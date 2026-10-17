@@ -125,3 +125,71 @@ export function designBAEL(deck, perm, f61, opt = {}) {
   return { ref: 'F61', mat, d, h, c, comb, beam, perFibre, bot, top, envBot, envTop, mins, shear, punch,
     transverseMin: { bot: Math.max(...envBot) / 4, top: Math.max(...envTop) / 4 } };
 }
+
+// -----------------------------------------------------------------------------------------------------
+// Flexion transversale : aciers transversaux par travée (section rectangulaire par mètre, d_y = h − c − φ)
+// -----------------------------------------------------------------------------------------------------
+
+/** Pseudo-résultats [travée][y] pour réutiliser les combinaisons longitudinales. */
+function asCase(spans, pick) { return { mxMax: spans.map(sp => pick(sp).myMax), mxMin: spans.map(sp => pick(sp).myMin) }; }
+
+/**
+ * @param {object} trans   résultat de TransverseModel.run()
+ * @param {object} longEC  résultat de designEC (pour les minimums non sectionnels)
+ */
+export function designTransverseEC(deck, trans, longEC, opt = {}) {
+  const { c = 0.03, phi = 0.020, wkMax = 0.3, phiLong = 0.020 } = opt;
+  const mat = materialsEC2(opt);
+  const h = deck.h, d = h - c - phiLong, sec = { b: 1, h, d };
+  const spans = trans.spans;
+  const perm = { mxMax: spans.map(sp => sp.perm.myMax), mxMin: spans.map(sp => sp.perm.myMin) };
+  const ec = { TS: asCase(spans, sp => sp.ec.TS), UDL: asCase(spans, sp => sp.ec.UDL), footway: asCase(spans, sp => sp.ec.footway), gr1b: asCase(spans, sp => sp.ec.gr1b), gr3: asCase(spans, sp => sp.ec.gr3) };
+  const thermal = asCase(spans, sp => sp.thermal), settle = asCase(spans, sp => sp.settle);
+  const comb = combineEC(perm, ec, { thermal, settle });
+  const mins = minimumSteel(sec, mat, { kSlab: opt.kSlab ?? 1.2 });
+  const out = [];
+  spans.forEach((sp, j) => {
+    const idx = deck.beam.sections.map((s, i) => (s.span === j ? i : -1)).filter(i => i >= 0);
+    const asLongBot = Math.max(...idx.map(i => longEC.envBot[i])), asLongTop = Math.max(...idx.map(i => longEC.envTop[i]));
+    const face = (Mu, Mcar, Mfre) => {
+      const uls = flexureULS(Mu * kNm2MNm, sec, mat), sls = flexureSLS(Mcar * kNm2MNm, sec, mat), wk = asForCrackWidth(Mfre * kNm2MNm, sec, mat, { wkMax, phi, c });
+      return { Mu, Mcar, Mfre, AsULS: uls.As, AsSLS: sls.As, AsWk: wk, flex: Math.max(uls.As, sls.As, wk), sigS: sls.sigS, sigC: sls.sigC };
+    };
+    const botY = trans.ys.map((_, iy) => face(Math.max(comb.ELU.max[j][iy], 0), Math.max(comb.CAR.max[j][iy], 0), Math.max(comb.FREQ.max[j][iy], 0)));
+    const topY = trans.ys.map((_, iy) => face(Math.max(-comb.ELU.min[j][iy], 0), Math.max(-comb.CAR.min[j][iy], 0), Math.max(-comb.FREQ.min[j][iy], 0)));
+    const ib = botY.map(f => f.flex).indexOf(Math.max(...botY.map(f => f.flex))), it = topY.map(f => f.flex).indexOf(Math.max(...topY.map(f => f.flex)));
+    const bot = botY[ib], top = topY[it];
+    const nonSecBot = 0.2 * asLongBot;
+    const botAs = Math.max(bot.flex, nonSecBot, mins.perFace);
+    const nonSecTop = Math.max(0.2 * asLongTop, 0.5 * botAs);
+    const topAs = Math.max(top.flex, nonSecTop, mins.perFace);
+    out.push({ j, L: sp.L, bot: { ...bot, y: trans.ys[ib], nonSec: nonSecBot, perFace: mins.perFace, As: botAs }, top: { ...top, y: trans.ys[it], nonSec: nonSecTop, perFace: mins.perFace, As: topAs }, asLongBot, asLongTop, comb: { CARmax: comb.CAR.max[j], CARmin: comb.CAR.min[j], ELUmax: comb.ELU.max[j], ELUmin: comb.ELU.min[j] } });
+  });
+  return { mat, d, spans: out, ys: trans.ys };
+}
+
+export function designTransverseBAEL(deck, trans, longBAEL, opt = {}) {
+  const { c = 0.03, phiLong = 0.020 } = opt;
+  const mat = materialsBAEL(opt);
+  const h = deck.h, d = h - c - phiLong, sec = { b: 1, h, d };
+  const spans = trans.spans;
+  const perm = { mxMax: spans.map(sp => sp.perm.myMax), mxMin: spans.map(sp => sp.perm.myMin) };
+  const f61 = { A: asCase(spans, sp => sp.f61.A), Bc: asCase(spans, sp => sp.f61.Bc), Bt: spans[0].f61.Bt ? asCase(spans, sp => sp.f61.Bt) : null, Mc120: asCase(spans, sp => sp.f61.Mc120), D240: asCase(spans, sp => sp.f61.D240), trottoir: asCase(spans, sp => sp.f61.trottoir) };
+  const thermal = asCase(spans, sp => sp.thermal), settle = asCase(spans, sp => sp.settle);
+  const comb = combineBAEL(perm, f61, { thermal, settle });
+  const mins = minimumSteelBAEL(sec, mat);
+  const out = [];
+  spans.forEach((sp, j) => {
+    const idx = deck.beam.sections.map((s, i) => (s.span === j ? i : -1)).filter(i => i >= 0);
+    const asLongBot = Math.max(...idx.map(i => longBAEL.envBot[i])), asLongTop = Math.max(...idx.map(i => longBAEL.envTop[i]));
+    const face = (Mu, Ms) => { const elu = flexureELU(Mu * kNm2MNm, sec, mat), els = flexureELS(Ms * kNm2MNm, sec, mat); return { Mu, Ms, AsELU: elu.As, AsELS: els.As, flex: Math.max(elu.As, els.As), sigS: els.sigS, sigB: els.sigB }; };
+    const botY = trans.ys.map((_, iy) => face(Math.max(comb.ELU.max[j][iy], 0), Math.max(comb.ELS.max[j][iy], 0)));
+    const topY = trans.ys.map((_, iy) => face(Math.max(-comb.ELU.min[j][iy], 0), Math.max(-comb.ELS.min[j][iy], 0)));
+    const ib = botY.map(f => f.flex).indexOf(Math.max(...botY.map(f => f.flex))), it = topY.map(f => f.flex).indexOf(Math.max(...topY.map(f => f.flex)));
+    const bot = botY[ib], top = topY[it];
+    // armatures de répartition BAEL (B.7.4) : ≥ A_s,long/4 (charges réparties) ; ≥ A_s,long/3 pour charges concentrées
+    const botAs = Math.max(bot.flex, asLongBot / 3, mins.dalle), topAs = Math.max(top.flex, asLongTop / 3, mins.dalle);
+    out.push({ j, L: sp.L, bot: { ...bot, y: trans.ys[ib], nonSec: asLongBot / 3, As: botAs }, top: { ...top, y: trans.ys[it], nonSec: asLongTop / 3, As: topAs }, asLongBot, asLongTop, comb: { ELSmax: comb.ELS.max[j], ELSmin: comb.ELS.min[j], ELUmax: comb.ELU.max[j], ELUmin: comb.ELU.min[j] } });
+  });
+  return { mat, d, spans: out, ys: trans.ys };
+}

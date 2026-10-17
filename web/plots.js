@@ -145,3 +145,17 @@ export function asPlot(div, deck, design, label) {
   layout.shapes = deck.beam.x0.map(x => ({ type: 'line', x0: x, x1: x, y0: 0, y1: 1, yref: 'paper', line: { color: theme().grid, width: 1, dash: 'dash' } }));
   Plotly.newPlot(div, data, layout, CONFIG);
 }
+
+/** Moments transversaux m_y(y) d'une travée : permanent, cas de trafic choisis, enveloppe combinée. */
+export function myPlot(div, deck, trans, j, extra = []) {
+  const sp = trans.spans[j], ys = trans.ys;
+  const data = [{ x: ys, y: sp.perm.my, name: 'Permanent (nominal)', mode: 'lines+markers', line: { color: '#6b6b6b', width: 2 } }];
+  const items = [['TS', sp.ec.TS], ['UDL', sp.ec.UDL], ['LM2', sp.ec.gr1b], ['A(l)', sp.f61.A], ['Bc', sp.f61.Bc], ['Mc120', sp.f61.Mc120], ['D240', sp.f61.D240]];
+  items.forEach(([lab, r], i) => {
+    data.push({ x: ys, y: r.myMax, name: lab + ' max', mode: 'lines+markers', line: { color: PALETTE[i % PALETTE.length], width: 1.5 }, marker: { size: 4 }, legendgroup: lab });
+    data.push({ x: ys, y: r.myMin, name: lab + ' min', mode: 'lines', line: { color: PALETTE[i % PALETTE.length], width: 1, dash: 'dot' }, legendgroup: lab, showlegend: false });
+  });
+  extra.forEach((e, i) => data.push({ x: ys, y: e.y, name: e.name, mode: 'lines', line: { color: PALETTE[(items.length + i) % PALETTE.length], width: 2.5, dash: 'dash' } }));
+  const layout = baseLayout(`Moments transversaux m_y(y) — travée ${j + 1} (dalle isostatique équivalente L_eq = ${sp.L.toFixed(2)} m, x = L_eq/2, ν = ${deck.nu}) [kN·m/m]`, 'y [m]', 'm_y [kN·m/m]', { hovermode: 'closest' });
+  Plotly.newPlot(div, data, layout, CONFIG);
+}

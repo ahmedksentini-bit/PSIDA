@@ -92,7 +92,7 @@
       </div>
       <div class="row">
         <label>Enrobage à l'axe c [m]<input name="cover" value="0.03" type="number" step="0.005"></label>
-        <label>Diamètre φ [mm] (fissuration)<input name="phi" value="20" type="number" step="1"></label>
+        <label>φ long. / φ transv. [mm] (fissuration)<div class="row"><input name="phi" value="20" type="number" step="1"><input name="phiT" value="16" type="number" step="1"></div></label>
       </div>
       <div class="row">
         <label>wk max [mm] (ELS fréquent)<input name="wk" value="0.3" type="number" step="0.05"></label>
@@ -128,6 +128,11 @@
       <div class="toolbar"><label>Référentiel <select id="design-ref"><option value="EC">Eurocodes (EC2)</option><option value="F61">Fascicule 61 + BAEL 91</option></select></label></div>
       <div class="plot" id="plot-As"></div>
       <div id="design-tables"></div>
+    </div>
+    <div class="card"><h2>Flexion transversale et aciers transversaux</h2>
+      <div class="toolbar"><label>Travée <select id="trans-span"></select></label><label>Référentiel <select id="trans-ref"><option value="EC">Eurocodes (EC2)</option><option value="F61">Fascicule 61 + BAEL 91</option></select></label></div>
+      <div class="plot" id="plot-my"></div>
+      <div id="trans-tables"></div>
     </div>
     <div class="card"><h2>Lignes d'influence</h2>
       <div class="toolbar"><label>Section <select id="section-select"></select></label></div>

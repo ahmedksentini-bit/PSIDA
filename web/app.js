@@ -2,8 +2,9 @@ import { SlabDeck } from '../src/analysis.js';
 import { EC_ALPHA, notionalLanes, lm1 } from '../src/loads_ec.js';
 import { voiesF61, classePont, MC120, D240 } from '../src/loads_f61.js';
 import { elevationSVG, crossSectionSVG } from './svg.js';
-import { envelopePlot, shearPlot, reactionPlot, kPlot, transversePlot, factorPlot, influencePlot, surfacePlot, asPlot } from './plots.js';
-import { designEC, designBAEL } from '../src/design.js';
+import { envelopePlot, shearPlot, reactionPlot, kPlot, transversePlot, factorPlot, influencePlot, surfacePlot, asPlot, myPlot } from './plots.js';
+import { designEC, designBAEL, designTransverseEC, designTransverseBAEL } from '../src/design.js';
+import { TransverseModel } from '../src/transverse.js';
 
 const $ = s => document.querySelector(s);
 const nums = s => s.split(/[,;\s]+/).filter(Boolean).map(Number);
@@ -34,7 +35,7 @@ function parseForm(form) {
     },
     alpha: d.alpha, nRetenue: +d.nRetenue, classe: d.classe.trim() ? +d.classe : null, chamoaSign: !!d.chamoaSign,
     withTherm: !!d.withTherm, dT: nums(d.dT), E: +EIv[0] || 34000, I: EIv[1] ? +EIv[1] : null, delta: +d.delta, phiFluage: +d.phiFluage,
-    mat: { fck: +d.fck, fyk: +d.fyk, fc28: +d.fck, fe: +d.fyk, c: +d.cover, phi: +d.phi / 1000, wkMax: +d.wk, fissuration: d.fiss, tRev: +d.tRev },
+    mat: { fck: +d.fck, fyk: +d.fyk, fc28: +d.fck, fe: +d.fyk, c: +d.cover, phi: +d.phi / 1000, phiT: +(d.phiT || 16) / 1000, wkMax: +d.wk, fissuration: d.fiss, tRev: +d.tRev },
   };
 }
 
@@ -51,6 +52,12 @@ function compute(p) {
     EC: designEC(deck, perm, ec, { ...p.mat, thermal, settle }),
     F61: designBAEL(deck, perm, f61, { ...p.mat, thermal, settle }),
   };
+  const tm = new TransverseModel(deck, { tRev: p.mat.tRev, nHarm: 15 });
+  const trans = tm.run({ alpha: EC_ALPHA[p.alpha], f61opt: { nRetenue: p.nRetenue, classe: p.classe }, thermal, settle });
+  const transDesign = {
+    EC: designTransverseEC(deck, trans, design.EC, { ...p.mat, phi: p.mat.phiT, phiLong: p.mat.phi }),
+    F61: designTransverseBAEL(deck, trans, design.F61, { ...p.mat, phiLong: p.mat.phi }),
+  };
   const cases = [
     { id: 'TS', label: 'LM1 – TS', res: ec.TS, ref: 'EC' }, { id: 'UDL', label: 'LM1 – UDL', res: ec.UDL, ref: 'EC' },
     { id: 'LM1', label: 'LM1 (TS + UDL)', res: ec.LM1, ref: 'EC' }, { id: 'gr1a', label: 'gr1a (LM1 + trottoirs 3 kN/m²)', res: ec.gr1a, ref: 'EC' },
@@ -61,7 +68,7 @@ function compute(p) {
     { id: 'trott', label: 'Trottoirs 1,5 kN/m²', res: f61.trottoir, ref: 'F61' },
   ];
   if (thermal) cases.push({ id: 'therm', label: 'Gradient thermique (±)', res: { ...thermal, Vmax: thermal.Vmax, Vmin: thermal.Vmin }, ref: 'EC' }, { id: 'settle', label: 'Tassements aléatoires (±)', res: settle, ref: 'EC' });
-  return { p, deck, keys, perm, ec, f61, cases, thermal, settle, design, dt: (performance.now() - t0) / 1000 };
+  return { p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transDesign, dt: (performance.now() - t0) / 1000 };
 }
 
 /** Charges à dessiner sur la coupe pour un cas (arrangement représentatif, voies depuis le bord y1). */
@@ -135,7 +142,8 @@ function renderStatic(st) {
   h += `<h3>Eurocodes — EN 1991-2 (valeurs caractéristiques)</h3>` + st.cases.filter(c => c.ref === 'EC').map(c => tableEnv(st, c.res, c.label)).join('');
   h += `<h3>Fascicule 61 titre II (valeurs caractéristiques, δ inclus pour B et Mc)</h3>` + st.cases.filter(c => c.ref === 'F61').map(c => tableEnv(st, c.res, c.label)).join('');
   $('#tables').innerHTML = h;
-  renderCase(st); renderSection(st); renderDesign(st);
+  $('#trans-span').innerHTML = deck.spans.map((L, j) => `<option value="${j}">Travée ${j + 1} (${L} m)</option>`).join('');
+  renderCase(st); renderSection(st); renderDesign(st); renderTransverse(st);
 }
 
 function renderCase(st) {
@@ -178,6 +186,25 @@ function renderDesign(st) {
   $('#design-tables').innerHTML = h;
 }
 
+function renderTransverse(st) {
+  const j = +$('#trans-span').value, ref = $('#trans-ref').value;
+  const dz = st.transDesign[ref], sp = dz.spans[j];
+  const extra = ref === 'EC' ? [{ name: 'ELS caractéristique max', y: sp.comb.CARmax }, { name: 'ELS caractéristique min', y: sp.comb.CARmin }] : [{ name: 'ELS max', y: sp.comb.ELSmax }, { name: 'ELS min', y: sp.comb.ELSmin }];
+  myPlot($('#plot-my'), st.deck, st.trans, j, extra);
+  const cm = v => (v * 1e4).toFixed(1);
+  let h = `<p class="small">Dalle isostatique équivalente (L_eq, bords libres, ν = ${st.deck.nu}), charges diffusées à 45° jusqu'au feuillet moyen (contact + 2·${st.p.mat.tRev} + h), séries de Fourier (15 harmoniques), charges roulantes centrées sur x = L_eq/2, enveloppe sur les positions transversales ; thermique et tassements : m_y = ν·m_x. Hauteur utile transversale d = h − c − φ_long = ${dz.d.toFixed(3)} m.</p>`;
+  if (ref === 'EC') {
+    h += `<table><thead><tr><th>Travée</th><th>Face</th><th>y</th><th>M ELU</th><th>M car.</th><th>M fréq.</th><th>ELU</th><th>ELS σ</th><th>wk</th><th>non sect.</th><th><b>A_s,y</b></th><th>σs</th></tr></thead><tbody>`;
+    dz.spans.forEach(sp2 => { for (const face of ['bot', 'top']) { const f = sp2[face]; h += `<tr><td>Travée ${sp2.j + 1}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${f.y}</td><td>${f.Mu.toFixed(1)}</td><td>${f.Mcar.toFixed(1)}</td><td>${f.Mfre.toFixed(1)}</td><td>${cm(f.AsULS)}</td><td>${cm(f.AsSLS)}</td><td>${cm(f.AsWk)}</td><td>${cm(f.nonSec)}</td><td><b>${cm(f.As)}</b></td><td>${f.sigS.toFixed(0)}</td></tr>`; } });
+    h += `</tbody></table><p class="small">Non sectionnel (EC2 9.3.1.1 et pratique CHAMOA) : A_s,trans,inf ≥ 0,2 A_s,long,inf ; A_s,trans,sup ≥ max(0,2 A_s,long,sup ; 0,5 A_s,trans,inf). Le critère wk (7.3.4) impose un espacement ≤ 5(c + φ/2), d'où un minimum lié au diamètre choisi (φ transversal ${(st.p.mat.phiT * 1000).toFixed(0)} mm).</p>`;
+  } else {
+    h += `<table><thead><tr><th>Travée</th><th>Face</th><th>y</th><th>M ELU</th><th>M ELS</th><th>ELU</th><th>ELS</th><th>répartition</th><th><b>A_s,y</b></th><th>σs</th></tr></thead><tbody>`;
+    dz.spans.forEach(sp2 => { for (const face of ['bot', 'top']) { const f = sp2[face]; h += `<tr><td>Travée ${sp2.j + 1}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${f.y}</td><td>${f.Mu.toFixed(1)}</td><td>${f.Ms.toFixed(1)}</td><td>${cm(f.AsELU)}</td><td>${cm(f.AsELS)}</td><td>${cm(f.nonSec)}</td><td><b>${cm(f.As)}</b></td><td>${f.sigS.toFixed(0)}</td></tr>`; } });
+    h += `</tbody></table><p class="small">Armatures de répartition BAEL B.7.4 : ≥ A_s,long/3 (charges concentrées).</p>`;
+  }
+  $('#trans-tables').innerHTML = h;
+}
+
 function renderSection(st) {
   const k = st.keys[+$('#section-select').value];
   const sup = k.kind === 'support' ? k.span + 1 : (k.span === 0 ? 1 : k.span);
@@ -194,6 +221,8 @@ $('#case-select').addEventListener('change', () => state && renderCase(state));
 $('#surface-which').addEventListener('change', () => state && renderCase(state));
 $('#section-select').addEventListener('change', () => state && renderSection(state));
 $('#design-ref').addEventListener('change', () => state && renderDesign(state));
+$('#trans-span').addEventListener('change', () => state && renderTransverse(state));
+$('#trans-ref').addEventListener('change', () => state && renderTransverse(state));
 $('#span-select').addEventListener('change', () => state && kPlot($('#plot-K'), state.deck, +$('#span-select').value));
 $('#btn-chamoa').addEventListener('click', () => {
   const f = $('#f');

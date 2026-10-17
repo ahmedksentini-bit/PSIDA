@@ -10,6 +10,7 @@
 | H4 | Pour chaque fibre y, arrangement transversal le plus défavorable (voies glissées et renumérotées, pas `laneStep`) ; files indépendantes longitudinalement : m_x(y) = Σ K̄_i(y)·M_i/2b | `laneArrangementsEC()`, `evaluateArrangements()` | CHAMOA ch. 2 §3.4.1 : « effet le plus défavorable de la répartition transversale pour chaque point d'étude transversal ». Le facteur de bord (dimensionnant) est reproduit ; le profil CHAMOA est plus plat vers l'axe (1,18 contre 1,10), définition exacte du fichier Guyon à élucider |
 | H5 | Poids propre K = 1 ; superstructures avec K(e,y) ; revêtement bande uniforme avec K̄ | `permanent()` | PSIDA répartit aussi les charges permanentes excentrées |
 | H6 | Ouvrage droit | — | Biais 70–100 gr : coefficients correctifs du guide SETRA 1989 |
+| H7 | Flexion transversale sur dalle isostatique équivalente (voir § 1 ter) | `transverse.js` | CHAMOA §4.3 et fichiers 5.4 (biais 80 gr) |
 
 Autres choix :
 - ν = 0 pour K (tables classiques) ; option `nu` dans `guyon.js` pour les moments transversaux (correction de Bareš).
@@ -43,8 +44,23 @@ par barre (max des fibres) et prend comme moment de calcul par mètre M_ST1/2b s
 Formules de combinaison relevées dans la note et reproduites (combinations.js) : ELS caractéristique = G + Ta + max(T + ψ0·Q ; 0,6 T + Q_LM1 ; Q_LM2) ;
 ELS fréquent = G + max(0,6 T ; 0,5 T + ψ1·Q_LM1 ; 0,75 Q_LM2) ; ELU = 1,35 G + 1,35 Q (ζ = 0 pour T et Ta).
 
-Écart résiduel sur les aciers supérieurs d'appui : CHAMOA obtient un bras de levier z ≈ 0,82 d (section exacte à chanfreins et bombement,
-calcul de section non documenté) contre 0,88 d ici ; le moment de calcul, lui, est reproduit à 0,3 %.
+**Aciers supérieurs d'appui — écart expliqué.** Les 551,8 cm² (P1) et 625,5 cm² (P2) de la note sont gouvernés par le **profil provisoire**
+(phase de chantier : remblai de 0,50 m, enrobé 0,20 m, tombereaux 23/34 m³ avec δ = 1,5, LM3 VS), dont l'ELS caractéristique à P1 vaut
+10 826 kN·m (tableau « profil provisoire ») contre 10 042 pour le profil définitif. Avec ce moment, le module de sections donne
+556,2 cm² (+0,8 %) ; avec le moment du profil définitif, 513,6 cm². Le profil provisoire n'est pas modélisé ici (données des engins de
+chantier non disponibles), les aciers d'appui de l'outil correspondent donc au seul profil définitif.
+
+## 1 ter. Flexion transversale (H7)
+
+Modèle : dalle isostatique équivalente de portée L_eq, isotrope, ν = 0,2, bords libres ; charges réelles diffusées à 45° jusqu'au feuillet
+moyen (contact + 2·t_rev + h) ; séries de Fourier (15 harmoniques) ; charges roulantes centrées sur x = L_eq/2 ; enveloppe sur les positions
+transversales ; thermique et tassements : m_y = ν·m_x pondéré par le profil de la réponse à une charge uniforme (nul aux bords libres).
+
+Comparaison CHAMOA (fichiers 5.4 et §4.3) : poids propre « ossature seule » au centre de la travée 1 : CHAMOA 24,0 kN·m/m (variante ν = 0 :
+−6,4), outil 36,4 (ν = 0 : +2,6) — CHAMOA traite le chanfrein en encorbellement (TRV_ENC = −6,46) et son terme de couplage ν correspond à
+un m_x de ≈ 152 kN·m/m dont l'origine n'est pas documentée ; l'outil est du côté conservatif. Les aciers transversaux de la note
+(14,1 / 17,3 cm²/m inf.) sont dimensionnés par M_APF = 288 / 351 kN·m/m, moment dans la direction des aciers après correction de biais
+(annexe 12 du BPEL, biais 80 gr) : non comparable à un ouvrage droit (M_APF = m_y ≈ 115 chez CHAMOA, 150 ici en ELS caractéristique).
 
 Note : le biais de 80 gr de l'exemple est ignoré (CHAMOA calcule aussi « en biais géométrique » sans correction).
 

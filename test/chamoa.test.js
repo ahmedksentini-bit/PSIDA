@@ -92,3 +92,11 @@ test('CHAMOA ch.4 — gradient thermique, tassements aléatoires, kmin/kmax et E
   rel(d.envTop[P1] * 1e4, 46.0, 0.06, 'A_s supérieur P1');
   rel(d.mins.as921 * 11.12 * 1e4, 165.2, 0.02, 'minten');
 });
+
+test('CHAMOA ch.4 — aciers supérieurs P1 : le profil provisoire (10 826 kN·m) explique les 551,8 cm²', async () => {
+  const { materialsEC2, flexureSLS, chamferWidthFn } = await import('../src/section_ec2.js');
+  const m = materialsEC2({ fck: 35, fyk: 500 });
+  const w = chamferWidthFn({ width: 12, h: 0.772, hEdge: 0.40, joue: 1.0 });
+  rel(flexureSLS(10.826 / 12, { d: 0.742, widthFn: w }, m).As * 1e4 * 12, 551.8, 0.015, 'A_s sup P1 (profil provisoire)');
+  rel(flexureSLS(8.62 / 12, { d: 0.742 }, m).As * 1e4 * 12, 431.7, 0.015, 'A_s inf mi-travée 2');
+});

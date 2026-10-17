@@ -36,7 +36,8 @@ src/analysis.js     orchestration : SlabDeck (permanent, eurocode, fascicule61, 
 src/combinations.js combinaisons EC0-A2 (formules CHAMOA) et BAEL / Fasc. 61
 src/section_ec2.js  sections EC2 : ELU, ELS, wk 7.3.4, minimums, V_Rd,c, poinçonnement, chanfreins
 src/section_bael.js sections BAEL 91 : ELU, ELS, minimums, τu, poinçonnement
-src/design.js       ferraillage par section et fibre, enveloppes, tranchant, poinçonnement
+src/design.js       ferraillage longitudinal et transversal, enveloppes, tranchant, poinçonnement
+src/transverse.js   flexion transversale m_y(y) par travée (dalle isostatique équivalente, Fourier)
 examples/psida3.js  exemple PSIDA 3 travées 14-18-14 m (node examples/psida3.js)
 test/               tests unitaires (npm test)
 docs/hypotheses.md  hypothèses de modélisation, protocole de comparaison, références
@@ -108,12 +109,16 @@ Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de
    Gradient thermique (EN 1991-1-5) et tassements aléatoires (δ, −δ sur appuis adjacents, module différé) en option,
    chanfreins en compression par l'intrados en option.
 
-## État et limites (v0.3)
+7. **Flexion transversale** — m_y(y) par travée sur la dalle isostatique équivalente (permanent, TS, UDL, LM2,
+   A(l), Bc, Mc120, D240, enveloppe combinée), aciers transversaux par face et par critère, minimums non sectionnels
+   (20 % des longitudinaux, sup ≥ 50 % inf ; BAEL : A_s/3).
+
+## État et limites (v0.4)
 
 - Ouvrage droit, dalle pleine de hauteur constante, appuis simples, abouts en console (charges permanentes).
 - Fatigue des armatures : vérification simplifiée σs ≤ 300 MPa sous ELS caractéristique (pratique CHAMOA), pas la méthode λ_s de l'EN 1992-2 annexe NN.
-- Pas encore : moments transversaux m_y dans l'interface (le moteur les calcule), aciers transversaux au-delà des minimums,
-  biais, LM3 / convois spéciaux EC, tassements probables, aciers d'effort tranchant.
+- Pas encore : biais (correction SETRA 1989 / annexe 12 BPEL), LM3 / convois spéciaux EC, phase de chantier (profil provisoire),
+  tassements probables, aciers d'effort tranchant, encorbellements.
 - Les tableaux `a1`, `bc`, `bt` du Fascicule 61 et les α de l'annexe française sont à relire contre
   les textes avant toute utilisation en production (voir les commentaires `TODO_VERIF`).
 
