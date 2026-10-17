@@ -2,7 +2,8 @@ import { SlabDeck } from '../src/analysis.js';
 import { EC_ALPHA, notionalLanes, lm1 } from '../src/loads_ec.js';
 import { voiesF61, classePont, MC120, D240 } from '../src/loads_f61.js';
 import { elevationSVG, crossSectionSVG } from './svg.js';
-import { envelopePlot, shearPlot, reactionPlot, kPlot, transversePlot, factorPlot, influencePlot, surfacePlot, asPlot, myPlot } from './plots.js';
+import { envelopePlot, shearPlot, reactionPlot, kPlot, transversePlot, factorPlot, influencePlot, surfacePlot, asPlot, myPlot, abaquePlot } from './plots.js';
+import * as ABAQUES from '../src/abaques1989.js';
 import { designEC, designBAEL, designTransverseEC, designTransverseBAEL } from '../src/design.js';
 import { TransverseModel } from '../src/transverse.js';
 import { buildReport } from './report.js';
@@ -97,6 +98,8 @@ function renderConception(st) {
   for (const s of c.sections) h += `<h3>${s.title}</h3><ul class="checks">${s.items.map(it => `<li>${badge(it.level)}${it.text}</li>`).join('')}</ul>`;
   h += `<p class="small">Règles et ordres de grandeur du guide SETRA « Ponts-dalles – guide de conception » (1989) ; les paragraphes cités renvoient à ce guide. Le guide a été rédigé pour les charges du Fascicule 61 : les élancements indicatifs ne dispensent pas de la vérification (recherche d'épaisseur ci-dessous, puis calcul complet).</p>`;
   $('#concept').innerHTML = h;
+  if (c.type === 'DA' && c.epaisseur.abaque) abaquePlot($('#plot-abaque'), st.deck.spans, c.epaisseur.abaque, c.epaisseur.k || 1, ABAQUES);
+  else Plotly.purge($('#plot-abaque'));
   // variantes de travure
   const tv = c.travures;
   let t = `<p class="small">Longueur entre appuis extrêmes L = ${c.Ltot.toFixed(1)} m ; rives à 0,7 fois la travée adjacente (§ 2.1.1), travées décroissantes vers les culées ; épaisseur indicative par l'élancement du guide (B${st.p.mat.fck}). « Adopter » recopie la travure (et l'épaisseur indicative) dans le formulaire.</p>

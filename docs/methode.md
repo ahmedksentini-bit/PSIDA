@@ -11,11 +11,20 @@ Avant tout calcul, l'outil confronte le projet aux règles du guide SETRA *Ponts
 * **Domaine d'emploi (§ 1.2)** : dalle BA (PSI.DA) économique de 7 à 15 m (1–2 travées) et de 6 à 18 m (≥ 3 travées) ;
   dalle précontrainte (PSI.DP) de 14 à 25 m (30 m), à larges encorbellements au-delà d'une vingtaine de mètres ; plage
   commune 14–18 m. Au-delà de 25–30 m : dalle nervurée, bipoutre mixte, béquilles.
+* **Épaisseur (§ 3.1.3, abaques p. 65–67 numérisés dans `src/abaques1989.js`)** : travée indépendante h(ℓ)
+  (10 m → 0,44 ; 12 → 0,53 ; 14 → 0,625), deux travées égales (10 → 0,43 ; 12 → 0,51 ; 15 → 0,65), trois travées
+  h(ℓ, θℓ) avec ℓ la travée centrale (10–19 m) et θℓ la travée de rive (plateau vers θ ≈ 0,4, montée jusqu'à θ = 1 :
+  ℓ = 15 → 0,50 à θℓ = 8, 0,60 à 15), quatre travées h(ℓ, θℓ) (13,25–19 m ; courbes quasi plates jusqu'au minimum vers
+  θ ≈ 0,83 puis la travée de rive gouverne : ℓ = 15 → 0,559 à θℓ = 8, 0,546 à 12,5, 0,609 à 15). Pour un nombre
+  quelconque de travées, le guide applique les abaques à la travure symétrique équivalente (exemple 9-14-15-13-8 →
+  8-15-15-8 → 0,56 m). Abaques établis pour un B25 : × 0,87 pour un B30, × 0,81 pour un B35. Les abaques s'arrêtent à
+  0,40 m. Dalles précontraintes (§ 3.1.2, p. 59–61, classe II, chaussée 7,50 m + 2 × 1,25 m) : plateaux h(ℓ) de la dalle
+  pleine (3 travées : 15 → 0,47, 22 → 0,635) et de la dalle à larges encorbellements (15 → 0,64, 25 → 0,91), montée de
+  0,015 à 0,04 m lorsque la travée de rive dépasse 0,6–0,7 ℓ ; épaisseur minimale technique ≈ 0,8 h_éco.
 * **Élancement courant (épaisseur / portée la plus longue, § 1.2)** : PSI.DA 1/20 (travée unique), 1/26 (2 travées),
-  1/28 (3 travées et plus) ; PSI.DP 1/22–1/25, 1/25 (1/28 avec larges encorbellements), 1/33 (1/28). Les abaques BA du
-  guide (§ 3.1.3) sont établis pour un B25 ; pour un B30 l'épaisseur vaut 0,87 h, pour un B35 0,81 h. Exemple du guide :
-  8 – 15 – 15 – 8 m → 0,56 m en B25. Ces valeurs correspondent aux charges du Fascicule 61 : sous LM1 l'épaisseur
-  vérifiée est en général supérieure.
+  1/28 (3 travées et plus) ; PSI.DP 1/22–1/25, 1/25 (1/28 avec larges encorbellements), 1/33 (1/28). Les abaques donnent
+  en pratique ℓ/22,5 (1 travée), ℓ/23 (2), ℓ/28 (3 travées, θ = 0,7) et ℓ/27 (4 travées). Ces valeurs correspondent aux
+  charges du Fascicule 61 : sous LM1 l'épaisseur vérifiée est en général supérieure.
 * **Travure (§ 2.1.1)** : 0,5 ≤ travée de rive / travée adjacente ≤ 0,85 (0,6 au moins en biais prononcé) — en deçà,
   risque de soulèvement de l'about ; nombre impair de travées décroissant du milieu vers les culées ; hauteur
   libre / portée ≲ 0,618 ; au-delà de 8 m de hauteur, 3 travées plutôt que 4 (§ 1.2.4). Les variantes proposées par
@@ -35,6 +44,14 @@ Avant tout calcul, l'outil confronte le projet aux règles du guide SETRA *Ponts
 * **Descente de charges (§ 1.3)** : poids propre 1,2 à 2 t/m², réactions ≈ 20 t/m (pile-culée) à 70 t/m (pile) par
   mètre de largeur, fondations superficielles fréquentes ; tassements différentiels admissibles 2–3 cm (6–7 cm avec
   renforts).
+* **Domaine des programmes PSIDA / PSIDP (annexe 1 du guide)** : bords libres parallèles, biais mécanique > 70 gr, biais
+  géométrique peu différent d'un appui à l'autre, portée angulaire ≤ 0,3 rad (biais moyen des ouvrages construits ≈ 85 gr) ;
+  au-delà : MCP (bords non parallèles), MRB (biais ou courbure prononcés, appui ponctuel), éléments finis de plaque épaisse
+  (Mindlin) pour les zones d'about et de bords libres (largeur ≈ 2 h) où la torsion et le cisaillement dominent.
+* **Points de vigilance (ch. 5)** : insuffisance d'aciers passifs à l'origine de la plupart des désordres ; fissures
+  transversales près des appuis (pointes de flexion, gradient thermique, retrait différentiel nervure/encorbellements),
+  fissures longitudinales des dalles de plus de 15 m, abouts BP (diffusion de la précontrainte), appareils d'appui en
+  élastomère pour les tabliers biais ou courbes, piles résistant aux chocs, joints et dalles de transition.
 
 **Recherche de l'épaisseur minimale** (pratique CHAMOA § 4.1) : h est augmenté de 2 cm en 2 cm, la chaîne complète du
 § 1 au § 7 étant relancée à chaque pas, jusqu'à ce que : aucune face ne demande d'aciers comprimés (x/d ≤ 0,45 à l'ELU,

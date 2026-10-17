@@ -37,6 +37,7 @@ export async function buildReport(st) {
     f: await img(document.querySelector('#plot-f'), 'Facteur de répartition transversale f(y)'),
     As: await img(document.querySelector('#plot-As'), 'Ferraillage longitudinal A_s(x)'),
     my: await img(document.querySelector('#plot-my'), 'Moments transversaux m_y(y)'),
+    abaque: document.querySelector('#plot-abaque')?.data ? await img(document.querySelector('#plot-abaque'), 'Abaque d\'épaisseur PSI.DA du guide SETRA 1989 (numérisé) et point du projet') : '',
   };
   const dEC = design.EC, dB = design.F61, tEC = transDesign.EC, tB = transDesign.F61;
   let h = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Note de calcul — pont-dalle</title>
@@ -67,6 +68,7 @@ export async function buildReport(st) {
     const c = st.concept, lab = { ok: 'OK', info: 'info', warn: 'attention' };
     h += `<h2>2. Conception et prédimensionnement (guide SETRA « Ponts-dalles », 1989)</h2>`;
     for (const sec of c.sections) h += `<h4>${esc(sec.title)}</h4><ul class="small">${sec.items.map(it => `<li><b>[${lab[it.level]}]</b> ${esc(it.text)}</li>`).join('')}</ul>`;
+    h += figs.abaque;
     h += `<h4>Variantes de travure pour L = ${c.Ltot.toFixed(1)} m entre appuis extrêmes</h4><table><thead><tr><th>Travées</th><th>Portées [m]</th><th>Type</th><th>h indicatif [m]</th></tr></thead><tbody>${c.travures.map(v => `<tr><td>${v.n}</td><td>${v.spans.join(' – ')}</td><td>${v.ok ? 'PSI.' + v.type : 'hors domaine'}</td><td>${v.ok ? v.hGuide.toFixed(2) : '—'}</td></tr>`).join('')}</tbody></table>`;
     if (st.hSearch) h += `<h4>Recherche de l'épaisseur minimale vérifiée (Eurocodes)</h4><table><thead><tr><th>h [m]</th><th>A_s inf</th><th>A_s sup</th><th>ρ max [%]</th><th>σc</th><th>x/d</th><th>V_Ed/V_Rd,c</th><th>Verdict</th></tr></thead><tbody>${st.hSearch.rows.map(r => `<tr><td>${r.h.toFixed(2)}</td><td>${cm(r.asBot)}</td><td>${cm(r.asTop)}</td><td>${(Math.max(r.rhoBot, r.rhoTop) * 100).toFixed(2)}</td><td>${f1(r.sigC)}</td><td>${r.xd.toFixed(2)}</td><td>${r.vRatio.toFixed(2)}</td><td>${r.ok ? 'vérifiée' : esc(r.crit.join(', '))}</td></tr>`).join('')}</tbody></table>`;
   }

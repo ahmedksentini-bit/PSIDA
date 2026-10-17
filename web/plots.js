@@ -159,3 +159,27 @@ export function myPlot(div, deck, trans, j, extra = []) {
   const layout = baseLayout(`Moments transversaux m_y(y) — travée ${j + 1} (dalle isostatique équivalente L_eq = ${sp.L.toFixed(2)} m, x = L_eq/2, ν = ${deck.nu}) [kN·m/m]`, 'y [m]', 'm_y [kN·m/m]', { hovermode: 'closest' });
   Plotly.newPlot(div, data, layout, CONFIG);
 }
+
+/** Abaque d'épaisseur PSI.DA du guide SETRA 1989 (numérisé) avec le point du projet. */
+export function abaquePlot(div, spans, ab, k = 1, abaques) {
+  const { DA1, DA2, DA3, DA4 } = abaques;
+  const n = spans.length;
+  const data = [];
+  let xTitle, title;
+  if (n <= 2) {
+    data.push({ x: DA1.map(p => p[0]), y: DA1.map(p => p[1]), name: 'Travée indépendante', mode: 'lines', line: { color: PALETTE[0], width: 2 } });
+    data.push({ x: DA2.map(p => p[0]), y: DA2.map(p => p[1]), name: '2 travées égales', mode: 'lines', line: { color: PALETTE[1], width: 2 } });
+    data.push({ x: [ab.L], y: [ab.h25], name: 'Projet (B25)', mode: 'markers', marker: { size: 12, symbol: 'diamond', color: PALETTE[2] } });
+    if (k < 1) data.push({ x: [ab.L], y: [ab.h25 * k], name: `Projet × ${k}`, mode: 'markers', marker: { size: 10, symbol: 'diamond-open', color: PALETTE[2] } });
+    xTitle = 'portée ℓ [m]'; title = 'Abaque PSI.DA à 1 ou 2 travées (guide SETRA 1989, p. 65, B25)';
+  } else {
+    const table = n === 3 ? DA3 : DA4;
+    Object.keys(table).map(Number).sort((a, b) => a - b).forEach((L, i) => {
+      data.push({ x: table[L].map(p => p[0]), y: table[L].map(p => p[1]), name: `ℓ = ${L} m`, mode: 'lines', line: { color: PALETTE[i % PALETTE.length], width: 1.5 } });
+    });
+    data.push({ x: [ab.thetaL], y: [ab.h25], name: `Projet (ℓ = ${ab.L} m, B25)`, mode: 'markers', marker: { size: 12, symbol: 'diamond', color: '#000' } });
+    if (k < 1) data.push({ x: [ab.thetaL], y: [ab.h25 * k], name: `Projet × ${k}`, mode: 'markers', marker: { size: 10, symbol: 'diamond-open', color: '#000' } });
+    xTitle = 'travée de rive θℓ [m]'; title = `Abaque PSI.DA à ${n === 3 ? '3' : '4'} travées (guide SETRA 1989, p. ${n === 3 ? '66' : '67'}, B25)`;
+  }
+  Plotly.newPlot(div, data, baseLayout(title, xTitle, 'épaisseur h [m]', { hovermode: 'closest', legend: { orientation: 'v', x: 1.02, y: 1 }, margin: { l: 60, r: 120, t: 40, b: 50 } }), CONFIG);
+}

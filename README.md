@@ -22,9 +22,10 @@ pour les moments transversaux « dans la direction des aciers » de l'annexe 12A
 `test/chamoa.test.js`, `test/skew.test.js` et `docs/hypotheses.md`.
 
 **Aide à la conception** : les règles du guide SETRA *Ponts-dalles – guide de conception* (1989) — domaine
-d'emploi, élancements, travure, biais, coupe transversale, abouts, descente de charges — sont codées dans
-`src/conception.js` et affichées en tête des résultats, avec des variantes de travure et une recherche automatique
-de l'épaisseur minimale vérifiée (Eurocodes).
+d'emploi, **abaques d'épaisseur numérisés** (PSI.DA à 1, 2, 3 et 4 travées, pages 65–67 ; plateaux PSI.DP pages 59–61),
+élancements, travure, biais, coupe transversale, abouts, descente de charges, points de vigilance — sont codées dans
+`src/conception.js` / `src/abaques1989.js` et affichées en tête des résultats, avec des variantes de travure et une
+recherche automatique de l'épaisseur minimale vérifiée (Eurocodes).
 
 ## Contenu
 
@@ -48,6 +49,8 @@ src/design.js       ferraillage longitudinal et transversal, enveloppes, trancha
 src/transverse.js   flexion transversale m_y(y) par travée (dalle isostatique équivalente, Fourier)
 src/skew.js         biais : biais mécanique (SETRA 1989), moments dans les directions d'aciers (annexe 12A BPEL / CHAMOA, Wood-Armer)
 src/conception.js   aide à la conception : règles du guide SETRA 1989, variantes de travure, recherche de l'épaisseur minimale vérifiée
+src/abaques1989.js  abaques d'épaisseur du guide SETRA 1989 numérisés (PSI.DA p. 65–67 ; plateaux PSI.DP p. 59–61)
+tools/abaques1989/  script de numérisation (suivi de courbes sur les pages scannées) et données brutes
 examples/psida3.js  exemple PSIDA 3 travées 14-18-14 m (node examples/psida3.js)
 test/               tests unitaires (npm test)
 docs/hypotheses.md  hypothèses de modélisation, protocole de comparaison, références
@@ -105,8 +108,9 @@ Les hypothèses détaillées et les points à confronter aux notes CHAMOA / PSID
 Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de référence), résultats à droite :
 
 0. **Aide à la conception** (guide SETRA 1989, bouton « Aide à la conception seule » pour l'obtenir en une fraction de
-   seconde sans lancer le calcul complet) — domaine d'emploi et type de dalle (§ 1.2), épaisseur indicative par
-   l'élancement (1/20, 1/26, 1/28 en BA avec les coefficients B30/B35 ; 1/22–1/33 en BP), travure (rapports de rive
+   seconde sans lancer le calcul complet) — domaine d'emploi et type de dalle (§ 1.2), épaisseur lue sur les abaques
+   du guide (h(ℓ, θℓ) pour 1–4 travées en BA, B25 × 0,87/0,81 pour B30/B35, graphique avec le point du projet ; plateaux
+   BP) et par l'élancement (1/20, 1/26, 1/28 ; 1/22–1/33 en BP), travure (rapports de rive
    0,5–0,85, décroissance vers les culées, nombre d'or), biais (biais mécanique, validité de Guyon-Massonnet, direction des
    fers, minimum transversal 1,3 n ‰), coupe transversale (largeur, grande largeur, encorbellements, dévers), abouts
    (0,1 + 15 D), descente de charges (t/m², t/m) et quantités indicatives (béton, aciers en kg/m³). Variantes de travure
@@ -145,8 +149,8 @@ Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de
   mais ne sont pas encore appliqués automatiquement au ferraillage transversal de l'interface (prochaine étape).
 - Fatigue des armatures : vérification simplifiée σs ≤ 300 MPa sous ELS caractéristique (pratique CHAMOA), pas la méthode λ_s de l'EN 1992-2 annexe NN.
 - Pas encore : LM3 / convois spéciaux EC, phase de chantier (profil provisoire), tassements probables, encorbellements.
-- Le guide SETRA 1989 a été établi pour les charges du Fascicule 61 : ses élancements sont des ordres de grandeur, la recherche
-  d'épaisseur de l'outil fait foi pour les charges Eurocodes.
+- Le guide SETRA 1989 a été établi pour les charges du Fascicule 61 (classe I–II, deux voies) : ses abaques et élancements sont des
+  ordres de grandeur (lecture des abaques à ±0,005 m), la recherche d'épaisseur de l'outil fait foi pour les charges Eurocodes.
 - Les tableaux `a1`, `bc`, `bt` du Fascicule 61 et les α de l'annexe française sont à relire contre
   les textes avant toute utilisation en production (voir les commentaires `TODO_VERIF`).
 

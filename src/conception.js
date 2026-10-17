@@ -10,6 +10,7 @@
  * Toutes les fonctions sont pures sauf `rechercheEpaisseur`, qui enchaîne SlabDeck → designEC.
  */
 import { mechanicalSkew, equivalentWidth } from './skew.js';
+import { DA1, DA2, DA3, DA4, DP } from './abaques1989.js';
 import { SlabDeck } from './analysis.js';
 import { EC_ALPHA } from './loads_ec.js';
 import { designEC } from './design.js';
@@ -51,23 +52,87 @@ export function domaineEmploi(spans) {
   return { Lmax, n, types, level, text: text.trim(), recommande };
 }
 
+/** Interpolation linéaire sur des couples [x, y] triés ; prolongement linéaire au-delà des bornes (signalé). */
+function interp1(pairs, x) {
+  const n = pairs.length;
+  let i = 0;
+  while (i < n - 2 && x > pairs[i + 1][0]) i++;
+  const [x0, y0] = pairs[i], [x1, y1] = pairs[i + 1];
+  return { y: y0 + (y1 - y0) * (x - x0) / (x1 - x0), extrap: x < pairs[0][0] - 1e-9 || x > pairs[n - 1][0] + 1e-9 };
+}
+/** Lecture d'une courbe h(θℓ) d'abaque : plateau à gauche (courbes plates), prolongement à droite signalé. */
+function curveAt(curve, u) {
+  if (u <= curve[0][0]) return { y: curve[0][1], extrap: false };
+  return interp1(curve, u);
+}
+
 /**
- * Épaisseur indicative par l'élancement courant (§ 1.2 ; § 3.1.2 et § 3.1.3).
+ * Épaisseur des abaques PSI.DA du guide (B25, § 3.1.3) pour une travure quelconque : travée déterminante ℓ et
+ * travée de rive θℓ (la plus longue) ; hors du domaine des abaques, l'épaisseur est prolongée à élancement
+ * constant et signalée.
+ * @returns {{h25:number, L:number, thetaL:number|null, abaque:string, extrap:boolean, note:string}}
+ */
+export function epaisseurAbaqueDA(spans) {
+  const n = spans.length;
+  if (n === 1) { const r = interp1(DA1, spans[0]); return { h25: r.y, L: spans[0], thetaL: null, abaque: 'travée indépendante (p. 65)', extrap: r.extrap, note: r.extrap ? 'portée hors de la plage 9,5–14,5 m de l\'abaque, prolongement linéaire' : '' }; }
+  if (n === 2) { const L = Math.max(...spans); const r = interp1(DA2, L); return { h25: r.y, L, thetaL: null, abaque: '2 travées égales (p. 65)', extrap: r.extrap, note: (spans[0] !== spans[1] ? 'abaque établi pour deux travées égales, portée la plus longue retenue ; ' : '') + (r.extrap ? 'portée hors de la plage 10–15 m, prolongement linéaire' : '') }; }
+  const table = n === 3 ? DA3 : DA4;
+  const keys = Object.keys(table).map(Number).sort((a, b) => a - b);
+  const central = n === 3 ? [spans[1]] : spans.slice(1, n - 1);
+  const L = Math.max(...central), thetaL = Math.max(spans[0], spans[n - 1]);
+  let note = n >= 5 ? `${n} travées : abaque à 4 travées appliqué à la plus longue travée intermédiaire (§ 3.1.3, « moyennant adaptations ») ; ` : '';
+  if (n === 4 && spans[1] !== spans[2]) note += 'travées centrales inégales, la plus longue est retenue ; ';
+  if (n === 3 && spans[0] !== spans[2]) note += 'travées de rive inégales, la plus longue est retenue (exemple du guide 18-25-20 → 20-25-20) ; ';
+  const lo = keys[0], hi = keys[keys.length - 1];
+  const read = (Lk, u) => curveAt(table[Lk], u);
+  let h25, extrap = false;
+  if (L < lo - 1e-9 || L > hi + 1e-9) {
+    // prolongement à élancement constant à partir de la courbe extrême (même rapport θ)
+    const Lk = L < lo ? lo : hi; const r = read(Lk, thetaL * Lk / L); h25 = r.y * L / Lk; extrap = true;
+    note += `travée déterminante ${L} m hors de la plage ${lo}–${hi} m de l'abaque, prolongement à élancement constant ; `;
+  } else {
+    let k0 = keys[0], k1 = keys[keys.length - 1];
+    for (let i = 0; i < keys.length - 1; i++) if (L >= keys[i] - 1e-9 && L <= keys[i + 1] + 1e-9) { k0 = keys[i]; k1 = keys[i + 1]; break; }
+    const r0 = read(k0, thetaL), r1 = read(k1, thetaL);
+    h25 = k1 === k0 ? r0.y : r0.y + (r1.y - r0.y) * (L - k0) / (k1 - k0);
+    extrap = r0.extrap || r1.extrap;
+    if (extrap) note += 'travée de rive au-delà de la travée centrale (θ > 1), prolongement de l\'abaque ; ';
+  }
+  if (h25 < 0.40) note += 'valeur inférieure à 0,40 m, limite basse des abaques (épaisseur pratique minimale) ; ';
+  return { h25, L, thetaL, abaque: n === 3 ? '3 travées (p. 66)' : '4 travées (p. 67)', extrap, note: note.replace(/ ; $/, '') };
+}
+
+/** Épaisseur « plateau » des abaques PSI.DP (§ 3.1.2) : dalle pleine (B25) ou à larges encorbellements (B30). */
+export function epaisseurAbaqueDP(spans, encorbellements = false) {
+  const n = Math.min(Math.max(spans.length, 2), 4);
+  const L = Math.max(...spans);
+  const key = `DP${n}${encorbellements ? 'N' : ''}`;
+  const r = interp1(DP[key], L);
+  return { h: r.y, L, abaque: key, extrap: r.extrap, note: (spans.length === 1 ? 'travée unique : abaque à 2 travées, le guide conseille ℓ/25 à ℓ/22 ; ' : '') + (r.extrap ? `portée hors de la plage ${DP[key][0][0]}–${DP[key][DP[key].length - 1][0]} m, prolongement linéaire ; ` : '') + 'valeur pour des travées de rive de 0,4 à 0,6 ℓ, à majorer de 0,02 à 0,04 m si θ approche 0,8–1' };
+}
+
+/**
+ * Épaisseur indicative : abaques du guide (§ 3.1.2 / § 3.1.3) complétés par les élancements courants (§ 1.2).
  * @param {{spans:number[], type?:'DA'|'DP', fck?:number, encorbellements?:boolean}} p
  */
 export function epaisseurGuide({ spans, type = 'DA', fck = 25, encorbellements = false }) {
   const n = Math.min(spans.length, 3), Lmax = Math.max(...spans);
   if (type === 'DP') {
     const e = GUIDE89.DP.elancement[n];
-    const range = n === 1 ? [Lmax / e[1], Lmax / e[0]] : [Lmax / (encorbellements ? e.enc : e.rect), Lmax / (encorbellements ? e.enc : e.rect)];
-    const h = range[1];
-    return { type, h, range, elancement: n === 1 ? `1/${e[1]} à 1/${e[0]}` : `1/${encorbellements ? e.enc : e.rect}${encorbellements ? ' (larges encorbellements)' : ' (dalle rectangulaire)'}`, hMinTech: 0.8 * h,
-      text: `PSI.DP : élancement courant ${n === 1 ? `1/${e[1]} à 1/${e[0]}` : `1/${encorbellements ? e.enc : e.rect}`} → h ≈ ${range.map(v => v.toFixed(2)).join('–')} m ; épaisseur minimale technique ≈ 0,8 h_éco = ${(0.8 * h).toFixed(2)} m, et ±20 % autour de h_éco ne change le coût que de 2 % au plus (§ 3.1.2).` };
+    const el = n === 1 ? `1/${e[1]} à 1/${e[0]}` : `1/${encorbellements ? e.enc : e.rect}`;
+    const hEl = n === 1 ? Lmax / e[0] : Lmax / (encorbellements ? e.enc : e.rect);
+    const ab = epaisseurAbaqueDP(spans, encorbellements);
+    const h = ab.h;
+    return { type, h, hAbaque: ab.h, hElancement: hEl, range: [0.8 * h, h], elancement: el, hMinTech: 0.8 * h, abaque: ab,
+      text: `PSI.DP${encorbellements ? ' à larges encorbellements' : ' (dalle pleine)'} : abaque ${ab.abaque} du guide (§ 3.1.2, classe II, B${encorbellements ? '30' : '25'}) → h_éco ≈ ${h.toFixed(2)} m pour ℓ = ${ab.L} m (${ab.note}) ; élancement courant ${el} → ${hEl.toFixed(2)} m. Épaisseur minimale technique ≈ 0,8 h_éco = ${(0.8 * h).toFixed(2)} m ; ±20 % autour de h_éco ne change le coût que de 2 % au plus.` };
   }
   const e = GUIDE89.DA.elancement[n], k = coefBeton(fck);
-  const h25 = Lmax / e, h = h25 * k;
-  return { type: 'DA', h, h25, k, range: [h, h25], elancement: `1/${e}`, hMinTech: h,
-    text: `PSI.DA : élancement courant 1/${e} (${n >= 3 ? '3 travées ou plus' : n === 2 ? '2 travées' : 'travée unique'}) → h ≈ ${h25.toFixed(2)} m pour un B25${k < 1 ? `, × ${k} = ${h.toFixed(2)} m pour un ${fck >= 35 ? 'B35' : 'B30'} (§ 3.1.3)` : ''}. Valeurs établies pour les charges du Fascicule 61 (classe I–II, 2 voies) ; sous LM1 Eurocode et pour les dalles larges l'épaisseur vérifiée est souvent supérieure : utiliser la recherche d'épaisseur ci-dessous.` };
+  const ab = epaisseurAbaqueDA(spans);
+  const hEl = Lmax / e;
+  const h25 = ab.h25, h = h25 * k;
+  if (h25 < 0.40 && !ab.note.includes('0,40')) ab.note += (ab.note ? ' ; ' : '') + 'valeur inférieure à 0,40 m, limite basse des abaques (épaisseur pratique minimale)';
+  return { type: 'DA', h, h25, k, hAbaque: h25, hElancement: hEl, range: [h, Math.max(h, hEl * k)], elancement: `1/${e}`, hMinTech: h, abaque: ab,
+    text: `PSI.DA : abaque ${ab.abaque} du guide (§ 3.1.3, B25, charges du Fascicule 61) → h ≈ ${h25.toFixed(2)} m${ab.thetaL ? ` pour ℓ = ${ab.L} m et une travée de rive de ${ab.thetaL} m (θ = ${(ab.thetaL / ab.L).toFixed(2)})` : ` pour ℓ = ${ab.L} m`}${ab.note ? ' — ' + ab.note : ''}${k < 1 ? ` ; × ${k} = ${h.toFixed(2)} m pour un ${fck >= 35 ? 'B35' : 'B30'}` : ''}. Élancement courant ${`1/${e}`} (${n >= 3 ? '3 travées ou plus' : n === 2 ? '2 travées' : 'travée unique'}) → ${hEl.toFixed(2)} m. Sous LM1 Eurocode et pour les dalles larges, l'épaisseur vérifiée est souvent supérieure : utiliser la recherche d'épaisseur.` };
 }
 
 /**
@@ -229,6 +294,18 @@ export function quantites(deck, design, transDesign = null) {
     text: `Béton ${volume.toFixed(0)} m³ (${(deck.area / width).toFixed(3)} m³/m² de tablier). Aciers longitudinaux : ${(kg(steelLong) / 1000).toFixed(1)} t (${(kg(steelLong) / volume).toFixed(0)} kg/m³) pour l'enveloppe A_s(x) stricte, ${(kg(steelPractical) / 1000).toFixed(1)} t (${(kg(steelPractical) / volume).toFixed(0)} kg/m³) avec des nappes constantes par travée (inf.) et par demi-travée (sup.), hors recouvrements${transDesign ? ` ; transversaux ≈ ${(kg(steelTrans) / 1000).toFixed(1)} t (${(kg(steelTrans) / volume).toFixed(0)} kg/m³)` : ''} ; soit ≈ ${(kg(steelPractical + steelTrans) / volume).toFixed(0)} kg/m³ hors étriers, chevêtres, abouts et encorbellements.` };
 }
 
+/** Désordres constatés sur les ponts-dalles et leurs causes (guide, § 5.1), pour mémoire au stade de la conception. */
+export function pointsVigilance({ width, psi = 100, type = 'DA', spans }) {
+  const items = [];
+  items.push({ level: 'info', text: 'Les désordres les plus fréquents viennent d\'une insuffisance d\'aciers passifs (ouverture des fissures) plus que de béton : respecter les dispositions constructives du § 3.4 (deux directions d\'armatures par face, angle ≥ 60°, recouvrements entre zones, cadres et étriers).' });
+  items.push({ level: 'info', text: 'Fissures transversales en sous-face près des appuis intermédiaires : pointes de flexion amplifiées par le gradient thermique (et un tracé de câble inadapté en BP), retrait différentiel nervure / encorbellements minces — d\'où le gradient thermique et les minimums de l\'outil (§ 5.1 b).' });
+  if (width > GUIDE89.largeur.demiTabliers) items.push({ level: 'warn', text: 'Dalle de plus de 15 m de largeur : fissures longitudinales en sous-face découpant la dalle en bandes (gradient thermique, tassement de cintre avant durcissement) — demi-tabliers ou ferraillage transversal renforcé (§ 5.1 c, § 2.3.3).' });
+  if (type === 'DP') items.push({ level: 'info', text: 'Zones d\'about en BP : fissures longitudinales et inclinées dues à la diffusion de la précontrainte (efforts de surface, d\'éclatement, d\'équilibre général) ; frettage soigné derrière les ancrages (§ 5.1 a, § 3.2, § 3.3).' });
+  if (psi < 100) items.push({ level: 'info', text: 'Tabliers biais ou courbes : ruptures d\'articulations Freyssinet constatées (déplacements et rotations excessifs) — préférer des appareils d\'appui en élastomère fretté (§ 5.1, § 3.6).' });
+  items.push({ level: 'info', text: 'Appuis : piles conçues pour résister aux chocs de véhicules ; joints de chaussée et dalles de transition à concevoir dès l\'avant-projet (bourrelets et dislocations du revêtement sinon) (§ 5.1, § 3.9).' });
+  return items;
+}
+
 /**
  * Synthèse de l'aide à la conception pour un projet.
  * @param {object} p { spans, width, h, fck, psi, tirantAir, overhangs, D, I, type }
@@ -250,6 +327,7 @@ export function aideConception(p, res = {}) {
   const ab = verifierAbouts({ type, psi, D, overhangs });
   const mt = minTransversalGuide({ width, spans, h, psi, parallelesAppuis: psi >= 70 });
   sections.push({ title: 'Abouts et ferraillage minimal (§ 3.2, § 3.4.3)', items: [...ab.items, { level: 'info', text: mt.text }] });
+  sections.push({ title: 'Points de vigilance (désordres constatés, ch. 5 du guide)', items: pointsVigilance({ width, psi, type, spans }) });
   let descente = null, quant = null;
   if (res.deck && res.perm) { descente = descenteCharges(res.deck, res.perm); sections.push({ title: 'Descente de charges (§ 1.3)', items: descente.items }); }
   if (res.deck && res.design) { quant = quantites(res.deck, res.design, res.transDesign); sections.push({ title: 'Quantités indicatives', items: [{ level: 'info', text: quant.text }] }); }

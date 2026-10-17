@@ -16,16 +16,27 @@ test('domaine d\'emploi (§ 1.2) : DA ≤ 15 m (1–2 travées) / ≤ 18 m (≥ 
   assert.equal(domaineEmploi([5]).level, 'info', 'portée très courte : cadre/portique');
 });
 
-test('épaisseur indicative (§ 1.2, § 3.1.3) : élancements et coefficient de classe de béton', () => {
+test('épaisseur indicative : abaques numérisés (§ 3.1.2, § 3.1.3) et coefficient de classe de béton', async () => {
+  const { epaisseurAbaqueDA, epaisseurAbaqueDP } = await import('../src/conception.js');
   assert.equal(coefBeton(25), 1); assert.equal(coefBeton(30), 0.87); assert.equal(coefBeton(35), 0.81);
-  // exemple du guide : 4 travées 8-15-15-8 m, B25 → 0,56 m d'après les abaques ; l'élancement 1/28 donne 0,54 (−4 %)
-  rel(epaisseurGuide({ spans: [8, 15, 15, 8], fck: 25 }).h, 0.56, 0.05, 'h 8-15-15-8');
-  rel(epaisseurGuide({ spans: [12], fck: 25 }).h, 0.60, 1e-9, '1 travée : L/20');
-  rel(epaisseurGuide({ spans: [13, 13], fck: 35 }).h, 13 / 26 * 0.81, 1e-9, '2 travées B35');
-  const dp = epaisseurGuide({ spans: [15, 22, 15], type: 'DP' });
-  rel(dp.h, 22 / 33, 1e-9, 'DP 3 travées rectangulaire : L/33');
-  rel(epaisseurGuide({ spans: [15, 22, 15], type: 'DP', encorbellements: true }).h, 22 / 28, 1e-9, 'DP encorbellements : L/28');
-  rel(epaisseurGuide({ spans: [20], type: 'DP' }).range[0], 20 / 25, 1e-9, 'DP 1 travée : L/25 à L/22');
+  // exemple du guide (§ 3.1.3) : 4 travées 8-15-15-8 m, B25 → 0,56 m d'après l'abaque p. 67
+  rel(epaisseurAbaqueDA([8, 15, 15, 8]).h25, 0.56, 0.01, 'h 8-15-15-8');
+  rel(epaisseurGuide({ spans: [8, 15, 15, 8], fck: 25 }).h, 0.56, 0.01, 'epaisseurGuide = abaque');
+  rel(epaisseurGuide({ spans: [8, 15, 15, 8], fck: 35 }).h, 0.56 * 0.81, 0.01, 'B35 × 0,81');
+  // 4 travées : minimum vers θ ≈ 0,83 puis la travée de rive gouverne (p. 67)
+  const h = u => epaisseurAbaqueDA([u, 15, 15, u]).h25;
+  assert.ok(h(12.5) < h(8) && h(8) < h(15), 'forme de la courbe ℓ = 15 m');
+  rel(h(15), 0.609, 0.01, 'θ = 1 : 0,61 m');
+  // 3 travées p. 66 : ℓ = 15, rive 10 → 0,515 ; travée indépendante p. 65 : 12 m → 0,53 ; 2 travées égales 13 m → 0,56
+  rel(epaisseurAbaqueDA([10, 15, 10]).h25, 0.515, 0.01, '3 travées'); rel(epaisseurAbaqueDA([12]).h25, 0.531, 0.01, '1 travée');
+  rel(epaisseurAbaqueDA([13, 13]).h25, 0.558, 0.01, '2 travées');
+  // interpolation entre courbes et prolongement signalé
+  const mid = epaisseurAbaqueDA([10, 14.5, 14.5, 10]).h25; assert.ok(mid > h(10) - 0.04 && mid < h(10), 'interpolation en ℓ');
+  assert.ok(epaisseurAbaqueDA([14.6, 20.8, 14.6]).extrap, 'ℓ > 19 m : prolongement');
+  assert.ok(epaisseurAbaqueDA([9, 14, 15, 13, 8]).note.includes('5 travées'));
+  // PSI.DP : plateaux des abaques p. 59–61
+  rel(epaisseurAbaqueDP([15, 22, 15]).h, 0.635, 0.01, 'DP3 ℓ = 22'); rel(epaisseurAbaqueDP([15, 22, 15], true).h, 0.832, 0.01, 'DP3N');
+  rel(epaisseurAbaqueDP([20, 20]).h, 0.692, 0.01, 'DP2 ℓ = 20'); rel(epaisseurGuide({ spans: [15, 22, 15], type: 'DP' }).hElancement, 22 / 33, 1e-9, 'élancement 1/33');
 });
 
 test('propositions de travure : somme exacte, rives à 0,7, décroissance vers les culées', () => {
