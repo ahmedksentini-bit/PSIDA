@@ -4,6 +4,7 @@
  */
 import { elevationSVG, crossSectionSVG } from './svg.js';
 import { tableK } from '../src/guyon.js';
+import { planSVG } from './schema.js';
 
 const cm = v => (v * 1e4).toFixed(1);
 const f0 = v => v.toFixed(0), f1 = v => v.toFixed(1), f3 = v => v.toFixed(3);
@@ -51,7 +52,7 @@ export async function buildReport(st) {
 </style></head><body>
 <div class="noprint" style="margin-bottom:12px"><button onclick="window.print()" style="padding:8px 14px;font:inherit">Imprimer / enregistrer en PDF</button></div>
 <h1>Note de calcul — pont-dalle en béton armé (PSI-DA)</h1>
-<div class="meta">Calcul manuel assisté — moteur PSIDA v${esc(st.version || '0.5')} · ${date} · référentiels : Eurocodes (EN 1990/1991-2/1992) et Fascicule 61 titre II + BAEL 91</div>`;
+<div class="meta">Calcul manuel assisté — moteur PSIDA v${esc(st.version || '0.6')} · ${date} · référentiels : Eurocodes (EN 1990/1991-2/1992) et Fascicule 61 titre II + BAEL 91</div>`;
 
   // 1. Données
   h += `<h2>1. Données</h2><div class="box">
@@ -79,7 +80,7 @@ export async function buildReport(st) {
   }
 
   // 3. Modèle
-  h += `<h2>3. Modèle de calcul</h2><div class="svg">${elevationSVG(deck, keys)}</div><div class="svg">${crossSectionSVG({ deck, loads: [], title: 'Coupe transversale', note: '' })}</div>
+  h += `<h2>3. Modèle de calcul</h2><div class="svg">${elevationSVG(deck, keys)}</div><div class="svg">${crossSectionSVG({ deck, loads: [], title: 'Coupe transversale', note: '' })}</div>${p.concept && p.concept.psi < 100 ? `<div class="svg">${planSVG({ spans: deck.spans, width: 2 * deck.b, overhangs: g.overhangs || [0, 0], roadway: g.roadway, psi: p.concept.psi, transDir: p.concept.transversePerpendicular ? 'perp' : 'appuis' })}</div>` : ''}
 <table><thead><tr><th>Travée</th><th>L [m]</th><th>L_eq [m]</th><th>θ = b/L_eq</th></tr></thead><tbody>${deck.spans.map((L, j) => `<tr><td>${j + 1}</td><td>${L}</td><td>${f3(deck.Leq[j])}</td><td>${f3(deck.b / deck.Leq[j])}</td></tr>`).join('')}</tbody></table>`;
 
   // 4. Permanent

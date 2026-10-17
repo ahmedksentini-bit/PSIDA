@@ -9,6 +9,7 @@ import { TransverseModel } from '../src/transverse.js';
 import { buildReport } from './report.js';
 import { aideConception, rechercheEpaisseur } from '../src/conception.js';
 import { designBearings } from '../src/bearings.js';
+import { applyHelp, readGeometry, elevationInputSVG, crossSectionInputSVG, planSVG, summaryHTML } from './schema.js';
 
 const $ = s => document.querySelector(s);
 const nums = s => s.split(/[,;\s]+/).filter(Boolean).map(Number);
@@ -319,6 +320,23 @@ function hashToForm(form) {
   } catch (e) { return false; }
 }
 
+/** Schémas « ce que vous saisissez » : mis à jour à chaque modification du formulaire. */
+function renderScheme() {
+  try {
+    const g = readGeometry($('#f'));
+    $('#scheme-summary').innerHTML = summaryHTML(g);
+    $('#scheme-elevation').innerHTML = elevationInputSVG(g);
+    $('#scheme-cross').innerHTML = crossSectionInputSVG(g);
+    $('#scheme-plan').innerHTML = planSVG(g);
+  } catch (e) { $('#scheme-summary').innerHTML = `<p class="small">Schéma indisponible : ${e.message}</p>`; }
+}
+let schemeTimer = null;
+const scheduleScheme = () => { clearTimeout(schemeTimer); schemeTimer = setTimeout(renderScheme, 150); };
+$('#f').addEventListener('input', scheduleScheme);
+$('#f').addEventListener('change', scheduleScheme);
+applyHelp($('#f'), $('#help-list'));
+renderScheme();
+
 $('#f').addEventListener('submit', ev => {
   ev.preventDefault();
   $('#results').hidden = false; $('#results').classList.remove('concept-only');
@@ -338,6 +356,7 @@ $('#concept-travures').addEventListener('click', ev => {
   const f = $('#f');
   f.spans.value = v.spans.join(', '); f.h.value = v.hGuide.toFixed(2); f.area.value = ''; f.EI.value = f.EI.value.split(',')[0] + ',';
   $('#hs-min').value = ''; $('#hs-max').value = '';
+  renderScheme();
   $('#btn-concept').click();
 });
 $('#btn-hsearch').addEventListener('click', runThicknessSearch);
@@ -350,7 +369,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!state) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.5', hSearch: lastSearch });
+    const html = await buildReport({ ...state, version: '0.6', hSearch: lastSearch });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -370,4 +389,5 @@ $('#btn-chamoa').addEventListener('click', () => {
   f.hEdge.value = 0.40; f.joue.value = 1.0; f.EI.value = '34077, 0.43077'; f.withTherm.checked = true; f.fck.value = 35; f.fyk.value = 500; f.cover.value = 0.03;
   f.psi.value = 80; f.tirantAir.value = ''; f.typeDalle.value = 'auto'; f.Dabout.value = 25; f.rhoMax.value = 1.0; f.transDir.value = 'appuis'; f.nBearings.value = ''; f.xFixed.value = ''; f.epsSlow.value = 0.00025; f.dTu.value = 30;
   $('#hs-min').value = ''; $('#hs-max').value = '';
+  renderScheme();
 });

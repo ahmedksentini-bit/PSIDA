@@ -35,6 +35,7 @@ web/app.js          logique de l'interface (formulaire, cas de charge, rendu)
 web/svg.js          schémas SVG : élévation, coupe transversale avec les charges du cas affiché
 web/plots.js        graphiques Plotly : enveloppes M/V/R, K(y), m_x(y), facteur f(y), lignes d'influence, surface m_x(x,y), A_s(x), m_y(y)
 web/report.js       note de calcul HTML imprimable (graphiques en PNG)
+web/schema.js       schémas « ce que vous saisissez » (élévation, coupe, plan) et aide contextuelle des champs
 web/vendor/         plotly.min.js (2.35.2, MIT)
 src/linalg.js       Gauss, Gauss-Legendre
 src/beam.js         poutre continue : lignes d'influence M, V, R ; enveloppes UDL / travées entières / convois
@@ -106,8 +107,14 @@ Les hypothèses détaillées et les points à confronter aux notes CHAMOA / PSID
 
 ## Interface
 
-Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de référence), résultats à droite :
+Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de référence ; chaque champ porte une infobulle
+et une liste d'aide détaille les données), résultats à droite :
 
+- **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
+  classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et
+  schémas cotés : élévation (travées, appuis C0/P1…, abouts, h, hauteur libre, point fixe), coupe transversale (chanfreins,
+  chaussée et voies, trottoirs, charges linéiques et surfaciques, enrobage, appareils d'appui, ordonnées de calcul) et vue en
+  plan (biais ψ, lignes d'appui, direction des aciers).
 0. **Aide à la conception** (guide SETRA 1989, bouton « Aide à la conception seule » pour l'obtenir en une fraction de
    seconde sans lancer le calcul complet) — domaine d'emploi et type de dalle (§ 1.2), épaisseur lue sur les abaques
    du guide (h(ℓ, θℓ) pour 1–4 travées en BA, B25 × 0,87/0,81 pour B30/B35, graphique avec le point du projet ; plateaux
@@ -146,7 +153,7 @@ Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de
 9. **Permalien** — les données du formulaire sont encodées dans l'URL après chaque calcul : un lien suffit pour
    partager ou rejouer un cas (utile en cours).
 
-## État et limites (v0.5)
+## État et limites (v0.6)
 
 - Dalle pleine de hauteur constante, appuis simples, abouts en console (charges permanentes). Biais : le calcul longitudinal
   est fait suivant les portées biaises (comme CHAMOA, sans correction) ; les aciers transversaux sont corrigés par

@@ -14,8 +14,10 @@
   body { margin:0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--ink); background:var(--bg); }
   header { padding: 16px 20px 10px; border-bottom:1px solid var(--line); background:var(--card); }
   header h1 { margin:0; font-size: 20px; } header p { margin:4px 0 0; color:var(--muted); font-size:13px; }
-  main { max-width: 1280px; margin: 0 auto; padding: 16px; display:grid; gap:16px; grid-template-columns: 330px 1fr; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  main { max-width: 1280px; margin: 0 auto; padding: 16px; display:grid; gap:16px; grid-template-columns: 330px 1fr; grid-template-rows: auto 1fr; }
+  #f { grid-row: 1 / span 2; align-self: start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; grid-template-rows: auto; } #f { grid-row: auto; } }
+  #help-list dl { margin: 6px 0; } #help-list dt { font-weight: 600; margin-top: 6px; color: var(--ink); } #help-list dd { margin: 0 0 2px 0; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; min-width:0; }
   .card h2 { margin:0 0 10px; font-size:15px; } .card h3 { font-size:14px; margin:14px 0 6px; }
   label { display:block; font-size:13px; color:var(--muted); margin-top:8px; }
@@ -51,6 +53,7 @@
 <main>
   <form class="card" id="f">
     <h2>Données</h2>
+    <details id="help-box"><summary>Aide sur les données (survoler un champ affiche aussi son explication)</summary><div id="help-list" class="small"></div></details>
     <label>Portées [m]<input name="spans" value="14, 18, 14"></label>
     <div class="row">
       <label>Largeur dalle 2b [m]<input name="width" value="12" type="number" step="0.01"></label>
@@ -132,6 +135,13 @@
     <p class="small">Valeurs caractéristiques non pondérées. Moments de la poutre entière en kN·m, par mètre de largeur en kN·m/m.</p>
   </form>
 
+  <div class="card" id="scheme-card"><h2>Ce que vous saisissez</h2>
+    <p class="small">Schémas mis à jour en direct à partir du formulaire, avant tout calcul : vérifiez que la travure, la coupe et les charges correspondent à votre projet.</p>
+    <div id="scheme-summary"></div>
+    <div class="svgbox" id="scheme-elevation"></div>
+    <div class="svgbox" id="scheme-cross"></div>
+    <div class="svgbox" id="scheme-plan"></div>
+  </div>
   <div id="results" hidden>
     <pre id="error"></pre>
     <div class="card" id="concept-card"><h2>Aide à la conception — guide SETRA « Ponts-dalles » (1989)</h2>
