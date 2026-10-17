@@ -82,7 +82,7 @@ Chaque résultat de cas de charge contient, par section de calcul (tous les L/20
    chenille) étant positionnée indépendamment dans le sens longitudinal.
 
 Les hypothèses détaillées et les points à confronter aux notes CHAMOA / PSIDA sont dans
-[docs/hypotheses.md](docs/hypotheses.md).
+[docs/hypotheses.md](docs/hypotheses.md) ; la méthode complète, avec les formules à refaire à la main, est dans [docs/methode.md](docs/methode.md).
 
 ## Déploiement (GitHub → Cloudflare Pages)
 
