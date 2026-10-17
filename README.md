@@ -25,7 +25,8 @@ LM1 par mètre à l'appui (facteur KTRANS compris) — voir `test/chamoa.test.js
 index.html          interface
 web/app.js          logique de l'interface (formulaire, cas de charge, rendu)
 web/svg.js          schémas SVG : élévation, coupe transversale avec les charges du cas affiché
-web/plots.js        graphiques Plotly : enveloppes M/V/R, K(y), m_x(y), facteur f(y), lignes d'influence, surface m_x(x,y)
+web/plots.js        graphiques Plotly : enveloppes M/V/R, K(y), m_x(y), facteur f(y), lignes d'influence, surface m_x(x,y), A_s(x), m_y(y)
+web/report.js       note de calcul HTML imprimable (graphiques en PNG)
 web/vendor/         plotly.min.js (2.35.2, MIT)
 src/linalg.js       Gauss, Gauss-Legendre
 src/beam.js         poutre continue : lignes d'influence M, V, R ; enveloppes UDL / travées entières / convois
@@ -112,6 +113,11 @@ Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de
 7. **Flexion transversale** — m_y(y) par travée sur la dalle isostatique équivalente (permanent, TS, UDL, LM2,
    A(l), Bc, Mc120, D240, enveloppe combinée), aciers transversaux par face et par critère, minimums non sectionnels
    (20 % des longitudinaux, sup ≥ 50 % inf ; BAEL : A_s/3).
+
+8. **Note de calcul** — bouton « Exporter la note de calcul » : page HTML autonome (données, modèle, tableaux,
+   graphiques en PNG, hypothèses, références), à imprimer ou enregistrer en PDF depuis le navigateur.
+9. **Permalien** — les données du formulaire sont encodées dans l'URL après chaque calcul : un lien suffit pour
+   partager ou rejouer un cas (utile en cours).
 
 ## État et limites (v0.4)
 

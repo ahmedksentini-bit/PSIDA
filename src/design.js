@@ -62,7 +62,11 @@ export function designEC(deck, perm, ec, opt = {}) {
     const VEd = (1.35 * vG + 1.35 * K * vQ) / (2 * deck.b) * kNm2MNm; // MN/m
     const As = Math.max(envBot[s], envTop[s]);
     const r = shearVRdc({ d, As }, mat);
-    return { VEd, VRdc: r.VRdc, ratio: VEd / r.VRdc, rho: r.rho };
+    // EC2 6.2.3 : si V_Ed > V_Rd,c, étriers A_sw/s = V_Ed / (z·fywd·cot θ), z = 0,9 d, cot θ = 1 (bielles à 45°), et V_Rd,max
+    const z = 0.9 * d, cotT = 1, fywd = mat.fyd, nu1 = 0.6 * (1 - mat.fck / 250);
+    const VRdmax = 1 * z * nu1 * mat.fcd / (cotT + 1 / cotT);
+    const AswS = VEd > r.VRdc ? VEd / (z * fywd * cotT) : 0;
+    return { VEd, VRdc: r.VRdc, ratio: VEd / r.VRdc, rho: r.rho, AswS, VRdmax, okMax: VEd <= VRdmax };
   });
   // poinçonnement : roue LM1 voie 1 (αQ1·300/2, 0,40×0,40) et roue LM2 (βQ·200, 0,35×0,60), ELU γQ = 1,35
   const Q1 = 1.35 * ec.lm1.lanes[0].Q / 2 * kNm2MNm, Q2 = 1.35 * 400 * ec.alpha.aQ[0] / 2 * kNm2MNm;
@@ -115,7 +119,10 @@ export function designBAEL(deck, perm, f61, opt = {}) {
     const vMc = Math.max(pick(f61.Mc120, 'Vmax'), pick(f61.Mc120, 'Vmin'), pick(f61.D240, 'Vmax'), pick(f61.D240, 'Vmin'));
     const Vu = Math.max(1.35 * vG + 1.6 * K * vAB, 1.35 * vG + 1.35 * K * vMc) / (2 * deck.b) * kNm2MNm;
     const r = shearBAEL(Vu, sec, mat);
-    return { Vu, tau: r.tau, tauLim: r.tauLim, ratio: r.tau / r.tauLim };
+    // BAEL A.5.1.23 (armatures droites) si τu > τ̄u des dalles : A_t/s_t ≥ (τu − 0,3 k ft28)·b/(0,9 fsu), k = 1, et τu ≤ min(0,2 fc28/γb ; 5 MPa)
+    const tauMax = Math.min(0.2 * mat.fc28 / mat.gammaB, 5);
+    const AtS = r.tau > r.tauLim ? Math.max(0, r.tau - 0.3 * mat.ft28) / (0.9 * mat.fsu) : 0;
+    return { Vu, tau: r.tau, tauLim: r.tauLim, ratio: r.tau / r.tauLim, AtS, tauMax, okMax: r.tau <= tauMax };
   });
   const delta = f61.deltaBc ? Math.max(...f61.deltaBc) : 1;
   const punch = {

@@ -5,6 +5,7 @@ import { elevationSVG, crossSectionSVG } from './svg.js';
 import { envelopePlot, shearPlot, reactionPlot, kPlot, transversePlot, factorPlot, influencePlot, surfacePlot, asPlot, myPlot } from './plots.js';
 import { designEC, designBAEL, designTransverseEC, designTransverseBAEL } from '../src/design.js';
 import { TransverseModel } from '../src/transverse.js';
+import { buildReport } from './report.js';
 
 const $ = s => document.querySelector(s);
 const nums = s => s.split(/[,;\s]+/).filter(Boolean).map(Number);
@@ -171,7 +172,7 @@ function renderDesign(st) {
         h += `<tr><td>${k.label}</td><td>${face === 'bot' ? 'inf' : 'sup'} (y = ${deck.ys[iy]})</td><td>${f.Mu.toFixed(0)}</td><td>${f.Mcar.toFixed(0)}</td><td>${f.Mfre.toFixed(0)}</td><td>${f.Mqp.toFixed(0)}</td><td>${cm(f.AsULS)}</td><td>${cm(f.AsSLS)}</td><td>${cm(f.AsWk)}</td><td>${cm(Math.max(f.as921, f.as732, f.perFace))}</td><td><b>${cm(f.As)}</b></td><td>${f.sigS.toFixed(0)}</td><td>${f.sigC.toFixed(1)}</td><td>${f.xOverD.toFixed(2)}</td></tr>`;
       }
     }
-    h += `</tbody></table><p class="small">Moments en kN·m/m (fibre la plus sollicitée), aciers en cm²/m. Effort tranchant par mètre (V_Ed avec facteur K du cas LM1) / V_Rd,c : ` + keys.map(k => `${k.label} : ${dz.shear[k.idx].ratio.toFixed(2)}`).join(' ; ') + `. Poinçonnement : LM1 vEd = ${dz.punch.LM1.vEd.toFixed(3)} / vRd,c = ${dz.punch.LM1.vRdc.toFixed(3)} MPa (${dz.punch.LM1.ok ? 'OK' : 'NON'}) ; LM2 vEd = ${dz.punch.LM2.vEd.toFixed(3)} MPa (${dz.punch.LM2.ok ? 'OK' : 'NON'}). Aciers transversaux minimaux (EC2 9.3.1.1 : 20 % des longitudinaux) : inf ${cm(dz.transverseMin.bot)}, sup ${cm(dz.transverseMin.top)} cm²/m — à compléter par les moments transversaux m_y.</p>`;
+    h += `</tbody></table><p class="small">Moments en kN·m/m (fibre la plus sollicitée), aciers en cm²/m. Effort tranchant par mètre (V_Ed avec facteur K du cas LM1) / V_Rd,c : ` + keys.map(k => `${k.label} : ${dz.shear[k.idx].ratio.toFixed(2)}${dz.shear[k.idx].AswS > 0 ? ' → étriers A_sw/s = ' + (dz.shear[k.idx].AswS * 1e4).toFixed(1) + ' cm²/m par m' : ''}`).join(' ; ') + `. Poinçonnement : LM1 vEd = ${dz.punch.LM1.vEd.toFixed(3)} / vRd,c = ${dz.punch.LM1.vRdc.toFixed(3)} MPa (${dz.punch.LM1.ok ? 'OK' : 'NON'}) ; LM2 vEd = ${dz.punch.LM2.vEd.toFixed(3)} MPa (${dz.punch.LM2.ok ? 'OK' : 'NON'}). Aciers transversaux minimaux (EC2 9.3.1.1 : 20 % des longitudinaux) : inf ${cm(dz.transverseMin.bot)}, sup ${cm(dz.transverseMin.top)} cm²/m — à compléter par les moments transversaux m_y.</p>`;
   } else {
     h += `<p class="small">fc28 = ${dz.mat.fc28} MPa, fe = ${dz.mat.fe} MPa : fbu = ${dz.mat.fbu.toFixed(2)} MPa, fsu = ${dz.mat.fsu.toFixed(0)} MPa, μ_lim = ${dz.mat.muL.toFixed(3)} ; ELS fissuration ${dz.mat.fissuration} : σ̄s = ${isFinite(dz.mat.sigSbar) ? dz.mat.sigSbar.toFixed(0) + ' MPa' : '—'}, σ̄bc = ${dz.mat.sigBbar.toFixed(1)} MPa, n = 15 ; d = ${dz.d.toFixed(3)} m ; non-fragilité ${cm(dz.mins.nonFrag)}, dalle ${cm(dz.mins.dalle)} cm²/m.</p>`;
     h += `<table><thead><tr><th>Section</th><th>Face</th><th>M ELU</th><th>M ELS</th><th>ELU</th><th>ELS</th><th>min</th><th><b>A_s</b></th><th>σs</th><th>σb</th><th>α</th></tr></thead><tbody>`;
@@ -181,7 +182,7 @@ function renderDesign(st) {
         h += `<tr><td>${k.label}</td><td>${face === 'bot' ? 'inf' : 'sup'} (y = ${deck.ys[iy]})</td><td>${f.Mu.toFixed(0)}</td><td>${f.Ms.toFixed(0)}</td><td>${cm(f.AsELU)}</td><td>${cm(f.AsELS)}</td><td>${cm(Math.max(f.nonFrag, f.dalle))}</td><td><b>${cm(f.As)}</b></td><td>${f.sigS.toFixed(0)}</td><td>${f.sigB.toFixed(1)}</td><td>${f.alpha.toFixed(3)}</td></tr>`;
       }
     }
-    h += `</tbody></table><p class="small">Moments en kN·m/m, aciers en cm²/m. τu / τ̄u (dalles sans armatures d'âme, A.5.2.2) : ` + keys.map(k => `${k.label} : ${dz.shear[k.idx].ratio.toFixed(2)}`).join(' ; ') + `. Poinçonnement (A.5.2.42) : Br Qu = ${dz.punch.Br.Qu.toFixed(3)} / ${dz.punch.Br.QuLim.toFixed(3)} MN (${dz.punch.Br.ok ? 'OK' : 'NON'}). Armatures de répartition ≥ A_s/4 : inf ${cm(dz.transverseMin.bot)}, sup ${cm(dz.transverseMin.top)} cm²/m.</p>`;
+    h += `</tbody></table><p class="small">Moments en kN·m/m, aciers en cm²/m. τu / τ̄u (dalles sans armatures d'âme, A.5.2.2) : ` + keys.map(k => `${k.label} : ${dz.shear[k.idx].ratio.toFixed(2)}${dz.shear[k.idx].AtS > 0 ? ' → A_t/s_t = ' + (dz.shear[k.idx].AtS * 1e4).toFixed(1) + ' cm²/m par m' : ''}`).join(' ; ') + `. Poinçonnement (A.5.2.42) : Br Qu = ${dz.punch.Br.Qu.toFixed(3)} / ${dz.punch.Br.QuLim.toFixed(3)} MN (${dz.punch.Br.ok ? 'OK' : 'NON'}). Armatures de répartition ≥ A_s/4 : inf ${cm(dz.transverseMin.bot)}, sup ${cm(dz.transverseMin.top)} cm²/m.</p>`;
   }
   $('#design-tables').innerHTML = h;
 }
@@ -211,16 +212,44 @@ function renderSection(st) {
   influencePlot($('#plot-IL'), st.deck, k.idx, Math.min(sup, st.deck.spans.length));
 }
 
+function formToHash(form) {
+  const d = Object.fromEntries(new FormData(form).entries());
+  d.chamoaSign = form.chamoaSign.checked ? 1 : 0; d.withTherm = form.withTherm.checked ? 1 : 0;
+  try { location.hash = 'd=' + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(d))))); } catch (e) { /* ignore */ }
+}
+function hashToForm(form) {
+  const m = location.hash.match(/^#d=(.+)$/);
+  if (!m) return false;
+  try {
+    const d = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
+    for (const [k, v] of Object.entries(d)) { const el = form.elements[k]; if (!el) continue; if (el.type === 'checkbox') el.checked = !!+v; else el.value = v; }
+    return true;
+  } catch (e) { return false; }
+}
+
 $('#f').addEventListener('submit', ev => {
   ev.preventDefault();
   $('#results').hidden = false;
-  try { state = compute(parseForm(ev.target)); renderStatic(state); $('#error').textContent = ''; }
+  try { state = compute(parseForm(ev.target)); renderStatic(state); $('#error').textContent = ''; formToHash(ev.target); }
   catch (e) { $('#error').textContent = e.stack || String(e); }
 });
+if (hashToForm($('#f'))) $('#f').requestSubmit();
 $('#case-select').addEventListener('change', () => state && renderCase(state));
 $('#surface-which').addEventListener('change', () => state && renderCase(state));
 $('#section-select').addEventListener('change', () => state && renderSection(state));
 $('#design-ref').addEventListener('change', () => state && renderDesign(state));
+$('#btn-report').addEventListener('click', async () => {
+  if (!state) return;
+  const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
+  try {
+    const html = await buildReport({ ...state, version: '0.4' });
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, '_blank');
+    if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-de-calcul-pont-dalle.html'; aEl.click(); }
+  } catch (e) { $('#error').textContent = e.stack || String(e); }
+  finally { btn.disabled = false; btn.textContent = 'Exporter la note de calcul'; }
+});
 $('#trans-span').addEventListener('change', () => state && renderTransverse(state));
 $('#trans-ref').addEventListener('change', () => state && renderTransverse(state));
 $('#span-select').addEventListener('change', () => state && kPlot($('#plot-K'), state.deck, +$('#span-select').value));
