@@ -48,6 +48,7 @@ src/section_bael.js sections BAEL 91 : ELU, ELS, minimums, τu, poinçonnement
 src/design.js       ferraillage longitudinal et transversal, enveloppes, tranchant, poinçonnement
 src/transverse.js   flexion transversale m_y(y) par travée (dalle isostatique équivalente, Fourier)
 src/skew.js         biais : biais mécanique (SETRA 1989), moments dans les directions d'aciers (annexe 12A BPEL / CHAMOA, Wood-Armer)
+src/bearings.js     appareils d'appui en élastomère fretté : règles du guide § 3.6 (BT4), gamme standard, freinage EN 1991-2, rotations
 src/conception.js   aide à la conception : règles du guide SETRA 1989, variantes de travure, recherche de l'épaisseur minimale vérifiée
 src/abaques1989.js  abaques d'épaisseur du guide SETRA 1989 numérisés (PSI.DA p. 65–67 ; plateaux PSI.DP p. 59–61)
 tools/abaques1989/  script de numérisation (suivi de courbes sur les pages scannées) et données brutes
@@ -116,7 +117,9 @@ Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de
    (0,1 + 15 D), descente de charges (t/m², t/m) et quantités indicatives (béton, aciers en kg/m³). Variantes de travure
    à 1–5 travées pour la même longueur (bouton « Adopter ») et recherche de l'épaisseur minimale vérifiée : la chaîne
    Eurocodes complète est relancée de 2 cm en 2 cm (pratique CHAMOA) jusqu'à satisfaire x/d, σc, taux d'armatures,
-   V_Rd,max et poinçonnement.
+   V_Rd,max et poinçonnement. Après le calcul complet : prédimensionnement des appareils d'appui en élastomère fretté
+   par ligne d'appui (réactions ELS caractéristiques, distorsion lente et freinage, rotation, plus petit appareil de la
+   gamme standard NF T 47.815 du guide § 3.6).
 1. **Modèle** — élévation (portées, appuis, abouts, sections clés, L_eq, θ) et coupe transversale avec les
    charges du cas sélectionné (roues TS, files Bc/Bt, chenilles Mc120, bande D240, voies, trottoirs).
 2. **Enveloppes longitudinales** — M(x), V(x) de la poutre entière (permanent + cas de trafic, légende
@@ -134,7 +137,9 @@ Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de
 
 7. **Flexion transversale** — m_y(y) par travée sur la dalle isostatique équivalente (permanent, TS, UDL, LM2,
    A(l), Bc, Mc120, D240, enveloppe combinée), aciers transversaux par face et par critère, minimums non sectionnels
-   (20 % des longitudinaux, sup ≥ 50 % inf ; BAEL : A_s/3).
+   (20 % des longitudinaux, sup ≥ 50 % inf ; BAEL : A_s/3) et minimum du guide 1989 (1,3 n ‰). **Ouvrage biais** :
+   les aciers transversaux (parallèles aux lignes d'appui ou perpendiculaires aux bords libres, au choix) sont
+   dimensionnés avec le moment dans leur direction M_APF de l'annexe 12A du BPEL (pratique CHAMOA, reproduite exactement).
 
 8. **Note de calcul** — bouton « Exporter la note de calcul » : page HTML autonome (données, modèle, tableaux,
    graphiques en PNG, hypothèses, références), à imprimer ou enregistrer en PDF depuis le navigateur.
@@ -144,9 +149,9 @@ Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de
 ## État et limites (v0.5)
 
 - Dalle pleine de hauteur constante, appuis simples, abouts en console (charges permanentes). Biais : le calcul longitudinal
-  est fait suivant les portées biaises (comme CHAMOA, sans correction) ; le biais mécanique et les moments dans les
-  directions d'aciers (annexe 12A du BPEL, reproduits exactement sur la note CHAMOA) sont disponibles dans `src/skew.js`
-  mais ne sont pas encore appliqués automatiquement au ferraillage transversal de l'interface (prochaine étape).
+  est fait suivant les portées biaises (comme CHAMOA, sans correction) ; les aciers transversaux sont corrigés par
+  l'annexe 12A (biais mécanique du guide 1989, reproduits exactement sur la note CHAMOA).
+- Appareils d'appui : prédimensionnement aux règles du BT4 reprises par le guide 1989, à confirmer selon NF EN 1337-3.
 - Fatigue des armatures : vérification simplifiée σs ≤ 300 MPa sous ELS caractéristique (pratique CHAMOA), pas la méthode λ_s de l'EN 1992-2 annexe NN.
 - Pas encore : LM3 / convois spéciaux EC, phase de chantier (profil provisoire), tassements probables, encorbellements.
 - Le guide SETRA 1989 a été établi pour les charges du Fascicule 61 (classe I–II, deux voies) : ses abaques et élancements sont des

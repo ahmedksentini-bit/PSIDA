@@ -62,9 +62,10 @@ Comparaison CHAMOA (fichiers 5.4 et §4.3) : poids propre « ossature seule » a
 −6,4), outil 36,4 (ν = 0 : +2,6) — CHAMOA traite le chanfrein en encorbellement (TRV_ENC = −6,46) et son terme de couplage ν correspond à
 un m_x de ≈ 152 kN·m/m dont l'origine n'est pas documentée ; l'outil est du côté conservatif. Les aciers transversaux de la note
 (14,1 / 17,3 cm²/m inf.) sont dimensionnés par M_APF = 288 / 351 kN·m/m, moment dans la direction des aciers transversaux (parallèles
-aux lignes d'appui) de l'annexe 12A du BPEL. Cette transformation est désormais reproduite exactement (`skew.js`, méthode.md § 8 bis) :
-M_APF = 0,38 MX + 1,07 MY en travée 1, 0,28 MX + 1,17 MY en travée 2. L'écart résiduel porte sur les entrées : MY caractéristique CHAMOA
-114,9 contre ≈ 149 ici (travée 1, 15 harmoniques, charges locales diffusées), MX 435 contre ≈ 526 (max de travée avec Ta + 0,6 T).
+aux lignes d'appui) de l'annexe 12A du BPEL. Cette transformation est reproduite exactement (`skew.js`, méthode.md § 8 bis) et
+appliquée par l'outil : M_APF = 0,38 MX + 1,07 MY en travée 1, 0,28 MX + 1,17 MY en travée 2. L'écart résiduel porte sur les entrées :
+MY caractéristique CHAMOA 114,9 contre 149 ici (travée 1, 15 harmoniques, charges locales diffusées), MX 435 contre 528 (max de travée
+avec Ta + 0,6 T) → M_APF 359 / 417 contre 288 / 351 et aciers 18,6 / 21,8 cm²/m contre 14,1 / 17,3 (+30 %, du côté de la sécurité).
 
 Note : le biais de 80 gr de l'exemple n'intervient pas dans le calcul longitudinal (CHAMOA calcule « en biais géométrique » sans correction).
 
@@ -98,7 +99,7 @@ Note : le biais de 80 gr de l'exemple n'intervient pas dans le calcul longitudin
 
 Bibliographie : Bareš & Massonnet (1966) ; Pücher (1977) ; Homberg (1968) ; Calgaro & Virlogeux ; Hambly (1991) ; O'Brien, Keogh & O'Connor (2014) ; EN 1991-2, EN 1992-1-1, EN 1992-2 ; Fascicule 61 titre II ; BAEL 91.
 
-## 4. Vérifications internes déjà en place (`npm test`, 41 tests)
+## 4. Vérifications internes déjà en place (`npm test`, 45 tests)
 
 - Poutre : PL/4 ; −qL²/8 et 9/128·qL² (2 travées) ; −qL²/10, 0,08 qL², 0,025 qL² (3 travées) ; enveloppe une travée chargée 0,0957 qL² ; convoi glissant ; portées équivalentes 0,8L / 0,447L.
 - Guyon-Massonnet : conditions de bord libre exactes, saut de Y''' = 1 sous la charge, flèche moyenne = poutre (∫K = 2b à 10⁻⁵), réciprocité K(y,e) = K(e,y), symétrie, limite θ → 0 ⇒ K = 1, continuité en charge de bord, μ nul aux bords, ∫m_x dy = moment de poutre (séries de Fourier).

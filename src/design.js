@@ -13,6 +13,7 @@
 import { combineEC, combineBAEL, combineBeamEC, combineBeamBAEL } from './combinations.js';
 import { materialsEC2, flexureULS, flexureSLS, asForCrackWidth, minimumSteel, shearVRdc, punching, chamferWidthFn } from './section_ec2.js';
 import { materialsBAEL, flexureELU, flexureELS, minimumSteelBAEL, shearBAEL, punchingBAEL } from './section_bael.js';
+import { mechanicalSkew, equivalentWidth, annexe12A } from './skew.js';
 
 const kNm2MNm = 1e-3;
 
@@ -137,6 +138,29 @@ export function designBAEL(deck, perm, f61, opt = {}) {
 // Flexion transversale : aciers transversaux par travée (section rectangulaire par mètre, d_y = h − c − φ)
 // -----------------------------------------------------------------------------------------------------
 
+/**
+ * Biais : moments dans la direction des aciers transversaux (annexe 12A du BPEL, pratique CHAMOA) pour une travée.
+ * MX = moment longitudinal maximal de la travée (par mètre, toutes fibres), MY = moment transversal maximal (Guyon) ;
+ * les deux maxima ne sont pas concomitants (CHAMOA). Pour la nappe supérieure (MY < 0) la note prend MX = 0.
+ * @returns {{phiMec:number, psi2:number, Be:number, max:object, min:object}} ou null si l'ouvrage est droit
+ */
+function skewMoments(deck, j, longComb, transComb, opt) {
+  const psi = opt.psi ?? deck.g.psi ?? 100;
+  if (!(psi < 100)) return null;
+  const Be = equivalentWidth({ width: 2 * deck.b, h: deck.h, I: opt.I || null });
+  const phiMec = mechanicalSkew({ psi, Be, L: deck.spans[j] });
+  const psi2 = opt.transversePerpendicular ? 100 : psi;
+  const idx = deck.beam.sections.map((s, i) => (s.span === j ? i : -1)).filter(i => i >= 0);
+  const out = { phiMec, psi2, Be, psi, max: {}, min: {} };
+  for (const key of Object.keys(transComb)) {
+    const MX = Math.max(0, ...idx.map(i => Math.max(...longComb[key].max[i])));
+    const MY = Math.max(0, ...transComb[key].max[j]), MYmin = Math.min(0, ...transComb[key].min[j]);
+    out.max[key] = { MX, MY, M: annexe12A({ MX, MY, phiMec, psi, psi2, face: 'bot' }).M2 };
+    out.min[key] = { MX: 0, MY: MYmin, M: annexe12A({ MX: 0, MY: MYmin, phiMec, psi, psi2, face: 'top' }).M2 };
+  }
+  return out;
+}
+
 /** Pseudo-résultats [travée][y] pour réutiliser les combinaisons longitudinales. */
 function asCase(spans, pick) { return { mxMax: spans.map(sp => pick(sp).myMax), mxMin: spans.map(sp => pick(sp).myMin) }; }
 
@@ -165,14 +189,23 @@ export function designTransverseEC(deck, trans, longEC, opt = {}) {
     const botY = trans.ys.map((_, iy) => face(Math.max(comb.ELU.max[j][iy], 0), Math.max(comb.CAR.max[j][iy], 0), Math.max(comb.FREQ.max[j][iy], 0)));
     const topY = trans.ys.map((_, iy) => face(Math.max(-comb.ELU.min[j][iy], 0), Math.max(-comb.CAR.min[j][iy], 0), Math.max(-comb.FREQ.min[j][iy], 0)));
     const ib = botY.map(f => f.flex).indexOf(Math.max(...botY.map(f => f.flex))), it = topY.map(f => f.flex).indexOf(Math.max(...topY.map(f => f.flex)));
-    const bot = botY[ib], top = topY[it];
+    let bot = botY[ib], top = topY[it];
+    // biais : moments dans la direction des aciers (annexe 12A) à la place de m_y
+    const skew = skewMoments(deck, j, longEC.comb, { ELU: comb.ELU, CAR: comb.CAR, FREQ: comb.FREQ }, opt);
+    if (skew) {
+      bot = { ...face(skew.max.ELU.M, skew.max.CAR.M, skew.max.FREQ.M), straight: bot, skew: skew.max };
+      top = { ...face(-skew.min.ELU.M, -skew.min.CAR.M, -skew.min.FREQ.M), straight: top, skew: skew.min };
+    }
     const nonSecBot = 0.2 * asLongBot;
-    const botAs = Math.max(bot.flex, nonSecBot, mins.perFace);
+    // minimum du guide SETRA 1989 § 3.4.3 (gradient thermique) : 1,3 n ‰ ≤ 2 ‰ de b·h, × 1/sin ψ si parallèles aux lignes d'appui
+    const nWL = 2 * deck.b / Math.max(...deck.spans);
+    const minGuide = Math.min(1.3 * nWL, 2) / 1000 * h * (skew && skew.psi2 < 100 ? 1 / Math.sin(skew.psi2 * Math.PI / 200) : 1);
+    const botAs = Math.max(bot.flex, nonSecBot, mins.perFace, minGuide);
     const nonSecTop = Math.max(0.2 * asLongTop, 0.5 * botAs);
     const topAs = Math.max(top.flex, nonSecTop, mins.perFace);
-    out.push({ j, L: sp.L, bot: { ...bot, y: trans.ys[ib], nonSec: nonSecBot, perFace: mins.perFace, As: botAs }, top: { ...top, y: trans.ys[it], nonSec: nonSecTop, perFace: mins.perFace, As: topAs }, asLongBot, asLongTop, comb: { CARmax: comb.CAR.max[j], CARmin: comb.CAR.min[j], ELUmax: comb.ELU.max[j], ELUmin: comb.ELU.min[j] } });
+    out.push({ j, L: sp.L, bot: { ...bot, y: trans.ys[ib], nonSec: nonSecBot, perFace: mins.perFace, minGuide, As: botAs }, top: { ...top, y: trans.ys[it], nonSec: nonSecTop, perFace: mins.perFace, As: topAs }, asLongBot, asLongTop, skew, comb: { CARmax: comb.CAR.max[j], CARmin: comb.CAR.min[j], ELUmax: comb.ELU.max[j], ELUmin: comb.ELU.min[j] } });
   });
-  return { mat, d, spans: out, ys: trans.ys };
+  return { mat, d, spans: out, ys: trans.ys, skew: out[0].skew ? { psi: out[0].skew.psi, psi2: out[0].skew.psi2, Be: out[0].skew.Be, sinPsi: Math.sin(out[0].skew.psi2 * Math.PI / 200) } : null };
 }
 
 export function designTransverseBAEL(deck, trans, longBAEL, opt = {}) {
@@ -193,10 +226,17 @@ export function designTransverseBAEL(deck, trans, longBAEL, opt = {}) {
     const botY = trans.ys.map((_, iy) => face(Math.max(comb.ELU.max[j][iy], 0), Math.max(comb.ELS.max[j][iy], 0)));
     const topY = trans.ys.map((_, iy) => face(Math.max(-comb.ELU.min[j][iy], 0), Math.max(-comb.ELS.min[j][iy], 0)));
     const ib = botY.map(f => f.flex).indexOf(Math.max(...botY.map(f => f.flex))), it = topY.map(f => f.flex).indexOf(Math.max(...topY.map(f => f.flex)));
-    const bot = botY[ib], top = topY[it];
+    let bot = botY[ib], top = topY[it];
+    const skew = skewMoments(deck, j, longBAEL.comb, { ELU: comb.ELU, ELS: comb.ELS }, opt);
+    if (skew) {
+      bot = { ...face(skew.max.ELU.M, skew.max.ELS.M), straight: bot, skew: skew.max };
+      top = { ...face(-skew.min.ELU.M, -skew.min.ELS.M), straight: top, skew: skew.min };
+    }
+    const nWL = 2 * deck.b / Math.max(...deck.spans);
+    const minGuide = Math.min(1.3 * nWL, 2) / 1000 * h * (skew && skew.psi2 < 100 ? 1 / Math.sin(skew.psi2 * Math.PI / 200) : 1);
     // armatures de répartition BAEL (B.7.4) : ≥ A_s,long/4 (charges réparties) ; ≥ A_s,long/3 pour charges concentrées
-    const botAs = Math.max(bot.flex, asLongBot / 3, mins.dalle), topAs = Math.max(top.flex, asLongTop / 3, mins.dalle);
-    out.push({ j, L: sp.L, bot: { ...bot, y: trans.ys[ib], nonSec: asLongBot / 3, As: botAs }, top: { ...top, y: trans.ys[it], nonSec: asLongTop / 3, As: topAs }, asLongBot, asLongTop, comb: { ELSmax: comb.ELS.max[j], ELSmin: comb.ELS.min[j], ELUmax: comb.ELU.max[j], ELUmin: comb.ELU.min[j] } });
+    const botAs = Math.max(bot.flex, asLongBot / 3, mins.dalle, minGuide), topAs = Math.max(top.flex, asLongTop / 3, mins.dalle);
+    out.push({ j, L: sp.L, bot: { ...bot, y: trans.ys[ib], nonSec: asLongBot / 3, minGuide, As: botAs }, top: { ...top, y: trans.ys[it], nonSec: asLongTop / 3, As: topAs }, asLongBot, asLongTop, skew, comb: { ELSmax: comb.ELS.max[j], ELSmin: comb.ELS.min[j], ELUmax: comb.ELU.max[j], ELUmin: comb.ELU.min[j] } });
   });
-  return { mat, d, spans: out, ys: trans.ys };
+  return { mat, d, spans: out, ys: trans.ys, skew: out[0].skew ? { psi: out[0].skew.psi, psi2: out[0].skew.psi2, Be: out[0].skew.Be, sinPsi: Math.sin(out[0].skew.psi2 * Math.PI / 200) } : null };
 }

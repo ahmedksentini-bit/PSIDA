@@ -8,6 +8,7 @@ import { designEC, designBAEL, designTransverseEC, designTransverseBAEL } from '
 import { TransverseModel } from '../src/transverse.js';
 import { buildReport } from './report.js';
 import { aideConception, rechercheEpaisseur } from '../src/conception.js';
+import { designBearings } from '../src/bearings.js';
 
 const $ = s => document.querySelector(s);
 const nums = s => s.split(/[,;\s]+/).filter(Boolean).map(Number);
@@ -40,7 +41,8 @@ function parseForm(form) {
     alpha: d.alpha, nRetenue: +d.nRetenue, classe: d.classe.trim() ? +d.classe : null, chamoaSign: !!d.chamoaSign,
     withTherm: !!d.withTherm, dT: nums(d.dT), E: +EIv[0] || 34000, I: EIv[1] ? +EIv[1] : null, delta: +d.delta, phiFluage: +d.phiFluage,
     mat: { fck: +d.fck, fyk: +d.fyk, fc28: +d.fck, fe: +d.fyk, c: +d.cover, phi: +d.phi / 1000, phiT: +(d.phiT || 16) / 1000, wkMax: +d.wk, fissuration: d.fiss, tRev: +d.tRev },
-    concept: { psi: +(d.psi || 100), tirantAir: (d.tirantAir || '').trim() ? +d.tirantAir : null, type: d.typeDalle || 'auto', D: +(d.Dabout || 25) / 1000, rhoMax: +(d.rhoMax || 1) / 100 },
+    concept: { psi: +(d.psi || 100), tirantAir: (d.tirantAir || '').trim() ? +d.tirantAir : null, type: d.typeDalle || 'auto', D: +(d.Dabout || 25) / 1000, rhoMax: +(d.rhoMax || 1) / 100,
+      transversePerpendicular: d.transDir === 'perp', nBearings: (d.nBearings || '').trim() ? +d.nBearings : null, xFixed: (d.xFixed || '').trim() ? +d.xFixed : null, epsSlow: +(d.epsSlow || 2.5e-4), dTu: +(d.dTu || 30) },
   };
 }
 
@@ -65,10 +67,13 @@ function compute(p) {
   };
   const tm = new TransverseModel(deck, { tRev: p.mat.tRev, nHarm: 15 });
   const trans = tm.run({ alpha: EC_ALPHA[p.alpha], f61opt: { nRetenue: p.nRetenue, classe: p.classe }, thermal, settle });
+  const skewOpt = { psi: p.concept.psi, I: p.I, transversePerpendicular: p.concept.transversePerpendicular };
   const transDesign = {
-    EC: designTransverseEC(deck, trans, design.EC, { ...p.mat, phi: p.mat.phiT, phiLong: p.mat.phi }),
-    F61: designTransverseBAEL(deck, trans, design.F61, { ...p.mat, phiLong: p.mat.phi }),
+    EC: designTransverseEC(deck, trans, design.EC, { ...p.mat, phi: p.mat.phiT, phiLong: p.mat.phi, ...skewOpt }),
+    F61: designTransverseBAEL(deck, trans, design.F61, { ...p.mat, phiLong: p.mat.phi, ...skewOpt }),
   };
+  const EI = thermal ? thermal.EI : (p.E || 34000) * 1000 * (p.I || p.deckInput.width * Math.pow(p.deckInput.h, 3) / 12);
+  const bearings = designBearings({ deck, beamComb: design.EC.beam, EI, nPerLine: p.concept.nBearings, xFixed: p.concept.xFixed, epsSlow: p.concept.epsSlow, dT: p.concept.dTu, alphaQ1: ec.alpha.aQ[0], alphaq1: ec.alpha.aq1 });
   const cases = [
     { id: 'TS', label: 'LM1 – TS', res: ec.TS, ref: 'EC' }, { id: 'UDL', label: 'LM1 – UDL', res: ec.UDL, ref: 'EC' },
     { id: 'LM1', label: 'LM1 (TS + UDL)', res: ec.LM1, ref: 'EC' }, { id: 'gr1a', label: 'gr1a (LM1 + trottoirs 3 kN/m²)', res: ec.gr1a, ref: 'EC' },
@@ -80,7 +85,7 @@ function compute(p) {
   ];
   if (thermal) cases.push({ id: 'therm', label: 'Gradient thermique (±)', res: { ...thermal, Vmax: thermal.Vmax, Vmin: thermal.Vmin }, ref: 'EC' }, { id: 'settle', label: 'Tassements aléatoires (±)', res: settle, ref: 'EC' });
   const concept = aideConception(conceptInput(p), { deck, perm, design: design.EC, transDesign: transDesign.EC });
-  return { p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transDesign, concept, dt: (performance.now() - t0) / 1000 };
+  return { p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transDesign, concept, bearings, dt: (performance.now() - t0) / 1000 };
 }
 
 /** Aide à la conception seule : géométrie, charges permanentes et règles du guide (quelques dixièmes de seconde). */
@@ -100,6 +105,8 @@ function renderConception(st) {
   $('#concept').innerHTML = h;
   if (c.type === 'DA' && c.epaisseur.abaque) abaquePlot($('#plot-abaque'), st.deck.spans, c.epaisseur.abaque, c.epaisseur.k || 1, ABAQUES);
   else Plotly.purge($('#plot-abaque'));
+  // appareils d'appui
+  $('#concept-bearings').innerHTML = st.bearings ? bearingsTable(st) : '<p class="small">Disponible après le calcul complet (réactions ELS caractéristiques avec trafic).</p>';
   // variantes de travure
   const tv = c.travures;
   let t = `<p class="small">Longueur entre appuis extrêmes L = ${c.Ltot.toFixed(1)} m ; rives à 0,7 fois la travée adjacente (§ 2.1.1), travées décroissantes vers les culées ; épaisseur indicative par l'élancement du guide (B${st.p.mat.fck}). « Adopter » recopie la travure (et l'épaisseur indicative) dans le formulaire.</p>
@@ -112,6 +119,20 @@ function renderConception(st) {
   const r2 = v => (Math.round(v / 0.02) * 0.02).toFixed(2);
   if (!$('#hs-min').value) $('#hs-min').value = r2(Math.max(0.3, Lmax / 32));
   if (!$('#hs-max').value) $('#hs-max').value = r2(Math.max(st.deck.h, Lmax / 14));
+}
+
+function bearingsTable(st) {
+  const b = st.bearings;
+  let h = `<p class="small">Règles du § 3.6.1 (bulletin technique n° 4 du SETRA) : σ = P/(ab) ≤ min(15 MPa ; G·ab/(t(a+b))) avec G = ${b.G1} MPa ; u_g/T ≤ 0,5 ; u_g/T + H/(G₂ab) ≤ 0,7 (G₂ = ${b.G2} MPa) ; T ≤ min(a, b)/5 ; t·T ≥ α·a²/3. Réactions ELS caractéristiques (G + trafic + T + Ta) réparties sur ${b.nb} appareils par ligne ; u_g = (ε + α_T·ΔT)·distance au point fixe (ε = ${b.epsSlow}, ΔT = ${b.dT} °C, point fixe à x = ${b.xf.toFixed(1)} m) ; H = freinage EN 1991-2 § 4.4.1 = ${b.H.toFixed(0)} kN réparti sur ${b.nb * b.nLines} appareils ; α = ${(b.alpha0 * 1000).toFixed(0)} mrad de défaut de pose + rotation d'appui estimée par l'enveloppe ELS caractéristique. Sélection : plus petit appareil entièrement enrobé de la gamme standard du guide (NF T 47.815).</p>
+  <table><thead><tr><th>Ligne d'appui</th><th>x [m]</th><th>R max / min [kN]</th><th>P max / min par appareil [kN]</th><th>u_g [mm]</th><th>H [kN]</th><th>α [mrad]</th><th>Appareil</th><th>σ / σ_lim [MPa]</th><th>u_g/T ; total</th><th>T ≤ a/5</th><th>α_lim [mrad]</th><th>σ_min</th></tr></thead><tbody>`;
+  for (const r of b.rows) {
+    const s = r.sel;
+    h += `<tr><td>${r.i === 0 || r.i === b.rows.length - 1 ? 'Culée' : 'Pile'} ${r.i}</td><td>${r.x.toFixed(1)}</td><td>${r.Rmax.toFixed(0)} / ${r.Rmin.toFixed(0)}${r.uplift ? ' (soulèvement)' : ''}</td><td>${r.Pmax.toFixed(0)} / ${r.Pmin.toFixed(0)}</td><td>${(r.ug * 1000).toFixed(1)}</td><td>${r.Hb.toFixed(1)}</td><td>${(r.alpha * 1000).toFixed(1)}</td>`;
+    if (s) h += `<td><b>${s.label}</b> (${s.hTot} mm)</td><td>${s.sig.toFixed(1)} / ${s.sigLim.toFixed(1)}</td><td>${s.dist1.toFixed(2)} ; ${s.dist2.toFixed(2)}</td><td>${(s.T * 1000).toFixed(0)} ≤ ${(s.Tmax * 1000).toFixed(0)}</td><td>${(s.rotLim * 1000).toFixed(1)}</td><td>${s.sigMin.toFixed(1)}${s.antiCheminement ? ' <span class="badge warn">&lt; 2 : anti-cheminement</span>' : ''}${s.glissement ? ' <span class="badge warn">H &gt; f·P : blocage</span>' : ''}</td></tr>`;
+    else h += `<td colspan="6"><span class="badge warn">ATTENTION</span>aucun appareil standard ne convient : augmenter le nombre d'appareils par ligne, appareils sur mesure ou à pot d'élastomère (§ 3.7)</td></tr>`;
+  }
+  h += `</tbody></table><p class="small">Désignation a×b×n(t+ts) : dimensions efficaces en plan [mm], n feuillets d'élastomère de t mm et frettes de ts mm (hauteur totale avec frettes entre parenthèses). Les appareils sont supposés identiques sur une ligne et libres (pas de point fixe mécanique) ; prévoir bossages, taquets et 5 cm minimum au bord (figure § 3.6.1). Prédimensionnement à confirmer selon la norme en vigueur (NF EN 1337-3).</p>`;
+  return h;
 }
 
 async function runThicknessSearch() {
@@ -259,14 +280,20 @@ function renderTransverse(st) {
   myPlot($('#plot-my'), st.deck, st.trans, j, extra);
   const cm = v => (v * 1e4).toFixed(1);
   let h = `<p class="small">Dalle isostatique équivalente (L_eq, bords libres, ν = ${st.deck.nu}), charges diffusées à 45° jusqu'au feuillet moyen (contact + 2·${st.p.mat.tRev} + h), séries de Fourier (15 harmoniques), charges roulantes centrées sur x = L_eq/2, enveloppe sur les positions transversales ; thermique et tassements : m_y = ν·m_x. Hauteur utile transversale d = h − c − φ_long = ${dz.d.toFixed(3)} m.</p>`;
+  if (dz.skew) {
+    h += `<p class="small"><b>Ouvrage biais (ψ = ${dz.skew.psi} gr)</b> : les aciers transversaux sont ${dz.skew.psi2 < 100 ? 'parallèles aux lignes d\'appui' : 'perpendiculaires aux bords libres'} et dimensionnés avec le moment dans leur direction M_APF (annexe 12A du BPEL, pratique CHAMOA § 3.4, reproduite exactement sur la note) : moments principaux MX (longitudinal maximal de la travée) et MY (transversal maximal, non concomitants) tournés du biais mécanique φ, béton comprimé sur la bissectrice des deux familles ; nappe supérieure avec MX = 0. Be = ${dz.skew.Be.toFixed(2)} m. Les aciers sont donnés par mètre perpendiculaire aux aciers${dz.skew.psi2 < 100 ? ` ; par mètre d'axe de l'ouvrage, multiplier par sin ψ = ${dz.skew.sinPsi.toFixed(3)}` : ''}.</p>
+    <table><thead><tr><th>Travée</th><th>φ_mec [gr]</th><th>MX car. [kN·m/m]</th><th>MY car.</th><th><b>M_APF car.</b></th><th>MX ELU</th><th>MY ELU</th><th><b>M_APF ELU</b></th><th>MY min car.</th><th>M_APF min car.</th></tr></thead><tbody>`;
+    dz.spans.forEach(sp2 => { const k = sp2.skew; const c = ref === 'EC' ? 'CAR' : 'ELS'; h += `<tr><td>Travée ${sp2.j + 1}</td><td>${k.phiMec.toFixed(2)}</td><td>${k.max[c].MX.toFixed(1)}</td><td>${k.max[c].MY.toFixed(1)}</td><td><b>${k.max[c].M.toFixed(1)}</b></td><td>${k.max.ELU.MX.toFixed(1)}</td><td>${k.max.ELU.MY.toFixed(1)}</td><td><b>${k.max.ELU.M.toFixed(1)}</b></td><td>${k.min[c].MY.toFixed(1)}</td><td>${k.min[c].M.toFixed(1)}</td></tr>`; });
+    h += `</tbody></table>`;
+  }
   if (ref === 'EC') {
-    h += `<table><thead><tr><th>Travée</th><th>Face</th><th>y</th><th>M ELU</th><th>M car.</th><th>M fréq.</th><th>ELU</th><th>ELS σ</th><th>wk</th><th>non sect.</th><th><b>A_s,y</b></th><th>σs</th></tr></thead><tbody>`;
-    dz.spans.forEach(sp2 => { for (const face of ['bot', 'top']) { const f = sp2[face]; h += `<tr><td>Travée ${sp2.j + 1}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${f.y}</td><td>${f.Mu.toFixed(1)}</td><td>${f.Mcar.toFixed(1)}</td><td>${f.Mfre.toFixed(1)}</td><td>${cm(f.AsULS)}</td><td>${cm(f.AsSLS)}</td><td>${cm(f.AsWk)}</td><td>${cm(f.nonSec)}</td><td><b>${cm(f.As)}</b></td><td>${f.sigS.toFixed(0)}</td></tr>`; } });
-    h += `</tbody></table><p class="small">Non sectionnel (EC2 9.3.1.1 et pratique CHAMOA) : A_s,trans,inf ≥ 0,2 A_s,long,inf ; A_s,trans,sup ≥ max(0,2 A_s,long,sup ; 0,5 A_s,trans,inf). Le critère wk (7.3.4) impose un espacement ≤ 5(c + φ/2), d'où un minimum lié au diamètre choisi (φ transversal ${(st.p.mat.phiT * 1000).toFixed(0)} mm).</p>`;
+    h += `<table><thead><tr><th>Travée</th><th>Face</th><th>y</th><th>M ELU</th><th>M car.</th><th>M fréq.</th><th>ELU</th><th>ELS σ</th><th>wk</th><th>non sect.</th><th>min 1989</th><th><b>A_s,y</b></th><th>σs</th></tr></thead><tbody>`;
+    dz.spans.forEach(sp2 => { for (const face of ['bot', 'top']) { const f = sp2[face]; h += `<tr><td>Travée ${sp2.j + 1}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${f.y}</td><td>${f.Mu.toFixed(1)}</td><td>${f.Mcar.toFixed(1)}</td><td>${f.Mfre.toFixed(1)}</td><td>${cm(f.AsULS)}</td><td>${cm(f.AsSLS)}</td><td>${cm(f.AsWk)}</td><td>${cm(f.nonSec)}</td><td>${f.minGuide !== undefined ? cm(f.minGuide) : '—'}</td><td><b>${cm(f.As)}</b></td><td>${f.sigS.toFixed(0)}</td></tr>`; } });
+    h += `</tbody></table><p class="small">Non sectionnel (EC2 9.3.1.1 et pratique CHAMOA) : A_s,trans,inf ≥ 0,2 A_s,long,inf ; A_s,trans,sup ≥ max(0,2 A_s,long,sup ; 0,5 A_s,trans,inf) ; « min 1989 » : 1,3 n ‰ ≤ 2 ‰ de b·h (n = largeur/portée, × 1/sin ψ si parallèles aux lignes d'appui), guide SETRA § 3.4.3. Le critère wk (7.3.4) impose un espacement ≤ 5(c + φ/2), d'où un minimum lié au diamètre choisi (φ transversal ${(st.p.mat.phiT * 1000).toFixed(0)} mm).${dz.skew ? ' Moments M ELU / car. / fréq. = M_APF (direction des aciers).' : ''}</p>`;
   } else {
-    h += `<table><thead><tr><th>Travée</th><th>Face</th><th>y</th><th>M ELU</th><th>M ELS</th><th>ELU</th><th>ELS</th><th>répartition</th><th><b>A_s,y</b></th><th>σs</th></tr></thead><tbody>`;
-    dz.spans.forEach(sp2 => { for (const face of ['bot', 'top']) { const f = sp2[face]; h += `<tr><td>Travée ${sp2.j + 1}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${f.y}</td><td>${f.Mu.toFixed(1)}</td><td>${f.Ms.toFixed(1)}</td><td>${cm(f.AsELU)}</td><td>${cm(f.AsELS)}</td><td>${cm(f.nonSec)}</td><td><b>${cm(f.As)}</b></td><td>${f.sigS.toFixed(0)}</td></tr>`; } });
-    h += `</tbody></table><p class="small">Armatures de répartition BAEL B.7.4 : ≥ A_s,long/3 (charges concentrées).</p>`;
+    h += `<table><thead><tr><th>Travée</th><th>Face</th><th>y</th><th>M ELU</th><th>M ELS</th><th>ELU</th><th>ELS</th><th>répartition</th><th>min 1989</th><th><b>A_s,y</b></th><th>σs</th></tr></thead><tbody>`;
+    dz.spans.forEach(sp2 => { for (const face of ['bot', 'top']) { const f = sp2[face]; h += `<tr><td>Travée ${sp2.j + 1}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${f.y}</td><td>${f.Mu.toFixed(1)}</td><td>${f.Ms.toFixed(1)}</td><td>${cm(f.AsELU)}</td><td>${cm(f.AsELS)}</td><td>${cm(f.nonSec)}</td><td>${f.minGuide !== undefined ? cm(f.minGuide) : '—'}</td><td><b>${cm(f.As)}</b></td><td>${f.sigS.toFixed(0)}</td></tr>`; } });
+    h += `</tbody></table><p class="small">Armatures de répartition BAEL B.7.4 : ≥ A_s,long/3 (charges concentrées) ; « min 1989 » : guide SETRA § 3.4.3.${dz.skew ? ' Moments ELU / ELS = M_APF (direction des aciers).' : ''}</p>`;
   }
   $('#trans-tables').innerHTML = h;
 }
@@ -341,6 +368,6 @@ $('#btn-chamoa').addEventListener('click', () => {
   f.bands.value = '0.66 sur -6,6 k 0.8/1.2 ; 1.92 sur -5,5 k 0.8/1.4 ; 0.72 sur -6,-5 ; 0.72 sur 5,6'; f.ys.value = '-6, -4.5, -3, -1.5, 0, 1.5, 3, 4.5, 6';
   f.Leq.value = ''; f.alpha.value = 'FR2'; f.nRetenue.value = 0; f.classe.value = ''; f.nu.value = 0.2; f.chamoaSign.checked = true;
   f.hEdge.value = 0.40; f.joue.value = 1.0; f.EI.value = '34077, 0.43077'; f.withTherm.checked = true; f.fck.value = 35; f.fyk.value = 500; f.cover.value = 0.03;
-  f.psi.value = 80; f.tirantAir.value = ''; f.typeDalle.value = 'auto'; f.Dabout.value = 25; f.rhoMax.value = 1.0;
+  f.psi.value = 80; f.tirantAir.value = ''; f.typeDalle.value = 'auto'; f.Dabout.value = 25; f.rhoMax.value = 1.0; f.transDir.value = 'appuis'; f.nBearings.value = ''; f.xFixed.value = ''; f.epsSlow.value = 0.00025; f.dTu.value = 30;
   $('#hs-min').value = ''; $('#hs-max').value = '';
 });

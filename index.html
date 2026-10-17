@@ -115,6 +115,15 @@
         <label>Plus gros fer d'about D [mm]<input name="Dabout" value="25" type="number" step="1"></label>
       </div>
       <label>Taux d'armatures maximal par face pour la recherche d'épaisseur [%]<input name="rhoMax" value="1.0" type="number" step="0.1" min="0.3" max="4"></label>
+      <label>Aciers transversaux (ouvrage biais, annexe 12A)<select name="transDir"><option value="appuis">parallèles aux lignes d'appui (CHAMOA)</option><option value="perp">perpendiculaires aux bords libres</option></select></label>
+      <div class="row">
+        <label>Appareils d'appui par ligne (vide = auto)<input name="nBearings" value=""></label>
+        <label>Point fixe x [m] (vide = milieu)<input name="xFixed" value=""></label>
+      </div>
+      <div class="row">
+        <label>Raccourcissement lent ε (retrait + fluage)<input name="epsSlow" value="0.00025" type="number" step="0.00005"></label>
+        <label>Variation uniforme de température [°C]<input name="dTu" value="30" type="number" step="5"></label>
+      </div>
     </details>
     <label><input type="checkbox" name="chamoaSign">Convention CHAMOA (moment + = fibre supérieure tendue) sur le graphique M(x)</label>
     <button type="submit">Calculer</button>
@@ -128,6 +137,8 @@
     <div class="card" id="concept-card"><h2>Aide à la conception — guide SETRA « Ponts-dalles » (1989)</h2>
       <div id="concept"></div>
       <div class="plot" id="plot-abaque" style="min-height:380px"></div>
+      <h3>Appareils d'appui en élastomère fretté (guide § 3.6, gamme NF T 47.815)</h3>
+      <div id="concept-bearings"></div>
       <h3>Variantes de travure pour la même longueur entre appuis extrêmes</h3>
       <div id="concept-travures"></div>
       <h3>Recherche de l'épaisseur minimale vérifiée (Eurocodes, flexion longitudinale)</h3>

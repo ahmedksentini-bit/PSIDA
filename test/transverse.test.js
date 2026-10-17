@@ -45,3 +45,28 @@ test('aciers transversaux EC2 : non sectionnel ≥ 20 % des longitudinaux, sup �
   }
   close(dT.d, 0.7 - 0.04 - 0.02, 1e-12, 'd transversal');
 });
+
+test('ouvrage biais : aciers transversaux dimensionnés par M_APF (annexe 12A), option perpendiculaire aux bords libres', async () => {
+  const { SlabDeck } = await import('../src/analysis.js');
+  const { EC_ALPHA } = await import('../src/loads_ec.js');
+  const { designEC, designTransverseEC } = await import('../src/design.js');
+  const rel = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol * Math.abs(b), `${msg} : attendu ${b}, obtenu ${a}`);
+  const base = { spans: [10, 15, 15, 10], width: 12, h: 0.75, area: 8.91, overhangs: [0.5, 0.5], roadway: { y1: -5, y2: 5 }, footways: [{ y1: -6, y2: -5 }, { y1: 5, y2: 6 }],
+    bands: [{ q: 1.92, y1: -5, y2: 5 }], ys: [-6, -3, 0, 3, 6], nu: 0.2 };
+  const run = (psi, perp) => {
+    const deck = new SlabDeck({ ...base, psi });
+    const perm = deck.permanent(), ec = deck.eurocode({ alpha: EC_ALPHA.FR2 });
+    const d = designEC(deck, perm, ec, { fck: 35, fyk: 500, c: 0.03, phi: 0.02 });
+    const tr = new TransverseModel(deck, { nHarm: 5 }).run({ alpha: EC_ALPHA.FR2 });
+    return designTransverseEC(deck, tr, d, { fck: 35, fyk: 500, c: 0.03, phi: 0.016, phiLong: 0.02, I: 0.43076814, transversePerpendicular: perp });
+  };
+  const droit = run(100, false), biais = run(80, false), perp = run(80, true);
+  assert.equal(droit.skew, null, 'ouvrage droit : pas de correction');
+  assert.ok(biais.skew && Math.abs(biais.spans[0].skew.phiMec - 82.5322) < 1e-3, 'φ_mec travée 1 = 82,53 gr (Be = 12,253 m)');
+  const k = biais.spans[0].skew.max.CAR;
+  assert.ok(k.M > k.MY && k.M > 0.3 * k.MX, 'M_APF > MY et ≈ 0,38 MX + 1,07 MY');
+  rel(k.M, 0.3805 * k.MX + 1.0667 * k.MY, 2e-3, 'coefficients CHAMOA travée 1');
+  assert.ok(biais.spans[0].bot.As > droit.spans[0].bot.As, 'plus d\'aciers transversaux en biais');
+  assert.ok(perp.spans[0].skew.max.CAR.M < k.M, 'aciers perpendiculaires aux bords libres : M_APF plus faible');
+  assert.ok(biais.spans[0].bot.minGuide > perp.spans[0].bot.minGuide, 'minimum 1989 × 1/sin ψ pour les fers parallèles aux appuis');
+});

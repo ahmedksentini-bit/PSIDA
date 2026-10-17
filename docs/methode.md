@@ -53,6 +53,15 @@ Avant tout calcul, l'outil confronte le projet aux règles du guide SETRA *Ponts
   fissures longitudinales des dalles de plus de 15 m, abouts BP (diffusion de la précontrainte), appareils d'appui en
   élastomère pour les tabliers biais ou courbes, piles résistant aux chocs, joints et dalles de transition.
 
+* **Appareils d'appui en élastomère fretté (§ 3.6, règles du bulletin technique n° 4 du SETRA)** : σ = P/(ab) ≤ 15 MPa
+  et ≤ G·ab/(t(a + b)) (G = 0,8 MPa) ; σ_min < 2 MPa → anti-cheminement ; H > f·P avec f = 0,10 + 0,6/σ → blocage ;
+  u_g/T ≤ 0,5 ; u_g/T + H/(G₂ab) ≤ 0,7 (G₂ = 1,6 MPa) ; T ≤ min(a, b)/5 ; t·T ≥ α·a²/3 (rotation α). L'outil prend les
+  réactions ELS caractéristiques réparties sur n appareils par ligne (≈ un tous les 3 m), u_g = (ε_retrait+fluage +
+  α_T·ΔT)·(distance au point fixe), H = freinage EN 1991-2 § 4.4.1 réparti sur tous les appareils, α = 3 mrad de pose +
+  rotation d'appui par la poutre conjuguée θ = (1/EIL)∫M(L − x)dx sur l'enveloppe ELS, et retient le plus petit appareil
+  de la gamme standard entièrement enrobée du guide (§ 3.6.3, NF T 47.815 : 100×150 à 700×700, feuillets 8/10/12/15 mm).
+  Exemple CHAMOA (4 appareils par ligne) : culées 200×300×4(8+2), piles 300×400 et 300×500×3(10+3).
+
 **Recherche de l'épaisseur minimale** (pratique CHAMOA § 4.1) : h est augmenté de 2 cm en 2 cm, la chaîne complète du
 § 1 au § 7 étant relancée à chaque pas, jusqu'à ce que : aucune face ne demande d'aciers comprimés (x/d ≤ 0,45 à l'ELU,
 σc ≤ 0,6 fck à l'ELS caractéristique), le taux d'armatures par face reste sous la valeur admise (1 % par défaut),
@@ -198,8 +207,16 @@ MX = 0. Les aciers longitudinaux ne sont pas corrigés (M₁ n'est pas utilisé)
 M_APF = MY. Les aciers transversaux de la note (14,1 / 17,3 cm²/m) s'obtiennent ensuite avec σs ≤ 300 MPa sous
 M_APF caractéristique (288 / 351 kN·m/m, ce dernier venant du profil provisoire de chantier).
 
+L'outil applique ce calcul dès que ψ < 100 gr (`designTransverseEC/BAEL`) : MX = moment longitudinal maximal de la travée
+(par mètre, toutes fibres), MY = moment transversal maximal de la travée, pour chaque combinaison ; aciers transversaux
+parallèles aux lignes d'appui (ψ₂ = ψ, défaut CHAMOA) ou perpendiculaires aux bords libres (ψ₂ = 100 gr, M_APF plus faible
+sur l'exemple : 268 contre 359 kN·m/m). Sur l'exemple CHAMOA l'outil obtient M_APF = 359 / 417 kN·m/m (note : 288 / 351),
+l'écart venant des entrées MX (528 contre 435 : enveloppe du maximum de travée avec Ta + 0,6 T) et MY (149 contre 115 :
+charges locales à 15 harmoniques) ; aciers 18,6 / 21,8 cm²/m contre 14,1 / 17,3. Les quantités sont données par mètre
+perpendiculaire aux aciers (× sin ψ par mètre d'axe, remarque [11] de la note).
+
 ## 9. Ce que l'outil ne fait pas (encore)
 
-Application automatique de l'annexe 12A au ferraillage transversal de l'interface (le module existe), phase de
-chantier (profil provisoire), convois LM3 de l'Eurocode, tassements probables, encorbellements, fatigue par la
-méthode λ_s de l'EN 1992-2 annexe NN.
+Phase de chantier (profil provisoire), convois LM3 de l'Eurocode, tassements probables, encorbellements, fatigue par la
+méthode λ_s de l'EN 1992-2 annexe NN, appareils d'appui glissants ou à pot (§ 3.6.2, § 3.7), chevêtres incorporés et
+zones d'about du § 3.4.4 (aciers de diffusion, étriers).
