@@ -3,110 +3,104 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PontDalle — calcul manuel assisté des ponts-dalles</title>
+<title>PSIDA — calcul manuel assisté des ponts-dalles</title>
+<meta name="description" content="Poutre continue + Guyon-Massonnet recalculé ; charges Eurocodes (LM1/LM2) et Fascicule 61 (A(l), Bc, Bt, Mc120, D240) ; graphiques interactifs ; comparé à la note CHAMOA-PSIDA.">
+<!-- Plotly 2.35.2 (MIT) embarqué dans web/vendor/ : fonctionne hors ligne, sans dépendance à un CDN -->
+<script src="./web/vendor/plotly.min.js" charset="utf-8"></script>
 <style>
-  :root { --ink:#1d2433; --muted:#5b6478; --line:#d9dee7; --bg:#f6f7f9; --card:#fff; --acc:#0b5fa5; --warn:#9a5b00; }
-  @media (prefers-color-scheme: dark) { :root { --ink:#e8ecf2; --muted:#a3acbd; --line:#2d3544; --bg:#141821; --card:#1b2130; --acc:#6fb1f0; --warn:#f0b35a; } }
+  :root { --ink:#1d2433; --muted:#5b6478; --line:#d9dee7; --bg:#f6f7f9; --card:#fff; --acc:#0b5fa5; --warn:#9a5b00; --slab:#b9c2d1; --road:#4d5566; --footway:#dfe3ea; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#e8ecf2; --muted:#a3acbd; --line:#2d3544; --bg:#141821; --card:#1b2130; --acc:#6fb1f0; --warn:#f0b35a; --slab:#3f4a5e; --road:#8f98a8; --footway:#2d3544; } }
   * { box-sizing: border-box; }
   body { margin:0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--ink); background:var(--bg); }
-  header { padding: 18px 20px 8px; border-bottom:1px solid var(--line); background:var(--card); }
+  header { padding: 16px 20px 10px; border-bottom:1px solid var(--line); background:var(--card); }
   header h1 { margin:0; font-size: 20px; } header p { margin:4px 0 0; color:var(--muted); font-size:13px; }
-  main { max-width: 1200px; margin: 0 auto; padding: 16px; display:grid; gap:16px; grid-template-columns: 340px 1fr; }
-  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
-  .card h2 { margin:0 0 10px; font-size:15px; }
+  main { max-width: 1280px; margin: 0 auto; padding: 16px; display:grid; gap:16px; grid-template-columns: 330px 1fr; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; min-width:0; }
+  .card h2 { margin:0 0 10px; font-size:15px; } .card h3 { font-size:14px; margin:14px 0 6px; }
   label { display:block; font-size:13px; color:var(--muted); margin-top:8px; }
   input, select, textarea { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--ink); font: inherit; }
-  textarea { font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12.5px; min-height: 86px; }
+  input[type=checkbox] { width:auto; margin-right:6px; }
+  textarea { font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12.5px; min-height: 70px; }
   button { margin-top:12px; width:100%; padding:10px; border:0; border-radius:8px; background:var(--acc); color:#fff; font-weight:600; cursor:pointer; }
+  button.secondary { background:transparent; color:var(--acc); border:1px solid var(--acc); }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   table { border-collapse: collapse; width:100%; font-size:12.5px; margin: 6px 0 14px; }
   th, td { border-bottom:1px solid var(--line); padding:4px 6px; text-align:right; white-space:nowrap; }
-  th:first-child, td:first-child { text-align:left; }
-  thead th { color:var(--muted); font-weight:600; }
-  .neg { color: var(--warn); }
-  .small { font-size:12px; color:var(--muted); }
+  th:first-child, td:first-child { text-align:left; } thead th { color:var(--muted); font-weight:600; }
+  .neg { color: var(--warn); } .small { font-size:12px; color:var(--muted); }
   details { margin: 6px 0; } summary { cursor:pointer; font-weight:600; }
-  #out .card { overflow-x:auto; }
+  #results .card { overflow-x:auto; }
+  .plot { width:100%; min-height:360px; }
+  .svgbox svg { width:100%; height:auto; display:block; }
+  .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:8px; }
+  .toolbar label { margin:0; display:flex; align-items:center; gap:6px; } .toolbar select { width:auto; }
+  pre#error { color: var(--warn); white-space: pre-wrap; }
 </style>
 </head>
 <body>
 <header>
-  <h1>PontDalle — calcul manuel assisté des ponts-dalles</h1>
-  <p>Poutre continue + Guyon-Massonnet recalculé · charges Eurocodes (LM1/LM2) et Fascicule 61 (A(l), Bc, Bt, Mc120, D240) · moteur ouvert, vérifiable, sans dépendance.</p>
+  <h1>PSIDA — calcul manuel assisté des ponts-dalles</h1>
+  <p>Poutre continue + Guyon-Massonnet recalculé · charges Eurocodes (LM1/LM2) et Fascicule 61 (A(l), Bc, Bt, Mc120, D240) · comparé à la note CHAMOA-PSIDA (Cerema) · code ouvert.</p>
 </header>
 <main>
   <form class="card" id="f">
     <h2>Données</h2>
-    <label>Portées [m] (séparées par des virgules)<input name="spans" value="14, 18, 14"></label>
-    <label>Largeur totale de la dalle 2b [m]<input name="width" value="12" type="number" step="0.1"></label>
-    <label>Épaisseur de dalle h [m]<input name="h" value="0.70" type="number" step="0.01"></label>
-    <label>Chaussée (largeur roulable) y1, y2 [m] dans le repère −b…+b<input name="roadway" value="-5, 5"></label>
-    <label>Trottoirs y1,y2 ; … (optionnel)<input name="footways" value="-6,-5 ; 5,6"></label>
+    <label>Portées [m]<input name="spans" value="14, 18, 14"></label>
+    <div class="row">
+      <label>Largeur dalle 2b [m]<input name="width" value="12" type="number" step="0.01"></label>
+      <label>Épaisseur h [m]<input name="h" value="0.70" type="number" step="0.01"></label>
+    </div>
+    <div class="row">
+      <label>Aire section [m²] (vide = 2b·h)<input name="area" value=""></label>
+      <label>Abouts gauche, droit [m]<input name="overhangs" value="0, 0"></label>
+    </div>
+    <label>Chaussée y1, y2 [m] (repère −b…+b)<input name="roadway" value="-5, 5"></label>
+    <label>Trottoirs y1,y2 ; …<input name="footways" value="-6,-5 ; 5,6"></label>
     <label>Charges linéaires permanentes : g [kN/m] @ e [m] ; …<textarea name="lines">5 @ -5.9 ; 5 @ 5.9 ; 6.5 @ -5.3 ; 6.5 @ 5.3 ; 5 @ -5.5 ; 5 @ 5.5</textarea></label>
     <label>Charges surfaciques permanentes : q [kN/m²] sur y1,y2 ; …<input name="bands" value="2.6 sur -5,5"></label>
     <label>Ordonnées de calcul y [m]<input name="ys" value="-6, -4.5, -3, -1.5, 0, 1.5, 3, 4.5, 6"></label>
-    <label>Portées équivalentes L_eq [m] (vide = points de moment nul)<input name="Leq" value=""></label>
+    <div class="row">
+      <label>ν (Guyon) — 0,2 CHAMOA, 0 Massonnet<input name="nu" value="0.2" type="number" step="0.05" min="0" max="0.3"></label>
+      <label>Pas de glissement des voies [m]<input name="laneStep" value="0.5" type="number" step="0.1" min="0.1"></label>
+    </div>
+    <label>L_eq imposées [m] (vide = calcul)<input name="Leq" value=""></label>
     <label>Coefficients α (Eurocode)<select name="alpha"><option value="recommended">EN 1991-2 valeurs recommandées (α = 1)</option><option value="FR1">NF EN 1991-2/NA classe 1</option><option value="FR2">NF EN 1991-2/NA classe 2</option></select></label>
-    <label>Fascicule 61 : dispositifs de retenue bordant la chaussée<input name="nRetenue" value="2" type="number" step="1" min="0" max="2"></label>
-    <label>Fascicule 61 : classe imposée (vide = déduite de Lr)<input name="classe" value=""></label>
+    <div class="row">
+      <label>F61 : dispositifs de retenue<input name="nRetenue" value="2" type="number" step="1" min="0" max="2"></label>
+      <label>F61 : classe imposée<input name="classe" value=""></label>
+    </div>
+    <label><input type="checkbox" name="chamoaSign">Convention CHAMOA (moment + = fibre supérieure tendue) sur le graphique M(x)</label>
     <button type="submit">Calculer</button>
-    <p class="small">Toutes les valeurs sont caractéristiques (non pondérées). Moments en kN·m (poutre entière) et kN·m/m (par mètre de largeur).</p>
+    <button type="button" class="secondary" id="btn-chamoa">Charger l'exemple CHAMOA-PSIDA (10-15-15-10 m)</button>
+    <p class="small">Valeurs caractéristiques non pondérées. Moments de la poutre entière en kN·m, par mètre de largeur en kN·m/m.</p>
   </form>
-  <div id="out"><div class="card"><h2>Résultats</h2><p class="small">Renseignez les données puis « Calculer ».</p></div></div>
+
+  <div id="results" hidden>
+    <pre id="error"></pre>
+    <div class="card"><h2>Modèle</h2><p id="model-info" class="small"></p>
+      <div class="svgbox" id="elevation"></div>
+      <div class="toolbar"><label>Cas de charge affiché <select id="case-select"></select></label></div>
+      <div class="svgbox" id="cross"></div>
+    </div>
+    <div class="card"><h2>Enveloppes longitudinales (poutre entière)</h2>
+      <div class="plot" id="plot-M"></div><div class="plot" id="plot-V"></div><div class="plot" id="plot-R" style="min-height:300px"></div>
+    </div>
+    <div class="card"><h2>Répartition transversale</h2>
+      <div class="toolbar"><label>Travée pour K(y) <select id="span-select"></select></label></div>
+      <div class="plot" id="plot-K"></div>
+      <div class="plot" id="plot-mx"></div>
+      <div class="plot" id="plot-f"></div>
+      <div class="toolbar"><label>Surface <select id="surface-which"><option value="mxMax">m_x max</option><option value="mxMin">m_x min</option></select></label></div>
+      <div class="plot" id="plot-3d" style="min-height:430px"></div>
+    </div>
+    <div class="card"><h2>Lignes d'influence</h2>
+      <div class="toolbar"><label>Section <select id="section-select"></select></label></div>
+      <div class="plot" id="plot-IL"></div>
+    </div>
+    <div class="card"><h2>Tableaux</h2><div id="tables"></div></div>
+  </div>
 </main>
-<script type="module">
-import { SlabDeck } from './src/analysis.js';
-import { EC_ALPHA } from './src/loads_ec.js';
-import { tableK } from './src/guyon.js';
-
-const nums = s => s.split(/[,;\s]+/).filter(Boolean).map(Number);
-const pairs = s => s.split(';').map(t => t.trim()).filter(Boolean).map(t => nums(t));
-const f = document.getElementById('f'), out = document.getElementById('out');
-const fmt = v => (Math.abs(v) < 0.05 ? '0' : v.toFixed(1));
-const cell = v => `<td class="${v < -0.05 ? 'neg' : ''}">${fmt(v)}</td>`;
-
-function tableEnv(deck, keys, res, title) {
-  const ys = deck.ys;
-  let h = `<details open><summary>${title}</summary><table><thead><tr><th>Section</th><th>M max [kN·m]</th><th>M min</th>${ys.map(y => `<th>y=${y}</th>`).join('')}</tr></thead><tbody>`;
-  for (const k of keys) {
-    h += `<tr><td>${k.label}</td>${cell(res.Mmax[k.idx])}${cell(res.Mmin[k.idx])}${res.mxMax[k.idx].map(cell).join('')}</tr>`;
-    h += `<tr><td class="small">&nbsp;&nbsp;m_x min</td><td></td><td></td>${res.mxMin[k.idx].map(cell).join('')}</tr>`;
-  }
-  h += `</tbody></table><p class="small">V max/min par section et réactions : R max = ${res.Rmax.map(v => v.toFixed(0)).join(' / ')} kN ; R min = ${res.Rmin.map(v => v.toFixed(0)).join(' / ')} kN${res.delta ? ' ; δ = ' + res.delta.map(v => v.toFixed(3)).join(' / ') : ''}</p></details>`;
-  return h;
-}
-
-f.addEventListener('submit', ev => {
-  ev.preventDefault();
-  const d = Object.fromEntries(new FormData(f).entries());
-  try {
-    const t0 = performance.now();
-    const [y1, y2] = nums(d.roadway);
-    const deck = new SlabDeck({
-      spans: nums(d.spans), width: +d.width, h: +d.h, roadway: { y1, y2 },
-      footways: pairs(d.footways).map(([a, b]) => ({ y1: a, y2: b })),
-      lines: d.lines.split(';').map(t => t.trim()).filter(Boolean).map(t => { const [g, e] = t.split('@').map(Number); return { g, e }; }),
-      bands: d.bands.split(';').map(t => t.trim()).filter(Boolean).map(t => { const [q, r] = t.split('sur'); const [a, b] = nums(r); return { q: +q, y1: a, y2: b }; }),
-      ys: nums(d.ys), Leq: d.Leq.trim() ? nums(d.Leq) : undefined,
-    });
-    const keys = deck.keySections();
-    const perm = deck.permanent();
-    const ec = deck.eurocode({ alpha: EC_ALPHA[d.alpha] });
-    const f61 = deck.fascicule61({ nRetenue: +d.nRetenue, classe: d.classe.trim() ? +d.classe : null });
-    let h = `<div class="card"><h2>Modèle</h2><p>Portées équivalentes L_eq = ${deck.Leq.map(v => v.toFixed(2)).join(' / ')} m — θ = b/L_eq = ${deck.Leq.map(L => (deck.b / L).toFixed(3)).join(' / ')}<br>`;
-    h += `Eurocode : ${ec.lanes.n} voie(s) de ${ec.lanes.wl.toFixed(2)} m, aire résiduelle ${ec.lanes.wr.toFixed(2)} m (${ec.alpha.label}) · Fascicule 61 : classe ${f61.classe}, Lc = ${f61.Lc.toFixed(2)} m, ${f61.nv} voie(s) de ${f61.v.toFixed(2)} m · calcul en ${((performance.now() - t0) / 1000).toFixed(1)} s</p></div>`;
-    h += `<div class="card"><h2>Charges permanentes (g = ${perm.gTotal.toFixed(1)} kN/m)</h2><table><thead><tr><th>Section</th><th>M [kN·m]</th>${deck.ys.map(y => `<th>y=${y}</th>`).join('')}</tr></thead><tbody>`;
-    for (const k of keys) h += `<tr><td>${k.label}</td>${cell(perm.M[k.idx])}${perm.mx[k.idx].map(cell).join('')}</tr>`;
-    h += `</tbody></table><p class="small">Réactions : ${perm.R.map(v => v.toFixed(0)).join(' / ')} kN</p></div>`;
-    h += `<div class="card"><h2>Eurocodes — EN 1991-2 (valeurs caractéristiques)</h2>` + tableEnv(deck, keys, ec.TS, 'LM1 – TS') + tableEnv(deck, keys, ec.UDL, 'LM1 – UDL') + tableEnv(deck, keys, ec.gr1a, 'gr1a = TS + UDL + trottoirs 3 kN/m²') + tableEnv(deck, keys, ec.gr1b, 'gr1b = LM2') + tableEnv(deck, keys, ec.gr3, 'gr3 = trottoirs 5 kN/m²') + `</div>`;
-    h += `<div class="card"><h2>Fascicule 61 titre II (valeurs caractéristiques, δ inclus pour B et Mc)</h2>` + tableEnv(deck, keys, f61.A, 'A(l)') + tableEnv(deck, keys, f61.Bc, 'Bc') + (f61.Bt ? tableEnv(deck, keys, f61.Bt, 'Bt') : '') + tableEnv(deck, keys, f61.Mc120, 'Mc120') + tableEnv(deck, keys, f61.D240, 'D240') + tableEnv(deck, keys, f61.trottoir, 'Trottoirs 1,5 kN/m²') + `</div>`;
-    // table K pour la travée 1
-    const es = [0, 0.25, 0.5, 0.75, 1].map(r => r * deck.b);
-    const T = tableK({ b: deck.b, L: deck.Leq[0], es, ys: deck.ys });
-    h += `<div class="card"><h2>Coefficients K de Guyon-Massonnet (α = 1, θ = ${(deck.b / deck.Leq[0]).toFixed(3)}, travée 1)</h2><table><thead><tr><th>e</th>${deck.ys.map(y => `<th>y=${y}</th>`).join('')}</tr></thead><tbody>${T.map((row, i) => `<tr><td>e = ${es[i].toFixed(2)}</td>${row.map(v => `<td>${v.toFixed(3)}</td>`).join('')}</tr>`).join('')}</tbody></table><p class="small">À comparer aux tables de Massonnet-Bareš (K₁).</p></div>`;
-    out.innerHTML = h;
-  } catch (e) { out.innerHTML = `<div class="card"><h2>Erreur</h2><pre>${e.stack || e}</pre></div>`; }
-});
-</script>
+<script type="module" src="./web/app.js"></script>
 </body>
 </html>

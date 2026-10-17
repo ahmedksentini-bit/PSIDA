@@ -12,12 +12,21 @@ Deux référentiels de charges sont traités en parallèle :
 
 Le moteur est en JavaScript pur (modules ES), **sans dépendance ni étape de build** : il tourne sous
 Node pour les tests et dans le navigateur pour l'interface. Le dépôt se déploie tel quel sur
-Cloudflare Pages depuis GitHub.
+Cloudflare Pages depuis GitHub. Les graphiques utilisent Plotly (MIT, embarqué dans `web/vendor/`,
+donc utilisable hors ligne) pour les courbes, et du SVG natif pour les schémas.
+
+**Benchmark** : l'exemple du chapitre 4 du guide technique CHAMOA-PSIDA (Cerema) est reproduit à
+10⁻³ près pour les charges permanentes et la travée équivalente, et à 1–2 % pour le moment de calcul
+LM1 par mètre à l'appui (facteur KTRANS compris) — voir `test/chamoa.test.js` et `docs/hypotheses.md`.
 
 ## Contenu
 
 ```
-index.html          interface (formulaire → tableaux de résultats)
+index.html          interface
+web/app.js          logique de l'interface (formulaire, cas de charge, rendu)
+web/svg.js          schémas SVG : élévation, coupe transversale avec les charges du cas affiché
+web/plots.js        graphiques Plotly : enveloppes M/V/R, K(y), m_x(y), facteur f(y), lignes d'influence, surface m_x(x,y)
+web/vendor/         plotly.min.js (2.35.2, MIT)
 src/linalg.js       Gauss, Gauss-Legendre
 src/beam.js         poutre continue : lignes d'influence M, V, R ; enveloppes UDL / travées entières / convois
 src/guyon.js        Guyon-Massonnet recalculé (plaque isotrope, ν = 0) : K, μ, m_y multi-harmoniques
@@ -76,11 +85,24 @@ Les hypothèses détaillées et les points à confronter aux notes CHAMOA / PSID
 3. Build command : *(vide)* ; Build output directory : `/` (racine). Aucune étape de build.
 4. Chaque `git push` redéploie. Un sous-domaine personnalisé se règle dans l'onglet *Custom domains*.
 
-## État et limites (v0.1)
+## Interface
 
-- Ouvrage droit, dalle pleine de hauteur constante, appuis simples (pas de cantilever, pas d'encastrement).
+Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de référence), résultats à droite :
+
+1. **Modèle** — élévation (portées, appuis, abouts, sections clés, L_eq, θ) et coupe transversale avec les
+   charges du cas sélectionné (roues TS, files Bc/Bt, chenilles Mc120, bande D240, voies, trottoirs).
+2. **Enveloppes longitudinales** — M(x), V(x) de la poutre entière (permanent + cas de trafic, légende
+   cliquable, survol des valeurs) et réactions ; option « convention CHAMOA » (moment + = fibre supérieure tendue).
+3. **Répartition transversale** — famille K(y) de Guyon-Massonnet par travée, m_x(y) aux sections clés,
+   facteur f(y) = m_x/(M/2b) (le KTRANS de CHAMOA en est le maximum), surface 3D m_x(x, y).
+4. **Lignes d'influence** — M, V⁻/V⁺ et réaction pour la section choisie.
+5. **Tableaux** — toutes les valeurs numériques, par cas, avec K par section.
+
+## État et limites (v0.2)
+
+- Ouvrage droit, dalle pleine de hauteur constante, appuis simples, abouts en console (charges permanentes).
 - Pas encore : sections (ELS/ELU EC2 et BAEL), fatigue, poinçonnement, moments transversaux dans
-  l'interface, biais, LM3 / convois spéciaux EC, combinaisons pondérées automatiques.
+  l'interface (le moteur les calcule), biais, LM3 / convois spéciaux EC, combinaisons pondérées automatiques.
 - Les tableaux `a1`, `bc`, `bt` du Fascicule 61 et les α de l'annexe française sont à relire contre
   les textes avant toute utilisation en production (voir les commentaires `TODO_VERIF`).
 
