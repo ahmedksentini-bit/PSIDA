@@ -132,3 +132,16 @@ export function surfacePlot(div, deck, res, which = 'mxMax', title = '') {
   };
   Plotly.newPlot(div, data, layout, CONFIG);
 }
+
+/** Diagramme de ferraillage longitudinal A_s(x) [cm²/m] : enveloppes inférieure et supérieure sur la largeur. */
+export function asPlot(div, deck, design, label) {
+  const xs = deck.beam.sections.map(s => s.x);
+  const cm = arr => arr.map(v => v * 1e4);
+  const data = [
+    { x: xs, y: cm(design.envBot), name: 'A_s inférieur (enveloppe y)', mode: 'lines', line: { color: PALETTE[0], width: 2 }, fill: 'tozeroy', fillcolor: 'rgba(11,95,165,0.12)' },
+    { x: xs, y: cm(design.envTop).map(v => -v), name: 'A_s supérieur (enveloppe y, tracé vers le bas)', mode: 'lines', line: { color: PALETTE[1], width: 2 }, fill: 'tozeroy', fillcolor: 'rgba(200,85,43,0.12)' },
+  ];
+  const layout = baseLayout(`Ferraillage longitudinal par mètre — ${label} [cm²/m]`, 'x [m]', 'A_s [cm²/m] (sup. vers le bas)');
+  layout.shapes = deck.beam.x0.map(x => ({ type: 'line', x0: x, x1: x, y0: 0, y1: 1, yref: 'paper', line: { color: theme().grid, width: 1, dash: 'dash' } }));
+  Plotly.newPlot(div, data, layout, CONFIG);
+}

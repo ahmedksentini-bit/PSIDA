@@ -2,7 +2,8 @@ import { SlabDeck } from '../src/analysis.js';
 import { EC_ALPHA, notionalLanes, lm1 } from '../src/loads_ec.js';
 import { voiesF61, classePont, MC120, D240 } from '../src/loads_f61.js';
 import { elevationSVG, crossSectionSVG } from './svg.js';
-import { envelopePlot, shearPlot, reactionPlot, kPlot, transversePlot, factorPlot, influencePlot, surfacePlot } from './plots.js';
+import { envelopePlot, shearPlot, reactionPlot, kPlot, transversePlot, factorPlot, influencePlot, surfacePlot, asPlot } from './plots.js';
+import { designEC, designBAEL } from '../src/design.js';
 
 const $ = s => document.querySelector(s);
 const nums = s => s.split(/[,;\s]+/).filter(Boolean).map(Number);
@@ -12,21 +13,28 @@ const cell = v => `<td class="${v < -0.05 ? 'neg' : ''}">${fmt(v)}</td>`;
 
 let state = null;
 
+// « 10 @ -5.85 k 0.8/1.2 » → { g, e, kmin, kmax } ; « 1.92 sur -5,5 k 0.8/1.4 » → { q, y1, y2, kmin, kmax }
+function parseK(t) { const m = t.match(/k\s*([\d.]+)\s*\/\s*([\d.]+)/i); return m ? { kmin: +m[1], kmax: +m[2], rest: t.replace(m[0], '') } : { kmin: 1, kmax: 1, rest: t }; }
+
 function parseForm(form) {
   const d = Object.fromEntries(new FormData(form).entries());
   const [y1, y2] = nums(d.roadway);
   const overhangs = nums(d.overhangs || '0,0');
+  const EIv = d.EI.split(',').map(t => t.trim());
   return {
     deckInput: {
       spans: nums(d.spans), width: +d.width, h: +d.h, roadway: { y1, y2 },
       area: d.area.trim() ? +d.area : undefined, overhangs: [overhangs[0] || 0, overhangs[1] || 0],
       footways: pairs(d.footways).map(([a, b]) => ({ y1: a, y2: b })),
-      lines: d.lines.split(';').map(t => t.trim()).filter(Boolean).map(t => { const [g, e] = t.split('@').map(Number); return { g, e }; }),
-      bands: d.bands.split(';').map(t => t.trim()).filter(Boolean).map(t => { const [q, r] = t.split('sur'); const [a, b] = nums(r); return { q: +q, y1: a, y2: b }; }),
+      lines: d.lines.split(';').map(t => t.trim()).filter(Boolean).map(t => { const k = parseK(t); const [g, e] = k.rest.split('@').map(Number); return { g, e, kmin: k.kmin, kmax: k.kmax }; }),
+      bands: d.bands.split(';').map(t => t.trim()).filter(Boolean).map(t => { const k = parseK(t); const [q, r] = k.rest.split('sur'); const [a, b] = nums(r); return { q: +q, y1: a, y2: b, kmin: k.kmin, kmax: k.kmax }; }),
       ys: nums(d.ys), Leq: d.Leq.trim() ? nums(d.Leq) : undefined,
       nu: +d.nu, laneStep: +d.laneStep, nSec: 20, nGrid: 100,
+      chamfer: d.hEdge.trim() && d.joue.trim() ? { hEdge: +d.hEdge, joue: +d.joue } : undefined,
     },
     alpha: d.alpha, nRetenue: +d.nRetenue, classe: d.classe.trim() ? +d.classe : null, chamoaSign: !!d.chamoaSign,
+    withTherm: !!d.withTherm, dT: nums(d.dT), E: +EIv[0] || 34000, I: EIv[1] ? +EIv[1] : null, delta: +d.delta, phiFluage: +d.phiFluage,
+    mat: { fck: +d.fck, fyk: +d.fyk, fc28: +d.fck, fe: +d.fyk, c: +d.cover, phi: +d.phi / 1000, wkMax: +d.wk, fissuration: d.fiss, tRev: +d.tRev },
   };
 }
 
@@ -37,6 +45,12 @@ function compute(p) {
   const perm = deck.permanent();
   const ec = deck.eurocode({ alpha: EC_ALPHA[p.alpha] });
   const f61 = deck.fascicule61({ nRetenue: p.nRetenue, classe: p.classe });
+  const thermal = p.withTherm ? deck.thermal({ dTheat: p.dT[0], dTcool: p.dT[1], E: p.E, I: p.I }) : null;
+  const settle = p.withTherm ? deck.settlements({ delta: p.delta, E: p.E, I: p.I, phi: p.phiFluage }) : null;
+  const design = {
+    EC: designEC(deck, perm, ec, { ...p.mat, thermal, settle }),
+    F61: designBAEL(deck, perm, f61, { ...p.mat, thermal, settle }),
+  };
   const cases = [
     { id: 'TS', label: 'LM1 – TS', res: ec.TS, ref: 'EC' }, { id: 'UDL', label: 'LM1 – UDL', res: ec.UDL, ref: 'EC' },
     { id: 'LM1', label: 'LM1 (TS + UDL)', res: ec.LM1, ref: 'EC' }, { id: 'gr1a', label: 'gr1a (LM1 + trottoirs 3 kN/m²)', res: ec.gr1a, ref: 'EC' },
@@ -46,7 +60,8 @@ function compute(p) {
     { id: 'Mc120', label: 'Mc120 (δ inclus)', res: f61.Mc120, ref: 'F61' }, { id: 'D240', label: 'D240', res: f61.D240, ref: 'F61' },
     { id: 'trott', label: 'Trottoirs 1,5 kN/m²', res: f61.trottoir, ref: 'F61' },
   ];
-  return { p, deck, keys, perm, ec, f61, cases, dt: (performance.now() - t0) / 1000 };
+  if (thermal) cases.push({ id: 'therm', label: 'Gradient thermique (±)', res: { ...thermal, Vmax: thermal.Vmax, Vmin: thermal.Vmin }, ref: 'EC' }, { id: 'settle', label: 'Tassements aléatoires (±)', res: settle, ref: 'EC' });
+  return { p, deck, keys, perm, ec, f61, cases, thermal, settle, design, dt: (performance.now() - t0) / 1000 };
 }
 
 /** Charges à dessiner sur la coupe pour un cas (arrangement représentatif, voies depuis le bord y1). */
@@ -120,7 +135,7 @@ function renderStatic(st) {
   h += `<h3>Eurocodes — EN 1991-2 (valeurs caractéristiques)</h3>` + st.cases.filter(c => c.ref === 'EC').map(c => tableEnv(st, c.res, c.label)).join('');
   h += `<h3>Fascicule 61 titre II (valeurs caractéristiques, δ inclus pour B et Mc)</h3>` + st.cases.filter(c => c.ref === 'F61').map(c => tableEnv(st, c.res, c.label)).join('');
   $('#tables').innerHTML = h;
-  renderCase(st); renderSection(st);
+  renderCase(st); renderSection(st); renderDesign(st);
 }
 
 function renderCase(st) {
@@ -131,6 +146,36 @@ function renderCase(st) {
   transversePlot($('#plot-mx'), st.deck, st.keys, st.perm, c.res, c.label);
   factorPlot($('#plot-f'), st.deck, st.keys, st.deck.transverseFactors(c.res), c.label);
   surfacePlot($('#plot-3d'), st.deck, c.res, $('#surface-which').value, `m_x(x, y) ${$('#surface-which').value === 'mxMax' ? 'max' : 'min'} — ${c.label} [kN·m/m]`);
+}
+
+function renderDesign(st) {
+  const ref = $('#design-ref').value, dz = st.design[ref];
+  const { deck, keys } = st;
+  asPlot($('#plot-As'), deck, dz, ref === 'EC' ? 'Eurocodes (EC2)' : 'Fascicule 61 + BAEL 91');
+  const cm = v => (v * 1e4).toFixed(1);
+  let h = '';
+  if (ref === 'EC') {
+    h += `<p class="small">C${dz.mat.fck}/${dz.mat.fck + 10}, B${dz.mat.fyk} : fcd = ${dz.mat.fcd.toFixed(1)} MPa, fyd = ${dz.mat.fyd.toFixed(0)} MPa, fctm = ${dz.mat.fctm.toFixed(2)} MPa, αe = ${dz.mat.alphaE} ; d = h − c = ${dz.d.toFixed(3)} m ; σs ≤ ${dz.mat.sigSlim} MPa (ELS car., fatigue simplifiée), σc ≤ ${dz.mat.sigCcar.toFixed(1)} MPa, wk ≤ ${st.p.mat.wkMax} mm (ELS fréquent, φ ${(st.p.mat.phi * 1000).toFixed(0)}) ; minimums : 9.2.1.1 ×1,2 = ${cm(dz.mins.as921)}, 7.3.2 = ${cm(dz.mins.as732)}, 3 cm²/m par face.${deck.g.chamfer ? ' Chanfreins pris en compte en compression par l\'intrados.' : ''}</p>`;
+    h += `<table><thead><tr><th>Section</th><th>Face</th><th>M ELU</th><th>M car.</th><th>M fréq.</th><th>M QP</th><th>ELU</th><th>ELS σ</th><th>wk</th><th>min</th><th><b>A_s</b></th><th>σs</th><th>σc</th><th>x/d</th></tr></thead><tbody>`;
+    for (const k of keys) {
+      for (const face of ['bot', 'top']) {
+        const arr = dz[face][k.idx]; const iy = arr.indexOf(Math.max(...arr)); const f = dz.perFibre[k.idx][iy][face];
+        h += `<tr><td>${k.label}</td><td>${face === 'bot' ? 'inf' : 'sup'} (y = ${deck.ys[iy]})</td><td>${f.Mu.toFixed(0)}</td><td>${f.Mcar.toFixed(0)}</td><td>${f.Mfre.toFixed(0)}</td><td>${f.Mqp.toFixed(0)}</td><td>${cm(f.AsULS)}</td><td>${cm(f.AsSLS)}</td><td>${cm(f.AsWk)}</td><td>${cm(Math.max(f.as921, f.as732, f.perFace))}</td><td><b>${cm(f.As)}</b></td><td>${f.sigS.toFixed(0)}</td><td>${f.sigC.toFixed(1)}</td><td>${f.xOverD.toFixed(2)}</td></tr>`;
+      }
+    }
+    h += `</tbody></table><p class="small">Moments en kN·m/m (fibre la plus sollicitée), aciers en cm²/m. Effort tranchant par mètre (V_Ed avec facteur K du cas LM1) / V_Rd,c : ` + keys.map(k => `${k.label} : ${dz.shear[k.idx].ratio.toFixed(2)}`).join(' ; ') + `. Poinçonnement : LM1 vEd = ${dz.punch.LM1.vEd.toFixed(3)} / vRd,c = ${dz.punch.LM1.vRdc.toFixed(3)} MPa (${dz.punch.LM1.ok ? 'OK' : 'NON'}) ; LM2 vEd = ${dz.punch.LM2.vEd.toFixed(3)} MPa (${dz.punch.LM2.ok ? 'OK' : 'NON'}). Aciers transversaux minimaux (EC2 9.3.1.1 : 20 % des longitudinaux) : inf ${cm(dz.transverseMin.bot)}, sup ${cm(dz.transverseMin.top)} cm²/m — à compléter par les moments transversaux m_y.</p>`;
+  } else {
+    h += `<p class="small">fc28 = ${dz.mat.fc28} MPa, fe = ${dz.mat.fe} MPa : fbu = ${dz.mat.fbu.toFixed(2)} MPa, fsu = ${dz.mat.fsu.toFixed(0)} MPa, μ_lim = ${dz.mat.muL.toFixed(3)} ; ELS fissuration ${dz.mat.fissuration} : σ̄s = ${isFinite(dz.mat.sigSbar) ? dz.mat.sigSbar.toFixed(0) + ' MPa' : '—'}, σ̄bc = ${dz.mat.sigBbar.toFixed(1)} MPa, n = 15 ; d = ${dz.d.toFixed(3)} m ; non-fragilité ${cm(dz.mins.nonFrag)}, dalle ${cm(dz.mins.dalle)} cm²/m.</p>`;
+    h += `<table><thead><tr><th>Section</th><th>Face</th><th>M ELU</th><th>M ELS</th><th>ELU</th><th>ELS</th><th>min</th><th><b>A_s</b></th><th>σs</th><th>σb</th><th>α</th></tr></thead><tbody>`;
+    for (const k of keys) {
+      for (const face of ['bot', 'top']) {
+        const arr = dz[face][k.idx]; const iy = arr.indexOf(Math.max(...arr)); const f = dz.perFibre[k.idx][iy][face];
+        h += `<tr><td>${k.label}</td><td>${face === 'bot' ? 'inf' : 'sup'} (y = ${deck.ys[iy]})</td><td>${f.Mu.toFixed(0)}</td><td>${f.Ms.toFixed(0)}</td><td>${cm(f.AsELU)}</td><td>${cm(f.AsELS)}</td><td>${cm(Math.max(f.nonFrag, f.dalle))}</td><td><b>${cm(f.As)}</b></td><td>${f.sigS.toFixed(0)}</td><td>${f.sigB.toFixed(1)}</td><td>${f.alpha.toFixed(3)}</td></tr>`;
+      }
+    }
+    h += `</tbody></table><p class="small">Moments en kN·m/m, aciers en cm²/m. τu / τ̄u (dalles sans armatures d'âme, A.5.2.2) : ` + keys.map(k => `${k.label} : ${dz.shear[k.idx].ratio.toFixed(2)}`).join(' ; ') + `. Poinçonnement (A.5.2.42) : Br Qu = ${dz.punch.Br.Qu.toFixed(3)} / ${dz.punch.Br.QuLim.toFixed(3)} MN (${dz.punch.Br.ok ? 'OK' : 'NON'}). Armatures de répartition ≥ A_s/4 : inf ${cm(dz.transverseMin.bot)}, sup ${cm(dz.transverseMin.top)} cm²/m.</p>`;
+  }
+  $('#design-tables').innerHTML = h;
 }
 
 function renderSection(st) {
@@ -148,11 +193,13 @@ $('#f').addEventListener('submit', ev => {
 $('#case-select').addEventListener('change', () => state && renderCase(state));
 $('#surface-which').addEventListener('change', () => state && renderCase(state));
 $('#section-select').addEventListener('change', () => state && renderSection(state));
+$('#design-ref').addEventListener('change', () => state && renderDesign(state));
 $('#span-select').addEventListener('change', () => state && kPlot($('#plot-K'), state.deck, +$('#span-select').value));
 $('#btn-chamoa').addEventListener('click', () => {
   const f = $('#f');
   f.spans.value = '10, 15, 15, 10'; f.width.value = 12; f.h.value = 0.75; f.area.value = 8.91; f.overhangs.value = '0.5, 0.5';
-  f.roadway.value = '-5, 5'; f.footways.value = '-6,-5 ; 5,6'; f.lines.value = '10 @ -5.85 ; 10 @ 5.85';
-  f.bands.value = '0.66 sur -6,6 ; 1.92 sur -5,5 ; 0.72 sur -6,-5 ; 0.72 sur 5,6'; f.ys.value = '-6, -4.5, -3, -1.5, 0, 1.5, 3, 4.5, 6';
+  f.roadway.value = '-5, 5'; f.footways.value = '-6,-5 ; 5,6'; f.lines.value = '10 @ -5.85 k 0.8/1.2 ; 10 @ 5.85 k 0.8/1.2';
+  f.bands.value = '0.66 sur -6,6 k 0.8/1.2 ; 1.92 sur -5,5 k 0.8/1.4 ; 0.72 sur -6,-5 ; 0.72 sur 5,6'; f.ys.value = '-6, -4.5, -3, -1.5, 0, 1.5, 3, 4.5, 6';
   f.Leq.value = ''; f.alpha.value = 'FR2'; f.nRetenue.value = 0; f.classe.value = ''; f.nu.value = 0.2; f.chamoaSign.checked = true;
+  f.hEdge.value = 0.40; f.joue.value = 1.0; f.EI.value = '34077, 0.43077'; f.withTherm.checked = true; f.fck.value = 35; f.fyk.value = 500; f.cover.value = 0.03;
 });

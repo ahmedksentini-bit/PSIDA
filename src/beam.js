@@ -310,6 +310,69 @@ export class ContinuousBeam {
     return { M0, ML };
   }
 
+  /**
+   * Réponse à des termes d'encastrement parfait FEM (horaires +) et à des rotations de corde ψ_j
+   * (horaires +, ψ = (v_{j+1} − v_j)/L, v positif vers le bas) : moments d'extrémité fléchissants M0/ML
+   * et diagramme linéaire (aucune charge en travée).
+   * @param {number[]} femL FEM à gauche de chaque travée, femR à droite, psi rotations de corde
+   */
+  _responseFemPsi(femL, femR, psi, EI = this.EI) {
+    const N = this.n + 1;
+    const F = new Array(N).fill(0);
+    for (let j = 0; j < this.n; j++) {
+      const k = EI[j] / this.spans[j];
+      F[j] += (femL[j] || 0) - 6 * k * (psi[j] || 0);
+      F[j + 1] += (femR[j] || 0) - 6 * k * (psi[j] || 0);
+    }
+    // matrice de rigidité avec EI réels
+    const K = Array.from({ length: N }, () => new Array(N).fill(0));
+    for (let j = 0; j < this.n; j++) {
+      const k = EI[j] / this.spans[j];
+      K[j][j] += 4 * k; K[j][j + 1] += 2 * k; K[j + 1][j] += 2 * k; K[j + 1][j + 1] += 4 * k;
+    }
+    const theta = solve(K, F.map(v => -v));
+    const M0 = new Array(this.n), ML = new Array(this.n);
+    for (let s = 0; s < this.n; s++) {
+      const k = EI[s] / this.spans[s];
+      M0[s] = k * (4 * theta[s] + 2 * theta[s + 1]) - 6 * k * (psi[s] || 0) + (femL[s] || 0);
+      ML[s] = -(k * (2 * theta[s] + 4 * theta[s + 1]) - 6 * k * (psi[s] || 0) + (femR[s] || 0));
+    }
+    return this._linearDiagram(M0, ML);
+  }
+
+  /** Diagramme M linéaire par travée à partir des moments d'extrémité, avec V et R associés. */
+  _linearDiagram(M0, ML) {
+    const M = [], Vm = [], Vp = [];
+    this.sections.forEach(sec => {
+      const L = this.spans[sec.span], slope = (ML[sec.span] - M0[sec.span]) / L;
+      M.push(M0[sec.span] + slope * sec.xi); Vm.push(slope); Vp.push(slope);
+    });
+    const R = new Array(this.n + 1).fill(0);
+    for (let i = 0; i <= this.n; i++) {
+      if (i < this.n) R[i] += (ML[i] - M0[i]) / this.spans[i];
+      if (i > 0) R[i] -= (ML[i - 1] - M0[i - 1]) / this.spans[i - 1];
+    }
+    return { M, Vm, Vp, R, M0, ML };
+  }
+
+  /**
+   * Courbure imposée uniforme κ [1/m] dans toutes les travées (gradient thermique) : κ > 0 pour une fibre
+   * supérieure plus chaude (la poutre libre se bombe vers le haut) → moments hyperstatiques positifs sur
+   * appuis intermédiaires. EI en kN·m² par travée.
+   */
+  thermalCurvature(kappa, EI) {
+    const femL = this.spans.map((_, j) => EI[j] * kappa), femR = this.spans.map((_, j) => -EI[j] * kappa);
+    return this._responseFemPsi(femL, femR, this.spans.map(() => 0), EI);
+  }
+
+  /**
+   * Tassement imposé δ [m] (positif vers le bas) des appuis : v[i] par appui (0 ailleurs). EI en kN·m².
+   */
+  settlement(v, EI) {
+    const psi = this.spans.map((L, j) => ((v[j + 1] || 0) - (v[j] || 0)) / L);
+    return this._responseFemPsi(this.spans.map(() => 0), this.spans.map(() => 0), psi, EI);
+  }
+
   /** Moments, tranchants et réactions sous une charge uniforme g [kN/m] sur tout l'ouvrage (abouts compris). */
   uniformLoad(g) {
     const M = this.sections.map((_, s) => g * this.integrateIL(this.ILM[s]));

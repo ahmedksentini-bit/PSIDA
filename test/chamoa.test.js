@@ -17,6 +17,7 @@ import assert from 'node:assert/strict';
 import { ContinuousBeam } from '../src/beam.js';
 import { SlabDeck } from '../src/analysis.js';
 import { EC_ALPHA } from '../src/loads_ec.js';
+import * as awaitImport from '../src/design.js';
 
 const rel = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol * Math.abs(b), `${msg} : attendu ${b}, obtenu ${a} (tol ${(tol * 100).toFixed(1)} %)`);
 
@@ -61,4 +62,33 @@ test('CHAMOA ch.4 — LM1 classe 2 : moment de poutre, facteur de répartition K
   assert.ok(f.fMax[T1][4] > 1.05 && f.fMax[T1][4] < 1.1804, 'facteur fibre d\'axe travée 1 entre 1,05 et 1,18');
   // symétrie
   f.fMax[T1].forEach((v, i) => assert.ok(Math.abs(v - f.fMax[T1][8 - i]) < 1e-6, 'symétrie'));
+});
+
+test('CHAMOA ch.4 — gradient thermique, tassements aléatoires, kmin/kmax et ELS caractéristique à P1', () => {
+  const ys = [-6, -4.5, -3, -1.5, 0, 1.5, 3, 4.5, 6];
+  const deck = new SlabDeck({ spans: [10, 15, 15, 10], width: 12, h: 0.772, area: 8.91, overhangs: [0.5, 0.5], roadway: { y1: -5, y2: 5 },
+    footways: [{ y1: -6, y2: -5 }, { y1: 5, y2: 6 }], lines: [{ g: 10, e: -5.85, kmin: 0.8, kmax: 1.2 }, { g: 10, e: 5.85, kmin: 0.8, kmax: 1.2 }],
+    bands: [{ q: 0.66, y1: -6, y2: 6, kmin: 0.8, kmax: 1.2 }, { q: 1.92, y1: -5, y2: 5, kmin: 0.8, kmax: 1.4 }, { q: 0.72, y1: -6, y2: -5 }, { q: 0.72, y1: 5, y2: 6 }],
+    ys, nu: 0.2, chamfer: { hEdge: 0.4, joue: 1.0 } });
+  const P1 = deck.beam.supportSectionIndex(1);
+  const perm = deck.permanent();
+  rel(perm.Mmin[P1], -4490.4, 2e-3, 'permanent max (kmax)'); rel(perm.Mmax[P1], -4132.4, 2e-3, 'permanent min (kmin)');
+  // gradient thermique EN 1991-1-5 : +12 / −6 °C, α = 1e-5, EI = Ecm·I = 34 077 MPa × 0,43077 m⁴ (note : EIe = 0,1468E+08 kN·m²)
+  const th = deck.thermal({ E: 34077, I: 0.43076814 });
+  rel(th.EI, 1.468e7, 2e-3, 'EI'); rel(th.heat.M[P1], 2819.9, 2e-3, 'gradient +12'); rel(th.cool.M[P1], -1409.9, 2e-3, 'gradient −6');
+  // tassements aléatoires : ±1 cm sur deux appuis adjacents en sens opposés, module différé E/3 → 1870,9 à P1
+  const se = deck.settlements({ E: 34077, I: 0.43076814, phi: 2 });
+  rel(se.Mmax[P1], 1870.9, 2e-3, 'tassements aléatoires');
+  // ELS caractéristique à P1 (poutre entière, trafic × KTRANS) : G + Ta + 0,6 T + K·Q_LM1 = 10 042
+  const ec = deck.eurocode({ alpha: EC_ALPHA.FR2 });
+  const K = deck.transverseFactors(ec.LM1).K[P1];
+  const car = -perm.Mmin[P1] + se.Mmax[P1] - 0.6 * th.cool.M[P1] - K * ec.LM1.Mmin[P1];
+  rel(car, 10042, 0.01, 'ELS caractéristique à P1');
+  // aciers (σs ≤ 300 MPa) : mi-travée 2 inférieur 431,7/12 = 36,0 cm²/m ; appuis : écart de 4–9 % (section exacte CHAMOA)
+  const { designEC } = awaitImport;
+  const d = designEC(deck, perm, ec, { fck: 35, fyk: 500, c: 0.03, phi: 0.02, wkMax: 0.3, thermal: th, settle: se });
+  const T2 = deck.beam.sectionIndex(1, 0.5);
+  rel(d.envBot[T2] * 1e4, 36.0, 0.03, 'A_s inférieur mi-travée 2');
+  rel(d.envTop[P1] * 1e4, 46.0, 0.06, 'A_s supérieur P1');
+  rel(d.mins.as921 * 11.12 * 1e4, 165.2, 0.02, 'minten');
 });

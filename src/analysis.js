@@ -115,30 +115,87 @@ export class SlabDeck {
 
   permanentFiles() {
     const files = [];
-    files.push({ label: 'Poids propre dalle', q: this.gammaC * this.area, e1: -this.b, e2: this.b, unitK: true });
-    for (const l of this.g.lines || []) files.push({ label: l.label || 'Charge linéaire', q: l.g, e1: l.e, e2: l.e, unitK: false });
-    for (const bd of this.g.bands || []) files.push({ label: bd.label || 'Charge surfacique', q: bd.q * (bd.y2 - bd.y1), e1: bd.y1, e2: bd.y2, unitK: false });
+    const g = this.g;
+    files.push({ label: 'Poids propre dalle', q: this.gammaC * this.area, e1: -this.b, e2: this.b, unitK: true, kmin: g.kDalle?.[0] ?? 1, kmax: g.kDalle?.[1] ?? 1 });
+    for (const l of g.lines || []) files.push({ label: l.label || 'Charge linéaire', q: l.g, e1: l.e, e2: l.e, unitK: false, kmin: l.kmin ?? 1, kmax: l.kmax ?? 1 });
+    for (const bd of g.bands || []) files.push({ label: bd.label || 'Charge surfacique', q: bd.q * (bd.y2 - bd.y1), e1: bd.y1, e2: bd.y2, unitK: false, kmin: bd.kmin ?? 1, kmax: bd.kmax ?? 1 });
     return files;
   }
 
-  /** Sollicitations permanentes : M_total, V, R par section (poutre), et m_x(y) par K̄ (H5). */
+  /**
+   * Sollicitations permanentes : valeurs nominales (M, V, R, mx) et enveloppes min/max par les
+   * coefficients de valeur caractéristique kmin/kmax de chaque composante (EN 1991-1-1 §5.2.3, CHAMOA).
+   */
   permanent() {
     const files = this.permanentFiles();
-    const nS = this.beam.sections.length;
-    const M = new Array(nS).fill(0), Vm = new Array(nS).fill(0), Vp = new Array(nS).fill(0);
-    const R = new Array(this.spans.length + 1).fill(0);
-    const mx = Array.from({ length: nS }, () => this.ys.map(() => 0));
+    const nS = this.beam.sections.length, nSup = this.spans.length + 1;
+    const z = () => new Array(nS).fill(0), zy = () => Array.from({ length: nS }, () => this.ys.map(() => 0));
+    const M = z(), Vm = z(), Vp = z(), Mmax = z(), Mmin = z();
+    const R = new Array(nSup).fill(0), Rmax = new Array(nSup).fill(0), Rmin = new Array(nSup).fill(0);
+    const mx = zy(), mxMax = zy(), mxMin = zy();
     const gTotal = files.reduce((a, f) => a + f.q, 0);
     for (const f of files) {
       const r = this.beam.uniformLoad(f.q);
       for (let s = 0; s < nS; s++) {
         M[s] += r.M[s]; Vm[s] += r.Vm[s]; Vp[s] += r.Vp[s];
+        Mmax[s] += Math.max(f.kmin * r.M[s], f.kmax * r.M[s]); Mmin[s] += Math.min(f.kmin * r.M[s], f.kmax * r.M[s]);
         const K = f.unitK ? null : this.Kbar(this.LeqAt(s), f.e1, f.e2);
-        this.ys.forEach((_, iy) => { mx[s][iy] += (K ? K[iy] : 1) * r.M[s] / (2 * this.b); });
+        this.ys.forEach((_, iy) => {
+          const v = (K ? K[iy] : 1) * r.M[s] / (2 * this.b);
+          mx[s][iy] += v; mxMax[s][iy] += Math.max(f.kmin * v, f.kmax * v); mxMin[s][iy] += Math.min(f.kmin * v, f.kmax * v);
+        });
       }
-      r.R.forEach((v, i) => R[i] += v);
+      r.R.forEach((v, i) => { R[i] += v; Rmax[i] += Math.max(f.kmin * v, f.kmax * v); Rmin[i] += Math.min(f.kmin * v, f.kmax * v); });
     }
-    return { files, gTotal, M, Vm, Vp, R, mx };
+    return { files, gTotal, M, Vm, Vp, R, mx, Mmax, Mmin, Rmax, Rmin, mxMax, mxMin };
+  }
+
+  /** Rigidité de flexion de la section entière EI [kN·m²] : E [MPa] × I [m⁴] (I = 2b·h³/12 par défaut). */
+  EItotal({ E = 34000, I = null } = {}) {
+    const It = I ?? (2 * this.b * Math.pow(this.h, 3) / 12);
+    return E * 1000 * It;
+  }
+
+  /**
+   * Gradient thermique (EN 1991-1-5 §6.1.4.1 — approche 1, composante linéaire) : courbure κ = αT·ΔT/h,
+   * ΔT > 0 = fibre supérieure plus chaude. Effets hyperstatiques uniformes sur la largeur (K = 1).
+   * @returns {{heat, cool, Mmax, Mmin, mxMax, mxMin, Rmax, Rmin}}
+   */
+  thermal({ dTheat = 12, dTcool = -6, alphaT = 1e-5, E = 34000, I = null, hTherm = null } = {}) {
+    const EI = this.spans.map(() => this.EItotal({ E, I }));
+    const hh = hTherm ?? this.h;
+    const run = dT => { const r = this.beam.thermalCurvature(alphaT * dT / hh, EI); return { ...r, mx: r.M.map(m => this.ys.map(() => m / (2 * this.b))) }; };
+    const heat = run(dTheat), cool = run(dTcool);
+    const nS = this.beam.sections.length;
+    const Mmax = [], Mmin = [], mxMax = [], mxMin = [];
+    for (let s = 0; s < nS; s++) {
+      Mmax.push(Math.max(heat.M[s], cool.M[s], 0)); Mmin.push(Math.min(heat.M[s], cool.M[s], 0));
+      mxMax.push(this.ys.map((_, iy) => Math.max(heat.mx[s][iy], cool.mx[s][iy], 0))); mxMin.push(this.ys.map((_, iy) => Math.min(heat.mx[s][iy], cool.mx[s][iy], 0)));
+    }
+    const Rmax = heat.R.map((v, i) => Math.max(v, cool.R[i], 0)), Rmin = heat.R.map((v, i) => Math.min(v, cool.R[i], 0));
+    const Vmax = heat.Vm.map((v, s) => Math.max(v, cool.Vm[s], 0)), Vmin = heat.Vm.map((v, s) => Math.min(v, cool.Vm[s], 0));
+    return { heat, cool, Mmax, Mmin, mxMax, mxMin, Rmax, Rmin, Vmax, Vmin, EI: EI[0] };
+  }
+
+  /**
+   * Tassements aléatoires (pratique CHAMOA / guide Cerema) : δ sur un appui et −δ sur l'appui adjacent,
+   * module différé E/(1+φ) (φ = 2 → E/3), enveloppe sur toutes les paires d'appuis adjacents et les deux signes.
+   */
+  settlements({ delta = 0.01, E = 34000, I = null, phi = 2 } = {}) {
+    const EI = this.spans.map(() => this.EItotal({ E, I }) / (1 + phi));
+    const nS = this.beam.sections.length, nSup = this.spans.length + 1;
+    const Mmax = new Array(nS).fill(0), Mmin = new Array(nS).fill(0), Rmax = new Array(nSup).fill(0), Rmin = new Array(nSup).fill(0);
+    const Vmax = new Array(nS).fill(0), Vmin = new Array(nS).fill(0);
+    const cases = [];
+    for (let i = 0; i < nSup - 1; i++) {
+      const v = new Array(nSup).fill(0); v[i] = delta; v[i + 1] = -delta;
+      const r = this.beam.settlement(v, EI);
+      cases.push({ pair: [i, i + 1], ...r });
+      for (let s = 0; s < nS; s++) { Mmax[s] = Math.max(Mmax[s], Math.abs(r.M[s])); Mmin[s] = -Mmax[s]; Vmax[s] = Math.max(Vmax[s], Math.abs(r.Vm[s])); Vmin[s] = -Vmax[s]; }
+      r.R.forEach((val, k) => { Rmax[k] = Math.max(Rmax[k], Math.abs(val)); Rmin[k] = -Rmax[k]; });
+    }
+    const mxMax = Mmax.map(m => this.ys.map(() => m / (2 * this.b))), mxMin = Mmin.map(m => this.ys.map(() => m / (2 * this.b)));
+    return { cases, Mmax, Mmin, mxMax, mxMin, Rmax, Rmin, Vmax, Vmin, EI: EI[0] };
   }
 
   // ---------------------------------------------------------------------------

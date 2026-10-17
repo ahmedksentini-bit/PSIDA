@@ -32,6 +32,20 @@ par barre (max des fibres) et prend comme moment de calcul par mètre M_ST1/2b s
 | KTRANS travée 1 | 1,35827 | 1,3276 | −2,3 % |
 | m_x de calcul LM1 à P1 [kN·m/m] | 236,2 | 233,6 | −1,1 % |
 
+| Gradient thermique +12 / −6 °C à P1 [kN·m] | 2819,9 / −1409,9 | 2818,6 / −1409,3 | < 0,1 % |
+| Tassements aléatoires 1 cm à P1 [kN·m] | 1870,9 | 1870,9 | — (δ et −δ sur deux appuis adjacents, E/3) |
+| Permanent kmin / kmax à P1 [kN·m] | 4132,4 / 4490,4 | 4132,0 / 4490,0 | < 0,1 % |
+| ELS caractéristique à P1, poutre entière [kN·m] | 10 042 | 10 010 | −0,3 % |
+| A_s inférieur mi-travée 2 (σs ≤ 300 MPa) [cm²/m] | 36,0 (431,7/12) | 36,4 | +1 % |
+| A_s supérieur P1 / P2 [cm²/m] | 46,0 / 52,1 | 44,2 / 47,5 | −4 % / −9 % |
+| A_s,min 9.2.1.1 ×1,2 (bt = 11,12 m) / 7.3.2 [cm²] | 165,2 / 75,8 | 165,2 / 74,1 | < 2 % |
+
+Formules de combinaison relevées dans la note et reproduites (combinations.js) : ELS caractéristique = G + Ta + max(T + ψ0·Q ; 0,6 T + Q_LM1 ; Q_LM2) ;
+ELS fréquent = G + max(0,6 T ; 0,5 T + ψ1·Q_LM1 ; 0,75 Q_LM2) ; ELU = 1,35 G + 1,35 Q (ζ = 0 pour T et Ta).
+
+Écart résiduel sur les aciers supérieurs d'appui : CHAMOA obtient un bras de levier z ≈ 0,82 d (section exacte à chanfreins et bombement,
+calcul de section non documenté) contre 0,88 d ici ; le moment de calcul, lui, est reproduit à 0,3 %.
+
 Note : le biais de 80 gr de l'exemple est ignoré (CHAMOA calcule aussi « en biais géométrique » sans correction).
 
 ## 2. Protocole de comparaison avec une note de référence

@@ -70,6 +70,36 @@
       <label>F61 : dispositifs de retenue<input name="nRetenue" value="2" type="number" step="1" min="0" max="2"></label>
       <label>F61 : classe imposée<input name="classe" value=""></label>
     </div>
+    <details><summary>Chanfreins, température, tassements</summary>
+      <div class="row">
+        <label>Chanfreins : hauteur au bord [m] (vide = sans)<input name="hEdge" value=""></label>
+        <label>Largeur de la joue [m]<input name="joue" value=""></label>
+      </div>
+      <label><input type="checkbox" name="withTherm" checked>Gradient thermique (EN 1991-1-5) et tassements aléatoires</label>
+      <div class="row">
+        <label>ΔT échauffement / refroidissement [°C]<input name="dT" value="12, -6"></label>
+        <label>E [MPa], I total [m⁴] (vide = 2b·h³/12)<input name="EI" value="34077,"></label>
+      </div>
+      <div class="row">
+        <label>Tassement aléatoire δ [m]<input name="delta" value="0.01" type="number" step="0.001"></label>
+        <label>Fluage φ (module différé E/(1+φ))<input name="phiFluage" value="2" type="number" step="0.1"></label>
+      </div>
+    </details>
+    <details open><summary>Matériaux et ferraillage</summary>
+      <div class="row">
+        <label>fck / fc28 [MPa]<input name="fck" value="35" type="number" step="1"></label>
+        <label>fyk / fe [MPa]<input name="fyk" value="500" type="number" step="10"></label>
+      </div>
+      <div class="row">
+        <label>Enrobage à l'axe c [m]<input name="cover" value="0.03" type="number" step="0.005"></label>
+        <label>Diamètre φ [mm] (fissuration)<input name="phi" value="20" type="number" step="1"></label>
+      </div>
+      <div class="row">
+        <label>wk max [mm] (ELS fréquent)<input name="wk" value="0.3" type="number" step="0.05"></label>
+        <label>Fissuration BAEL<select name="fiss"><option value="prejudiciable">préjudiciable</option><option value="tres prejudiciable">très préjudiciable</option><option value="peu nuisible">peu nuisible</option></select></label>
+      </div>
+      <label>Épaisseur de revêtement pour la diffusion des roues [m]<input name="tRev" value="0.08" type="number" step="0.01"></label>
+    </details>
     <label><input type="checkbox" name="chamoaSign">Convention CHAMOA (moment + = fibre supérieure tendue) sur le graphique M(x)</label>
     <button type="submit">Calculer</button>
     <button type="button" class="secondary" id="btn-chamoa">Charger l'exemple CHAMOA-PSIDA (10-15-15-10 m)</button>
@@ -93,6 +123,11 @@
       <div class="plot" id="plot-f"></div>
       <div class="toolbar"><label>Surface <select id="surface-which"><option value="mxMax">m_x max</option><option value="mxMin">m_x min</option></select></label></div>
       <div class="plot" id="plot-3d" style="min-height:430px"></div>
+    </div>
+    <div class="card"><h2>Ferraillage longitudinal par mètre</h2>
+      <div class="toolbar"><label>Référentiel <select id="design-ref"><option value="EC">Eurocodes (EC2)</option><option value="F61">Fascicule 61 + BAEL 91</option></select></label></div>
+      <div class="plot" id="plot-As"></div>
+      <div id="design-tables"></div>
     </div>
     <div class="card"><h2>Lignes d'influence</h2>
       <div class="toolbar"><label>Section <select id="section-select"></select></label></div>

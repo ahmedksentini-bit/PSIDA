@@ -32,7 +32,11 @@ src/beam.js         poutre continue : lignes d'influence M, V, R ; enveloppes UD
 src/guyon.js        Guyon-Massonnet recalculé (plaque isotrope, ν = 0) : K, μ, m_y multi-harmoniques
 src/loads_ec.js     EN 1991-2 : voies conventionnelles, LM1, LM2, LM4, α, ψ
 src/loads_f61.js    Fascicule 61 : classes, voies, A(l), Bc, Bt, Br, Mc120, D240, δ
-src/analysis.js     orchestration : SlabDeck (permanent, eurocode, fascicule61)
+src/analysis.js     orchestration : SlabDeck (permanent, eurocode, fascicule61, thermal, settlements)
+src/combinations.js combinaisons EC0-A2 (formules CHAMOA) et BAEL / Fasc. 61
+src/section_ec2.js  sections EC2 : ELU, ELS, wk 7.3.4, minimums, V_Rd,c, poinçonnement, chanfreins
+src/section_bael.js sections BAEL 91 : ELU, ELS, minimums, τu, poinçonnement
+src/design.js       ferraillage par section et fibre, enveloppes, tranchant, poinçonnement
 examples/psida3.js  exemple PSIDA 3 travées 14-18-14 m (node examples/psida3.js)
 test/               tests unitaires (npm test)
 docs/hypotheses.md  hypothèses de modélisation, protocole de comparaison, références
@@ -98,11 +102,18 @@ Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de
 4. **Lignes d'influence** — M, V⁻/V⁺ et réaction pour la section choisie.
 5. **Tableaux** — toutes les valeurs numériques, par cas, avec K par section.
 
-## État et limites (v0.2)
+6. **Ferraillage longitudinal** — combinaisons (ELU, ELS caractéristique / fréquent / quasi-permanent ;
+   ELU / ELS BAEL), aciers par mètre et par critère (ELU, σs/σc, ouverture de fissure 7.3.4, minimums 9.2.1.1 ×1,2 /
+   7.3.2 / 3 cm²/m ; ELU / ELS BAEL, non-fragilité), diagramme A_s(x), tranchant V_Rd,c ou τu, poinçonnement sous roue.
+   Gradient thermique (EN 1991-1-5) et tassements aléatoires (δ, −δ sur appuis adjacents, module différé) en option,
+   chanfreins en compression par l'intrados en option.
+
+## État et limites (v0.3)
 
 - Ouvrage droit, dalle pleine de hauteur constante, appuis simples, abouts en console (charges permanentes).
-- Pas encore : sections (ELS/ELU EC2 et BAEL), fatigue, poinçonnement, moments transversaux dans
-  l'interface (le moteur les calcule), biais, LM3 / convois spéciaux EC, combinaisons pondérées automatiques.
+- Fatigue des armatures : vérification simplifiée σs ≤ 300 MPa sous ELS caractéristique (pratique CHAMOA), pas la méthode λ_s de l'EN 1992-2 annexe NN.
+- Pas encore : moments transversaux m_y dans l'interface (le moteur les calcule), aciers transversaux au-delà des minimums,
+  biais, LM3 / convois spéciaux EC, tassements probables, aciers d'effort tranchant.
 - Les tableaux `a1`, `bc`, `bt` du Fascicule 61 et les α de l'annexe française sont à relire contre
   les textes avant toute utilisation en production (voir les commentaires `TODO_VERIF`).
 
