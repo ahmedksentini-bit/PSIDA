@@ -1,0 +1,327 @@
+/**
+ * Poutre continue sur appuis simples (modèle de « poutre équivalente » d'un pont-dalle).
+ *
+ * - EI constant par travée (rapports relatifs admis : seule la répartition hyperstatique en dépend).
+ * - Méthode des rotations (slope-deflection) : inconnues = rotations des nœuds d'appui.
+ * - Lignes d'influence de M, V (à gauche et à droite de la section) et des réactions R,
+ *   calculées sur une grille de positions de charge unitaire.
+ * - Enveloppes : charge répartie sur zones défavorables (EC LM1-UDL), charge répartie par
+ *   travées entières avec intensité fonction de la longueur chargée (Fasc. 61 A(l)),
+ *   convois d'essieux glissants (TS, Bc, Bt, Mc120, D240…).
+ *
+ * Conventions :
+ *   - x croît de la culée C0 (x = 0) vers la culée Cn ; travée j entre appuis j et j+1.
+ *   - Moment fléchissant positif = fibre inférieure tendue.
+ *   - Effort tranchant positif = somme des forces à gauche vers le haut.
+ *   - Charges positives vers le bas.
+ *   - Moments d'extrémité de barre (interne) : sens horaire positif.
+ */
+import { solve } from './linalg.js';
+
+export class ContinuousBeam {
+  /**
+   * @param {number[]} spans portées [m]
+   * @param {{EI?:number[], nGrid?:number, nSec?:number}} opt
+   *   EI    rigidités relatives par travée (défaut : 1 partout)
+   *   nGrid nombre de positions de charge par travée pour les lignes d'influence (défaut 100)
+   *   nSec  nombre d'intervalles de sections par travée (défaut 20 → sections tous les L/20)
+   */
+  constructor(spans, { EI = null, nGrid = 100, nSec = 20 } = {}) {
+    if (!spans.length) throw new Error('Au moins une travée');
+    this.spans = spans.slice();
+    this.n = spans.length;
+    this.EI = EI ? EI.slice() : spans.map(() => 1);
+    this.nGrid = nGrid;
+    this.nSec = nSec;
+    this.x0 = [0];
+    for (let j = 0; j < this.n; j++) this.x0.push(this.x0[j] + spans[j]);
+    this.Ltot = this.x0[this.n];
+    this._buildStiffness();
+    this._buildGrid();
+    this._buildSections();
+    this._buildInfluenceLines();
+  }
+
+  /** Matrice de rigidité en rotation (n+1 × n+1). */
+  _buildStiffness() {
+    const N = this.n + 1;
+    const K = Array.from({ length: N }, () => new Array(N).fill(0));
+    for (let j = 0; j < this.n; j++) {
+      const k = this.EI[j] / this.spans[j];
+      K[j][j] += 4 * k; K[j][j + 1] += 2 * k;
+      K[j + 1][j] += 2 * k; K[j + 1][j + 1] += 4 * k;
+    }
+    this.K = K;
+  }
+
+  /**
+   * Moments d'extrémité (fléchissants, fibre inf. tendue +) de toutes les travées
+   * sous une charge ponctuelle P en travée j à l'abscisse locale a.
+   * @returns {{M0:number[], ML:number[]}} M0[j] à gauche de la travée j, ML[j] à droite
+   */
+  endMomentsPoint(j, a, P = 1) {
+    const L = this.spans[j], b = L - a;
+    const N = this.n + 1;
+    const F = new Array(N).fill(0); // moments d'encastrement parfait (horaire +)
+    const femL = -P * a * b * b / (L * L);
+    const femR = P * a * a * b / (L * L);
+    F[j] += femL; F[j + 1] += femR;
+    const theta = solve(this.K, F.map(v => -v));
+    const M0 = new Array(this.n), ML = new Array(this.n);
+    for (let s = 0; s < this.n; s++) {
+      const k = this.EI[s] / this.spans[s];
+      const Ml = k * (4 * theta[s] + 2 * theta[s + 1]) + (s === j ? femL : 0);
+      const Mr = k * (2 * theta[s] + 4 * theta[s + 1]) + (s === j ? femR : 0);
+      M0[s] = Ml;      // moment horaire à gauche = fibre inférieure tendue
+      ML[s] = -Mr;     // moment horaire à droite = fibre supérieure tendue
+    }
+    return { M0, ML };
+  }
+
+  /** Grille des positions de charge : nGrid points par travée + extrémité finale. */
+  _buildGrid() {
+    const pos = [];
+    for (let j = 0; j < this.n; j++) {
+      const L = this.spans[j];
+      for (let i = 0; i < this.nGrid; i++) pos.push({ j, a: L * i / this.nGrid, x: this.x0[j] + L * i / this.nGrid });
+    }
+    pos.push({ j: this.n - 1, a: this.spans[this.n - 1], x: this.Ltot });
+    this.positions = pos;
+    this.xs = pos.map(p => p.x);
+  }
+
+  /** Sections de calcul : (nSec+1) par travée, abscisse locale xi. */
+  _buildSections() {
+    const secs = [];
+    for (let j = 0; j < this.n; j++) {
+      const L = this.spans[j];
+      for (let s = 0; s <= this.nSec; s++) {
+        secs.push({ span: j, xi: L * s / this.nSec, x: this.x0[j] + L * s / this.nSec, frac: s / this.nSec });
+      }
+    }
+    this.sections = secs;
+  }
+
+  /**
+   * Lignes d'influence sur la grille :
+   *  ILM[s][p]  moment à la section s pour une charge unité à la position p
+   *  ILVm/ILVp  effort tranchant juste à gauche / à droite de la section
+   *  ILR[i][p]  réaction de l'appui i
+   */
+  _buildInfluenceLines() {
+    const nS = this.sections.length, nP = this.positions.length, nSup = this.n + 1;
+    const ILM = Array.from({ length: nS }, () => new Float64Array(nP));
+    const ILVm = Array.from({ length: nS }, () => new Float64Array(nP));
+    const ILVp = Array.from({ length: nS }, () => new Float64Array(nP));
+    const ILR = Array.from({ length: nSup }, () => new Float64Array(nP));
+
+    for (let p = 0; p < nP; p++) {
+      const { j, a } = this.positions[p];
+      const Lj = this.spans[j];
+      const { M0, ML } = this.endMomentsPoint(j, a, 1);
+      const atSupportLeft = a === 0;                 // charge exactement sur l'appui j
+      const atSupportRight = a === Lj;               // charge exactement sur l'appui j+1 (dernier point)
+
+      for (let s = 0; s < nS; s++) {
+        const { span, xi } = this.sections[s];
+        const L = this.spans[span];
+        const slope = (ML[span] - M0[span]) / L;
+        let M = M0[span] + slope * xi;
+        let Vm = slope, Vp = slope;
+        if (span === j && !atSupportLeft && !atSupportRight) {
+          const b = Lj - a;
+          M += xi < a ? b * xi / L : a * (L - xi) / L;
+          Vm += xi <= a ? b / L : -a / L;
+          Vp += xi < a ? b / L : -a / L;
+        }
+        ILM[s][p] = M; ILVm[s][p] = Vm; ILVp[s][p] = Vp;
+      }
+      // réactions : saut d'effort tranchant à l'appui (+ charge posée sur l'appui)
+      for (let i = 0; i < nSup; i++) {
+        let R = 0;
+        if (i < this.n) { // tranchant à droite de l'appui i = début de la travée i
+          const L = this.spans[i];
+          let V = (ML[i] - M0[i]) / L;
+          if (i === j && !atSupportLeft && !atSupportRight) V += (Lj - a) / L;
+          R += V;
+        }
+        if (i > 0) { // tranchant à gauche de l'appui i = fin de la travée i-1
+          const L = this.spans[i - 1];
+          let V = (ML[i - 1] - M0[i - 1]) / L;
+          if (i - 1 === j && !atSupportLeft && !atSupportRight) V += -a / L;
+          R -= V;
+        }
+        if ((atSupportLeft && i === j) || (atSupportRight && i === j + 1)) R += 1;
+        ILR[i][p] = R;
+      }
+    }
+    this.ILM = ILM; this.ILVm = ILVm; this.ILVp = ILVp; this.ILR = ILR;
+  }
+
+  /** Index de la section la plus proche de (travée j, fraction f de la portée). */
+  sectionIndex(j, frac) {
+    let best = -1, d = Infinity;
+    this.sections.forEach((s, i) => { if (s.span === j) { const dd = Math.abs(s.frac - frac); if (dd < d) { d = dd; best = i; } } });
+    return best;
+  }
+
+  /** Index de la section « sur appui i » (côté droit de la travée i-1, ou gauche de la travée i). */
+  supportSectionIndex(i) {
+    return i === 0 ? this.sectionIndex(0, 0) : this.sectionIndex(i - 1, 1);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Outils sur lignes d'influence
+  // ---------------------------------------------------------------------------
+
+  /** Valeur interpolée d'une ligne d'influence en x (0 hors de l'ouvrage). */
+  ilAt(il, x) {
+    const xs = this.xs;
+    if (x < 0 || x > this.Ltot) return 0;
+    // recherche dichotomique
+    let lo = 0, hi = xs.length - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (xs[mid] <= x) lo = mid; else hi = mid; }
+    if (xs[hi] === xs[lo]) return il[lo];
+    const t = (x - xs[lo]) / (xs[hi] - xs[lo]);
+    return il[lo] + t * (il[hi] - il[lo]);
+  }
+
+  /**
+   * Intégrale de la ligne d'influence sur [xa, xb], avec option de ne retenir que
+   * la partie positive (sign=+1) ou négative (sign=-1) — zones défavorables.
+   */
+  integrateIL(il, xa = 0, xb = this.Ltot, sign = 0) {
+    const xs = this.xs;
+    let s = 0;
+    const clip = v => (sign > 0 ? Math.max(v, 0) : sign < 0 ? Math.min(v, 0) : v);
+    for (let p = 0; p < xs.length - 1; p++) {
+      let x1 = xs[p], x2 = xs[p + 1];
+      if (x2 <= xa || x1 >= xb) continue;
+      let v1 = il[p], v2 = il[p + 1];
+      // restriction de l'intervalle à [xa, xb]
+      if (x1 < xa) { v1 = v1 + (v2 - v1) * (xa - x1) / (x2 - x1); x1 = xa; }
+      if (x2 > xb) { v2 = il[p] + (il[p + 1] - il[p]) * (xb - xs[p]) / (xs[p + 1] - xs[p]); x2 = xb; }
+      const h = x2 - x1;
+      if (h <= 0) continue;
+      if (sign === 0 || (v1 >= 0 && v2 >= 0 && sign > 0) || (v1 <= 0 && v2 <= 0 && sign < 0)) {
+        s += 0.5 * (v1 + v2) * h;
+      } else if ((v1 <= 0 && v2 <= 0 && sign > 0) || (v1 >= 0 && v2 >= 0 && sign < 0)) {
+        // rien
+      } else {
+        // changement de signe dans l'intervalle : triangle utile
+        const xc = x1 + h * v1 / (v1 - v2);
+        const vKeep = clip(v1) !== 0 ? v1 : v2;
+        const hKeep = clip(v1) !== 0 ? xc - x1 : x2 - xc;
+        s += 0.5 * vKeep * hKeep;
+      }
+    }
+    return s;
+  }
+
+  /**
+   * Enveloppe d'une charge répartie q (kN/m) appliquée sur les zones défavorables
+   * (EN 1991-2 §4.3.2 : UDL sur les parties défavorables de la ligne d'influence).
+   * @returns {{max:number, min:number}}
+   */
+  udlEnvelope(il, q) {
+    return { max: q * this.integrateIL(il, 0, this.Ltot, +1), min: q * this.integrateIL(il, 0, this.Ltot, -1) };
+  }
+
+  /**
+   * Enveloppe d'une charge répartie par travées entières dont l'intensité dépend
+   * de la longueur chargée l (Fasc. 61 titre II, système A(l)).
+   * @param {Float64Array} il ligne d'influence
+   * @param {(l:number)=>number} qOfL intensité [kN/m] pour une longueur chargée l [m]
+   * @returns {{max:number, min:number, spansMax:number[], spansMin:number[]}}
+   */
+  spanwiseEnvelope(il, qOfL) {
+    const n = this.n;
+    const perSpan = [];
+    for (let j = 0; j < n; j++) perSpan.push(this.integrateIL(il, this.x0[j], this.x0[j + 1], 0));
+    let max = 0, min = 0, spansMax = [], spansMin = [];
+    for (let mask = 1; mask < (1 << n); mask++) {
+      let l = 0, I = 0; const list = [];
+      for (let j = 0; j < n; j++) if (mask & (1 << j)) { l += this.spans[j]; I += perSpan[j]; list.push(j); }
+      const v = qOfL(l) * I;
+      if (v > max) { max = v; spansMax = list; }
+      if (v < min) { min = v; spansMin = list; }
+    }
+    return { max, min, spansMax, spansMin };
+  }
+
+  /**
+   * Enveloppe d'un convoi d'essieux glissant sur l'ouvrage (les deux sens de marche).
+   * @param {Float64Array} il
+   * @param {{d:number, P:number}[]} axles distances cumulées depuis le 1er essieu [m], charges [kN]
+   * @param {{step?:number}} opt pas de glissement [m] (défaut 0.05)
+   * @returns {{max:number, min:number, xmax:number, xmin:number, dirMax:number, dirMin:number}}
+   */
+  axleEnvelope(il, axles, { step = 0.05 } = {}) {
+    const dmax = Math.max(...axles.map(a => a.d));
+    let max = -Infinity, min = Infinity, xmax = 0, xmin = 0, dirMax = 1, dirMin = 1;
+    for (const dir of [1, -1]) {
+      for (let x = -dmax; x <= this.Ltot + dmax + 1e-9; x += step) {
+        let v = 0;
+        for (const ax of axles) v += ax.P * this.ilAt(il, x + dir * ax.d);
+        if (v > max) { max = v; xmax = x; dirMax = dir; }
+        if (v < min) { min = v; xmin = x; dirMin = dir; }
+      }
+    }
+    return { max, min, xmax, xmin, dirMax, dirMin };
+  }
+
+  /**
+   * Enveloppe d'une charge répartie uniforme de longueur finie (chenille, D240…)
+   * glissant sur l'ouvrage : intensité q [kN/m] sur une longueur len.
+   */
+  stripEnvelope(il, q, len, { step = 0.05 } = {}) {
+    let max = -Infinity, min = Infinity, xmax = 0, xmin = 0;
+    for (let x = -len; x <= this.Ltot + 1e-9; x += step) {
+      const v = q * this.integrateIL(il, Math.max(0, x), Math.min(this.Ltot, x + len), 0);
+      if (v > max) { max = v; xmax = x; }
+      if (v < min) { min = v; xmin = x; }
+    }
+    return { max, min, xmax, xmin };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sollicitations sous charges permanentes (charge uniforme g sur toute la longueur)
+  // ---------------------------------------------------------------------------
+
+  /** Moments, tranchants et réactions sous une charge uniforme g [kN/m] sur tout l'ouvrage. */
+  uniformLoad(g) {
+    const M = this.sections.map((_, s) => g * this.integrateIL(this.ILM[s]));
+    const Vm = this.sections.map((_, s) => g * this.integrateIL(this.ILVm[s]));
+    const Vp = this.sections.map((_, s) => g * this.integrateIL(this.ILVp[s]));
+    const R = this.ILR.map(il => g * this.integrateIL(il));
+    return { M, Vm, Vp, R };
+  }
+
+  /**
+   * Portée équivalente de chaque travée au sens de Guyon-Massonnet :
+   * distance entre points de moment nul sous charge uniforme (travée de rive et
+   * travée intermédiaire), avec repli sur la portée réelle si une seule travée.
+   */
+  equivalentSpans() {
+    if (this.n === 1) return [this.spans[0]];
+    const { M } = this.uniformLoad(1);
+    const tol = 1e-9 * Math.max(...M.map(Math.abs));
+    const out = [];
+    for (let j = 0; j < this.n; j++) {
+      const idx = this.sections.map((s, i) => s.span === j ? i : -1).filter(i => i >= 0);
+      // recherche des zéros de M dans la travée
+      const zeros = [];
+      for (let k = 0; k < idx.length - 1; k++) {
+        const i1 = idx[k], i2 = idx[k + 1];
+        const m1 = Math.abs(M[i1]) < tol ? 0 : M[i1], m2 = Math.abs(M[i2]) < tol ? 0 : M[i2];
+        if (m1 === 0) zeros.push(this.sections[i1].x);
+        else if (m1 * m2 < 0) zeros.push(this.sections[i1].x + (this.sections[i2].x - this.sections[i1].x) * m1 / (m1 - m2));
+      }
+      const last = idx[idx.length - 1];
+      if (Math.abs(M[last]) < tol) zeros.push(this.sections[last].x);
+      if (zeros.length >= 2) out.push(zeros[zeros.length - 1] - zeros[0]);
+      else out.push(this.spans[j]);
+    }
+    return out;
+  }
+}
