@@ -4,10 +4,10 @@
 
 | # | Hypothèse | Code | À confronter à |
 |---|-----------|------|----------------|
-| H1 | Dalle isotrope de largeur totale 2b (encorbellements compris), inertie équivalente constante | `SlabDeck` (`b = width/2`) | CHAMOA-PSIDA ch. 2 §3.4 : « modèle Guyon constitué d'une dalle isotrope » avec inertie équivalente |
-| H2 | Poutre continue à EI constant, appuis simples | `ContinuousBeam` | CHAMOA : flexion longitudinale avec ST1 (modèle à barres) ; PSIDA.EL : idem par RDM |
-| H3 | Premier harmonique ; θ = b/L_eq ; L_eq = distance entre points de moment nul sous charge uniforme (rive et intermédiaire), moyenne des deux L_eq sur appui | `equivalentSpans()`, `LeqAt()` ; paramètre `Leq` pour imposer d'autres valeurs | Choix de portée équivalente de PSIDA / CHAMOA (à lire dans les guides) |
-| H4 | Files de charge indépendantes : m_x(y) = Σ K̄_i(y)·M_i/2b, positions longitudinales choisies file par file | `evaluateCase()` | Légèrement conservatif pour Bc (files alignées) ; exact pour LM1 |
+| H1 | Dalle isotrope de largeur totale 2b (encorbellements compris), inertie équivalente constante, ν = 0,2 (option `nu`, 0 = tables de Massonnet) | `SlabDeck` (`b = width/2`, `nu`) | CHAMOA-PSIDA ch. 2 §3.3 : dalle isotrope de largeur totale, I = I_tot/2b_d. **Vérifié** : avec ν = 0,2 le facteur de bord reproduit KTRANS à 0,4 % (P1) et 2,3 % (travée 1) ; avec ν = 0 il est 7 % trop bas |
+| H2 | Poutre continue à EI constant, appuis simples, abouts en console (`overhangs`) | `ContinuousBeam` | **Vérifié** à 10⁻³ près sur les moments de poids propre et de superstructures de la note CHAMOA (ST1) |
+| H3 | Premier harmonique ; θ = b/L_eq ; L_eq = distance entre points de moment nul de la travée **seule chargée** par une charge uniforme (« méthode des moments » CHAMOA), moyenne des deux L_eq sur appui | `equivalentSpans()`, `LeqAt()` ; paramètre `Leq` | **Vérifié** : 8,9119 / 11,1867 m contre 8,9118 / 11,1862 (note CHAMOA, tableau « caractéristiques équivalentes ») |
+| H4 | Pour chaque fibre y, arrangement transversal le plus défavorable (voies glissées et renumérotées, pas `laneStep`) ; files indépendantes longitudinalement : m_x(y) = Σ K̄_i(y)·M_i/2b | `laneArrangementsEC()`, `evaluateArrangements()` | CHAMOA ch. 2 §3.4.1 : « effet le plus défavorable de la répartition transversale pour chaque point d'étude transversal ». Le facteur de bord (dimensionnant) est reproduit ; le profil CHAMOA est plus plat vers l'axe (1,18 contre 1,10), définition exacte du fichier Guyon à élucider |
 | H5 | Poids propre K = 1 ; superstructures avec K(e,y) ; revêtement bande uniforme avec K̄ | `permanent()` | PSIDA répartit aussi les charges permanentes excentrées |
 | H6 | Ouvrage droit | — | Biais 70–100 gr : coefficients correctifs du guide SETRA 1989 |
 
@@ -17,6 +17,22 @@ Autres choix :
 - Voies Eurocode numérotées depuis chaque bord de chaussée (deux arrangements), enveloppe des deux.
 - Fascicule 61 : files Bc/Bt accolées (2,50 m) depuis chaque bord de la largeur chargeable ; Mc120 et D240 au plus près de chaque bord et au centre.
 - δ (Fasc. 61 art. 5.5) calculé par travée avec G = g·L et S = poids maximal du système sur la travée (approché : 1 ou 2 camions par file selon L ≥ 16,5 m) ; sur appui, δ max des deux travées.
+
+## 1 bis. Résultats du benchmark CHAMOA-PSIDA (test/chamoa.test.js)
+
+Exemple du chapitre 4 (10-15-15-10 m, 12 × 0,75 m, classe 2). CHAMOA applique au calcul ST1 un facteur KTRANS
+par barre (max des fibres) et prend comme moment de calcul par mètre M_ST1/2b sur toute la largeur.
+
+| Grandeur | CHAMOA | pontdalle | écart |
+|---|---|---|---|
+| M poids propre P1 / P2 [kN·m] | 3514,9 / 4507,4 | 3514,8 / 4507,3 | < 0,1 % |
+| Le travée 1 / 2 [m] | 8,9118 / 11,1862 | 8,9119 / 11,1867 | < 0,1 % |
+| M LM1 (poutre entière) à P1 [kN·m] | 2834,2/1,30464 = 2172 | 2157 | −0,7 % |
+| KTRANS P1 (barre 2) | 1,30464 | 1,2996 | −0,4 % |
+| KTRANS travée 1 | 1,35827 | 1,3276 | −2,3 % |
+| m_x de calcul LM1 à P1 [kN·m/m] | 236,2 | 233,6 | −1,1 % |
+
+Note : le biais de 80 gr de l'exemple est ignoré (CHAMOA calcule aussi « en biais géométrique » sans correction).
 
 ## 2. Protocole de comparaison avec une note de référence
 

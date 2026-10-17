@@ -72,11 +72,16 @@ test('convoi glissant : tandem 2×P espacé 1,2 m sur travée isostatique', () =
   close(rEnv.max, P + P * (L - 1.2) / L, 1e-6 * P, 'R max tandem');
 });
 
-test('portées équivalentes (points de moment nul)', () => {
-  const bm = new ContinuousBeam([10, 10, 10], { nGrid: 200, nSec: 100 });
+test('portées équivalentes (travée seule chargée, « méthode des moments » CHAMOA)', () => {
+  const bm = new ContinuousBeam([10, 10, 10], { nGrid: 200, nSec: 20 });
   const Leq = bm.equivalentSpans();
-  // 3 travées égales : zéro en travée de rive à 0.8L, travée centrale : zéros à 0.2764L et 0.7236L → 0.447L
-  close(Leq[0], 8.0, 0.05, 'Leq rive');
-  close(Leq[1], 4.472, 0.05, 'Leq centrale');
-  close(Leq[2], 8.0, 0.05, 'Leq rive');
+  // 3 travées égales : travée de rive seule chargée → M_B = −qL²/15, zéro à 13L/15 ; travée centrale seule
+  // chargée → M_B = M_C = −qL²/20, zéros à L(1 ± √0,6)/2 → distance 0,7746 L
+  close(Leq[0], 10 * 13 / 15, 2e-3, 'Leq rive');
+  close(Leq[1], 10 * Math.sqrt(0.6), 2e-3, 'Leq centrale');
+  close(Leq[2], 10 * 13 / 15, 2e-3, 'Leq rive');
+  // exemple CHAMOA-PSIDA : 10-15-15-10 m, abouts 0,50 m → 8,9118 / 11,1862
+  const b2 = new ContinuousBeam([10, 15, 15, 10], { nGrid: 100, nSec: 20, overhangs: [0.5, 0.5] });
+  const L2 = b2.equivalentSpans();
+  close(L2[0], 8.9118, 2e-3, 'Leq CHAMOA travée 1'); close(L2[1], 11.1862, 2e-3, 'Leq CHAMOA travée 2');
 });

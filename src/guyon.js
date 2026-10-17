@@ -28,19 +28,39 @@ import { solve, gaussNodes } from './linalg.js';
  * @param {{b:number, L:number, n?:number, e:number, nu?:number}} p
  * @returns {{k:number, Y:(y:number)=>number, d1, d2, d3, b:number, e:number}}
  */
-export function plateHarmonic({ b, L, n = 1, e, nu = 0 }) {
+export function plateHarmonic({ b, L, n = 1, e, nu = 0, alpha = 1 }) {
   const k = n * Math.PI / L;
   const tolEdge = 1e-9 * b;
   const edgeLoad = e >= b - tolEdge ? +1 : e <= -b + tolEdge ? -1 : 0;
+  const iso = alpha >= 1 - 1e-9;
 
-  // Évaluation d'une base {E, (y-c)E} avec E = exp(s k (y - c)) → [f, f', f'', f''']
+  // Base de fonctions → [f, f', f'', f'''] en y.
+  //  α = 1 (racine double k)      : {E, (y−c)E}, E = exp(s k (y−c))
+  //  α < 1 (racines complexes)    : {Re F, Im F}, F = exp(λ (y−c)), λ = k (s·a + i·c₁),
+  //                                 a = √((1+α)/2), c₁ = √((1−α)/2)   (paramètre de torsion de Guyon-Massonnet)
+  const ca = Math.sqrt((1 + alpha) / 2), cc = Math.sqrt(Math.max(0, (1 - alpha) / 2));
   const basis = (list, y) => list.map(({ s, c, lin }) => {
-    const t = y - c, E = Math.exp(s * k * t);
-    if (!lin) return [E, s * k * E, k * k * E, s * k * k * k * E];
-    return [t * E, E * (1 + s * k * t), E * (2 * s * k + k * k * t), E * (3 * k * k + s * k * k * k * t)];
+    const t = y - c;
+    if (iso) {
+      const E = Math.exp(s * k * t);
+      if (!lin) return [E, s * k * E, k * k * E, s * k * k * k * E];
+      return [t * E, E * (1 + s * k * t), E * (2 * s * k + k * k * t), E * (3 * k * k + s * k * k * k * t)];
+    }
+    // λ = k(s·a + i·c₁) ; F = e^{λt} ; F^(m) = λ^m F ; lin=false → Re, lin=true → Im
+    const lr = k * s * ca, li = k * cc;
+    const mod = Math.exp(lr * t), ph = li * t;
+    let pr = 1, pi = 0; // λ^m
+    const out = [];
+    for (let m = 0; m < 4; m++) {
+      const Fr = mod * (pr * Math.cos(ph) - pi * Math.sin(ph));
+      const Fi = mod * (pr * Math.sin(ph) + pi * Math.cos(ph));
+      out.push(lin ? Fi : Fr);
+      const nr = pr * lr - pi * li, ni = pr * li + pi * lr; pr = nr; pi = ni;
+    }
+    return out;
   });
-  const momentOp = f => f[2] - nu * k * k * f[0];               // M_y = 0 (à D près)
-  const shearOp = f => f[3] - (2 - nu) * k * k * f[1];          // V_y (Kirchhoff) = 0 (à −D près)
+  const momentOp = f => f[2] - nu * k * k * f[0];                       // M_y = 0 (à D près)
+  const shearOp = f => f[3] - (2 * alpha - nu) * k * k * f[1];          // V_y (Kirchhoff) = 0 (à −D près)
 
   if (edgeLoad !== 0) {
     // Une seule région : la charge en bord devient une condition aux limites
@@ -96,15 +116,15 @@ export function meanDeflection(h, pieces = 64) {
  * @param {{b:number, L:number, e:number, y:number, nu?:number}} p
  *   b demi-largeur de la dalle, L portée (équivalente), e excentricité de la charge, y ordonnée
  */
-export function coefK({ b, L, e, y, nu = 0 }) {
-  const h = plateHarmonic({ b, L, n: 1, e, nu });
+export function coefK({ b, L, e, y, nu = 0, alpha = 1 }) {
+  const h = plateHarmonic({ b, L, n: 1, e, nu, alpha });
   if (nu === 0) return 2 * b * Math.pow(h.k, 4) * h.Y(y);
   return h.Y(y) / meanDeflection(h);
 }
 
 /** Fonction K(y) pour une excentricité e donnée (évite de refaire la résolution). */
-export function coefKFunction({ b, L, e, nu = 0 }) {
-  const h = plateHarmonic({ b, L, n: 1, e, nu });
+export function coefKFunction({ b, L, e, nu = 0, alpha = 1 }) {
+  const h = plateHarmonic({ b, L, n: 1, e, nu, alpha });
   const norm = nu === 0 ? 2 * b * Math.pow(h.k, 4) : 1 / meanDeflection(h);
   return y => norm * h.Y(y);
 }
@@ -112,13 +132,13 @@ export function coefKFunction({ b, L, e, nu = 0 }) {
 /**
  * K moyen sur une bande de charge e ∈ [e1, e2] (voie chargée uniformément dans le sens transversal).
  */
-export function coefKBand({ b, L, e1, e2, y, nu = 0, nGauss = 5 }) {
-  if (Math.abs(e2 - e1) < 1e-9) return coefK({ b, L, e: e1, y, nu });
+export function coefKBand({ b, L, e1, e2, y, nu = 0, alpha = 1, nGauss = 5 }) {
+  if (Math.abs(e2 - e1) < 1e-9) return coefK({ b, L, e: e1, y, nu, alpha });
   let s = 0;
   const pieces = Math.max(1, Math.ceil(Math.abs(e2 - e1) / 0.5));
   const hh = (e2 - e1) / pieces;
   for (let i = 0; i < pieces; i++) {
-    for (const [e, w] of gaussNodes(e1 + i * hh, e1 + (i + 1) * hh, nGauss)) s += w * coefK({ b, L, e, y, nu });
+    for (const [e, w] of gaussNodes(e1 + i * hh, e1 + (i + 1) * hh, nGauss)) s += w * coefK({ b, L, e, y, nu, alpha });
   }
   return s / (e2 - e1);
 }
@@ -127,14 +147,14 @@ export function coefKBand({ b, L, e1, e2, y, nu = 0, nGauss = 5 }) {
  * Coefficient μ de Guyon-Massonnet : moment transversal m_y = μ · b · p sous la charge-ligne
  * sinusoïdale p·sin(πx/L) placée en e (premier harmonique).
  */
-export function coefMu({ b, L, e, y, nu = 0 }) {
-  const h = plateHarmonic({ b, L, n: 1, e, nu });
+export function coefMu({ b, L, e, y, nu = 0, alpha = 1 }) {
+  const h = plateHarmonic({ b, L, n: 1, e, nu, alpha });
   return -(h.d2(y) - nu * h.k * h.k * h.Y(y)) / b;
 }
 
 /** Tableau K[y][e] pour listes d'ordonnées et d'excentricités (contrôle visuel / comparaison aux tables). */
-export function tableK({ b, L, es, ys, nu = 0 }) {
-  return es.map(e => { const f = coefKFunction({ b, L, e, nu }); return ys.map(y => f(y)); });
+export function tableK({ b, L, es, ys, nu = 0, alpha = 1 }) {
+  return es.map(e => { const f = coefKFunction({ b, L, e, nu, alpha }); return ys.map(y => f(y)); });
 }
 
 /**
@@ -146,7 +166,7 @@ export function tableK({ b, L, es, ys, nu = 0 }) {
  *   p_n = (2q/(nπ)) [cos(nπx1/L) − cos(nπx2/L)]   (charge-ligne par unité de largeur).
  * @returns {{my:number[], mx:number[]}} moments [kN·m/m] aux ordonnées ys, à l'abscisse x
  */
-export function transverseMoments({ b, L, patches, x, ys, nHarm = 25, nu = 0, nGauss = 4 }) {
+export function transverseMoments({ b, L, patches, x, ys, nHarm = 25, nu = 0, alpha = 1, nGauss = 4 }) {
   const my = ys.map(() => 0), mx = ys.map(() => 0);
   for (let n = 1; n <= nHarm; n++) {
     const sinx = Math.sin(n * Math.PI * x / L);
@@ -164,7 +184,7 @@ export function transverseMoments({ b, L, patches, x, ys, nHarm = 25, nu = 0, nG
         const hh = (b1 - a1) / pieces;
         for (let i = 0; i < pieces; i++) {
           for (const [e, w] of gaussNodes(a1 + i * hh, a1 + (i + 1) * hh, nGauss)) {
-            const h = plateHarmonic({ b, L, n, e, nu });
+            const h = plateHarmonic({ b, L, n, e, nu, alpha });
             ys.forEach((y, iy) => {
               const Y = h.Y(y), Y2 = h.d2(y);
               my[iy] += sinx * pn * w * (-(Y2 - nu * k * k * Y));

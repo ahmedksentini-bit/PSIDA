@@ -26,13 +26,14 @@ export class ContinuousBeam {
    *   nGrid nombre de positions de charge par travée pour les lignes d'influence (défaut 100)
    *   nSec  nombre d'intervalles de sections par travée (défaut 20 → sections tous les L/20)
    */
-  constructor(spans, { EI = null, nGrid = 100, nSec = 20 } = {}) {
+  constructor(spans, { EI = null, nGrid = 100, nSec = 20, overhangs = [0, 0] } = {}) {
     if (!spans.length) throw new Error('Au moins une travée');
     this.spans = spans.slice();
     this.n = spans.length;
     this.EI = EI ? EI.slice() : spans.map(() => 1);
     this.nGrid = nGrid;
     this.nSec = nSec;
+    this.overhangs = overhangs; // abouts (consoles) au-delà des appuis extrêmes [m] : chargés par g seulement
     this.x0 = [0];
     for (let j = 0; j < this.n; j++) this.x0.push(this.x0[j] + spans[j]);
     this.Ltot = this.x0[this.n];
@@ -288,40 +289,74 @@ export class ContinuousBeam {
   // Sollicitations sous charges permanentes (charge uniforme g sur toute la longueur)
   // ---------------------------------------------------------------------------
 
-  /** Moments, tranchants et réactions sous une charge uniforme g [kN/m] sur tout l'ouvrage. */
+  /**
+   * Réponse (moments d'extrémité fléchissants M0/ML par travée) à des moments imposés aux nœuds :
+   * Mnode[i] = moment fléchissant (fibre inf. tendue +) que la poutre doit présenter au nœud i
+   * (utilisé pour les consoles d'about : M = −g·a²/2 aux appuis extrêmes).
+   */
+  _responseToNodalMoments(Mnode) {
+    const N = this.n + 1;
+    // équations : M_left(0) = Mnode[0] ; équilibre interne ; −M_right(n−1) = Mnode[n]
+    const rhs = new Array(N).fill(0);
+    rhs[0] = Mnode[0] || 0;
+    rhs[N - 1] = -(Mnode[N - 1] || 0);
+    const theta = solve(this.K, rhs);
+    const M0 = new Array(this.n), ML = new Array(this.n);
+    for (let s = 0; s < this.n; s++) {
+      const k = this.EI[s] / this.spans[s];
+      M0[s] = k * (4 * theta[s] + 2 * theta[s + 1]);
+      ML[s] = -(k * (2 * theta[s] + 4 * theta[s + 1]));
+    }
+    return { M0, ML };
+  }
+
+  /** Moments, tranchants et réactions sous une charge uniforme g [kN/m] sur tout l'ouvrage (abouts compris). */
   uniformLoad(g) {
     const M = this.sections.map((_, s) => g * this.integrateIL(this.ILM[s]));
     const Vm = this.sections.map((_, s) => g * this.integrateIL(this.ILVm[s]));
     const Vp = this.sections.map((_, s) => g * this.integrateIL(this.ILVp[s]));
     const R = this.ILR.map(il => g * this.integrateIL(il));
+    const [aL, aR] = this.overhangs;
+    if (aL > 0 || aR > 0) {
+      const Mnode = new Array(this.n + 1).fill(0);
+      Mnode[0] = -g * aL * aL / 2; Mnode[this.n] = -g * aR * aR / 2;
+      const { M0, ML } = this._responseToNodalMoments(Mnode);
+      this.sections.forEach((sec, s) => {
+        const L = this.spans[sec.span], slope = (ML[sec.span] - M0[sec.span]) / L;
+        M[s] += M0[sec.span] + slope * sec.xi; Vm[s] += slope; Vp[s] += slope;
+      });
+      for (let i = 0; i <= this.n; i++) {
+        if (i < this.n) R[i] += (ML[i] - M0[i]) / this.spans[i];
+        if (i > 0) R[i] -= (ML[i - 1] - M0[i - 1]) / this.spans[i - 1];
+      }
+      R[0] += g * aL; R[this.n] += g * aR;
+    }
     return { M, Vm, Vp, R };
   }
 
   /**
-   * Portée équivalente de chaque travée au sens de Guyon-Massonnet :
-   * distance entre points de moment nul sous charge uniforme (travée de rive et
-   * travée intermédiaire), avec repli sur la portée réelle si une seule travée.
+   * Portée équivalente de chaque travée au sens de Guyon-Massonnet (« méthode des moments »
+   * de CHAMOA / PSIDA) : distance entre les points de moment nul de la travée lorsqu'elle est
+   * seule chargée par une charge uniforme ; travée isostatique → portée réelle.
+   * Vérifié sur l'exemple CHAMOA-PSIDA (10-15-15-10 m : 8,9118 / 11,1862 m).
    */
   equivalentSpans() {
     if (this.n === 1) return [this.spans[0]];
-    const { M } = this.uniformLoad(1);
-    const tol = 1e-9 * Math.max(...M.map(Math.abs));
     const out = [];
     for (let j = 0; j < this.n; j++) {
-      const idx = this.sections.map((s, i) => s.span === j ? i : -1).filter(i => i >= 0);
-      // recherche des zéros de M dans la travée
-      const zeros = [];
-      for (let k = 0; k < idx.length - 1; k++) {
-        const i1 = idx[k], i2 = idx[k + 1];
-        const m1 = Math.abs(M[i1]) < tol ? 0 : M[i1], m2 = Math.abs(M[i2]) < tol ? 0 : M[i2];
-        if (m1 === 0) zeros.push(this.sections[i1].x);
-        else if (m1 * m2 < 0) zeros.push(this.sections[i1].x + (this.sections[i2].x - this.sections[i1].x) * m1 / (m1 - m2));
-      }
-      const last = idx[idx.length - 1];
-      if (Math.abs(M[last]) < tol) zeros.push(this.sections[last].x);
-      if (zeros.length >= 2) out.push(zeros[zeros.length - 1] - zeros[0]);
-      else out.push(this.spans[j]);
+      const L = this.spans[j];
+      // charge p = 1 sur la seule travée j : moments d'extrémité par intégration des lignes d'influence,
+      // puis M(x) = M0 + (ML − M0)·x/L + x(L − x)/2 exact dans la travée → racines du trinôme
+      const M0 = this.integrateIL(this.ILM[this.sectionIndex(j, 0)], this.x0[j], this.x0[j + 1], 0);
+      const ML = this.integrateIL(this.ILM[this.sectionIndex(j, 1)], this.x0[j], this.x0[j + 1], 0);
+      const a = -0.5, bq = L / 2 + (ML - M0) / L, c = M0;
+      const disc = bq * bq - 4 * a * c;
+      if (disc <= 0) { out.push(L); continue; }
+      const r1 = (-bq + Math.sqrt(disc)) / (2 * a), r2 = (-bq - Math.sqrt(disc)) / (2 * a);
+      const x1 = Math.max(0, Math.min(r1, r2)), x2 = Math.min(L, Math.max(r1, r2));
+      out.push(x2 - x1);
     }
     return out;
   }
+
 }
