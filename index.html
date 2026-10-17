@@ -56,8 +56,8 @@
     <details id="help-box"><summary>Aide sur les données (survoler un champ affiche aussi son explication)</summary><div id="help-list" class="small"></div></details>
     <label>Portées [m]<input name="spans" value="14, 18, 14"></label>
     <div class="row">
-      <label>Largeur dalle 2b [m]<input name="width" value="12" type="number" step="0.01"></label>
-      <label>Épaisseur h [m]<input name="h" value="0.70" type="number" step="0.01"></label>
+      <label>Largeur dalle 2b [m]<input name="width" value="12" type="number" step="any"></label>
+      <label>Épaisseur h [m]<input name="h" value="0.70" type="number" step="any"></label>
     </div>
     <div class="row">
       <label>Aire section [m²] (vide = 2b·h)<input name="area" value=""></label>
@@ -72,7 +72,10 @@
       <label>ν (Guyon) — 0,2 CHAMOA, 0 Massonnet<input name="nu" value="0.2" type="number" step="0.05" min="0" max="0.3"></label>
       <label>Pas de glissement des voies [m]<input name="laneStep" value="0.5" type="number" step="0.1" min="0.1"></label>
     </div>
-    <label>L_eq imposées [m] (vide = calcul)<input name="Leq" value=""></label>
+    <div class="row">
+      <label>L_eq imposées [m] (vide = calcul)<input name="Leq" value=""></label>
+      <label>Calcul de L_eq<select name="leqMethod"><option value="moments">points de moment nul (CHAMOA)</option><option value="fleches">flèche à mi-travée (PSIDA.EL 1984)</option></select></label>
+    </div>
     <label>Coefficients α (Eurocode)<select name="alpha"><option value="recommended">EN 1991-2 valeurs recommandées (α = 1)</option><option value="FR1">NF EN 1991-2/NA classe 1</option><option value="FR2">NF EN 1991-2/NA classe 2</option></select></label>
     <div class="row">
       <label>F61 : dispositifs de retenue<input name="nRetenue" value="2" type="number" step="1" min="0" max="2"></label>
@@ -95,7 +98,7 @@
     </details>
     <details open><summary>Matériaux et ferraillage</summary>
       <div class="row">
-        <label>fck / fc28 [MPa]<input name="fck" value="35" type="number" step="1"></label>
+        <label>fck / fc28 [MPa]<input name="fck" value="35" type="number" step="any"></label>
         <label>fyk / fe [MPa]<input name="fyk" value="500" type="number" step="10"></label>
       </div>
       <div class="row">
@@ -167,6 +170,7 @@
     <button type="submit">Calculer</button>
     <button type="button" class="secondary" id="btn-concept">Aide à la conception seule (rapide)</button>
     <button type="button" class="secondary" id="btn-chamoa">Charger l'exemple CHAMOA-PSIDA (10-15-15-10 m)</button>
+    <button type="button" class="secondary" id="btn-psidael">Charger l'exemple PSIDA.EL 1984 (9,75-13,93-13,93-9,75 m, Fasc. 61)</button>
     <p class="small">Valeurs caractéristiques non pondérées. Moments de la poutre entière en kN·m, par mètre de largeur en kN·m/m.</p>
   </form>
 

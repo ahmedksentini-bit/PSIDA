@@ -41,7 +41,7 @@ function parseForm(form) {
       footways: pairs(d.footways).map(([a, b]) => ({ y1: a, y2: b })),
       lines: d.lines.split(';').map(t => t.trim()).filter(Boolean).map(t => { const k = parseK(t); const [g, e] = k.rest.split('@').map(Number); return { g, e, kmin: k.kmin, kmax: k.kmax }; }),
       bands: d.bands.split(';').map(t => t.trim()).filter(Boolean).map(t => { const k = parseK(t); const [q, r] = k.rest.split('sur'); const [a, b] = nums(r); return { q: +q, y1: a, y2: b, kmin: k.kmin, kmax: k.kmax }; }),
-      ys: nums(d.ys), Leq: d.Leq.trim() ? nums(d.Leq) : undefined,
+      ys: nums(d.ys), Leq: d.Leq.trim() ? nums(d.Leq) : undefined, leqMethod: d.leqMethod || 'moments',
       nu: +d.nu, laneStep: +d.laneStep, nSec: 20, nGrid: 100,
       chamfer: d.hEdge.trim() && d.joue.trim() ? { hEdge: +d.hEdge, joue: +d.joue } : undefined,
       psi: +(d.psi || 100),
@@ -508,7 +508,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!state) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.8', hSearch: lastSearch });
+    const html = await buildReport({ ...state, version: '0.9', hSearch: lastSearch });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -519,12 +519,26 @@ $('#btn-report').addEventListener('click', async () => {
 $('#trans-span').addEventListener('change', () => state && renderTransverse(state));
 $('#trans-ref').addEventListener('change', () => state && renderTransverse(state));
 $('#span-select').addEventListener('change', () => state && kPlot($('#plot-K'), state.deck, +$('#span-select').value));
+// Exemple de la note commentée PSIDA.EL (SETRA 1984, réimpr. 1990) : rectangle équivalent 7,913 × 0,52 m, I = 0,09272 m⁴,
+// superstructures QSUP 42,5 kN/m (min 25,5), trottoirs 1,5 kN/m², classe 1, Ei = 38 032 MPa (tassements : Ei/3), biais 80 gr.
+$('#btn-psidael').addEventListener('click', () => {
+  const f = $('#f');
+  f.spans.value = '9.75, 13.93, 13.93, 9.75'; f.width.value = 7.913; f.h.value = 0.52; f.area.value = 4.1256; f.overhangs.value = '0.35, 0.35';
+  f.roadway.value = '-3, 3'; f.footways.value = '-3.9565,-3 ; 3,3.9565'; f.lines.value = '';
+  f.bands.value = '5.371 sur -3.9565,3.9565 k 0.6/1.0'; f.ys.value = '-3.9565, -3, -1.978, 0, 1.978, 3, 3.9565';
+  f.Leq.value = ''; f.leqMethod.value = 'fleches'; f.alpha.value = 'FR2'; f.nRetenue.value = 0; f.classe.value = '1'; f.nu.value = 0; f.chamoaSign.checked = true;
+  f.hEdge.value = ''; f.joue.value = ''; f.EI.value = '38032, 0.09272'; f.withTherm.checked = false; f.fck.value = 30.6; f.fyk.value = 400; f.cover.value = 0.025;
+  f.psi.value = 80; f.tirantAir.value = ''; f.typeDalle.value = 'auto'; f.Dabout.value = 25; f.rhoMax.value = 1.0; f.transDir.value = 'appuis'; f.nBearings.value = ''; f.xFixed.value = ''; f.epsSlow.value = 0.00025; f.dTu.value = 30;
+  f.withChantier.checked = false; f.lm3.value = ''; f.cant.value = ''; f.fatLambda1.value = 1.0; f.fatCat.value = '2'; f.bearingPitch.value = '';
+  $('#hs-min').value = ''; $('#hs-max').value = '';
+  renderScheme();
+});
 $('#btn-chamoa').addEventListener('click', () => {
   const f = $('#f');
   f.spans.value = '10, 15, 15, 10'; f.width.value = 12; f.h.value = 0.75; f.area.value = 8.91; f.overhangs.value = '0.5, 0.5';
   f.roadway.value = '-5, 5'; f.footways.value = '-6,-5 ; 5,6'; f.lines.value = '10 @ -5.85 k 0.8/1.2 ; 10 @ 5.85 k 0.8/1.2';
   f.bands.value = '0.66 sur -6,6 k 0.8/1.2 ; 1.92 sur -5,5 k 0.8/1.4 ; 0.72 sur -6,-5 ; 0.72 sur 5,6'; f.ys.value = '-6, -4.5, -3, -1.5, 0, 1.5, 3, 4.5, 6';
-  f.Leq.value = ''; f.alpha.value = 'FR2'; f.nRetenue.value = 0; f.classe.value = ''; f.nu.value = 0.2; f.chamoaSign.checked = true;
+  f.Leq.value = ''; f.leqMethod.value = 'moments'; f.alpha.value = 'FR2'; f.nRetenue.value = 0; f.classe.value = ''; f.nu.value = 0.2; f.chamoaSign.checked = true;
   f.hEdge.value = 0.40; f.joue.value = 1.0; f.EI.value = '34077, 0.43077'; f.withTherm.checked = true; f.fck.value = 35; f.fyk.value = 500; f.cover.value = 0.03;
   f.psi.value = 80; f.tirantAir.value = ''; f.typeDalle.value = 'auto'; f.Dabout.value = 25; f.rhoMax.value = 1.0; f.transDir.value = 'appuis'; f.nBearings.value = ''; f.xFixed.value = ''; f.epsSlow.value = 0.00025; f.dTu.value = 30;
   f.withChantier.checked = true; f.chRoadway.value = '-4, 4'; f.chNeutral.value = 1; f.chRemblai.value = '0.5 sur -5,5'; f.chEnrobe.value = '0.2 sur -4,4'; f.chVehicles.value = 'Véhicule spécial : 100@1 ; 100@9 | w=3 e=2 dyn=1.5';

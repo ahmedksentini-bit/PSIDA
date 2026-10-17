@@ -60,6 +60,7 @@ export function chargeA(l, { classe = 1, nVoiesChargees = 1, v = 3.5 } = {}) {
  */
 export const BC = {
   axlesOneTruck: [{ d: 0, P: 60 }, { d: 4.5, P: 120 }, { d: 6.0, P: 120 }],
+  pitchMin: 10.5, // pas minimal entre essieux avant de deux camions d'une même file (encombrement 10,50 m) ; espacement libre au-delà
   axlesTwoTrucks: [{ d: 0, P: 60 }, { d: 4.5, P: 120 }, { d: 6.0, P: 120 }, { d: 10.5, P: 60 }, { d: 15.0, P: 120 }, { d: 16.5, P: 120 }],
   wheelTrack: 2.0, width: 2.5,
   contactRear: { x: 0.25, y: 0.25 }, contactFront: { x: 0.2, y: 0.2 },
@@ -73,7 +74,9 @@ export const BC = {
  */
 export const BT = {
   axles: [{ d: 0, P: 160 }, { d: 1.35, P: 160 }],
-  wheelTrack: 2.0, width: 2.5, contact: { x: 0.25, y: 0.6 },
+  // chaque tandem circule dans l'axe d'une bande longitudinale de 3 m (art. 5.3) — confirmé par la note
+  // PSIDA.EL commentée (coefficient Bt 1,023 = moyenne des K aux roues ±0,5 et ±2,5 m de l'axe)
+  wheelTrack: 2.0, width: 3.0, contact: { x: 0.25, y: 0.6 },
   bt: { 1: 1.0, 2: 0.9, 3: null },
 };
 
@@ -88,6 +91,25 @@ export const BR = { P: 100, contact: { x: 0.3, y: 0.6 } };
  * @param {number} S poids total maximal des charges du système considéré sur cette travée [kN]
  */
 export function deltaDyn(L, G, S) {
+  return deltaDynRaw(L, G, S);
+}
+
+/**
+ * S (art. 5.5) : poids total le plus élevé des essieux d'une file qu'il est possible de placer sur la
+ * longueur L (fenêtre glissante sur le convoi). Ex. Bc 2 camions : 300 kN sur 9,75 m, 420 kN sur 13,93 m.
+ */
+export function maxAxleLoadOnLength(axles, L) {
+  // (pour Bc : convoi de 2 camions au pas minimal, cas le plus chargé sur une longueur donnée)
+  let best = 0;
+  for (let i = 0; i < axles.length; i++) {
+    let s = 0;
+    for (let k = i; k < axles.length && axles[k].d - axles[i].d <= L + 1e-9; k++) s += axles[k].P;
+    best = Math.max(best, s);
+  }
+  return best;
+}
+
+function deltaDynRaw(L, G, S) {
   return 1 + 0.4 / (1 + 0.2 * L) + 0.6 / (1 + 4 * G / S);
 }
 

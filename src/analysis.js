@@ -21,7 +21,7 @@
 import { ContinuousBeam } from './beam.js';
 import { coefKFunction, coefKBand } from './guyon.js';
 import { EC_ALPHA, notionalLanes, lm1, lm2, TS_GEOM, FOOTWAY } from './loads_ec.js';
-import { classePont, voiesF61, chargeA, BC, BT, MC120, D240, TROTTOIR, deltaDyn } from './loads_f61.js';
+import { classePont, voiesF61, chargeA, BC, BT, MC120, D240, TROTTOIR, deltaDyn, maxAxleLoadOnLength } from './loads_f61.js';
 
 /** Permutations d'un tableau (petites tailles). */
 function permutations(arr) {
@@ -56,6 +56,7 @@ export class SlabDeck {
    * @param {number} [g.nSec=20] intervalles de sections par travée
    * @param {number[]} [g.ys] ordonnées de calcul transversal (défaut : 9 points de −b à b)
    * @param {number[]} [g.Leq] portées équivalentes imposées (sinon calculées, H3)
+   * @param {'moments'|'fleches'} [g.leqMethod='moments'] calcul de L_eq : points de moment nul (CHAMOA) ou flèche à mi-travée (PSIDA.EL)
    * @param {number} [g.nu=0.2] coefficient de Poisson de la dalle pour Guyon-Massonnet (0 = tables de Massonnet)
    * @param {number} [g.alphaTorsion=1] paramètre de torsion α de Guyon-Massonnet (1 = dalle isotrope)
    * @param {number} [g.laneStep=0.5] pas de glissement transversal des voies / files [m]
@@ -66,7 +67,7 @@ export class SlabDeck {
     this.b = g.width / 2;
     this.h = g.h;
     this.beam = new ContinuousBeam(g.spans, { nGrid: g.nGrid || 100, nSec: g.nSec || 20, overhangs: g.overhangs || [0, 0] });
-    this.Leq = g.Leq || this.beam.equivalentSpans();
+    this.Leq = g.Leq || this.beam.equivalentSpans(g.leqMethod || 'moments');
     this.ys = g.ys || Array.from({ length: 9 }, (_, i) => -this.b + 2 * this.b * i / 8);
     this.gammaC = g.gammaC || 25;
     this.area = g.area || g.width * g.h;
@@ -206,12 +207,13 @@ export class SlabDeck {
 
   /** Enveloppes de poutre (M, V, R) d'une file, mises en cache par signature longitudinale. */
   _beamEnvelopes(f) {
-    const sig = f.kind + '|' + (f.kind === 'axles' ? JSON.stringify(f.axles) : f.kind === 'strip' ? `${f.q}|${f.len}` : f.kind === 'spanwise' ? f.sigL : f.q);
+    const sig = f.kind + '|' + (f.kind === 'axles' ? JSON.stringify(f.axles) : f.kind === 'train' ? JSON.stringify([f.axles, f.nVeh, f.pitch]) : f.kind === 'strip' ? `${f.q}|${f.len}` : f.kind === 'spanwise' ? f.sigL : f.q);
     if (this._envCache.has(sig)) return this._envCache.get(sig);
     const bm = this.beam;
     const envOf = il => {
       if (f.kind === 'udl') return bm.udlEnvelope(il, f.q);
       if (f.kind === 'axles') return bm.axleEnvelope(il, f.axles);
+      if (f.kind === 'train') return bm.trainEnvelope(il, f.axles, { nVeh: f.nVeh, pitch: f.pitch });
       if (f.kind === 'strip') return bm.stripEnvelope(il, f.q, f.len);
       if (f.kind === 'spanwise') return bm.spanwiseEnvelope(il, f.qOfL);
       throw new Error('kind inconnu ' + f.kind);
@@ -418,13 +420,16 @@ export class SlabDeck {
       for (const s of slidePositions(yc1, yc2, 2.5 * nf, this.laneStep)) {
         arrBc.push(Array.from({ length: nf }, (_, i) => {
           const e = s + 2.5 * i + 1.25;
-          return { label: `Bc file ${i + 1}/${nf}`, kind: 'axles', axles: BC.axlesTwoTrucks.map(a => ({ d: a.d, P: a.P * bc })),
+          return { label: `Bc file ${i + 1}/${nf}`, kind: 'train', nVeh: 2, pitch: BC.pitchMin, axles: BC.axlesOneTruck.map(a => ({ d: a.d, P: a.P * bc })),
             tracks: [{ e1: e - 1, e2: e - 1, share: 0.5 }, { e1: e + 1, e2: e + 1, share: 0.5 }] };
         }));
       }
     }
-    const SBc = this.spans.map(L => nfMax * BC.bc[cl][nfMax - 1] * 300 * (L >= 16.5 ? 2 : 1));
-    const deltaBc = this.spans.map((L, j) => deltaDyn(L, G[j], SBc[j]));
+    const SBc = this.spans.map(L => nfMax * BC.bc[cl][nfMax - 1] * maxAxleLoadOnLength(BC.axlesTwoTrucks, L));
+    // δ du système B : S = poids le plus élevé des essieux de Bc OU de Bt plaçables sur la travée (art. 5.5),
+    // un même coefficient pour Bc et Bt (cf. note PSIDA.EL commentée)
+    const SBt0 = this.spans.map(L => (BT.bt[cl] ? Math.min(nv, 2) * BT.bt[cl] * maxAxleLoadOnLength(BT.axles, L) : 0));
+    const deltaBc = this.spans.map((L, j) => deltaDyn(L, G[j], Math.max(SBc[j], SBt0[j])));
     const Bc = this.applyDelta(this.evaluateArrangements(arrBc), deltaBc);
 
     // --- Bt : 1 ou 2 tandems (classes 1 et 2)
@@ -432,16 +437,16 @@ export class SlabDeck {
     if (BT.bt[cl]) {
       const arrBt = [];
       for (let nf = 1; nf <= Math.min(nv, 2); nf++) {
-        for (const s of slidePositions(yc1, yc2, 2.5 * nf, this.laneStep)) {
+        const wb = Math.min(BT.width, Lc / nf);   // bande de 3 m par tandem (réduite si Lc < 3·nf)
+        for (const s of slidePositions(yc1, yc2, wb * nf, this.laneStep)) {
           arrBt.push(Array.from({ length: nf }, (_, i) => {
-            const e = s + 2.5 * i + 1.25;
+            const e = s + wb * i + wb / 2;
             return { label: `Bt file ${i + 1}/${nf}`, kind: 'axles', axles: BT.axles.map(a => ({ d: a.d, P: a.P * BT.bt[cl] })),
               tracks: [{ e1: e - 1, e2: e - 1, share: 0.5 }, { e1: e + 1, e2: e + 1, share: 0.5 }] };
           }));
         }
       }
-      const SBt = this.spans.map(() => Math.min(nv, 2) * BT.bt[cl] * 320);
-      deltaBt = this.spans.map((L, j) => deltaDyn(L, G[j], SBt[j]));
+      deltaBt = deltaBc;
       Bt = this.applyDelta(this.evaluateArrangements(arrBt), deltaBt);
     }
 

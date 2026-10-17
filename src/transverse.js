@@ -10,7 +10,7 @@
  */
 import { transverseMoments } from './guyon.js';
 import { notionalLanes, lm1, lm2, TS_GEOM, FOOTWAY } from './loads_ec.js';
-import { classePont, voiesF61, chargeA, BC, BT, MC120, D240, TROTTOIR, deltaDyn } from './loads_f61.js';
+import { classePont, voiesF61, chargeA, BC, BT, MC120, D240, TROTTOIR, deltaDyn, maxAxleLoadOnLength } from './loads_f61.js';
 
 function permutations(arr) {
   if (arr.length <= 1) return [arr.slice()];
@@ -188,14 +188,15 @@ export class TransverseModel {
       const bc = BC.bc[cl][nf - 1];
       for (const s of slidePositions(yc1, yc2, 2.5 * nf, deck.laneStep)) arrBc.push(Array.from({ length: nf }, (_, i) => { const e = s + 2.5 * i + 1.25; return { key: `bc|${e.toFixed(3)}`, patches: this.bcPatches(j, e), coef: bc }; }));
     }
-    const dBc = deltaDyn(Lj, gT * Lj, nfMax * BC.bc[cl][nfMax - 1] * 300 * (Lj >= 16.5 ? 2 : 1));
+    const SB = Math.max(nfMax * BC.bc[cl][nfMax - 1] * maxAxleLoadOnLength(BC.axlesTwoTrucks, Lj), BT.bt[cl] ? Math.min(nv, 2) * BT.bt[cl] * maxAxleLoadOnLength(BT.axles, Lj) : 0);
+    const dBc = deltaDyn(Lj, gT * Lj, SB);
     const scale = (env, k) => ({ myMax: env.myMax.map(x => x * k), myMin: env.myMin.map(x => x * k), mxMax: env.mxMax.map(x => x * k), mxMin: env.mxMin.map(x => x * k) });
     const Bc = scale(this.envelope(j, arrBc), dBc);
     let Bt = null;
     if (BT.bt[cl]) {
       const arrBt = [];
-      for (let nf = 1; nf <= Math.min(nv, 2); nf++) for (const s of slidePositions(yc1, yc2, 2.5 * nf, deck.laneStep)) arrBt.push(Array.from({ length: nf }, (_, i) => { const e = s + 2.5 * i + 1.25; return { key: `bt|${e.toFixed(3)}`, patches: this.btPatches(j, e), coef: BT.bt[cl] }; }));
-      Bt = scale(this.envelope(j, arrBt), deltaDyn(Lj, gT * Lj, Math.min(nv, 2) * BT.bt[cl] * 320));
+      for (let nf = 1; nf <= Math.min(nv, 2); nf++) { const wb = Math.min(BT.width, Lc / nf); for (const s of slidePositions(yc1, yc2, wb * nf, deck.laneStep)) arrBt.push(Array.from({ length: nf }, (_, i) => { const e = s + wb * i + wb / 2; return { key: `bt|${e.toFixed(3)}`, patches: this.btPatches(j, e), coef: BT.bt[cl] }; })); }
+      Bt = scale(this.envelope(j, arrBt), dBc);
     }
     const arrMc = slidePositions(yc1 + 2.15, yc2 - 2.15, 0, deck.laneStep).map(e => [{ key: `mc|${e.toFixed(3)}`, patches: this.mcPatches(j, e), coef: 1 }]);
     const Mc120 = scale(this.envelope(j, arrMc), deltaDyn(Lj, gT * Lj, MC120.P * Math.min(1, Lj / MC120.trackLength)));

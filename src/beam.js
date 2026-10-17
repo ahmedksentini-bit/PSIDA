@@ -272,6 +272,39 @@ export class ContinuousBeam {
   }
 
   /**
+   * Enveloppe d'une file de nVeh véhicules identiques (même sens de marche) dont l'espacement est libre
+   * au-delà d'un pas minimal entre essieux avant (Fasc. 61 art. 5.2 : « la distance des deux camions
+   * d'une même file est déterminée pour produire l'effet le plus défavorable », camions Bc de 10,50 m
+   * d'encombrement → pas ≥ 10,50 m). Chaque véhicule peut aussi sortir de l'ouvrage (contribution nulle).
+   * Programmation dynamique sur la grille de positions (max/min de Σ f(x_k), x_{k+1} − x_k ≥ pitch).
+   */
+  trainEnvelope(il, axles, { nVeh = 2, pitch = 10.5, step = 0.05 } = {}) {
+    const dmax = Math.max(...axles.map(a => a.d));
+    const ext = dmax + pitch * nVeh;
+    const n = Math.ceil((this.Ltot + 2 * ext) / step) + 1;
+    const off = Math.round(pitch / step);
+    let max = -Infinity, min = Infinity;
+    for (const dir of [1, -1]) {
+      const f = new Float64Array(n);
+      for (let i = 0; i < n; i++) { const x = -ext + i * step; let v = 0; for (const ax of axles) v += ax.P * this.ilAt(il, x + dir * ax.d); f[i] = v; }
+      // best_k[i] = extremum de la somme de k véhicules dont le premier est en position ≥ i
+      let bMax = Float64Array.from(f), bMin = Float64Array.from(f);
+      for (let i = n - 2; i >= 0; i--) { bMax[i] = Math.max(bMax[i], bMax[i + 1]); bMin[i] = Math.min(bMin[i], bMin[i + 1]); }
+      for (let k = 2; k <= nVeh; k++) {
+        const nMax = new Float64Array(n), nMin = new Float64Array(n);
+        for (let i = n - 1; i >= 0; i--) {
+          const restMax = i + off < n ? bMax[i + off] : 0, restMin = i + off < n ? bMin[i + off] : 0;
+          nMax[i] = Math.max(f[i] + restMax, i + 1 < n ? nMax[i + 1] : -Infinity);
+          nMin[i] = Math.min(f[i] + restMin, i + 1 < n ? nMin[i + 1] : Infinity);
+        }
+        bMax = nMax; bMin = nMin;
+      }
+      max = Math.max(max, bMax[0]); min = Math.min(min, bMin[0]);
+    }
+    return { max, min };
+  }
+
+  /**
    * Enveloppe d'une charge répartie uniforme de longueur finie (chenille, D240…)
    * glissant sur l'ouvrage : intensité q [kN/m] sur une longueur len.
    */
@@ -402,8 +435,10 @@ export class ContinuousBeam {
    * de CHAMOA / PSIDA) : distance entre les points de moment nul de la travée lorsqu'elle est
    * seule chargée par une charge uniforme ; travée isostatique → portée réelle.
    * Vérifié sur l'exemple CHAMOA-PSIDA (10-15-15-10 m : 8,9118 / 11,1862 m).
+   * method = 'fleches' : portée de la travée isostatique ayant la même flèche à mi-travée que la travée
+   * chargée seule (programme PSIDA.EL 1984 : 9,017 m pour la travée de rive de 9,75 m de la note commentée).
    */
-  equivalentSpans() {
+  equivalentSpans(method = 'moments') {
     if (this.n === 1) return [this.spans[0]];
     const out = [];
     for (let j = 0; j < this.n; j++) {
@@ -412,6 +447,13 @@ export class ContinuousBeam {
       // puis M(x) = M0 + (ML − M0)·x/L + x(L − x)/2 exact dans la travée → racines du trinôme
       const M0 = this.integrateIL(this.ILM[this.sectionIndex(j, 0)], this.x0[j], this.x0[j + 1], 0);
       const ML = this.integrateIL(this.ILM[this.sectionIndex(j, 1)], this.x0[j], this.x0[j + 1], 0);
+      if (method === 'fleches') {
+        // flèche à mi-travée (EI = 1, p = 1) : isostatique + moments d'extrémité ; travée isostatique
+        // de même flèche : 5 Leq⁴/384 = w(L/2) (méthode PSIDA.EL 1984, cf. docs/hypotheses.md)
+        const w = 5 * L ** 4 / 384 + (M0 + ML) * L * L / 16;
+        out.push(w > 0 ? (384 * w / 5) ** 0.25 : L);
+        continue;
+      }
       const a = -0.5, bq = L / 2 + (ML - M0) / L, c = M0;
       const disc = bq * bq - 4 * a * c;
       if (disc <= 0) { out.push(L); continue; }

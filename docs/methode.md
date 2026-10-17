@@ -84,7 +84,9 @@ par travée on obtient les **lignes d'influence** de M, V et des réactions, pui
 * charge répartie q : intégrale de la ligne d'influence sur ses parties positives (max) ou négatives (min) —
   EN 1991-2 §4.3.2 autorise de ne charger que les zones défavorables ;
 * A(l) du Fascicule 61 : intensité fonction de la longueur chargée, donc énumération des travées chargées ;
-* convois (TS, Bc, Bt, Mc120, D240) : glissement pas à pas dans les deux sens.
+* convois (TS, Bt, Mc120, D240) : glissement pas à pas dans les deux sens ;
+* Bc : deux camions par file à espacement libre (pas ≥ 10,50 m entre essieux avant, Fasc. 61 art. 5.2) — programmation
+  dynamique sur la grille de positions (`trainEnvelope`), chaque camion pouvant aussi sortir de l'ouvrage.
 
 Les abouts (consoles au-delà des culées) n'entrent que par les charges permanentes : M = −g a²/2 imposé
 aux nœuds extrêmes. Vérification : 2 travées égales sous q → M_appui = −qL²/8, M_travée,max = 9/128 qL² ;
@@ -136,7 +138,9 @@ donne en plus le profil m_x(y).
   α_Q = 0,9/0,8/0,8, α_q1 = 0,7).
 * **Fascicule 61 titre II** : classe du pont par la largeur roulable ; A(l) = 2,3 + 360/(l + 12) kN/m² ×a_1·a_2 ;
   Bc (camions de 300 kN, bc), Bt (tandems de 320 kN, bt), Br ; Mc120 (1100 kN sur deux chenilles de 6,10 × 1,00 m),
-  D240 (2400 kN sur 18,6 × 3,2 m) ; δ = 1 + 0,4/(1 + 0,2 L) + 0,6/(1 + 4G/S).
+  D240 (2400 kN sur 18,6 × 3,2 m) ; δ = 1 + 0,4/(1 + 0,2 L) + 0,6/(1 + 4G/S), un seul δ pour le système B avec S = poids
+  maximal des essieux de Bc ou de Bt plaçables sur la travée. Transversalement : files Bc dans des bandes de 2,50 m,
+  tandems Bt dans l'axe de bandes de 3,00 m (art. 5.3), A(l) sur les voies fixes (a_1 selon le nombre de voies chargées).
 * **Permanent** : poids propre (K = 1), superstructures linéiques et surfaciques avec K(e, y), coefficients
   k_min/k_max (0,8/1,4 enrobé, 0,8/1,2 chape et corniches dans l'exemple CHAMOA).
 
