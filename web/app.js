@@ -20,6 +20,7 @@ import { flm3Envelope, fatigueCheck } from '../src/fatigue.js';
 import { rebarPlan } from '../src/rebar.js';
 import { parseData, compute, computeConceptOnly, conceptInput, parseVehicle } from '../src/pipeline.js';
 import { longitudinalRebarSVG, crossRebarSVG, scheduleHTML, providedPlot } from './rebarplan.js';
+import { supportsBlocks, blocksToHTML } from './supports_view.js';
 
 const $ = s => document.querySelector(s);
 const nums = s => s.split(/[,;\s]+/).filter(Boolean).map(Number);
@@ -177,7 +178,7 @@ function renderStatic(st) {
   h += `<h3>Fascicule 61 titre II (valeurs caractéristiques, δ inclus pour B et Mc)</h3>` + st.cases.filter(c => c.ref === 'F61').map(c => tableEnv(st, c.res, c.label)).join('');
   $('#tables').innerHTML = h;
   $('#trans-span').innerHTML = deck.spans.map((L, j) => `<option value="${j}">Travée ${j + 1} (${L} m)</option>`).join('');
-  renderConception(st); renderCase(st); renderSection(st); renderDesign(st); renderTransverse(st); renderExtra(st); renderRebar(st);
+  renderConception(st); renderCase(st); renderSection(st); renderDesign(st); renderTransverse(st); renderExtra(st); renderRebar(st); renderSupports(st);
 }
 
 function renderRebar(st) {
@@ -193,6 +194,12 @@ function renderRebar(st) {
   $('#rebar-cross').innerHTML = crossRebarSVG(deck, rebar, x, `Coupe transversale — ${o ? o.label : ''}`);
   providedPlot($('#plot-rebar'), deck, rebar);
   $('#rebar-schedule').innerHTML = scheduleHTML(rebar);
+}
+
+function renderSupports(st) {
+  const box = $('#supports-tables');
+  if (!st.supports) { box.innerHTML = `<p class="small">Calcul des appuis indisponible${st.supportsError ? ` : ${st.supportsError}` : ''}.</p>`; return; }
+  box.innerHTML = blocksToHTML(supportsBlocks(st.supports, $('#supports-ref').value));
 }
 
 function renderExtra(st) {
@@ -376,7 +383,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!state) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.12', hSearch: lastSearch });
+    const html = await buildReport({ ...state, version: '0.13', hSearch: lastSearch });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -396,7 +403,7 @@ async function noteFigures() {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.12' }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.13' }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!state || state.conceptOnly) { $('#error').textContent = 'Lancer d\'abord le calcul complet.'; return; }
@@ -418,6 +425,7 @@ $('#btn-note-docx').addEventListener('click', async () => {
   } catch (e) { $('#error').textContent = e.stack || String(e); } finally { btn.disabled = false; btn.textContent = 'Note de calcul (Word)'; }
 });
 $('#trans-span').addEventListener('change', () => state && renderTransverse(state));
+$('#supports-ref').addEventListener('change', () => state && renderSupports(state));
 $('#trans-ref').addEventListener('change', () => state && renderTransverse(state));
 $('#span-select').addEventListener('change', () => state && kPlot($('#plot-K'), state.deck, +$('#span-select').value));
 // Exemple de la note commentée PSIDA.EL (SETRA 1984, réimpr. 1990) : rectangle équivalent 7,913 × 0,52 m, I = 0,09272 m⁴,

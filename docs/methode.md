@@ -261,8 +261,17 @@ aux moments maximaux. l_b,rqd = (φ/4) f_yd/f_bd, f_bd = 2,25 η₁ f_ctd (η₁
 libres (≥ 5 cm²/m), épingles dans les zones V_Ed > V_Rd,c (maille ≤ 0,75 d). Sur l'exemple CHAMOA : HA25 e = 25 + renforts
 en travée, HA20 e = 15 + HA25 e = 15 sur appuis, ≈ 52 t soit ≈ 115 kg/m³.
 
+## 8 quinquies. Appuis et fondations
+
+Chaîne (`src/supports/index.js`) : réactions du tablier par ligne (permanent, A(l), Bc, Bt, Mc120, trottoirs ; gr1a, gr2) →
+rigidités (néoprène retenu + fût) → freinage (F61 : A·S/(20 + 0,0035 S) et 300 kN ; EC : Q_lk) et déformations imposées réparties →
+combinaisons en tête → descente en pied (poids du chevêtre, du fût, poussée des terres pour les culées) → fûts (flambement,
+second ordre, flexion composée, minimums), chevêtres sur colonnes (poutre continue), garde-grève et murs en retour →
+semelles (portance, excentrement, glissement, bielles, sens transversal) ou pieux (efforts, Ménard, ferraillage, portance,
+tirant de semelle). Résultats dans la carte « Appuis et fondations », le rapport et le chapitre 14 de la note de calcul.
+
 ## 9. Ce que l'outil ne fait pas (encore)
 
-Tassements probables, précontrainte (PSI.DP), appareils d'appui glissants ou à pot (§ 3.6.2, § 3.7), dalles à
+Tassements probables, précontrainte (PSI.DP), souplesse des fondations dans la répartition des efforts horizontaux, flexion déviée des fûts, chocs, vent et séisme sur les appuis, stabilité d'ensemble des culées (renversement), appareils d'appui glissants ou à pot (§ 3.6.2, § 3.7), dalles à
 encorbellements massifs participant à la flexion longitudinale ; les tombereaux de la circulaire « delta 70 » ne sont pas
 prédéfinis ; λ_s,1 (figure NN.1) est saisi ; la composition des lignes d'essieux de l'annexe A est à relire.

@@ -66,6 +66,9 @@ src/cantilever.js   encorbellements : moments d'encastrement (poids propre, supe
 src/fatigue.js      fatigue des armatures : FLM3, λ_s (EN 1992-2 annexe NN), section fissurée
 src/rebar.js        plan de ferraillage : choix φ/e, épure décalée, filantes + renforts, ancrages, recouvrements, transversaux, cadres, épingles, métré
 web/rebarplan.js    dessins du plan de ferraillage (coupe longitudinale, coupes transversales), nomenclature, A_s mis en place / requis
+src/supports/       appuis et fondations : section N-M (section_nm), efforts horizontaux et combinaisons (actions), fûts et
+                    chevêtres (pier, beam1d), culées (abutment), semelles et pieux (foundation), chaîne complète (index)
+web/supports_view.js tableaux « Appuis et fondations » (interface, rapport, note de calcul)
 src/conception.js   aide à la conception : règles du guide SETRA 1989, variantes de travure, recherche de l'épaisseur minimale vérifiée
 src/abaques1989.js  abaques d'épaisseur du guide SETRA 1989 numérisés (PSI.DA p. 65–67 ; plateaux PSI.DP p. 59–61)
 tools/abaques1989/  script de numérisation (suivi de courbes sur les pages scannées) et données brutes
@@ -192,6 +195,9 @@ et une liste d'aide détaille les données), résultats à droite :
 - Phase de chantier : les tombereaux 23/34 m³ de la circulaire « delta 70 » ne sont pas prédéfinis (données non disponibles) ;
   le véhicule spécial de la note CHAMOA est reproduit à 4 % (435 contre 451 kN·m à P1). LM3 : composition des lignes
   d'essieux de l'annexe A à relire (`TODO_VERIF`). Encorbellement : méthode simplifiée (diffusion à 45°), pas l'annexe 3 du PSIDP.EL.
+- Appuis et fondations (v0.13) : piles voiles ou colonnes, culées remblayées ou enterrées, semelles ou pieux, BAEL/F61/F62-V et
+  Eurocodes ; rigidités, répartition et descente de charges recalées sur la note des appuis du Pont de Noé. Les formules de
+  pratique PP73 (garde-grève, murs en retour), FOND 72 et une partie de F62-V / NF P 94-262 sont marquées `TODO_VERIF`.
 - Pas encore : tassements probables, précontrainte (PSI.DP), appareils d'appui glissants ou à pot.
 - Le guide SETRA 1989 a été établi pour les charges du Fascicule 61 (classe I–II, deux voies) : ses abaques et élancements sont des
   ordres de grandeur (lecture des abaques à ±0,005 m), la recherche d'épaisseur de l'outil fait foi pour les charges Eurocodes.

@@ -6,6 +6,7 @@ import { elevationSVG, crossSectionSVG } from './svg.js';
 import { tableK } from '../src/guyon.js';
 import { planSVG, zoningPlanSVG } from './schema.js';
 import { longitudinalRebarSVG, crossRebarSVG, scheduleHTML } from './rebarplan.js';
+import { supportsBlocks, blocksToHTML } from './supports_view.js';
 
 const cm = v => (v * 1e4).toFixed(1);
 const f0 = v => v.toFixed(0), f1 = v => v.toFixed(1), f3 = v => v.toFixed(3);
@@ -53,7 +54,7 @@ export async function buildReport(st) {
 </style></head><body>
 <div class="noprint" style="margin-bottom:12px"><button onclick="window.print()" style="padding:8px 14px;font:inherit">Imprimer / enregistrer en PDF</button></div>
 <h1>Note de calcul — pont-dalle en béton armé (PSI-DA)</h1>
-<div class="meta">Calcul manuel assisté — moteur PSIDA v${esc(st.version || '0.12')} · ${date} · référentiels : Eurocodes (EN 1990/1991-2/1992) et Fascicule 61 titre II + BAEL 91</div>`;
+<div class="meta">Calcul manuel assisté — moteur PSIDA v${esc(st.version || '0.13')} · ${date} · référentiels : Eurocodes (EN 1990/1991-2/1992) et Fascicule 61 titre II + BAEL 91</div>`;
 
   // 1. Données
   h += `<h2>1. Données</h2><div class="box">
@@ -165,6 +166,9 @@ export async function buildReport(st) {
   }
 
   // 12. Références
+  if (st.supports) {
+    h += `<h2>11 bis. Appuis et fondations</h2><h3>Eurocodes</h3>${blocksToHTML(supportsBlocks(st.supports, 'EC'))}<h3>Fascicule 61 / BAEL / Fascicule 62 titre V</h3>${blocksToHTML(supportsBlocks(st.supports, 'F61'))}`;
+  }
   h += `<h2>12. Hypothèses et références</h2><p class="small">H1 dalle isotrope de largeur totale, ν = ${deck.nu} ; H2 poutre continue à EI constant ; H3 premier harmonique, L_eq de la travée seule chargée (« méthode des moments ») ; H4 arrangement transversal le plus défavorable par fibre, files indépendantes longitudinalement ; H5 poids propre K = 1, charges excentrées K(e, y) ; H6 calcul longitudinal suivant les portées biaises sans correction (biais mécanique et annexe 12A dans le module biais) ; H7 flexion transversale sur dalle isostatique équivalente. Vérifications : 51 tests unitaires dont la note CHAMOA-PSIDA (Cerema, ch. 4) : moments permanents, travée équivalente, gradient thermique et tassements à 10⁻³, moment de calcul LM1 à 1 %, aciers de flexion à 1 %, biais mécanique et moments de l'annexe 12A à 10⁻⁴.</p>
 <p class="small">Références : EN 1990 (A2), EN 1991-1-5, EN 1991-2, EN 1992-1-1, EN 1992-2 et annexes nationales ; Fascicule 61 titre II ; BAEL 91 ; SETRA, Ponts-dalles – guide de conception (1989) ; Cerema, CHAMOA-P PSIDA – guide technique ; Bareš & Massonnet (1966) ; Pücher (1977) ; Hambly (1991) ; Calgaro & Virlogeux.</p>
 </body></html>`;

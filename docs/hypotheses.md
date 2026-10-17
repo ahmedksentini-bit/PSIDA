@@ -160,12 +160,33 @@ Chaque document a été lu en entier et confronté à l'outil ; les tests corres
 | **Pont de Noé** (COMETE/ICI 2012, VIPP 4 × 33 m, PONTYPE/PAP ; note d'appuis EN 1337-3) | K et μ₁₋₃₋₅ pour α = 0,148 (4 fibres × 105 points), coefficients A/Bc/Bt/Mc120/trottoirs, A(l), a1, a2, bc, δ (G moyen), moments par poutre, freinage F61, appareil 400 × 400 | K à 10⁻³ avec l'interpolation √α (désormais par défaut) ; tables a1/a2/bc/bt de la classe 1 confirmées ; l'outil (BT4 1989) est plus sévère que l'EN 1337-3 en distorsion | `noe.test.js` |
 | **Guide « Ponts-dalles » 1989** (relecture page par page, 40 règles) | élancements, abaques, travures, abouts, minimum transversal, chevêtres, bords libres, angles, appareils d'appui, biais | conforme sauf : élancement PSI.DP à 2 travées inversé, abaque BA (rive la plus courte), minimum 1,3η par travée, appareil glissant — corrigés | `guide89.test.js` |
 | **Guide PSIDP-EL, note modèle complète et annexes 2 à 6** (scans fournis) | coefficients d'inégalité de répartition de la note (p. 52, 3 et 4 appareils, CP / A / Bc / Mc120), entraxe E/sinψ/(n − 0,1), moment de chevêtre R·ℓ/(12 e) ; annexe 4 : coefficients s(α), t(α), u, parts rive/centre, d, ζ, bandes de ferraillage | coefficients à 0,5 % (Bc 2,057 / 2,162 contre 2,055 / 2,161) ; annexe 4 implémentée (`chevetre.js`) et recalée sur les rapports rive/centre du mémoire (CP et A à 0,1 %) ; chevêtres incorporés calculés pour chaque ligne d'appui | `chevetre.test.js` |
+| **Pont de Noé — note des appuis et fondations** (COMETE/ICI 2012, programme PSH ; PP73, FOND 72, F62-V) | souplesses des appareils (T_e/(nGab)), rigidités des lignes 1780 / 1050 / 996 t/m, centre de déformation 56,80 / 56,905 m, freinage Bc et A(l), TLD / retrait / fluage / TCD par ligne, combinaisons C1/C8 en tête de P3, descente en pied (P3 1348,89 / 1426,98 t ; C1 415,66 / 601,55 t, M 263,93 / 323,24 t·m), pieux 475,66 t et 50,35 / 100,04 t, flambement λ = 85,44 / 25,98, Ménard k = 6756 / 9120 t/m³, minimum des pieux, bielles 501,5 cm² | ≤ 0,2 % (efforts horizontaux ≤ 1 %, bielles 0,5 % : la note retient 501,53 cm² pour 498,9 par la formule) ; la note imprime P4 et C5 en valeur absolue et combine en P3 le freinage positif avec le retrait négatif (non défavorable : l'outil cumule en valeur absolue) ; a1 = 0,75 pris pour 2 voies (devrait être 1) ; poids de semelle de P3 incohérent avec sa largeur | `noe_appuis.test.js` |
 | **MRB-EL** (SETRA 1995, biais et courbes) | domaine de la méthode du pont droit, ν = 0 pour les efforts BAEL | compatible avec H6 ; le texte en ligne s'arrête au bordereau (pas d'exemple chiffré exploitable) | — |
 
 Restent hors périmètre : la précontrainte (PSIDP.EL), la
 vérification NF EN 1337-3 des appareils d'appui (l'outil applique le BT4 du guide 1989, plus sévère en distorsion lente), les tableaux a1/bc
 des classes 2 et 3 (aucun document de la série ne les imprime), la flexion transversale sous roues (PSI-DA 68 et PSIDA.EL prennent des roues
 ponctuelles transversalement et le seul tandem arrière de Bc : l'outil diffuse à 45° et charge tout le convoi — ±10 à 20 % selon la fibre).
+
+## 1 sexies. Appuis et fondations (v0.13, `src/supports/`)
+
+Choix retenus (justifiés dans les en-têtes des modules) :
+
+- **Efforts horizontaux** : souplesse d'une ligne = appareils (G = 1,8 / 0,9 MPa) + fût console H³/(3EI) ; fondation supposée
+  rigide (la souplesse des pieux — matrice de tête du programme PSH — n'est pas encore ajoutée) ; culée remblayée rigide.
+  Freinage au prorata de K instantané, déformations imposées H = K ε (x₀ − x) (K différé pour retrait, fluage, TLD ; instantané pour TCD).
+- **Combinaisons** : BAEL 91 annexe D (1,35 G + 1,35 (retrait + fluage) + 1,605 (Q + freinage) + 0,78 TLD ; Mc120 × 1,35 ;
+  ELS 1,2 / 0,6) et EN 1990 A2 (1,35 / 1,5 ψ₀ T) ; efforts horizontaux cumulés en valeur absolue.
+- **Fûts** : section N-M à fibres (pivots BAEL / EC2), armatures symétriques ; second ordre BAEL forfaitaire (A.4.4,3) si
+  l_f/h ≤ max(15 ; 20 e₁/h), sinon moment amplifié N(e₁ + e_a)/(1 − N/N_cr) avec E_v (simplification de l'état limite de
+  stabilité de forme) ; EC2 λ_lim puis courbure nominale (K_r = K_φ = 1). Flexion transversale (déviée) non traitée.
+- **Culées** : garde-grève et murs en retour par les formules de pratique PP73 (TODO_VERIF : texte non consulté) ;
+  poussée de Rankine sur le mur de front (garde-grève compris) ou sur une largeur fictive min(3D ; entraxe) par colonne.
+- **Fondations** : semelles NF P 94-261 (k_p du tableau D.2.3 — vérifié sur les k_p,max du guide Cerema —, i_δ, Meyerhof,
+  glissement) ou F62-V (q_ref = (3q_max + q_min)/4, γ_q = 2 / 3) ; bielles ; pieux : semelle rigide, Winkler-Ménard
+  (différences finies, vérifié sur la solution de Hetényi), portance NF P 94-262 simplifiée (une couche ; f_sol et k_p à relire).
+- **Écart signalé** : la note de Noé applique au tirant de la semelle de culée l'effort total (601,6 t) ; la formule des bielles
+  à deux files porte sur la réaction d'une file — c'est ce que fait l'outil.
 
 ## 2. Protocole de comparaison avec une note de référence
 
@@ -199,7 +220,7 @@ ponctuelles transversalement et le seul tandem arrière de Bc : l'outil diffuse 
 
 Bibliographie : Bareš & Massonnet (1966) ; Pücher (1977) ; Homberg (1968) ; Calgaro & Virlogeux ; Hambly (1991) ; O'Brien, Keogh & O'Connor (2014) ; EN 1991-2, EN 1992-1-1, EN 1992-2 ; Fascicule 61 titre II ; BAEL 91.
 
-## 4. Vérifications internes déjà en place (`npm test`, 90 tests)
+## 4. Vérifications internes déjà en place (`npm test`, 98 tests)
 
 - Poutre : PL/4 ; −qL²/8 et 9/128·qL² (2 travées) ; −qL²/10, 0,08 qL², 0,025 qL² (3 travées) ; enveloppe une travée chargée 0,0957 qL² ; convoi glissant ; portées équivalentes 0,8L / 0,447L.
 - Guyon-Massonnet : conditions de bord libre exactes, saut de Y''' = 1 sous la charge, flèche moyenne = poutre (∫K = 2b à 10⁻⁵), réciprocité K(y,e) = K(e,y), symétrie, limite θ → 0 ⇒ K = 1, continuité en charge de bord, μ nul aux bords, ∫m_x dy = moment de poutre (séries de Fourier).

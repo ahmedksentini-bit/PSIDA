@@ -167,6 +167,40 @@
       </div>
       <label>Entraxe des appareils d'appui [m] (zonage ; vide = déduit du nombre d'appareils)<input name="bearingPitch" value=""></label>
     </details>
+    <details><summary>Appuis et fondations (piles, culées, semelles, pieux)</summary>
+      <div class="row">
+        <label>Piles<select name="ap_pileType"><option value="voile">voile</option><option value="colonnes">colonnes</option></select></label>
+        <label>Hauteur des fûts H_f [m] (une valeur ou une par pile)<input name="ap_pileH" value="6"></label>
+      </div>
+      <div class="row">
+        <label>Voile : épaisseur / longueur [m] (vide = largeur du tablier)<div class="row"><input name="ap_pileB" value="0.6" type="number" step="any"><input name="ap_pileLv" value="" type="number" step="any"></div></label>
+        <label>Colonnes : nombre / Ø [m]<div class="row"><input name="ap_nCol" value="3" type="number"><input name="ap_D" value="0.8" type="number" step="any"></div></label>
+      </div>
+      <label>Chevêtre de pile sur colonnes : hauteur / largeur [m] (hauteur 0 = sans)<div class="row"><input name="ap_hc" value="0" type="number" step="any"><input name="ap_lc" value="1.2" type="number" step="any"></div></label>
+      <div class="row">
+        <label>Culées<select name="ap_culType"><option value="remblayee">remblayée (mur de front)</option><option value="enterree">enterrée (chevêtre sur colonnes)</option></select></label>
+        <label>Hauteur mur de front / colonnes [m]<input name="ap_Hm" value="3" type="number" step="any"></label>
+      </div>
+      <div class="row">
+        <label>Mur de front : épaisseur [m] ; garde-grève h [m] (vide = auto)<div class="row"><input name="ap_em" value="0.8" type="number" step="any"><input name="ap_hGG" value="" type="number" step="any"></div></label>
+        <label>Murs en retour : longueur [m]<input name="ap_Lret" value="4" type="number" step="any"></label>
+      </div>
+      <label>Culée enterrée : colonnes nombre / Ø ; chevêtre h / largeur [m]<div class="row"><input name="ap_culNCol" value="3" type="number"><input name="ap_culD" value="0.8" type="number" step="any"><input name="ap_culHc" value="1.0" type="number" step="any"><input name="ap_culLc" value="1.6" type="number" step="any"></div></label>
+      <div class="row">
+        <label>Fondations<select name="ap_found"><option value="superficielle">semelles superficielles</option><option value="pieux">semelles sur pieux</option></select></label>
+        <label>Semelle : B (longitudinal) / épaisseur / encastrement D_e [m]<div class="row"><input name="ap_B" value="3" type="number" step="any"><input name="ap_hs" value="1" type="number" step="any"><input name="ap_De" value="1" type="number" step="any"></div></label>
+      </div>
+      <label>Pieux : Ø [m] / par file / files / entraxe des files [m] / longueur [m]<div class="row"><input name="ap_pileD" value="0.8" type="number" step="any"><input name="ap_nPile" value="3" type="number"><input name="ap_nFiles" value="2" type="number"><input name="ap_sPile" value="2.4" type="number" step="any"><input name="ap_Lpile" value="15" type="number" step="any"></div></label>
+      <div class="row">
+        <label>Sol<select name="ap_soil"><option value="sables">sables et graves</option><option value="argiles">argiles et limons</option><option value="craies">craies</option><option value="marnes">marnes, roches altérées</option></select></label>
+        <label>p*_le [MPa] / E_M [MPa] / α Ménard<div class="row"><input name="ap_ple" value="1.0" type="number" step="any"><input name="ap_EM" value="10" type="number" step="any"><input name="ap_alpha" value="0.5" type="number" step="any"></div></label>
+      </div>
+      <div class="row">
+        <label>Remblai : φ' [°] / γ [kN/m³] / surcharge q [kN/m²]<div class="row"><input name="ap_phi" value="30" type="number" step="any"><input name="ap_gamma" value="20" type="number" step="any"><input name="ap_q" value="10" type="number" step="any"></div></label>
+        <label>Béton appuis f_ck / acier f_yk [MPa] / enrobage [m]<div class="row"><input name="ap_fck" value="25" type="number" step="any"><input name="ap_fyk" value="400" type="number" step="any"><input name="ap_c" value="0.05" type="number" step="any"></div></label>
+      </div>
+      <label>F61 : ε TLD / ε TCD (appuis)<div class="row"><input name="ap_TLD" value="0.0003" type="number" step="any"><input name="ap_TCD" value="0.0001" type="number" step="any"></div></label>
+    </details>
     <label><input type="checkbox" name="chamoaSign">Convention CHAMOA (moment + = fibre supérieure tendue) sur le graphique M(x)</label>
     <button type="submit">Calculer</button>
     <button type="button" class="secondary" id="btn-concept">Aide à la conception seule (rapide)</button>
@@ -236,6 +270,7 @@
       <h3>Nomenclature et métré</h3>
       <div id="rebar-schedule"></div>
     </div>
+    <div class="card full-only" id="card-supports"><div class="toolbar"><h2 style="margin:0;flex:1">Appuis et fondations</h2><select id="supports-ref" style="width:auto;margin:0;padding:7px"><option value="F61">Fascicule 61 / BAEL / F62-V</option><option value="EC">Eurocodes</option></select></div><div id="supports-tables"></div></div>
     <div class="card full-only"><h2>Zonage du ferraillage et dispositions constructives (guide SETRA 1989 § 3.4)</h2><div class="svgbox" id="zoning-plan"></div><div id="zoning-tables"></div></div>
     <div class="card full-only"><h2>Lignes d'influence</h2>
       <div class="toolbar"><label>Section <select id="section-select"></select></label></div>

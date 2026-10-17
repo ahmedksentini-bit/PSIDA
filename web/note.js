@@ -7,11 +7,12 @@
  *  1 données · 2 caractéristiques et lignes d'influence · 3 dénivellations d'appui · 4 charges et majoration dynamique
  *  5 coefficients de répartition transversale · 6 moments fléchissants par travée · 7 positions des charges
  *  8 efforts tranchants · 9 réactions d'appui · 10 flexion transversale · 11 ferraillage longitudinal
- *  12 appareils d'appui et chevêtres incorporés · 13 nomenclature des aciers · références.
+ *  12 appareils d'appui et chevêtres incorporés · 13 nomenclature des aciers · 14 appuis et fondations · références.
  * Le modèle ne dépend pas du DOM (testable sous Node) ; les figures sont passées en data: URI.
  */
 import { BC, BT, MC120, maxAxleLoadOnLength, maxStripTrainLoad, COMBI_BAEL } from '../src/loads_f61.js';
 import { mechanicalSkew } from '../src/skew.js';
+import { supportsBlocks } from './supports_view.js';
 
 const F = (v, n = 1) => (v === null || v === undefined || !isFinite(v) ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: n, maximumFractionDigits: n }));
 const F0 = v => F(v, 0), F1 = v => F(v, 1), F2 = v => F(v, 2), F3 = v => F(v, 3);
@@ -271,6 +272,12 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
     para(`Masse totale d'aciers : ${F0(rebar.totalMass)} kg pour ${F1(rebar.volume)} m³ de béton, soit ${F0(rebar.ratio)} kg/m³.`);
   }
 
+  // ---------------------------------------------------------------------------------------------------------- 14
+  if (st.supports) {
+    h1('Appuis et fondations', isF ? 14 : 13);
+    for (const b of supportsBlocks(st.supports, ref)) B.push(b);
+  }
+
   h1('Références');
   for (const r of [
     'SETRA, Ponts-dalles — Guide de conception, juillet 1989.',
@@ -279,6 +286,9 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
     'SETRA, Ponts-dalles précontraints d\'inertie constante — Programme PSIDP.EL, notice et note de calcul modèle, annexes 1 à 6, 1985.',
     'Cerema, CHAMOA-P PSIDA — Guide technique, 2023.',
     'Fascicule 61 titre II (1971, mod. 1981) ; BAEL 91 révisé 99 ; NF EN 1990/A1, NF EN 1991-2, NF EN 1992-1-1 et 1992-2 et annexes nationales.',
+    ...(st.supports ? ['SETRA, PP73 — Appuis des tabliers (piles, palées, culées), 1973-1977 ; SETRA, FOND 72 — Fondations courantes d\'ouvrages d\'art.',
+      'Fascicule 62 titre V (1993) ; NF P 94-261 (2013) et guide Cerema « Eurocode 7 — fondations superficielles » (2015) ; NF P 94-262 (2012).',
+      'Note de calcul des appuis et fondations du Pont de Noé (COMETE/ICI, A.P.D. mai 2012, programme PSH) — valeurs de contrôle.'] : []),
   ]) para(r);
   return { title, meta, blocks: B };
 }
