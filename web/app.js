@@ -6,6 +6,7 @@ import { envelopePlot, shearPlot, reactionPlot, kPlot, transversePlot, factorPlo
 import { designEC, designBAEL, designTransverseEC, designTransverseBAEL } from '../src/design.js';
 import { TransverseModel } from '../src/transverse.js';
 import { buildReport } from './report.js';
+import { aideConception, rechercheEpaisseur } from '../src/conception.js';
 
 const $ = s => document.querySelector(s);
 const nums = s => s.split(/[,;\s]+/).filter(Boolean).map(Number);
@@ -13,7 +14,7 @@ const pairs = s => s.split(';').map(t => t.trim()).filter(Boolean).map(t => nums
 const fmt = v => (Math.abs(v) < 0.05 ? '0' : v.toFixed(1));
 const cell = v => `<td class="${v < -0.05 ? 'neg' : ''}">${fmt(v)}</td>`;
 
-let state = null;
+let state = null, lastSearch = null;
 
 // « 10 @ -5.85 k 0.8/1.2 » → { g, e, kmin, kmax } ; « 1.92 sur -5,5 k 0.8/1.4 » → { q, y1, y2, kmin, kmax }
 function parseK(t) { const m = t.match(/k\s*([\d.]+)\s*\/\s*([\d.]+)/i); return m ? { kmin: +m[1], kmax: +m[2], rest: t.replace(m[0], '') } : { kmin: 1, kmax: 1, rest: t }; }
@@ -33,11 +34,19 @@ function parseForm(form) {
       ys: nums(d.ys), Leq: d.Leq.trim() ? nums(d.Leq) : undefined,
       nu: +d.nu, laneStep: +d.laneStep, nSec: 20, nGrid: 100,
       chamfer: d.hEdge.trim() && d.joue.trim() ? { hEdge: +d.hEdge, joue: +d.joue } : undefined,
+      psi: +(d.psi || 100),
     },
     alpha: d.alpha, nRetenue: +d.nRetenue, classe: d.classe.trim() ? +d.classe : null, chamoaSign: !!d.chamoaSign,
     withTherm: !!d.withTherm, dT: nums(d.dT), E: +EIv[0] || 34000, I: EIv[1] ? +EIv[1] : null, delta: +d.delta, phiFluage: +d.phiFluage,
     mat: { fck: +d.fck, fyk: +d.fyk, fc28: +d.fck, fe: +d.fyk, c: +d.cover, phi: +d.phi / 1000, phiT: +(d.phiT || 16) / 1000, wkMax: +d.wk, fissuration: d.fiss, tRev: +d.tRev },
+    concept: { psi: +(d.psi || 100), tirantAir: (d.tirantAir || '').trim() ? +d.tirantAir : null, type: d.typeDalle || 'auto', D: +(d.Dabout || 25) / 1000, rhoMax: +(d.rhoMax || 1) / 100 },
   };
+}
+
+/** Données de l'aide à la conception à partir du formulaire analysé et des résultats disponibles. */
+function conceptInput(p) {
+  const di = p.deckInput;
+  return { spans: di.spans, width: di.width, h: di.h, fck: p.mat.fck, psi: p.concept.psi, tirantAir: p.concept.tirantAir, overhangs: di.overhangs, D: p.concept.D, I: p.I, type: p.concept.type };
 }
 
 function compute(p) {
@@ -69,7 +78,60 @@ function compute(p) {
     { id: 'trott', label: 'Trottoirs 1,5 kN/m²', res: f61.trottoir, ref: 'F61' },
   ];
   if (thermal) cases.push({ id: 'therm', label: 'Gradient thermique (±)', res: { ...thermal, Vmax: thermal.Vmax, Vmin: thermal.Vmin }, ref: 'EC' }, { id: 'settle', label: 'Tassements aléatoires (±)', res: settle, ref: 'EC' });
-  return { p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transDesign, dt: (performance.now() - t0) / 1000 };
+  const concept = aideConception(conceptInput(p), { deck, perm, design: design.EC, transDesign: transDesign.EC });
+  return { p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transDesign, concept, dt: (performance.now() - t0) / 1000 };
+}
+
+/** Aide à la conception seule : géométrie, charges permanentes et règles du guide (quelques dixièmes de seconde). */
+function computeConceptOnly(p) {
+  const deck = new SlabDeck(p.deckInput);
+  const perm = deck.permanent();
+  return { p, deck, perm, concept: aideConception(conceptInput(p), { deck, perm }), conceptOnly: true };
+}
+
+const badge = lv => `<span class="badge ${lv}">${lv === 'ok' ? 'OK' : lv === 'warn' ? 'ATTENTION' : 'INFO'}</span>`;
+
+function renderConception(st) {
+  const c = st.concept;
+  let h = '';
+  for (const s of c.sections) h += `<h3>${s.title}</h3><ul class="checks">${s.items.map(it => `<li>${badge(it.level)}${it.text}</li>`).join('')}</ul>`;
+  h += `<p class="small">Règles et ordres de grandeur du guide SETRA « Ponts-dalles – guide de conception » (1989) ; les paragraphes cités renvoient à ce guide. Le guide a été rédigé pour les charges du Fascicule 61 : les élancements indicatifs ne dispensent pas de la vérification (recherche d'épaisseur ci-dessous, puis calcul complet).</p>`;
+  $('#concept').innerHTML = h;
+  // variantes de travure
+  const tv = c.travures;
+  let t = `<p class="small">Longueur entre appuis extrêmes L = ${c.Ltot.toFixed(1)} m ; rives à 0,7 fois la travée adjacente (§ 2.1.1), travées décroissantes vers les culées ; épaisseur indicative par l'élancement du guide (B${st.p.mat.fck}). « Adopter » recopie la travure (et l'épaisseur indicative) dans le formulaire.</p>
+  <table><thead><tr><th>Travées</th><th>Portées [m]</th><th>Type</th><th>h indicatif [m]</th><th>Emploi type (guide § 1.2)</th><th></th></tr></thead><tbody>`;
+  tv.forEach((v, i) => { t += `<tr><td>${v.n}</td><td>${v.spans.join(' – ')}</td><td>${v.ok ? 'PSI.' + v.type : 'hors domaine pont-dalle'}</td><td>${v.ok ? v.hGuide.toFixed(2) : '—'}</td><td style="white-space:normal;text-align:left">${v.usage}</td><td><button type="button" class="mini" data-adopt="${i}" ${v.ok ? '' : 'disabled'}>Adopter</button></td></tr>`; });
+  t += `</tbody></table>`;
+  $('#concept-travures').innerHTML = t;
+  // bornes par défaut de la recherche d'épaisseur
+  const Lmax = Math.max(...st.deck.spans);
+  const r2 = v => (Math.round(v / 0.02) * 0.02).toFixed(2);
+  if (!$('#hs-min').value) $('#hs-min').value = r2(Math.max(0.3, Lmax / 32));
+  if (!$('#hs-max').value) $('#hs-max').value = r2(Math.max(st.deck.h, Lmax / 14));
+}
+
+async function runThicknessSearch() {
+  if (!state) return;
+  const btn = $('#btn-hsearch'); btn.disabled = true; btn.textContent = 'Recherche…';
+  const out = $('#hsearch');
+  const hMin = +$('#hs-min').value, hMax = +$('#hs-max').value, step = +$('#hs-step').value || 0.02;
+  const rhoMax = state.p.concept.rhoMax;
+  const cm = v => (v * 1e4).toFixed(1);
+  let rowsHtml = '';
+  out.innerHTML = `<p class="small">Critères : pas d'aciers comprimés (x/d ≤ 0,45 à l'ELU, σc ≤ 0,6 fck à l'ELS caractéristique), taux d'armatures par face ≤ ${(rhoMax * 100).toFixed(1)} %, V_Ed ≤ V_Rd,max, poinçonnement sous roue. Chaîne Eurocodes complète (permanent + LM1/LM2 + gradient/tassements si cochés) à chaque pas, ≈ 1 s par épaisseur.</p><table><thead><tr><th>h [m]</th><th>L_max/h</th><th>A_s inf max</th><th>A_s sup max</th><th>ρ max [%]</th><th>σc [MPa]</th><th>x/d</th><th>V_Ed/V_Rd,c</th><th>V_Ed/V_Rd,max</th><th>Poinç.</th><th>Verdict</th></tr></thead><tbody id="hs-rows"></tbody></table>`;
+  const Lmax = Math.max(...state.deck.spans);
+  try {
+    lastSearch = null;
+    const r = await rechercheEpaisseur(state.p, { hMin, hMax, step, rhoMax, onStep: async row => {
+      rowsHtml += `<tr><td><b>${row.h.toFixed(2)}</b></td><td>${(Lmax / row.h).toFixed(1)}</td><td>${cm(row.asBot)}</td><td>${cm(row.asTop)}</td><td>${(Math.max(row.rhoBot, row.rhoTop) * 100).toFixed(2)}</td><td>${row.sigC.toFixed(1)}</td><td>${row.xd.toFixed(2)}</td><td>${row.vRatio.toFixed(2)}${row.stirrups ? ' (étriers)' : ''}</td><td>${row.vMax.toFixed(2)}</td><td>${row.punchOK ? 'OK' : 'NON'}</td><td>${row.ok ? badge('ok') + 'vérifiée' : badge('warn') + row.crit.join(', ')}</td></tr>`;
+      $('#hs-rows').innerHTML = rowsHtml;
+      await new Promise(res => setTimeout(res, 0));
+    } });
+    lastSearch = r;
+    out.insertAdjacentHTML('beforeend', r.hOK ? `<p><b>Épaisseur minimale vérifiée : h = ${r.hOK.toFixed(2)} m</b> (L_max/h = ${(Lmax / r.hOK).toFixed(1)}). Les épaisseurs supérieures réduisent les aciers ; le tranchant V_Ed > V_Rd,c appelle des étriers (pratique courante des dalles PSI.DA, guide § 3.4.2) tant que V_Ed ≤ V_Rd,max.</p>` : `<p><b>Aucune épaisseur vérifiée dans l'intervalle</b> : augmenter h max, le taux d'armatures admis ou revoir la travure.</p>`);
+  } catch (e) { out.insertAdjacentHTML('beforeend', `<pre class="small">${e.stack || e}</pre>`); }
+  finally { btn.disabled = false; btn.textContent = 'Rechercher'; }
 }
 
 /** Charges à dessiner sur la coupe pour un cas (arrangement représentatif, voies depuis le bord y1). */
@@ -144,7 +206,7 @@ function renderStatic(st) {
   h += `<h3>Fascicule 61 titre II (valeurs caractéristiques, δ inclus pour B et Mc)</h3>` + st.cases.filter(c => c.ref === 'F61').map(c => tableEnv(st, c.res, c.label)).join('');
   $('#tables').innerHTML = h;
   $('#trans-span').innerHTML = deck.spans.map((L, j) => `<option value="${j}">Travée ${j + 1} (${L} m)</option>`).join('');
-  renderCase(st); renderSection(st); renderDesign(st); renderTransverse(st);
+  renderConception(st); renderCase(st); renderSection(st); renderDesign(st); renderTransverse(st);
 }
 
 function renderCase(st) {
@@ -229,10 +291,26 @@ function hashToForm(form) {
 
 $('#f').addEventListener('submit', ev => {
   ev.preventDefault();
-  $('#results').hidden = false;
+  $('#results').hidden = false; $('#results').classList.remove('concept-only');
   try { state = compute(parseForm(ev.target)); renderStatic(state); $('#error').textContent = ''; formToHash(ev.target); }
   catch (e) { $('#error').textContent = e.stack || String(e); }
 });
+$('#btn-concept').addEventListener('click', () => {
+  $('#results').hidden = false; $('#results').classList.add('concept-only');
+  try { state = computeConceptOnly(parseForm($('#f'))); $('#hsearch').innerHTML = ''; renderConception(state); $('#error').textContent = ''; formToHash($('#f')); }
+  catch (e) { $('#error').textContent = e.stack || String(e); }
+  $('#concept-card').scrollIntoView({ behavior: 'smooth' });
+});
+$('#concept-travures').addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-adopt]');
+  if (!b || !state) return;
+  const v = state.concept.travures[+b.dataset.adopt];
+  const f = $('#f');
+  f.spans.value = v.spans.join(', '); f.h.value = v.hGuide.toFixed(2); f.area.value = ''; f.EI.value = f.EI.value.split(',')[0] + ',';
+  $('#hs-min').value = ''; $('#hs-max').value = '';
+  $('#btn-concept').click();
+});
+$('#btn-hsearch').addEventListener('click', runThicknessSearch);
 if (hashToForm($('#f'))) $('#f').requestSubmit();
 $('#case-select').addEventListener('change', () => state && renderCase(state));
 $('#surface-which').addEventListener('change', () => state && renderCase(state));
@@ -242,7 +320,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!state) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.4' });
+    const html = await buildReport({ ...state, version: '0.5', hSearch: lastSearch });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -260,4 +338,6 @@ $('#btn-chamoa').addEventListener('click', () => {
   f.bands.value = '0.66 sur -6,6 k 0.8/1.2 ; 1.92 sur -5,5 k 0.8/1.4 ; 0.72 sur -6,-5 ; 0.72 sur 5,6'; f.ys.value = '-6, -4.5, -3, -1.5, 0, 1.5, 3, 4.5, 6';
   f.Leq.value = ''; f.alpha.value = 'FR2'; f.nRetenue.value = 0; f.classe.value = ''; f.nu.value = 0.2; f.chamoaSign.checked = true;
   f.hEdge.value = 0.40; f.joue.value = 1.0; f.EI.value = '34077, 0.43077'; f.withTherm.checked = true; f.fck.value = 35; f.fyk.value = 500; f.cover.value = 0.03;
+  f.psi.value = 80; f.tirantAir.value = ''; f.typeDalle.value = 'auto'; f.Dabout.value = 25; f.rhoMax.value = 1.0;
+  $('#hs-min').value = ''; $('#hs-max').value = '';
 });

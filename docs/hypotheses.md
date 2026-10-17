@@ -9,7 +9,7 @@
 | H3 | Premier harmonique ; θ = b/L_eq ; L_eq = distance entre points de moment nul de la travée **seule chargée** par une charge uniforme (« méthode des moments » CHAMOA), moyenne des deux L_eq sur appui | `equivalentSpans()`, `LeqAt()` ; paramètre `Leq` | **Vérifié** : 8,9119 / 11,1867 m contre 8,9118 / 11,1862 (note CHAMOA, tableau « caractéristiques équivalentes ») |
 | H4 | Pour chaque fibre y, arrangement transversal le plus défavorable (voies glissées et renumérotées, pas `laneStep`) ; files indépendantes longitudinalement : m_x(y) = Σ K̄_i(y)·M_i/2b | `laneArrangementsEC()`, `evaluateArrangements()` | CHAMOA ch. 2 §3.4.1 : « effet le plus défavorable de la répartition transversale pour chaque point d'étude transversal ». Le facteur de bord (dimensionnant) est reproduit ; le profil CHAMOA est plus plat vers l'axe (1,18 contre 1,10), définition exacte du fichier Guyon à élucider |
 | H5 | Poids propre K = 1 ; superstructures avec K(e,y) ; revêtement bande uniforme avec K̄ | `permanent()` | PSIDA répartit aussi les charges permanentes excentrées |
-| H6 | Ouvrage droit | — | Biais 70–100 gr : coefficients correctifs du guide SETRA 1989 |
+| H6 | Calcul longitudinal suivant les portées biaises sans correction (pratique CHAMOA § 3.4.1) ; biais mécanique φ du guide SETRA 1989 et moments dans les directions d'aciers (annexe 12A) dans `skew.js` ; règles de conception du guide dans `conception.js` | `skew.js`, `conception.js` | **Vérifié** : φ = 82,5322 / 86,5105 gr et les 11 M_APF de la note CHAMOA reproduits à 10⁻⁴ (`test/skew.test.js`) ; validité φ ≥ 70 gr (guide § 2.4) |
 | H7 | Flexion transversale sur dalle isostatique équivalente (voir § 1 ter) | `transverse.js` | CHAMOA §4.3 et fichiers 5.4 (biais 80 gr) |
 
 Autres choix :
@@ -40,6 +40,8 @@ par barre (max des fibres) et prend comme moment de calcul par mètre M_ST1/2b s
 | A_s inférieur mi-travée 2 (σs ≤ 300 MPa) [cm²/m] | 36,0 (431,7/12) | 36,4 | +1 % |
 | A_s supérieur P1 / P2 [cm²/m] | 46,0 / 52,1 | 44,2 / 47,5 | −4 % / −9 % |
 | A_s,min 9.2.1.1 ×1,2 (bt = 11,12 m) / 7.3.2 [cm²] | 165,2 / 75,8 | 165,2 / 74,1 | < 2 % |
+| Biais mécanique travée 1 / 2 [gr] (Be = 12,253 m) | 82,5322 / 86,5105 | 82,5322 / 86,5105 | 10⁻⁵ |
+| M_APF annexe 12A, travée 1 CARA max (MX 435,08, MY 114,89) [kN·m/m] | 288,10 | 288,10 | 10⁻⁴ (11 valeurs) |
 
 Formules de combinaison relevées dans la note et reproduites (combinations.js) : ELS caractéristique = G + Ta + max(T + ψ0·Q ; 0,6 T + Q_LM1 ; Q_LM2) ;
 ELS fréquent = G + max(0,6 T ; 0,5 T + ψ1·Q_LM1 ; 0,75 Q_LM2) ; ELU = 1,35 G + 1,35 Q (ζ = 0 pour T et Ta).
@@ -59,10 +61,12 @@ transversales ; thermique et tassements : m_y = ν·m_x pondéré par le profil 
 Comparaison CHAMOA (fichiers 5.4 et §4.3) : poids propre « ossature seule » au centre de la travée 1 : CHAMOA 24,0 kN·m/m (variante ν = 0 :
 −6,4), outil 36,4 (ν = 0 : +2,6) — CHAMOA traite le chanfrein en encorbellement (TRV_ENC = −6,46) et son terme de couplage ν correspond à
 un m_x de ≈ 152 kN·m/m dont l'origine n'est pas documentée ; l'outil est du côté conservatif. Les aciers transversaux de la note
-(14,1 / 17,3 cm²/m inf.) sont dimensionnés par M_APF = 288 / 351 kN·m/m, moment dans la direction des aciers après correction de biais
-(annexe 12 du BPEL, biais 80 gr) : non comparable à un ouvrage droit (M_APF = m_y ≈ 115 chez CHAMOA, 150 ici en ELS caractéristique).
+(14,1 / 17,3 cm²/m inf.) sont dimensionnés par M_APF = 288 / 351 kN·m/m, moment dans la direction des aciers transversaux (parallèles
+aux lignes d'appui) de l'annexe 12A du BPEL. Cette transformation est désormais reproduite exactement (`skew.js`, méthode.md § 8 bis) :
+M_APF = 0,38 MX + 1,07 MY en travée 1, 0,28 MX + 1,17 MY en travée 2. L'écart résiduel porte sur les entrées : MY caractéristique CHAMOA
+114,9 contre ≈ 149 ici (travée 1, 15 harmoniques, charges locales diffusées), MX 435 contre ≈ 526 (max de travée avec Ta + 0,6 T).
 
-Note : le biais de 80 gr de l'exemple est ignoré (CHAMOA calcule aussi « en biais géométrique » sans correction).
+Note : le biais de 80 gr de l'exemple n'intervient pas dans le calcul longitudinal (CHAMOA calcule « en biais géométrique » sans correction).
 
 ## 2. Protocole de comparaison avec une note de référence
 
@@ -94,7 +98,7 @@ Note : le biais de 80 gr de l'exemple est ignoré (CHAMOA calcule aussi « en bi
 
 Bibliographie : Bareš & Massonnet (1966) ; Pücher (1977) ; Homberg (1968) ; Calgaro & Virlogeux ; Hambly (1991) ; O'Brien, Keogh & O'Connor (2014) ; EN 1991-2, EN 1992-1-1, EN 1992-2 ; Fascicule 61 titre II ; BAEL 91.
 
-## 4. Vérifications internes déjà en place (`npm test`)
+## 4. Vérifications internes déjà en place (`npm test`, 41 tests)
 
 - Poutre : PL/4 ; −qL²/8 et 9/128·qL² (2 travées) ; −qL²/10, 0,08 qL², 0,025 qL² (3 travées) ; enveloppe une travée chargée 0,0957 qL² ; convoi glissant ; portées équivalentes 0,8L / 0,447L.
 - Guyon-Massonnet : conditions de bord libre exactes, saut de Y''' = 1 sous la charge, flèche moyenne = poutre (∫K = 2b à 10⁻⁵), réciprocité K(y,e) = K(e,y), symétrie, limite θ → 0 ⇒ K = 1, continuité en charge de bord, μ nul aux bords, ∫m_x dy = moment de poutre (séries de Fourier).

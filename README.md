@@ -16,8 +16,15 @@ Cloudflare Pages depuis GitHub. Les graphiques utilisent Plotly (MIT, embarqué 
 donc utilisable hors ligne) pour les courbes, et du SVG natif pour les schémas.
 
 **Benchmark** : l'exemple du chapitre 4 du guide technique CHAMOA-PSIDA (Cerema) est reproduit à
-10⁻³ près pour les charges permanentes et la travée équivalente, et à 1–2 % pour le moment de calcul
-LM1 par mètre à l'appui (facteur KTRANS compris) — voir `test/chamoa.test.js` et `docs/hypotheses.md`.
+10⁻³ près pour les charges permanentes, la travée équivalente, le gradient thermique et les tassements, à 1–2 %
+pour le moment de calcul LM1 par mètre à l'appui (facteur KTRANS compris) et les aciers de flexion, et exactement
+pour les moments transversaux « dans la direction des aciers » de l'annexe 12A du BPEL (biais 80 gr) — voir
+`test/chamoa.test.js`, `test/skew.test.js` et `docs/hypotheses.md`.
+
+**Aide à la conception** : les règles du guide SETRA *Ponts-dalles – guide de conception* (1989) — domaine
+d'emploi, élancements, travure, biais, coupe transversale, abouts, descente de charges — sont codées dans
+`src/conception.js` et affichées en tête des résultats, avec des variantes de travure et une recherche automatique
+de l'épaisseur minimale vérifiée (Eurocodes).
 
 ## Contenu
 
@@ -39,6 +46,8 @@ src/section_ec2.js  sections EC2 : ELU, ELS, wk 7.3.4, minimums, V_Rd,c, poinço
 src/section_bael.js sections BAEL 91 : ELU, ELS, minimums, τu, poinçonnement
 src/design.js       ferraillage longitudinal et transversal, enveloppes, tranchant, poinçonnement
 src/transverse.js   flexion transversale m_y(y) par travée (dalle isostatique équivalente, Fourier)
+src/skew.js         biais : biais mécanique (SETRA 1989), moments dans les directions d'aciers (annexe 12A BPEL / CHAMOA, Wood-Armer)
+src/conception.js   aide à la conception : règles du guide SETRA 1989, variantes de travure, recherche de l'épaisseur minimale vérifiée
 examples/psida3.js  exemple PSIDA 3 travées 14-18-14 m (node examples/psida3.js)
 test/               tests unitaires (npm test)
 docs/hypotheses.md  hypothèses de modélisation, protocole de comparaison, références
@@ -95,6 +104,15 @@ Les hypothèses détaillées et les points à confronter aux notes CHAMOA / PSID
 
 Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de référence), résultats à droite :
 
+0. **Aide à la conception** (guide SETRA 1989, bouton « Aide à la conception seule » pour l'obtenir en une fraction de
+   seconde sans lancer le calcul complet) — domaine d'emploi et type de dalle (§ 1.2), épaisseur indicative par
+   l'élancement (1/20, 1/26, 1/28 en BA avec les coefficients B30/B35 ; 1/22–1/33 en BP), travure (rapports de rive
+   0,5–0,85, décroissance vers les culées, nombre d'or), biais (biais mécanique, validité de Guyon-Massonnet, direction des
+   fers, minimum transversal 1,3 n ‰), coupe transversale (largeur, grande largeur, encorbellements, dévers), abouts
+   (0,1 + 15 D), descente de charges (t/m², t/m) et quantités indicatives (béton, aciers en kg/m³). Variantes de travure
+   à 1–5 travées pour la même longueur (bouton « Adopter ») et recherche de l'épaisseur minimale vérifiée : la chaîne
+   Eurocodes complète est relancée de 2 cm en 2 cm (pratique CHAMOA) jusqu'à satisfaire x/d, σc, taux d'armatures,
+   V_Rd,max et poinçonnement.
 1. **Modèle** — élévation (portées, appuis, abouts, sections clés, L_eq, θ) et coupe transversale avec les
    charges du cas sélectionné (roues TS, files Bc/Bt, chenilles Mc120, bande D240, voies, trottoirs).
 2. **Enveloppes longitudinales** — M(x), V(x) de la poutre entière (permanent + cas de trafic, légende
@@ -119,12 +137,16 @@ Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de
 9. **Permalien** — les données du formulaire sont encodées dans l'URL après chaque calcul : un lien suffit pour
    partager ou rejouer un cas (utile en cours).
 
-## État et limites (v0.4)
+## État et limites (v0.5)
 
-- Ouvrage droit, dalle pleine de hauteur constante, appuis simples, abouts en console (charges permanentes).
+- Dalle pleine de hauteur constante, appuis simples, abouts en console (charges permanentes). Biais : le calcul longitudinal
+  est fait suivant les portées biaises (comme CHAMOA, sans correction) ; le biais mécanique et les moments dans les
+  directions d'aciers (annexe 12A du BPEL, reproduits exactement sur la note CHAMOA) sont disponibles dans `src/skew.js`
+  mais ne sont pas encore appliqués automatiquement au ferraillage transversal de l'interface (prochaine étape).
 - Fatigue des armatures : vérification simplifiée σs ≤ 300 MPa sous ELS caractéristique (pratique CHAMOA), pas la méthode λ_s de l'EN 1992-2 annexe NN.
-- Pas encore : biais (correction SETRA 1989 / annexe 12 BPEL), LM3 / convois spéciaux EC, phase de chantier (profil provisoire),
-  tassements probables, aciers d'effort tranchant, encorbellements.
+- Pas encore : LM3 / convois spéciaux EC, phase de chantier (profil provisoire), tassements probables, encorbellements.
+- Le guide SETRA 1989 a été établi pour les charges du Fascicule 61 : ses élancements sont des ordres de grandeur, la recherche
+  d'épaisseur de l'outil fait foi pour les charges Eurocodes.
 - Les tableaux `a1`, `bc`, `bt` du Fascicule 61 et les α de l'annexe française sont à relire contre
   les textes avant toute utilisation en production (voir les commentaires `TODO_VERIF`).
 

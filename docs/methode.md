@@ -4,6 +4,44 @@ Ce document décrit, étape par étape et avec les formules, la chaîne de calcu
 peut être refaite à la main ou au tableur ; l'outil ne fait qu'automatiser l'énumération des positions de charge.
 Les notations suivent la note CHAMOA-PSIDA du Cerema, sur laquelle la chaîne a été calée (voir `hypotheses.md`).
 
+## 0. Conception et prédimensionnement (guide SETRA 1989)
+
+Avant tout calcul, l'outil confronte le projet aux règles du guide SETRA *Ponts-dalles – guide de conception* (1989) :
+
+* **Domaine d'emploi (§ 1.2)** : dalle BA (PSI.DA) économique de 7 à 15 m (1–2 travées) et de 6 à 18 m (≥ 3 travées) ;
+  dalle précontrainte (PSI.DP) de 14 à 25 m (30 m), à larges encorbellements au-delà d'une vingtaine de mètres ; plage
+  commune 14–18 m. Au-delà de 25–30 m : dalle nervurée, bipoutre mixte, béquilles.
+* **Élancement courant (épaisseur / portée la plus longue, § 1.2)** : PSI.DA 1/20 (travée unique), 1/26 (2 travées),
+  1/28 (3 travées et plus) ; PSI.DP 1/22–1/25, 1/25 (1/28 avec larges encorbellements), 1/33 (1/28). Les abaques BA du
+  guide (§ 3.1.3) sont établis pour un B25 ; pour un B30 l'épaisseur vaut 0,87 h, pour un B35 0,81 h. Exemple du guide :
+  8 – 15 – 15 – 8 m → 0,56 m en B25. Ces valeurs correspondent aux charges du Fascicule 61 : sous LM1 l'épaisseur
+  vérifiée est en général supérieure.
+* **Travure (§ 2.1.1)** : 0,5 ≤ travée de rive / travée adjacente ≤ 0,85 (0,6 au moins en biais prononcé) — en deçà,
+  risque de soulèvement de l'about ; nombre impair de travées décroissant du milieu vers les culées ; hauteur
+  libre / portée ≲ 0,618 ; au-delà de 8 m de hauteur, 3 travées plutôt que 4 (§ 1.2.4). Les variantes proposées par
+  l'outil prennent des rives à 0,7 fois la travée adjacente et, à 5 travées, des travées intermédiaires à 0,85 de la
+  travée centrale.
+* **Biais (§ 2.4, § 3.4.1)** : biais mécanique φ = ψ + (100 − ψ)(1 − n/2)² (n = largeur biaise / portée biaise < 2),
+  Guyon-Massonnet (PSIDA, CHAMOA, cet outil) valable pour φ ≳ 70 gr ; direction des fers (§ 3.4.2) : option 1
+  (longitudinaux parallèles aux bords libres, transversaux parallèles aux lignes d'appui) pour ψ ≳ 80 gr en BA (70 gr en
+  BP), option 2 (fers parallèles et perpendiculaires aux bords libres) pour les biais prononcés, angle entre familles
+  ≥ 60° ; aciers transversaux inférieurs ≥ 1,3 n ‰ (≤ 2 ‰) de la section, n = largeur/portée, × 1/sin ψ s'ils sont
+  parallèles aux lignes d'appui (§ 3.4.3).
+* **Coupe transversale (§ 2.3)** : largeur 5,50–16 m, au-delà de 15 m deux demi-tabliers ; ouvrage « de grande
+  largeur » si la largeur dépasse une portée (efforts transversaux ≈ +20 %, gradient thermique sur les appareils d'appui
+  de rive) ; encorbellements au-delà de 20 m (0,20 ± 0,05 m en extrémité, 0,50 ± 0,15 m à la jonction, ≤ 3,50 m de
+  portée) ; dévers ≥ 2,5 %.
+* **Abouts (§ 3.2)** : longueur ≥ 0,1 + 15 D (BA, D = plus gros fer ancré par courbure), ≥ 0,5 (1 + |cot ψ|) (BP).
+* **Descente de charges (§ 1.3)** : poids propre 1,2 à 2 t/m², réactions ≈ 20 t/m (pile-culée) à 70 t/m (pile) par
+  mètre de largeur, fondations superficielles fréquentes ; tassements différentiels admissibles 2–3 cm (6–7 cm avec
+  renforts).
+
+**Recherche de l'épaisseur minimale** (pratique CHAMOA § 4.1) : h est augmenté de 2 cm en 2 cm, la chaîne complète du
+§ 1 au § 7 étant relancée à chaque pas, jusqu'à ce que : aucune face ne demande d'aciers comprimés (x/d ≤ 0,45 à l'ELU,
+σc ≤ 0,6 fck à l'ELS caractéristique), le taux d'armatures par face reste sous la valeur admise (1 % par défaut),
+V_Ed ≤ V_Rd,max et le poinçonnement sous roue est vérifié. V_Ed > V_Rd,c (étriers nécessaires) est signalé sans
+bloquer : les dalles PSI.DA comportent normalement des cadres et étriers (§ 3.4.2).
+
 ## 1. Modèle longitudinal : la poutre équivalente
 
 Le tablier est une poutre continue de largeur 2b, de rigidité EI constante, sur appuis simples. Pour une charge
@@ -124,8 +162,27 @@ moyen (contact + 2 t_rev + h) et centrées sur x = L_eq/2. Aciers transversaux p
 (d = h − c − φ_long), avec A_s,trans ≥ 0,2 A_s,long par face et A_s,trans,sup ≥ 0,5 A_s,trans,inf (CHAMOA) ;
 BAEL : ≥ A_s,long/3.
 
+## 8 bis. Biais : moments dans les directions d'aciers (annexe 12A du BPEL, pratique CHAMOA)
+
+CHAMOA calcule la flexion longitudinale suivant les portées biaises sans correction, puis dimensionne les aciers
+transversaux avec le moment « après fissuration » de l'annexe 12A du BPEL (dossier CED 66). L'outil reproduit
+exactement ce calcul (`annexe12A`, 11 valeurs de la note à 10⁻⁴) : le moment longitudinal MX (ST1, par mètre) et le
+moment transversal MY (Guyon) sont pris comme moments principaux, la direction de MX étant tournée de
+δ = 100 − φ_mec grades de l'axe vers la normale aux lignes d'appui ; le tenseur est décomposé sur les deux familles
+d'aciers (longitudinaux suivant x, transversaux à l'angle ψ) et sur leur bissectrice, où le béton ne travaille qu'en
+compression (Mb ≤ 0 en nappe inférieure) :
+
+    M = M₁ n₁⊗n₁ + M₂ n₂⊗n₂ + Mb c⊗c
+    M_APF = M₂ = M_yy / (1 − cos ψ) + M_xy / sin ψ,   M_yy = MX sin²δ + MY cos²δ,   M_xy = (MX − MY) sin δ cos δ
+
+Exemple (travée 1, φ = 82,53 gr, ψ = 80 gr) : MX = 435,08 et MY = 114,89 kN·m/m → M_APF = 288,10 (note : 288,10), soit
+0,38 MX + 1,07 MY ; en travée 2 (φ = 86,51 gr) : 0,28 MX + 1,17 MY. Pour les moments transversaux négatifs la note prend
+MX = 0. Les aciers longitudinaux ne sont pas corrigés (M₁ n'est pas utilisé). Pour une dalle droite ψ = 100 gr,
+M_APF = MY. Les aciers transversaux de la note (14,1 / 17,3 cm²/m) s'obtiennent ensuite avec σs ≤ 300 MPa sous
+M_APF caractéristique (288 / 351 kN·m/m, ce dernier venant du profil provisoire de chantier).
+
 ## 9. Ce que l'outil ne fait pas (encore)
 
-Biais (correction du guide SETRA 1989 et moments dans les directions d'aciers, annexe 12 du BPEL), phase de
+Application automatique de l'annexe 12A au ferraillage transversal de l'interface (le module existe), phase de
 chantier (profil provisoire), convois LM3 de l'Eurocode, tassements probables, encorbellements, fatigue par la
 méthode λ_s de l'EN 1992-2 annexe NN.

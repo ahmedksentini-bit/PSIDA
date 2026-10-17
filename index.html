@@ -36,6 +36,11 @@
   .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:8px; }
   .toolbar label { margin:0; display:flex; align-items:center; gap:6px; } .toolbar select { width:auto; }
   pre#error { color: var(--warn); white-space: pre-wrap; }
+  .badge { display:inline-block; min-width:38px; text-align:center; font-size:11px; font-weight:700; border-radius:4px; padding:1px 6px; margin-right:6px; vertical-align:middle; }
+  .badge.ok { background:#1f8a4c; color:#fff; } .badge.info { background:#4e5a70; color:#fff; } .badge.warn { background:#c0392b; color:#fff; }
+  ul.checks { list-style:none; padding:0; margin:0 0 8px; } ul.checks li { padding:4px 0; border-bottom:1px dashed var(--line); font-size:13px; }
+  #results.concept-only .full-only { display:none; }
+  button.mini { width:auto; margin:0; padding:3px 9px; font-size:12px; }
 </style>
 </head>
 <body>
@@ -100,23 +105,48 @@
       </div>
       <label>Épaisseur de revêtement pour la diffusion des roues [m]<input name="tRev" value="0.08" type="number" step="0.01"></label>
     </details>
+    <details open><summary>Conception (guide SETRA 1989)</summary>
+      <div class="row">
+        <label>Biais ψ [gr] (100 = droit)<input name="psi" value="100" type="number" step="1" min="30" max="100"></label>
+        <label>Hauteur libre sous tablier [m] (facultatif)<input name="tirantAir" value=""></label>
+      </div>
+      <div class="row">
+        <label>Type de dalle<select name="typeDalle"><option value="auto">automatique (portées)</option><option value="DA">PSI.DA (béton armé)</option><option value="DP">PSI.DP (précontraint)</option></select></label>
+        <label>Plus gros fer d'about D [mm]<input name="Dabout" value="25" type="number" step="1"></label>
+      </div>
+      <label>Taux d'armatures maximal par face pour la recherche d'épaisseur [%]<input name="rhoMax" value="1.0" type="number" step="0.1" min="0.3" max="4"></label>
+    </details>
     <label><input type="checkbox" name="chamoaSign">Convention CHAMOA (moment + = fibre supérieure tendue) sur le graphique M(x)</label>
     <button type="submit">Calculer</button>
+    <button type="button" class="secondary" id="btn-concept">Aide à la conception seule (rapide)</button>
     <button type="button" class="secondary" id="btn-chamoa">Charger l'exemple CHAMOA-PSIDA (10-15-15-10 m)</button>
     <p class="small">Valeurs caractéristiques non pondérées. Moments de la poutre entière en kN·m, par mètre de largeur en kN·m/m.</p>
   </form>
 
   <div id="results" hidden>
     <pre id="error"></pre>
-    <div class="card"><div class="toolbar"><h2 style="margin:0;flex:1">Modèle</h2><button type="button" id="btn-report" style="width:auto;margin:0;padding:8px 14px">Exporter la note de calcul</button></div><p id="model-info" class="small"></p>
+    <div class="card" id="concept-card"><h2>Aide à la conception — guide SETRA « Ponts-dalles » (1989)</h2>
+      <div id="concept"></div>
+      <h3>Variantes de travure pour la même longueur entre appuis extrêmes</h3>
+      <div id="concept-travures"></div>
+      <h3>Recherche de l'épaisseur minimale vérifiée (Eurocodes, flexion longitudinale)</h3>
+      <div class="toolbar">
+        <label>h min [m] <input id="hs-min" type="number" step="0.02" style="width:90px"></label>
+        <label>h max [m] <input id="hs-max" type="number" step="0.02" style="width:90px"></label>
+        <label>pas [m] <input id="hs-step" type="number" step="0.01" value="0.02" style="width:80px"></label>
+        <button type="button" id="btn-hsearch" style="width:auto;margin:0;padding:8px 14px">Rechercher</button>
+      </div>
+      <div id="hsearch"></div>
+    </div>
+    <div class="card full-only"><div class="toolbar"><h2 style="margin:0;flex:1">Modèle</h2><button type="button" id="btn-report" style="width:auto;margin:0;padding:8px 14px">Exporter la note de calcul</button></div><p id="model-info" class="small"></p>
       <div class="svgbox" id="elevation"></div>
       <div class="toolbar"><label>Cas de charge affiché <select id="case-select"></select></label></div>
       <div class="svgbox" id="cross"></div>
     </div>
-    <div class="card"><h2>Enveloppes longitudinales (poutre entière)</h2>
+    <div class="card full-only"><h2>Enveloppes longitudinales (poutre entière)</h2>
       <div class="plot" id="plot-M"></div><div class="plot" id="plot-V"></div><div class="plot" id="plot-R" style="min-height:300px"></div>
     </div>
-    <div class="card"><h2>Répartition transversale</h2>
+    <div class="card full-only"><h2>Répartition transversale</h2>
       <div class="toolbar"><label>Travée pour K(y) <select id="span-select"></select></label></div>
       <div class="plot" id="plot-K"></div>
       <div class="plot" id="plot-mx"></div>
@@ -124,21 +154,21 @@
       <div class="toolbar"><label>Surface <select id="surface-which"><option value="mxMax">m_x max</option><option value="mxMin">m_x min</option></select></label></div>
       <div class="plot" id="plot-3d" style="min-height:430px"></div>
     </div>
-    <div class="card"><h2>Ferraillage longitudinal par mètre</h2>
+    <div class="card full-only"><h2>Ferraillage longitudinal par mètre</h2>
       <div class="toolbar"><label>Référentiel <select id="design-ref"><option value="EC">Eurocodes (EC2)</option><option value="F61">Fascicule 61 + BAEL 91</option></select></label></div>
       <div class="plot" id="plot-As"></div>
       <div id="design-tables"></div>
     </div>
-    <div class="card"><h2>Flexion transversale et aciers transversaux</h2>
+    <div class="card full-only"><h2>Flexion transversale et aciers transversaux</h2>
       <div class="toolbar"><label>Travée <select id="trans-span"></select></label><label>Référentiel <select id="trans-ref"><option value="EC">Eurocodes (EC2)</option><option value="F61">Fascicule 61 + BAEL 91</option></select></label></div>
       <div class="plot" id="plot-my"></div>
       <div id="trans-tables"></div>
     </div>
-    <div class="card"><h2>Lignes d'influence</h2>
+    <div class="card full-only"><h2>Lignes d'influence</h2>
       <div class="toolbar"><label>Section <select id="section-select"></select></label></div>
       <div class="plot" id="plot-IL"></div>
     </div>
-    <div class="card"><h2>Tableaux</h2><div id="tables"></div></div>
+    <div class="card full-only"><h2>Tableaux</h2><div id="tables"></div></div>
   </div>
 </main>
 <script type="module" src="./web/app.js"></script>
