@@ -53,7 +53,7 @@ export async function buildReport(st) {
 </style></head><body>
 <div class="noprint" style="margin-bottom:12px"><button onclick="window.print()" style="padding:8px 14px;font:inherit">Imprimer / enregistrer en PDF</button></div>
 <h1>Note de calcul — pont-dalle en béton armé (PSI-DA)</h1>
-<div class="meta">Calcul manuel assisté — moteur PSIDA v${esc(st.version || '0.10')} · ${date} · référentiels : Eurocodes (EN 1990/1991-2/1992) et Fascicule 61 titre II + BAEL 91</div>`;
+<div class="meta">Calcul manuel assisté — moteur PSIDA v${esc(st.version || '0.11')} · ${date} · référentiels : Eurocodes (EN 1990/1991-2/1992) et Fascicule 61 titre II + BAEL 91</div>`;
 
   // 1. Données
   h += `<h2>1. Données</h2><div class="box">
@@ -76,6 +76,11 @@ export async function buildReport(st) {
       const b = st.bearings;
       h += `<h4>Appareils d'appui en élastomère fretté (guide § 3.6, gamme NF T 47.815)</h4><p class="small">${b.nb} appareils par ligne ; P max = réaction de l'appareil le plus chargé avec les coefficients d'inégalité de répartition de PSI-DA 68 § 2.4.2${b.ineq ? ` (k_CP = ${b.ineq.CP.toFixed(3)}, k_A = ${b.ineq.A.toFixed(3)}, k_B = ${b.ineq.B.toFixed(3)})` : ''} ; point fixe à x = ${b.xf.toFixed(1)} m ; ε = ${b.epsSlow}, ΔT = ${b.dT} °C ; H = ${b.H.toFixed(0)} kN (freinage EN 1991-2) ; α = ${(b.alpha0 * 1000).toFixed(0)} mrad + rotation d'appui ; σ ≤ min(15 ; G ab/(t(a+b))), u_g/T ≤ 0,5, u_g/T + H/(G₂ab) ≤ 0,7, T ≤ min(a,b)/5, t·T ≥ α a²/3.</p>
 <table><thead><tr><th>Ligne</th><th>x [m]</th><th>R max / min [kN]</th><th>P max / min [kN]</th><th>u_g [mm]</th><th>H [kN]</th><th>α [mrad]</th><th>Appareil</th><th>σ / σ_lim</th><th>u_g/T ; total</th><th>σ_min</th></tr></thead><tbody>${b.rows.map(r => `<tr><td>${r.i}</td><td>${r.x.toFixed(1)}</td><td>${f0(r.Rmax)} / ${f0(r.Rmin)}</td><td>${f0(r.Pmax)} / ${f0(r.Pmin)}</td><td>${f1(r.ug * 1000)}</td><td>${f1(r.Hb)}</td><td>${f1(r.alpha * 1000)}</td><td>${r.sel ? r.sel.label : 'aucun appareil standard'}</td><td>${r.sel ? f1(r.sel.sig) + ' / ' + f1(r.sel.sigLim) : ''}</td><td>${r.sel ? r.sel.dist1.toFixed(2) + ' ; ' + r.sel.dist2.toFixed(2) : ''}</td><td>${r.sel ? f1(r.sel.sigMin) + (r.sel.antiCheminement ? ' (anti-cheminement)' : '') + (r.sel.glissement ? ' (blocage)' : '') : ''}</td></tr>`).join('')}</tbody></table>`;
+    }
+    if (st.chevetres) {
+      const cm = v => (v * 1e4).toFixed(1);
+      h += `<h4>Chevêtres incorporés (guide PSIDP-EL, annexe 4)</h4><p class="small">ELU 1,35 G + 1,35 LM1 ; ligne d'appui de longueur 2b/sin ψ, consoles c = ${st.chevetres[0].c.toFixed(2)} m, entraxe a = ${st.chevetres[0].a.toFixed(2)} m ; charges de type 1 (réparties) et de type 2 (proches de la ligne, part ζ) ; moments locaux m_c⁻ = M_c⁻/(1,5 c), m_e = 1,5 M_e/e ; aciers par bandes en plus du ferraillage courant.</p>
+<table><thead><tr><th>Ligne</th><th>ζ TS / UDL</th><th>R rive / centre [kN]</th><th>m_c⁻ / m_e⁻ / m_e⁺ [kN·m/m]</th><th>Face sup. ①/②/③ [cm²/m]</th><th>Face inf. ①'/②' [cm²/m]</th></tr></thead><tbody>${st.chevetres.map(r => `<tr><td>${r.i}</td><td>${r.zetas.map(z => z.toFixed(2)).join(' / ')}</td><td>${f0(r.R1)} / ${f0(r.R2)}</td><td>${f0(r.mc)} / ${f0(r.me_neg)} / ${f0(r.me_pos)}</td><td>${r.bands.top.map(b => cm(b.As)).join(' / ')}</td><td>${r.bands.bot.map(b => cm(b.As)).join(' / ')}</td></tr>`).join('')}</tbody></table>`;
     }
     if (st.hSearch) h += `<h4>Recherche de l'épaisseur minimale vérifiée (Eurocodes)</h4><table><thead><tr><th>h [m]</th><th>A_s inf</th><th>A_s sup</th><th>ρ max [%]</th><th>σc</th><th>x/d</th><th>V_Ed/V_Rd,c</th><th>Verdict</th></tr></thead><tbody>${st.hSearch.rows.map(r => `<tr><td>${r.h.toFixed(2)}</td><td>${cm(r.asBot)}</td><td>${cm(r.asTop)}</td><td>${(Math.max(r.rhoBot, r.rhoTop) * 100).toFixed(2)}</td><td>${f1(r.sigC)}</td><td>${r.xd.toFixed(2)}</td><td>${r.vRatio.toFixed(2)}</td><td>${r.ok ? 'vérifiée' : esc(r.crit.join(', '))}</td></tr>`).join('')}</tbody></table>`;
   }

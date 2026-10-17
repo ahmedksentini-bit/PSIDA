@@ -9,6 +9,7 @@ import { TransverseModel } from '../src/transverse.js';
 import { buildReport } from './report.js';
 import { aideConception, rechercheEpaisseur } from '../src/conception.js';
 import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations } from '../src/bearings.js';
+import { chevetresEC } from '../src/chevetre.js';
 import { applyHelp, readGeometry, elevationInputSVG, crossSectionInputSVG, planSVG, summaryHTML, zoningPlanSVG } from './schema.js';
 import { parseAxles, vehicleEnvelope, provisionalProfile, ANNEX_A_VEHICLES, dynLM3 } from '../src/vehicles.js';
 import { designSingleActionEC } from '../src/design.js';
@@ -175,6 +176,7 @@ function compute(p) {
     { id: 'trott', label: 'Trottoirs 1,5 kN/m²', res: f61.trottoir, ref: 'F61' },
   ];
   if (thermal) cases.push({ id: 'therm', label: 'Gradient thermique (±)', res: { ...thermal, Vmax: thermal.Vmax, Vmin: thermal.Vmin }, ref: 'EC' }, { id: 'settle', label: 'Tassements aléatoires (±)', res: settle, ref: 'EC' });
+  const chevetres = chevetresEC({ deck, perm, ec, n: bearings.nb, psi: p.concept.psi, cover: p.mat.c, phi: p.mat.phiT, fck: p.mat.fck, fyk: p.mat.fyk });
   const concept = aideConception(conceptInput(p), { deck, perm, design: design.EC, transDesign: transDesign.EC });
   const extra = computeExtra(p, deck, perm, ec, thermal, settle, design.EC, bearings);
   // plan de ferraillage sur l'enveloppe des profils (définitif, chantier, LM3)
@@ -189,7 +191,7 @@ function compute(p) {
   }
   const rebar = rebarPlan({ deck, design: env, trans: transDesign.EC, opt: { fck: p.mat.fck, fyk: p.mat.fyk, phiLong: Math.round(p.mat.phi * 1000), phiTrans: Math.round(p.mat.phiT * 1000) } });
   rebar.governing = governing;
-  return { rebar, p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transF, transELU, transDesign, concept, bearings, extra, dt: (performance.now() - t0) / 1000 };
+  return { rebar, p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transF, transELU, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
 }
 
 /** Aide à la conception seule : géométrie, charges permanentes et règles du guide (quelques dixièmes de seconde). */
@@ -210,7 +212,7 @@ function renderConception(st) {
   if (c.type === 'DA' && c.epaisseur.abaque) abaquePlot($('#plot-abaque'), st.deck.spans, c.epaisseur.abaque, c.epaisseur.k || 1, ABAQUES);
   else Plotly.purge($('#plot-abaque'));
   // appareils d'appui
-  $('#concept-bearings').innerHTML = st.bearings ? bearingsTable(st) : '<p class="small">Disponible après le calcul complet (réactions ELS caractéristiques avec trafic).</p>';
+  $('#concept-bearings').innerHTML = st.bearings ? bearingsTable(st) + (st.chevetres ? chevetresTable(st) : '') : '<p class="small">Disponible après le calcul complet (réactions ELS caractéristiques avec trafic).</p>';
   // variantes de travure
   const tv = c.travures;
   let t = `<p class="small">Longueur entre appuis extrêmes L = ${c.Ltot.toFixed(1)} m ; rives à 0,7 fois la travée adjacente (§ 2.1.1), travées décroissantes vers les culées ; épaisseur indicative par l'élancement du guide (B${st.p.mat.fck}). « Adopter » recopie la travure (et l'épaisseur indicative) dans le formulaire.</p>
@@ -237,6 +239,16 @@ function bearingsTable(st) {
   }
   h += `</tbody></table><p class="small">Désignation a×b×n(t+ts) : dimensions efficaces en plan [mm], n feuillets d'élastomère de t mm et frettes de ts mm (hauteur totale avec frettes entre parenthèses). Les appareils sont supposés identiques sur une ligne et libres (pas de point fixe mécanique) ; prévoir bossages, taquets et 5 cm minimum au bord (figure § 3.6.1). Prédimensionnement à confirmer selon la norme en vigueur (NF EN 1337-3).</p>`;
   return h;
+}
+
+function chevetresTable(st) {
+  const cm = v => (v * 1e4).toFixed(1), f0 = v => v.toFixed(0), f2 = v => v.toFixed(2);
+  let h = `<h3>Chevêtres incorporés et réaction par appareil (annexe 4 du guide PSIDP-EL)</h3><p class="small">ELU fondamental 1,35 G + 1,35 LM1. Ligne d'appui de longueur B = 2b/sin ψ, ${st.chevetres[0].n} appareils à a = ${f2(st.chevetres[0].a)} m (le long de la ligne), consoles c = ${f2(st.chevetres[0].c)} m. Charges de type 1 (permanentes et trafic éloigné) réparties comme une charge uniforme, de type 2 (trafic à moins de d de la ligne) comme sur une poutre sur appuis : d = max[a + c ; (a + e)/2 ; min(B/2 ; L)], ζ_UDL = (d/L)(2 − d/L), ζ_TS = (1 − d/2L)·P_d/S_q. Moments du chevêtre par poutre continue sur les appareils (consoles c), moments locaux m_c⁻ = M_c⁻/(1,5 c), m_e = 1,5 M_e/e ; ferraillage par bandes (§ 6.2) en plus du ferraillage courant de la dalle, d = ${f2(st.chevetres[0].dEff)} m. Culées : adaptation de la règle (L = about + demi-travée de rive).</p>
+  <table><thead><tr><th>Ligne</th><th>L [m]</th><th>d [m]</th><th>ζ TS / UDL</th><th>R rive / centre ELU [kN]</th><th>R moyen [kN]</th><th>M_c⁻ / M_e⁻ / M_e⁺ [kN·m]</th><th>m_c⁻ / m_e⁻ / m_e⁺ [kN·m/m]</th><th>Face sup. ① / ② / ③ [cm²/m]</th><th>Face inf. ①' / ②' [cm²/m]</th></tr></thead><tbody>`;
+  for (const r of st.chevetres) {
+    h += `<tr><td>${r.i === 0 || r.i === st.chevetres.length - 1 ? 'Culée' : 'Pile'} ${r.i}</td><td>${f2(r.L)}</td><td>${f2(r.d)}</td><td>${r.zetas.map(f2).join(' / ')}</td><td>${f0(r.R1)} / ${f0(r.R2)}</td><td>${f0(r.Rmoy)}</td><td>${f0(r.Mc)} / ${f0(r.Me_neg)} / ${f0(r.Me_pos)}</td><td>${f0(r.mc)} / ${f0(r.me_neg)} / ${f0(r.me_pos)}</td><td>${r.bands.top.map(b => `${cm(b.As)} <span class="small">(${f2(b.width)} m)</span>`).join(' / ')}</td><td>${r.bands.bot.map(b => `${cm(b.As)} <span class="small">(${f2(b.width)} m)</span>`).join(' / ')}</td></tr>`;
+  }
+  return h + `</tbody></table><p class="small">Largeurs des bandes mesurées perpendiculairement à la ligne d'appui, centrées sur elle : ① 2/3·max(c, a, e), ② max(2c, a, e), ③ 2·max(a, e, c) (face supérieure) ; ①' 2/3·max(a, e), ②' 2·max(a, e) (face inférieure). Valeurs à cumuler avec le ferraillage courant en travée au-delà des bandes ① (guide PSIDP-EL, annexe 4, § 6.2).</p>`;
 }
 
 async function runThicknessSearch() {
@@ -533,7 +545,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!state) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.10', hSearch: lastSearch });
+    const html = await buildReport({ ...state, version: '0.11', hSearch: lastSearch });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');

@@ -155,9 +155,10 @@ Chaque document a été lu en entier et confronté à l'outil ; les tests corres
 | **PSI-DA 68 – Méthode de calcul** (SETRA 1968-73) | formules : foyers, L_eq (flèches, 10⁻⁹), K (10⁻¹³), δ, Bc à 2e camion libre, ligne d'influence de poutre à infinité de travées (inégalité de répartition) | conforme ; coefficients d'inégalité de répartition introduits (reproduisent la note PSIDA.EL à 0,3–1 %) ; δ de culée ; dalle droite équivalente au biais en flexion transversale ; trottoirs ×3 | `psida68.test.js` |
 | **Pont de Noé** (COMETE/ICI 2012, VIPP 4 × 33 m, PONTYPE/PAP ; note d'appuis EN 1337-3) | K et μ₁₋₃₋₅ pour α = 0,148 (4 fibres × 105 points), coefficients A/Bc/Bt/Mc120/trottoirs, A(l), a1, a2, bc, δ (G moyen), moments par poutre, freinage F61, appareil 400 × 400 | K à 10⁻³ avec l'interpolation √α (désormais par défaut) ; tables a1/a2/bc/bt de la classe 1 confirmées ; l'outil (BT4 1989) est plus sévère que l'EN 1337-3 en distorsion | `noe.test.js` |
 | **Guide « Ponts-dalles » 1989** (relecture page par page, 40 règles) | élancements, abaques, travures, abouts, minimum transversal, chevêtres, bords libres, angles, appareils d'appui, biais | conforme sauf : élancement PSI.DP à 2 travées inversé, abaque BA (rive la plus courte), minimum 1,3η par travée, appareil glissant — corrigés | `guide89.test.js` |
+| **Guide PSIDP-EL, note modèle complète et annexes 2 à 6** (scans fournis) | coefficients d'inégalité de répartition de la note (p. 52, 3 et 4 appareils, CP / A / Bc / Mc120), entraxe E/sinψ/(n − 0,1), moment de chevêtre R·ℓ/(12 e) ; annexe 4 : coefficients s(α), t(α), u, parts rive/centre, d, ζ, bandes de ferraillage | coefficients à 0,5 % (Bc 2,057 / 2,162 contre 2,055 / 2,161) ; annexe 4 implémentée (`chevetre.js`) et recalée sur les rapports rive/centre du mémoire (CP et A à 0,1 %) ; chevêtres incorporés calculés pour chaque ligne d'appui | `chevetre.test.js` |
 | **MRB-EL** (SETRA 1995, biais et courbes) | domaine de la méthode du pont droit, ν = 0 pour les efforts BAEL | compatible avec H6 ; le texte en ligne s'arrête au bordereau (pas d'exemple chiffré exploitable) | — |
 
-Restent hors périmètre : la précontrainte (PSIDP.EL), les chevêtres incorporés (annexe 4 de PSIDP-EL, absente du texte disponible), la
+Restent hors périmètre : la précontrainte (PSIDP.EL), la
 vérification NF EN 1337-3 des appareils d'appui (l'outil applique le BT4 du guide 1989, plus sévère en distorsion lente), les tableaux a1/bc
 des classes 2 et 3 (aucun document de la série ne les imprime), la flexion transversale sous roues (PSI-DA 68 et PSIDA.EL prennent des roues
 ponctuelles transversalement et le seul tandem arrière de Bc : l'outil diffuse à 45° et charge tout le convoi — ±10 à 20 % selon la fibre).
@@ -194,7 +195,7 @@ ponctuelles transversalement et le seul tandem arrière de Bc : l'outil diffuse 
 
 Bibliographie : Bareš & Massonnet (1966) ; Pücher (1977) ; Homberg (1968) ; Calgaro & Virlogeux ; Hambly (1991) ; O'Brien, Keogh & O'Connor (2014) ; EN 1991-2, EN 1992-1-1, EN 1992-2 ; Fascicule 61 titre II ; BAEL 91.
 
-## 4. Vérifications internes déjà en place (`npm test`, 85 tests)
+## 4. Vérifications internes déjà en place (`npm test`, 88 tests)
 
 - Poutre : PL/4 ; −qL²/8 et 9/128·qL² (2 travées) ; −qL²/10, 0,08 qL², 0,025 qL² (3 travées) ; enveloppe une travée chargée 0,0957 qL² ; convoi glissant ; portées équivalentes 0,8L / 0,447L.
 - Guyon-Massonnet : conditions de bord libre exactes, saut de Y''' = 1 sous la charge, flèche moyenne = poutre (∫K = 2b à 10⁻⁵), réciprocité K(y,e) = K(e,y), symétrie, limite θ → 0 ⇒ K = 1, continuité en charge de bord, μ nul aux bords, ∫m_x dy = moment de poutre (séries de Fourier).
