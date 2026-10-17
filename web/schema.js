@@ -150,14 +150,14 @@ export function elevationInputSVG(g) {
 
 /** Coupe transversale : dalle et chanfreins, chaussée, trottoirs, charges permanentes, voies, appareils d'appui, ordonnées. */
 export function crossSectionInputSVG(g) {
-  const W = 1000, H = 430;
+  const W = 1000, H = 440;
   if (!g.width || !g.h) return `<svg viewBox="0 0 ${W} 60" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif" font-size="13" fill="currentColor"><text x="20" y="35">Saisir la largeur et l'épaisseur pour voir la coupe.</text></svg>`;
   const b = g.width / 2, h = g.h;
   const m = { l: 70, r: 110 }, usable = W - m.l - m.r;
   const sy = y => m.l + (y + b) / (2 * b) * usable;
   const scale = usable / (2 * b);
   const hPx = Math.max(18, Math.min(70, h * scale));
-  const yTop = 200;
+  const yTop = 210;
   let s = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif" font-size="12" fill="currentColor" role="img" aria-label="Coupe transversale">`;
   s += `<defs><marker id="arrS" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn, #9a5b00)"/></marker><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="var(--warn, #9a5b00)" stroke-width="1"/></pattern></defs>`;
   s += `<text x="${m.l}" y="22" font-weight="600">Coupe transversale droite (perpendiculaire aux bords libres)</text>`;
@@ -172,13 +172,26 @@ export function crossSectionInputSVG(g) {
     s += `<text x="${(X1 + X2) / 2}" y="${yb - 3}" text-anchor="middle" fill="var(--warn, #9a5b00)" font-size="11">q = ${fr(bd.q)} kN/m² sur [${fr(bd.y1)} ; ${fr(bd.y2)}]${bd.kmin !== 1 || bd.kmax !== 1 ? ` (k ${bd.kmin}/${bd.kmax})` : ''}</text>`;
   });
   // charges linéiques
+  // charges linéiques : étiquettes étagées pour éviter les chevauchements (charges voisines)
   const yLines = Math.max(70, yTop - 28 - 18 * g.bands.length - 24);
-  g.lines.forEach((l, i) => {
-    const X = sy(l.e), yl = yLines - (i % 2) * 16;
+  const labels = g.lines.map((l, i) => {
+    const text = `g = ${fr(l.g)} kN/m @ y = ${fr(l.e)}${l.kmin !== 1 || l.kmax !== 1 ? ` (k ${l.kmin}/${l.kmax})` : ''}`;
+    const X = sy(l.e), wTxt = text.length * 6.2;
     const anchor = X < 160 ? 'start' : X > W - 160 ? 'end' : 'middle';
-    s += `<line x1="${X}" y1="${yl}" x2="${X}" y2="${yTop - 12}" stroke="var(--warn, #9a5b00)" stroke-width="1.6" marker-end="url(#arrS)"/>`;
-    s += `<text x="${X}" y="${yl - 4}" text-anchor="${anchor}" fill="var(--warn, #9a5b00)" font-size="11">g = ${fr(l.g)} kN/m @ y = ${fr(l.e)}${l.kmin !== 1 || l.kmax !== 1 ? ` (k ${l.kmin}/${l.kmax})` : ''}</text>`;
-  });
+    const x1 = anchor === 'start' ? X : anchor === 'end' ? X - wTxt : X - wTxt / 2, x2 = x1 + wTxt;
+    return { i, l, text, X, anchor, x1, x2, level: 0 };
+  }).sort((p, q) => p.X - q.X);
+  const levels = [];
+  for (const lb of labels) {
+    let lv = 0;
+    while (levels[lv] && levels[lv].some(o => !(lb.x2 < o.x1 - 6 || lb.x1 > o.x2 + 6))) lv++;
+    (levels[lv] = levels[lv] || []).push(lb); lb.level = lv;
+  }
+  for (const lb of labels) {
+    const yl = yLines - lb.level * 16;
+    s += `<line x1="${lb.X}" y1="${yl}" x2="${lb.X}" y2="${yTop - 12}" stroke="var(--warn, #9a5b00)" stroke-width="1.6" marker-end="url(#arrS)"/>`;
+    s += `<text x="${lb.X}" y="${yl - 4}" text-anchor="${lb.anchor}" fill="var(--warn, #9a5b00)" font-size="11">${esc(lb.text)}</text>`;
+  }
   // trottoirs
   for (const fw of g.footways) {
     s += `<rect x="${sy(fw.y1)}" y="${yTop - 10}" width="${sy(fw.y2) - sy(fw.y1)}" height="10" fill="var(--footway, #c7ccd6)" stroke="currentColor" stroke-width="0.8"/>`;
