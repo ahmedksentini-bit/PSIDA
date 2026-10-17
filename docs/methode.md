@@ -83,13 +83,17 @@ par travée on obtient les **lignes d'influence** de M, V et des réactions, pui
 
 * charge répartie q : intégrale de la ligne d'influence sur ses parties positives (max) ou négatives (min) —
   EN 1991-2 §4.3.2 autorise de ne charger que les zones défavorables ;
-* A(l) du Fascicule 61 : intensité fonction de la longueur chargée, donc énumération des travées chargées ;
+* A(l) du Fascicule 61 : intensité fonction de la longueur chargée, donc énumération des zones de même signe de la ligne
+  d'influence (travées, parties de travées entre zéros, abouts), l = somme des longueurs chargées ;
+* Mc120 : convoi d'engins à espacement libre (distance libre ≥ 30,50 m), même programmation dynamique que Bc ;
+* chaque enveloppe est ventilée par travée porteuse, ce qui permet d'appliquer à chaque charge le K et le δ de sa travée (Fasc. 61) ;
 * convois (TS, Bt, Mc120, D240) : glissement pas à pas dans les deux sens ;
 * Bc : deux camions par file à espacement libre (pas ≥ 10,50 m entre essieux avant, Fasc. 61 art. 5.2) — programmation
   dynamique sur la grille de positions (`trainEnvelope`), chaque camion pouvant aussi sortir de l'ouvrage.
 
-Les abouts (consoles au-delà des culées) n'entrent que par les charges permanentes : M = −g a²/2 imposé
-aux nœuds extrêmes. Vérification : 2 travées égales sous q → M_appui = −qL²/8, M_travée,max = 9/128 qL² ;
+Les abouts (consoles au-delà des culées) portent les charges permanentes (M = −g a²/2 imposé aux nœuds extrêmes) et
+le trafic : une charge unité à la distance t de l'appui extrême équivaut à un moment −t au nœud extrême plus la charge
+posée sur l'appui. Vérification : 2 travées égales sous q → M_appui = −qL²/8, M_travée,max = 9/128 qL² ;
 3 travées → −qL²/10.
 
 ## 2. Travée équivalente et paramètre θ

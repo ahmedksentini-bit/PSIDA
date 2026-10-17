@@ -118,7 +118,24 @@ function deltaDynRaw(L, G, S) {
  * poids total 1100 kN → 550 kN par chenille → 90,16 kN/m par chenille. Un seul engin par voie, dans le sens
  * longitudinal un seul convoi à la fois (distance minimale entre convois ≥ 30,50 m).
  */
-export const MC120 = { P: 1100, trackLength: 6.1, trackWidth: 1.0, trackSpacing: 3.3, qTrack: 550 / 6.1 };
+export const MC120 = { P: 1100, trackLength: 6.1, trackWidth: 1.0, trackSpacing: 3.3, qTrack: 550 / 6.1, gapMin: 30.5 };
+
+/**
+ * S pour δ d'un convoi de charges réparties (Mc120 : engins de P sur len, pas ≥ pitch) : poids maximal plaçable sur L.
+ * (1 100 kN tant que L ≤ 36,60 m, partiel si L < 6,10 m.)
+ */
+export function maxStripTrainLoad(L, len, pitch, P) {
+  const q = P / len;
+  let best = 0;
+  const nv = Math.ceil(L / pitch) + 2;
+  // fenêtre de longueur L commençant au début d'un engin ou finissant à la fin d'un engin
+  for (const startAt of [0, 1]) for (let k = 0; k < nv; k++) {
+    const a = startAt === 0 ? k * pitch : k * pitch + len - L, b = a + L;
+    let w = 0; for (let i = 0; i < nv + 2; i++) { const s0 = i * pitch, s1 = s0 + len; w += q * Math.max(0, Math.min(b, s1) - Math.max(a, s0)); }
+    best = Math.max(best, w);
+  }
+  return best;
+}
 
 /** Convoi exceptionnel D240 (art. 10) : 2400 kN uniformément répartis sur 18,60 × 3,20 m ; sans majoration dynamique. */
 export const D240 = { P: 2400, length: 18.6, width: 3.2, q: 2400 / 18.6 };

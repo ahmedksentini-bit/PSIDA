@@ -22,7 +22,9 @@ pour les moments transversaux « dans la direction des aciers » de l'annexe 12A
 `test/chamoa.test.js`, `test/skew.test.js` et `docs/hypotheses.md`. Pour le référentiel Fascicule 61 / BAEL, la note
 de calcul commentée **PSIDA.EL** du SETRA (version 84-1) est reproduite à 0,1–0,5 % pour les lignes d'influence, les
 dénivellations d'appui, la travée équivalente, les coefficients de répartition, A(l), Bc/Bt, Mc120 en travée, les
-combinaisons ELS/ELU et la section d'acier sur appui (`test/psidael.test.js`, `docs/hypotheses.md` § 1 quater).
+combinaisons ELS/ELU et la section d'acier sur appui (`test/psidael.test.js`, `docs/hypotheses.md` § 1 quater). Sont aussi
+reproduits la 2e note PSIDA.EL du guide PSI-PAP, la note modèle PSIDP.EL (hors précontrainte), les formules de PSI-DA 68,
+la répartition PONTYPE/PAP du Pont de Noé et les règles du guide 1989 relues page par page (§ 1 quinquies).
 
 **Aide à la conception** : les règles du guide SETRA *Ponts-dalles – guide de conception* (1989) — domaine
 d'emploi, **abaques d'épaisseur numérisés** (PSI.DA à 1, 2, 3 et 4 travées, pages 65–67 ; plateaux PSI.DP pages 59–61),

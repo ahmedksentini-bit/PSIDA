@@ -68,7 +68,8 @@ test('biais (§ 2.4, § 3.4) : validité Guyon, options de ferraillage, minimum 
   assert.equal(bad.items[0].level, 'warn', 'φ < 70 gr : Guyon non valable');
   assert.ok(bad.items[1].text.includes('option 2'));
   const mt = minTransversalGuide({ width: 12, spans: [10, 15, 15, 10], h: 0.75, psi: 80 });
-  rel(mt.rhoBase, 1.04e-3, 1e-3, '1,3 n ‰'); rel(mt.k, 1 / Math.sin(0.4 * Math.PI), 1e-9, '1/sin ψ');
+  // § 3.4.3 travée par travée : rives de 10 m → 1,56 ‰, travées de 15 m → 1,04 ‰ (guide p. 80, note PSIDP.EL)
+  rel(mt.rhoBase, 1.56e-3, 1e-3, '1,3 η ‰ (travée la plus courte)'); rel(mt.perSpan[1] / mt.k, 1.04e-3, 1e-3, '1,3 η ‰ travée de 15 m'); rel(mt.k, 1 / Math.sin(0.4 * Math.PI), 1e-9, '1/sin ψ');
   rel(minTransversalGuide({ width: 20, spans: [10], h: 0.5, psi: 100 }).rho, 2e-3, 1e-9, 'plafond 2 ‰');
   rel(longueurAbout({ type: 'DA', D: 0.025 }), 0.475, 1e-9, 'about BA 0,1 + 15 D');
   rel(longueurAbout({ type: 'DP', psi: 50 }), 1.0, 1e-9, 'about BP 0,5 (1 + cot 50 gr)');

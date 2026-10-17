@@ -76,19 +76,27 @@ export class ContinuousBeam {
       M0[s] = Ml;      // moment horaire à gauche = fibre inférieure tendue
       ML[s] = -Mr;     // moment horaire à droite = fibre supérieure tendue
     }
-    return { M0, ML };
+    return { M0, ML, theta };
   }
 
-  /** Grille des positions de charge : nGrid points par travée + extrémité finale. */
+  /**
+   * Grille des positions de charge : abouts (consoles au-delà des appuis extrêmes, chargés aussi par le trafic —
+   * pratique PSIDA.EL / PSIDP.EL), nGrid points par travée, extrémité finale.
+   */
   _buildGrid() {
     const pos = [];
+    const [aL, aR] = this.overhangs || [0, 0];
+    const nOv = a => Math.max(2, Math.ceil(a / (Math.min(...this.spans) / this.nGrid)));
+    if (aL > 1e-9) { const m = nOv(aL); for (let k = m; k >= 1; k--) pos.push({ j: -1, a: aL * k / m, x: -aL * k / m, over: 'L' }); }
     for (let j = 0; j < this.n; j++) {
       const L = this.spans[j];
       for (let i = 0; i < this.nGrid; i++) pos.push({ j, a: L * i / this.nGrid, x: this.x0[j] + L * i / this.nGrid });
     }
     pos.push({ j: this.n - 1, a: this.spans[this.n - 1], x: this.Ltot });
+    if (aR > 1e-9) { const m = nOv(aR); for (let k = 1; k <= m; k++) pos.push({ j: this.n, a: aR * k / m, x: this.Ltot + aR * k / m, over: 'R' }); }
     this.positions = pos;
     this.xs = pos.map(p => p.x);
+    this.xMin = this.xs[0]; this.xMax = this.xs[this.xs.length - 1];
   }
 
   /** Sections de calcul : (nSec+1) par travée, abscisse locale xi. */
@@ -115,11 +123,35 @@ export class ContinuousBeam {
     const ILVm = Array.from({ length: nS }, () => new Float64Array(nP));
     const ILVp = Array.from({ length: nS }, () => new Float64Array(nP));
     const ILR = Array.from({ length: nSup }, () => new Float64Array(nP));
+    // ILT[i][p] : rotation du nœud i (horaire +) pour une charge unité, rigidités relatives EI (diviser par EI réel)
+    const ILT = Array.from({ length: nSup }, () => new Float64Array(nP));
 
+    // charge unité sur un about à la distance t de l'appui extrême : moment −t imposé au nœud extrême (réponse linéaire)
+    // + charge directe sur l'appui extrême
+    const unitNode = node => { const Mn = new Array(this.n + 1).fill(0); Mn[node] = -1; return this._responseToNodalMoments(Mn); };
+    const uL = unitNode(0), uR = unitNode(this.n);
     for (let p = 0; p < nP; p++) {
-      const { j, a } = this.positions[p];
+      const { j, a, over } = this.positions[p];
+      if (over) {
+        const u = over === 'L' ? uL : uR, t = a;
+        for (let i = 0; i < nSup; i++) ILT[i][p] = t * u.theta[i];
+        for (let s = 0; s < nS; s++) {
+          const { span, xi } = this.sections[s];
+          const slope = t * (u.ML[span] - u.M0[span]) / this.spans[span];
+          ILM[s][p] = t * u.M0[span] + slope * xi; ILVm[s][p] = slope; ILVp[s][p] = slope;
+        }
+        for (let i = 0; i < nSup; i++) {
+          let R = 0;
+          if (i < this.n) R += t * (u.ML[i] - u.M0[i]) / this.spans[i];
+          if (i > 0) R -= t * (u.ML[i - 1] - u.M0[i - 1]) / this.spans[i - 1];
+          if ((over === 'L' && i === 0) || (over === 'R' && i === this.n)) R += 1;
+          ILR[i][p] = R;
+        }
+        continue;
+      }
       const Lj = this.spans[j];
-      const { M0, ML } = this.endMomentsPoint(j, a, 1);
+      const { M0, ML, theta } = this.endMomentsPoint(j, a, 1);
+      for (let i = 0; i < nSup; i++) ILT[i][p] = theta[i];
       const atSupportLeft = a === 0;                 // charge exactement sur l'appui j
       const atSupportRight = a === Lj;               // charge exactement sur l'appui j+1 (dernier point)
 
@@ -156,7 +188,20 @@ export class ContinuousBeam {
         ILR[i][p] = R;
       }
     }
-    this.ILM = ILM; this.ILVm = ILVm; this.ILVp = ILVp; this.ILR = ILR;
+    // sauts des lignes d'influence de l'effort tranchant au droit de la section : limites à gauche et à droite
+    // (extrapolation linéaire des deux points voisins, erreur O(h²)), utilisées par integrateIL et ilAt — sinon la
+    // grille étale le saut unité sur une maille et l'effort tranchant sous charge répartie perd g·h/2
+    const xs = this.xs;
+    this.sections.forEach((sec, s) => {
+      const p = xs.findIndex(x => Math.abs(x - sec.x) < 1e-9);
+      if (p < 0) return;
+      for (const il of [ILVm[s], ILVp[s]]) {
+        const left = p >= 2 ? 2 * il[p - 1] - il[p - 2] : il[p];
+        const right = p + 2 < nP ? 2 * il[p + 1] - il[p + 2] : il[p];
+        if (Math.abs(right - left) > 0.5) il.jump = { p, left, right };
+      }
+    });
+    this.ILM = ILM; this.ILVm = ILVm; this.ILVp = ILVp; this.ILR = ILR; this.ILT = ILT;
   }
 
   /** Index de la section la plus proche de (travée j, fraction f de la portée). */
@@ -178,13 +223,16 @@ export class ContinuousBeam {
   /** Valeur interpolée d'une ligne d'influence en x (0 hors de l'ouvrage). */
   ilAt(il, x) {
     const xs = this.xs;
-    if (x < 0 || x > this.Ltot) return 0;
+    if (x < this.xMin || x > this.xMax) return 0;
     // recherche dichotomique
     let lo = 0, hi = xs.length - 1;
     while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (xs[mid] <= x) lo = mid; else hi = mid; }
     if (xs[hi] === xs[lo]) return il[lo];
+    const J = il.jump;
+    if (J && x === xs[J.p]) return il[J.p];
     const t = (x - xs[lo]) / (xs[hi] - xs[lo]);
-    return il[lo] + t * (il[hi] - il[lo]);
+    const vlo = J && lo === J.p ? J.right : il[lo], vhi = J && hi === J.p ? J.left : il[hi];
+    return vlo + t * (vhi - vlo);
   }
 
   /**
@@ -195,13 +243,15 @@ export class ContinuousBeam {
     const xs = this.xs;
     let s = 0;
     const clip = v => (sign > 0 ? Math.max(v, 0) : sign < 0 ? Math.min(v, 0) : v);
+    const J = il.jump;
     for (let p = 0; p < xs.length - 1; p++) {
       let x1 = xs[p], x2 = xs[p + 1];
       if (x2 <= xa || x1 >= xb) continue;
-      let v1 = il[p], v2 = il[p + 1];
+      const a1 = J && p === J.p ? J.right : il[p], a2 = J && p + 1 === J.p ? J.left : il[p + 1];
+      let v1 = a1, v2 = a2;
       // restriction de l'intervalle à [xa, xb]
-      if (x1 < xa) { v1 = v1 + (v2 - v1) * (xa - x1) / (x2 - x1); x1 = xa; }
-      if (x2 > xb) { v2 = il[p] + (il[p + 1] - il[p]) * (xb - xs[p]) / (xs[p + 1] - xs[p]); x2 = xb; }
+      if (x1 < xa) { v1 = a1 + (a2 - a1) * (xa - x1) / (x2 - x1); x1 = xa; }
+      if (x2 > xb) { v2 = a1 + (a2 - a1) * (xb - xs[p]) / (xs[p + 1] - xs[p]); x2 = xb; }
       const h = x2 - x1;
       if (h <= 0) continue;
       if (sign === 0 || (v1 >= 0 && v2 >= 0 && sign > 0) || (v1 <= 0 && v2 <= 0 && sign < 0)) {
@@ -225,50 +275,135 @@ export class ContinuousBeam {
    * @returns {{max:number, min:number}}
    */
   udlEnvelope(il, q) {
-    return { max: q * this.integrateIL(il, 0, this.Ltot, +1), min: q * this.integrateIL(il, 0, this.Ltot, -1) };
+    return { max: q * this.integrateIL(il, this.xMin, this.xMax, +1), min: q * this.integrateIL(il, this.xMin, this.xMax, -1) };
+  }
+
+  /** Travée qui porte l'abscisse x (abouts rattachés aux travées de rive). */
+  spanOf(x) {
+    if (x < this.x0[1]) return 0;
+    if (x >= this.x0[this.n - 1]) return this.n - 1;
+    let j = 0; while (j < this.n - 1 && x >= this.x0[j + 1]) j++;
+    return j;
+  }
+
+  /** Intégrale de la ligne d'influence sur [xa, xb] ventilée par travée porteuse (abouts compris dans les rives). */
+  integrateByspan(il, xa, xb, sign = 0) {
+    const parts = new Array(this.n).fill(0);
+    const bnd = [this.xMin, ...this.x0.slice(1, this.n), this.xMax];
+    for (let j = 0; j < this.n; j++) {
+      const a = Math.max(xa, bnd[j]), b = Math.min(xb, bnd[j + 1]);
+      if (b > a) parts[j] = this.integrateIL(il, a, b, sign);
+    }
+    return parts;
   }
 
   /**
-   * Enveloppe d'une charge répartie par travées entières dont l'intensité dépend
-   * de la longueur chargée l (Fasc. 61 titre II, système A(l)).
+   * Enveloppe d'une charge répartie dont l'intensité dépend de la longueur chargée l (Fasc. 61 titre II,
+   * système A(l)) : on charge les zones de même signe de la ligne d'influence — travées entières, parties de
+   * travées délimitées par ses zéros et abouts —, l étant la somme des longueurs chargées (pratique PSIDA.EL /
+   * PSIDP.EL : « longueurs chargées 13,93 et 2,83 m »). Énumération des sous-ensembles de zones de même signe.
    * @param {Float64Array} il ligne d'influence
    * @param {(l:number)=>number} qOfL intensité [kN/m] pour une longueur chargée l [m]
-   * @returns {{max:number, min:number, spansMax:number[], spansMin:number[]}}
+   * @returns {{max, min, spansMax:number[], spansMin:number[], zonesMax, zonesMin, partsMax:number[], partsMin:number[]}}
    */
   spanwiseEnvelope(il, qOfL) {
-    const n = this.n;
-    const perSpan = [];
-    for (let j = 0; j < n; j++) perSpan.push(this.integrateIL(il, this.x0[j], this.x0[j + 1], 0));
-    let max = 0, min = 0, spansMax = [], spansMin = [];
-    for (let mask = 1; mask < (1 << n); mask++) {
-      let l = 0, I = 0; const list = [];
-      for (let j = 0; j < n; j++) if (mask & (1 << j)) { l += this.spans[j]; I += perSpan[j]; list.push(j); }
-      const v = qOfL(l) * I;
-      if (v > max) { max = v; spansMax = list; }
-      if (v < min) { min = v; spansMin = list; }
+    const xs = this.xs, cuts = [];
+    const J = il.jump;
+    for (let p = 0; p < xs.length - 1; p++) {
+      const v1 = J && p === J.p ? J.right : il[p], v2 = J && p + 1 === J.p ? J.left : il[p + 1];
+      if (v1 * v2 < 0) cuts.push(xs[p] + (xs[p + 1] - xs[p]) * v1 / (v1 - v2));
     }
-    return { max, min, spansMax, spansMin };
+    if (J) cuts.push(xs[J.p]);
+    const bounds = [...new Set([this.xMin, ...this.x0, this.xMax, ...cuts].map(v => Math.round(v * 1e9) / 1e9))].sort((a, b) => a - b);
+    const zones = [];
+    for (let k = 0; k < bounds.length - 1; k++) {
+      const x1 = bounds[k], x2 = bounds[k + 1];
+      if (x2 - x1 < 1e-6) continue;
+      const area = this.integrateIL(il, x1, x2, 0);
+      if (Math.abs(area) > 1e-12) zones.push({ x1, x2, len: x2 - x1, area, span: this.spanOf((x1 + x2) / 2) });
+    }
+    const best = sgn => {
+      let set = zones.filter(z => sgn * z.area > 0);
+      // garde-fou combinatoire : au-delà de 16 zones, on écarte les plus petites (effet négligeable)
+      if (set.length > 16) set = set.sort((a, b) => Math.abs(b.area) - Math.abs(a.area)).slice(0, 16);
+      const m = set.length; let v0 = 0, list0 = [], q0 = 0;
+      for (let mask = 1; mask < (1 << m); mask++) {
+        let l = 0, I = 0;
+        for (let i = 0; i < m; i++) if (mask & (1 << i)) { l += set[i].len; I += set[i].area; }
+        const q = qOfL(l), v = q * I;
+        if (sgn * v > sgn * v0) { v0 = v; q0 = q; list0 = set.filter((_, i) => mask & (1 << i)); }
+      }
+      const parts = new Array(this.n).fill(0);
+      for (const z of list0) parts[z.span] += q0 * z.area;
+      return { v: v0, list: list0, parts };
+    };
+    const bM = best(1), bm = best(-1);
+    const spansOf = list => [...new Set(list.map(z => z.span))].sort((a, b) => a - b);
+    return { max: bM.v, min: bm.v, spansMax: spansOf(bM.list), spansMin: spansOf(bm.list),
+      zonesMax: bM.list.map(({ x1, x2 }) => ({ x1, x2 })), zonesMin: bm.list.map(({ x1, x2 }) => ({ x1, x2 })), partsMax: bM.parts, partsMin: bm.parts };
+  }
+
+  /** Contribution par travée porteuse d'un groupe d'essieux placé en x (sens dir). */
+  _axleParts(il, axles, x, dir) {
+    const parts = new Array(this.n).fill(0);
+    for (const ax of axles) { const xa = x + dir * ax.d; const v = this.ilAt(il, xa); if (v) parts[this.spanOf(xa)] += ax.P * v; }
+    return parts;
   }
 
   /**
-   * Enveloppe d'un convoi d'essieux glissant sur l'ouvrage (les deux sens de marche).
+   * Enveloppe d'un convoi d'essieux glissant sur l'ouvrage, abouts compris (les deux sens de marche).
    * @param {Float64Array} il
    * @param {{d:number, P:number}[]} axles distances cumulées depuis le 1er essieu [m], charges [kN]
    * @param {{step?:number}} opt pas de glissement [m] (défaut 0.05)
-   * @returns {{max:number, min:number, xmax:number, xmin:number, dirMax:number, dirMin:number}}
+   * @returns {{max, min, xmax, xmin, dirMax, dirMin, partsMax, partsMin}}
    */
   axleEnvelope(il, axles, { step = 0.05 } = {}) {
     const dmax = Math.max(...axles.map(a => a.d));
     let max = -Infinity, min = Infinity, xmax = 0, xmin = 0, dirMax = 1, dirMin = 1;
     for (const dir of [1, -1]) {
-      for (let x = -dmax; x <= this.Ltot + dmax + 1e-9; x += step) {
+      for (let x = this.xMin - dmax; x <= this.xMax + dmax + 1e-9; x += step) {
         let v = 0;
         for (const ax of axles) v += ax.P * this.ilAt(il, x + dir * ax.d);
         if (v > max) { max = v; xmax = x; dirMax = dir; }
         if (v < min) { min = v; xmin = x; dirMin = dir; }
       }
     }
-    return { max, min, xmax, xmin, dirMax, dirMin };
+    return { max, min, xmax, xmin, dirMax, dirMin, partsMax: this._axleParts(il, axles, xmax, dirMax), partsMin: this._axleParts(il, axles, xmin, dirMin) };
+  }
+
+  /**
+   * Programmation dynamique d'un convoi de nVeh véhicules identiques sur une grille de positions :
+   * extremum de Σ f(x_k) avec x_{k+1} − x_k ≥ off (pas de grille), chaque véhicule pouvant sortir de l'ouvrage
+   * (f = 0 aux extrémités de la grille). Renvoie les positions retenues (indices).
+   */
+  _trainDP(f, off, nVeh) {
+    const n = f.length, out = {};
+    for (const sgn of [1, -1]) {
+      const levels = [];
+      let b = Float64Array.from(f, v => sgn * v);
+      for (let i = n - 2; i >= 0; i--) b[i] = Math.max(b[i], b[i + 1]);
+      levels.push(b);
+      for (let k = 2; k <= nVeh; k++) {
+        const prev = levels[k - 2], nb = new Float64Array(n);
+        for (let i = n - 1; i >= 0; i--) nb[i] = Math.max(sgn * f[i] + (i + off < n ? prev[i + off] : 0), i + 1 < n ? nb[i + 1] : -Infinity);
+        levels.push(nb);
+      }
+      // reconstruction des positions
+      const pos = []; let i = 0;
+      for (let k = nVeh; k >= 1 && i < n; k--) {
+        const lev = levels[k - 1], target = lev[i];
+        let q = i;
+        while (q < n) {
+          const here = sgn * f[q] + (k > 1 ? (q + off < n ? levels[k - 2][q + off] : 0) : 0);
+          if (Math.abs(here - target) < 1e-9 * (1 + Math.abs(target))) break;
+          q++;
+        }
+        if (q >= n) break;
+        pos.push(q); i = q + off;
+      }
+      out[sgn > 0 ? 'max' : 'min'] = { v: sgn * levels[nVeh - 1][0], pos };
+    }
+    return out;
   }
 
   /**
@@ -276,46 +411,59 @@ export class ContinuousBeam {
    * au-delà d'un pas minimal entre essieux avant (Fasc. 61 art. 5.2 : « la distance des deux camions
    * d'une même file est déterminée pour produire l'effet le plus défavorable », camions Bc de 10,50 m
    * d'encombrement → pas ≥ 10,50 m). Chaque véhicule peut aussi sortir de l'ouvrage (contribution nulle).
-   * Programmation dynamique sur la grille de positions (max/min de Σ f(x_k), x_{k+1} − x_k ≥ pitch).
    */
   trainEnvelope(il, axles, { nVeh = 2, pitch = 10.5, step = 0.05 } = {}) {
     const dmax = Math.max(...axles.map(a => a.d));
-    const ext = dmax + pitch * nVeh;
-    const n = Math.ceil((this.Ltot + 2 * ext) / step) + 1;
+    const ext = dmax + pitch * nVeh, x0 = this.xMin - ext;
+    const n = Math.ceil((this.xMax - this.xMin + 2 * ext) / step) + 1;
     const off = Math.round(pitch / step);
-    let max = -Infinity, min = Infinity;
+    let res = { max: -Infinity, min: Infinity, partsMax: null, partsMin: null };
     for (const dir of [1, -1]) {
       const f = new Float64Array(n);
-      for (let i = 0; i < n; i++) { const x = -ext + i * step; let v = 0; for (const ax of axles) v += ax.P * this.ilAt(il, x + dir * ax.d); f[i] = v; }
-      // best_k[i] = extremum de la somme de k véhicules dont le premier est en position ≥ i
-      let bMax = Float64Array.from(f), bMin = Float64Array.from(f);
-      for (let i = n - 2; i >= 0; i--) { bMax[i] = Math.max(bMax[i], bMax[i + 1]); bMin[i] = Math.min(bMin[i], bMin[i + 1]); }
-      for (let k = 2; k <= nVeh; k++) {
-        const nMax = new Float64Array(n), nMin = new Float64Array(n);
-        for (let i = n - 1; i >= 0; i--) {
-          const restMax = i + off < n ? bMax[i + off] : 0, restMin = i + off < n ? bMin[i + off] : 0;
-          nMax[i] = Math.max(f[i] + restMax, i + 1 < n ? nMax[i + 1] : -Infinity);
-          nMin[i] = Math.min(f[i] + restMin, i + 1 < n ? nMin[i + 1] : Infinity);
-        }
-        bMax = nMax; bMin = nMin;
-      }
-      max = Math.max(max, bMax[0]); min = Math.min(min, bMin[0]);
+      for (let i = 0; i < n; i++) { const x = x0 + i * step; let v = 0; for (const ax of axles) v += ax.P * this.ilAt(il, x + dir * ax.d); f[i] = v; }
+      const dp = this._trainDP(f, off, nVeh);
+      const partsOf = pos => pos.reduce((acc, i) => { const pp = this._axleParts(il, axles, x0 + i * step, dir); return acc.map((v, j) => v + pp[j]); }, new Array(this.n).fill(0));
+      if (dp.max.v > res.max) { res.max = dp.max.v; res.partsMax = partsOf(dp.max.pos); }
+      if (dp.min.v < res.min) { res.min = dp.min.v; res.partsMin = partsOf(dp.min.pos); }
     }
-    return { max, min };
+    return res;
   }
 
   /**
    * Enveloppe d'une charge répartie uniforme de longueur finie (chenille, D240…)
-   * glissant sur l'ouvrage : intensité q [kN/m] sur une longueur len.
+   * glissant sur l'ouvrage (abouts compris) : intensité q [kN/m] sur une longueur len.
    */
   stripEnvelope(il, q, len, { step = 0.05 } = {}) {
     let max = -Infinity, min = Infinity, xmax = 0, xmin = 0;
-    for (let x = -len; x <= this.Ltot + 1e-9; x += step) {
-      const v = q * this.integrateIL(il, Math.max(0, x), Math.min(this.Ltot, x + len), 0);
+    for (let x = this.xMin - len; x <= this.xMax + 1e-9; x += step) {
+      const v = q * this.integrateIL(il, Math.max(this.xMin, x), Math.min(this.xMax, x + len), 0);
       if (v > max) { max = v; xmax = x; }
       if (v < min) { min = v; xmin = x; }
     }
-    return { max, min, xmax, xmin };
+    const partsAt = x => this.integrateByspan(il, Math.max(this.xMin, x), Math.min(this.xMax, x + len)).map(v => q * v);
+    return { max, min, xmax, xmin, partsMax: partsAt(xmax), partsMin: partsAt(xmin) };
+  }
+
+  /**
+   * Convoi de charges réparties de longueur len à espacement libre, pas ≥ pitch entre débuts
+   * (Mc120 : F61 titre II art. 9 — distance libre ≥ 30,50 m entre engins, nombre d'engins non limité :
+   * pitch = 6,10 + 30,50 = 36,60 m). nVeh par défaut : autant que l'ouvrage peut en porter.
+   */
+  stripTrainEnvelope(il, q, len, { pitch = 36.6, nVeh = null, step = 0.05 } = {}) {
+    const nv = nVeh || Math.max(1, Math.ceil((this.xMax - this.xMin + len) / pitch) + 1);
+    const ext = len + pitch, x0 = this.xMin - ext;
+    const n = Math.ceil((this.xMax - this.xMin + 2 * ext) / step) + 1;
+    const off = Math.round(pitch / step);
+    const f = new Float64Array(n);
+    for (let i = 0; i < n; i++) { const x = x0 + i * step; const a = Math.max(this.xMin, x), b = Math.min(this.xMax, x + len); f[i] = b > a ? q * this.integrateIL(il, a, b, 0) : 0; }
+    const dp = this._trainDP(f, off, nv);
+    const partsOf = pos => pos.reduce((acc, i) => { const x = x0 + i * step; const a = Math.max(this.xMin, x), b = Math.min(this.xMax, x + len); const pp = b > a ? this.integrateByspan(il, a, b) : new Array(this.n).fill(0); return acc.map((v, j) => v + q * pp[j]); }, new Array(this.n).fill(0));
+    return { max: dp.max.v, min: dp.min.v, partsMax: partsOf(dp.max.pos), partsMin: partsOf(dp.min.pos) };
+  }
+
+  /** Enveloppe d'une charge répartie q sur les zones défavorables, ventilée par travée porteuse. */
+  udlEnvelopeParts(il, q) {
+    return { partsMax: this.integrateByspan(il, this.xMin, this.xMax, +1).map(v => q * v), partsMin: this.integrateByspan(il, this.xMin, this.xMax, -1).map(v => q * v) };
   }
 
   // ---------------------------------------------------------------------------
@@ -340,7 +488,7 @@ export class ContinuousBeam {
       M0[s] = k * (4 * theta[s] + 2 * theta[s + 1]);
       ML[s] = -(k * (2 * theta[s] + 4 * theta[s + 1]));
     }
-    return { M0, ML };
+    return { M0, ML, theta };
   }
 
   /**

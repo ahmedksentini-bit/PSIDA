@@ -8,7 +8,7 @@ import { designEC, designBAEL, designTransverseEC, designTransverseBAEL } from '
 import { TransverseModel } from '../src/transverse.js';
 import { buildReport } from './report.js';
 import { aideConception, rechercheEpaisseur } from '../src/conception.js';
-import { designBearings } from '../src/bearings.js';
+import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations } from '../src/bearings.js';
 import { applyHelp, readGeometry, elevationInputSVG, crossSectionInputSVG, planSVG, summaryHTML, zoningPlanSVG } from './schema.js';
 import { parseAxles, vehicleEnvelope, provisionalProfile, ANNEX_A_VEHICLES, dynLM3 } from '../src/vehicles.js';
 import { designSingleActionEC } from '../src/design.js';
@@ -107,7 +107,7 @@ function computeExtra(p, deck, perm, ec, thermal, settle, design, bearings) {
   }
   const flm = flm3Envelope(deck);
   out.fatigue = fatigueCheck(deck, flm, perm, design, deck.keySections(), x.fat);
-  const pitch = x.bearingPitch || (bearings ? (2 * deck.b - 2 * Math.min(1, deck.b / 3)) / Math.max(bearings.nb - 1, 1) : 3);
+  const pitch = x.bearingPitch || (bearings ? bearingSpacing({ width: 2 * deck.b, psi: p.concept.psi, n: bearings.nb }) : 3);
   out.zonage = zonage({ spans: deck.spans, overhangs: deck.g.overhangs, width: 2 * deck.b, h: deck.h, psi: p.concept.psi, bearingPitch: pitch, optionFers: p.concept.transversePerpendicular ? 2 : 1, cantilever: x.cant ? x.cant.Lc : 0 });
   out.zonage.pitch = pitch;
   return out;
@@ -132,15 +132,39 @@ function compute(p) {
     EC: designEC(deck, perm, ec, { ...p.mat, thermal, settle }),
     F61: designBAEL(deck, perm, f61, { ...p.mat, thermal, settle }),
   };
-  const tm = new TransverseModel(deck, { tRev: p.mat.tRev, nHarm: 15 });
+  const tm = new TransverseModel(deck, { tRev: p.mat.tRev, nHarm: 15, I: p.I });
   const trans = tm.run({ alpha: EC_ALPHA[p.alpha], f61opt: { nRetenue: p.nRetenue, classe: p.classe }, thermal, settle });
+  // Fascicule 61 / BAEL : pratique SETRA — dalle droite équivalente au biais mécanique (PSI-DA 68, PSIDA.EL, PSIDP.EL) et,
+  // en fissuration peu nuisible, ELU avec ν = 0 (béton fissuré) ; l'Eurocode suit CHAMOA (pas de transformation, ν de la dalle)
+  const runF = nu => new TransverseModel(deck, { tRev: p.mat.tRev, nHarm: 15, I: p.I, nu, skewEquivalent: true }).run({ alpha: EC_ALPHA[p.alpha], f61opt: { nRetenue: p.nRetenue, classe: p.classe }, thermal, settle });
+  const skewed = (p.concept.psi || 100) < 100;
+  const transF = skewed ? runF(deck.nu) : trans;
+  const transELU = p.mat.fissuration === 'peu nuisible' && deck.nu > 0 ? runF(0) : null;
   const skewOpt = { psi: p.concept.psi, I: p.I, transversePerpendicular: p.concept.transversePerpendicular };
   const transDesign = {
     EC: designTransverseEC(deck, trans, design.EC, { ...p.mat, phi: p.mat.phiT, phiLong: p.mat.phi, ...skewOpt }),
-    F61: designTransverseBAEL(deck, trans, design.F61, { ...p.mat, phiLong: p.mat.phi, ...skewOpt }),
+    F61: designTransverseBAEL(deck, transF, design.F61, { ...p.mat, phiLong: p.mat.phi, ...skewOpt, transELU }),
   };
   const EI = thermal ? thermal.EI : (p.E || 34000) * 1000 * (p.I || p.deckInput.width * Math.pow(p.deckInput.h, 3) / 12);
-  const bearings = designBearings({ deck, beamComb: design.EC.beam, EI, nPerLine: p.concept.nBearings, xFixed: p.concept.xFixed, epsSlow: p.concept.epsSlow, dT: p.concept.dTu, alphaQ1: ec.alpha.aQ[0], alphaq1: ec.alpha.aq1 });
+  // inégalité de répartition entre appareils d'une ligne (PSI-DA 68 § 2.4.2) : CP, UDL (formule A), tandems TS
+  // (roues des voies 1 à 3, centrées dans des voies de wl, généralisation de la formule B)
+  const nbL = p.concept.nBearings || Math.max(2, Math.round(2 * deck.b / 3));
+  const kc = inequalityCoefficients({ width: 2 * deck.b, chargeable: deck.g.roadway.y2 - deck.g.roadway.y1, n: nbL, psi: p.concept.psi, nLanes: ec.lanes.n, h: deck.h, hRev: p.mat.tRev });
+  const tsWheels = ec.lm1.lanes.slice(0, 3).flatMap((ln, i) => [{ y: i * ec.lanes.wl + ec.lanes.wl / 2 - 1, P: ln.Q }, { y: i * ec.lanes.wl + ec.lanes.wl / 2 + 1, P: ln.Q }]).filter(w => w.P > 0);
+  const ineq = { coef: { ...kc, B: inequalityWheels(tsWheels, kc.e, nbL) }, Rperm: perm.Rmax, RA: ec.UDL.Rmax, RB: ec.TS.Rmax };
+  // rotations d'appui : permanent (poutre conjuguée, module différé E/(1+φ)) + trafic gr1a (lignes d'influence de rotation, Ei)
+  const rotPerm = deck.beam.x0.map((_, i) => {
+    let th = 0;
+    for (const j of [i - 1, i]) {
+      if (j < 0 || j >= deck.spans.length) continue;
+      const idx = deck.beam.sections.map((sc, k) => (sc.span === j ? k : -1)).filter(k => k >= 0);
+      const r = endRotations(idx.map(k => deck.beam.sections[k].xi), idx.map(k => perm.M[k]), deck.spans[j], EI / (1 + (p.phiFluage || 2)));
+      th = Math.max(th, Math.abs(j === i ? r.thetaA : r.thetaB));
+    }
+    return th;
+  });
+  const rotQ = ec.gr1a.Tmax ? ec.gr1a.Tmax.map((v, i) => Math.max(Math.abs(v), Math.abs(ec.gr1a.Tmin[i])) / EI) : null;
+  const bearings = designBearings({ deck, beamComb: design.EC.beam, EI, nPerLine: p.concept.nBearings, xFixed: p.concept.xFixed, epsSlow: p.concept.epsSlow, dT: p.concept.dTu, alphaQ1: ec.alpha.aQ[0], alphaq1: ec.alpha.aq1, ineq, rot: rotQ ? { perm: rotPerm, traffic: rotQ } : null });
   const cases = [
     { id: 'TS', label: 'LM1 – TS', res: ec.TS, ref: 'EC' }, { id: 'UDL', label: 'LM1 – UDL', res: ec.UDL, ref: 'EC' },
     { id: 'LM1', label: 'LM1 (TS + UDL)', res: ec.LM1, ref: 'EC' }, { id: 'gr1a', label: 'gr1a (LM1 + trottoirs 3 kN/m²)', res: ec.gr1a, ref: 'EC' },
@@ -165,7 +189,7 @@ function compute(p) {
   }
   const rebar = rebarPlan({ deck, design: env, trans: transDesign.EC, opt: { fck: p.mat.fck, fyk: p.mat.fyk, phiLong: Math.round(p.mat.phi * 1000), phiTrans: Math.round(p.mat.phiT * 1000) } });
   rebar.governing = governing;
-  return { rebar, p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transDesign, concept, bearings, extra, dt: (performance.now() - t0) / 1000 };
+  return { rebar, p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transF, transELU, transDesign, concept, bearings, extra, dt: (performance.now() - t0) / 1000 };
 }
 
 /** Aide à la conception seule : géométrie, charges permanentes et règles du guide (quelques dixièmes de seconde). */
@@ -203,12 +227,12 @@ function renderConception(st) {
 
 function bearingsTable(st) {
   const b = st.bearings;
-  let h = `<p class="small">Règles du § 3.6.1 (bulletin technique n° 4 du SETRA) : σ = P/(ab) ≤ min(15 MPa ; G·ab/(t(a+b))) avec G = ${b.G1} MPa ; u_g/T ≤ 0,5 ; u_g/T + H/(G₂ab) ≤ 0,7 (G₂ = ${b.G2} MPa) ; T ≤ min(a, b)/5 ; t·T ≥ α·a²/3. Réactions ELS caractéristiques (G + trafic + T + Ta) réparties sur ${b.nb} appareils par ligne ; u_g = (ε + α_T·ΔT)·distance au point fixe (ε = ${b.epsSlow}, ΔT = ${b.dT} °C, point fixe à x = ${b.xf.toFixed(1)} m) ; H = freinage EN 1991-2 § 4.4.1 = ${b.H.toFixed(0)} kN réparti sur ${b.nb * b.nLines} appareils ; α = ${(b.alpha0 * 1000).toFixed(0)} mrad de défaut de pose + rotation d'appui estimée par l'enveloppe ELS caractéristique. Sélection : plus petit appareil entièrement enrobé de la gamme standard du guide (NF T 47.815).</p>
-  <table><thead><tr><th>Ligne d'appui</th><th>x [m]</th><th>R max / min [kN]</th><th>P max / min par appareil [kN]</th><th>u_g [mm]</th><th>H [kN]</th><th>α [mrad]</th><th>Appareil</th><th>σ / σ_lim [MPa]</th><th>u_g/T ; total</th><th>T ≤ a/5</th><th>α_lim [mrad]</th><th>σ_min</th></tr></thead><tbody>`;
+  let h = `<p class="small">Règles du § 3.6.1 (bulletin technique n° 4 du SETRA) : σ = P/(ab) ≤ min(15 MPa ; G·ab/(t(a+b))) avec G = ${b.G1} MPa ; u_g/T ≤ 0,5 ; u_g/T + H/(G₂ab) ≤ 0,7 (G₂ = ${b.G2} MPa) ; T ≤ min(a, b)/5 ; t·T ≥ α·a²/3. Réactions ELS caractéristiques (G + trafic + T + Ta) ; réaction de l'appareil le plus chargé = [k_CP·R_G + k_Q·(R − R_G)]/${b.nb} avec les coefficients d'inégalité de répartition de PSI-DA 68 § 2.4.2 (entraxe × sin ψ = ${b.ineq ? b.ineq.e.toFixed(2) + ' m' : '—'} ; k_CP = ${b.ineq ? b.ineq.CP.toFixed(3) : '1'}, k_A (UDL) = ${b.ineq ? b.ineq.A.toFixed(3) : '1'}, k_B (TS) = ${b.ineq ? b.ineq.B.toFixed(3) : '1'}, k_Q pondéré par les réactions UDL/TS) ; u_g = (ε + α_T·ΔT)·distance au point fixe (ε = ${b.epsSlow}, ΔT = ${b.dT} °C, point fixe à x = ${b.xf.toFixed(1)} m) ; H = freinage EN 1991-2 § 4.4.1 = ${b.H.toFixed(0)} kN réparti sur ${b.nb * b.nLines} appareils ; α = ${(b.alpha0 * 1000).toFixed(0)} mrad de défaut de pose + rotation sous charges permanentes (module différé) + rotation sous gr1a (ligne d'influence de rotation). Sélection : plus petit appareil entièrement enrobé de la gamme standard du guide (NF T 47.815).</p>
+  <table><thead><tr><th>Ligne d'appui</th><th>x [m]</th><th>R max / min [kN]</th><th>P max (appareil le plus chargé) / min [kN]</th><th>u_g [mm]</th><th>H [kN]</th><th>α [mrad]</th><th>Appareil</th><th>σ / σ_lim [MPa]</th><th>u_g/T ; total</th><th>T ≤ a/5</th><th>α_lim [mrad]</th><th>σ_min</th></tr></thead><tbody>`;
   for (const r of b.rows) {
     const s = r.sel;
-    h += `<tr><td>${r.i === 0 || r.i === b.rows.length - 1 ? 'Culée' : 'Pile'} ${r.i}</td><td>${r.x.toFixed(1)}</td><td>${r.Rmax.toFixed(0)} / ${r.Rmin.toFixed(0)}${r.uplift ? ' (soulèvement)' : ''}</td><td>${r.Pmax.toFixed(0)} / ${r.Pmin.toFixed(0)}</td><td>${(r.ug * 1000).toFixed(1)}</td><td>${r.Hb.toFixed(1)}</td><td>${(r.alpha * 1000).toFixed(1)}</td>`;
-    if (s) h += `<td><b>${s.label}</b> (${s.hTot} mm)</td><td>${s.sig.toFixed(1)} / ${s.sigLim.toFixed(1)}</td><td>${s.dist1.toFixed(2)} ; ${s.dist2.toFixed(2)}</td><td>${(s.T * 1000).toFixed(0)} ≤ ${(s.Tmax * 1000).toFixed(0)}</td><td>${(s.rotLim * 1000).toFixed(1)}</td><td>${s.sigMin.toFixed(1)}${s.antiCheminement ? ' <span class="badge warn">&lt; 2 : anti-cheminement</span>' : ''}${s.glissement ? ' <span class="badge warn">H &gt; f·P : blocage</span>' : ''}</td></tr>`;
+    h += `<tr><td>${r.i === 0 || r.i === b.rows.length - 1 ? 'Culée' : 'Pile'} ${r.i}</td><td>${r.x.toFixed(1)}</td><td>${r.Rmax.toFixed(0)} / ${r.Rmin.toFixed(0)}${r.uplift ? ' (soulèvement)' : ''}</td><td>${r.Pmax.toFixed(0)} / ${r.Pmin.toFixed(0)}<br><span class="small">k_CP ${r.kCP.toFixed(2)}, k_Q ${r.kQ.toFixed(2)}</span></td><td>${(r.ug * 1000).toFixed(1)}</td><td>${r.Hb.toFixed(1)}</td><td>${(r.alpha * 1000).toFixed(1)}</td>`;
+    if (s) h += `<td><b>${s.label}</b> (${s.hTot} mm)</td><td>${s.sig.toFixed(1)} / ${s.sigLim.toFixed(1)}</td><td>${s.dist1.toFixed(2)} ; ${s.dist2.toFixed(2)}</td><td>${(s.T * 1000).toFixed(0)} ≤ ${(s.Tmax * 1000).toFixed(0)}</td><td>${(s.rotLim * 1000).toFixed(1)}</td><td>${s.sigMin.toFixed(1)}${s.antiCheminement ? ' <span class="badge warn">&lt; 2 : anti-cheminement</span>' : ''}${s.glissement ? ' <span class="badge warn">H &gt; f·P : blocage</span>' : ''}${s.glissantNecessaire ? ' <span class="badge warn">u_g &gt; min(a,b)/10 : appareil glissant (§ 3.6.2)</span>' : ''}</td></tr>`;
     else h += `<td colspan="6"><span class="badge warn">ATTENTION</span>aucun appareil standard ne convient : augmenter le nombre d'appareils par ligne, appareils sur mesure ou à pot d'élastomère (§ 3.7)</td></tr>`;
   }
   h += `</tbody></table><p class="small">Désignation a×b×n(t+ts) : dimensions efficaces en plan [mm], n feuillets d'élastomère de t mm et frettes de ts mm (hauteur totale avec frettes entre parenthèses). Les appareils sont supposés identiques sur une ligne et libres (pas de point fixe mécanique) ; prévoir bossages, taquets et 5 cm minimum au bord (figure § 3.6.1). Prédimensionnement à confirmer selon la norme en vigueur (NF EN 1337-3).</p>`;
@@ -416,9 +440,10 @@ function renderTransverse(st) {
   const j = +$('#trans-span').value, ref = $('#trans-ref').value;
   const dz = st.transDesign[ref], sp = dz.spans[j];
   const extra = ref === 'EC' ? [{ name: 'ELS caractéristique max', y: sp.comb.CARmax }, { name: 'ELS caractéristique min', y: sp.comb.CARmin }] : [{ name: 'ELS max', y: sp.comb.ELSmax }, { name: 'ELS min', y: sp.comb.ELSmin }];
-  myPlot($('#plot-my'), st.deck, st.trans, j, extra);
+  myPlot($('#plot-my'), st.deck, ref === 'EC' ? st.trans : (st.transF || st.trans), j, extra);
   const cm = v => (v * 1e4).toFixed(1);
-  let h = `<p class="small">Dalle isostatique équivalente (L_eq, bords libres, ν = ${st.deck.nu}), charges diffusées à 45° jusqu'au feuillet moyen (contact + 2·${st.p.mat.tRev} + h), séries de Fourier (15 harmoniques), charges roulantes centrées sur x = L_eq/2, enveloppe sur les positions transversales ; thermique et tassements : m_y = ν·m_x. Hauteur utile transversale d = h − c − φ_long = ${dz.d.toFixed(3)} m.</p>`;
+  const setra = ref !== 'EC' ? ` Fascicule 61 (pratique SETRA) : ${(st.p.concept.psi || 100) < 100 ? 'dalle droite équivalente au biais mécanique (largeur 2b/sin φ, portée L_eq·sin φ, PSI-DA 68 § 2.5.2.1.2) ; ' : ''}trottoirs à la charge locale 4,5 kN/m² (un ou deux trottoirs)${st.transELU ? ' ; ELU calculé avec ν = 0 (fissuration peu nuisible, béton fissuré)' : ''}.` : '';
+  let h = `<p class="small">Dalle isostatique équivalente (L_eq, bords libres, ν = ${st.deck.nu}), charges diffusées à 45° jusqu'au feuillet moyen (contact + 2·${st.p.mat.tRev} + h), séries de Fourier (15 harmoniques), charges roulantes centrées sur x = L_eq/2, enveloppe sur les positions transversales ; thermique et tassements : m_y = ν·m_x. Hauteur utile transversale d = h − c − φ_long = ${dz.d.toFixed(3)} m.${setra}</p>`;
   if (dz.skew) {
     h += `<p class="small"><b>Ouvrage biais (ψ = ${dz.skew.psi} gr)</b> : les aciers transversaux sont ${dz.skew.psi2 < 100 ? 'parallèles aux lignes d\'appui' : 'perpendiculaires aux bords libres'} et dimensionnés avec le moment dans leur direction M_APF (annexe 12A du BPEL, pratique CHAMOA § 3.4, reproduite exactement sur la note) : moments principaux MX (longitudinal maximal de la travée) et MY (transversal maximal, non concomitants) tournés du biais mécanique φ, béton comprimé sur la bissectrice des deux familles ; nappe supérieure avec MX = 0. Be = ${dz.skew.Be.toFixed(2)} m. Les aciers sont donnés par mètre perpendiculaire aux aciers${dz.skew.psi2 < 100 ? ` ; par mètre d'axe de l'ouvrage, multiplier par sin ψ = ${dz.skew.sinPsi.toFixed(3)}` : ''}.</p>
     <table><thead><tr><th>Travée</th><th>φ_mec [gr]</th><th>MX car. [kN·m/m]</th><th>MY car.</th><th><b>M_APF car.</b></th><th>MX ELU</th><th>MY ELU</th><th><b>M_APF ELU</b></th><th>MY min car.</th><th>M_APF min car.</th></tr></thead><tbody>`;
@@ -508,7 +533,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!state) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.9', hSearch: lastSearch });
+    const html = await buildReport({ ...state, version: '0.10', hSearch: lastSearch });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -527,7 +552,7 @@ $('#btn-psidael').addEventListener('click', () => {
   f.roadway.value = '-3, 3'; f.footways.value = '-3.9565,-3 ; 3,3.9565'; f.lines.value = '';
   f.bands.value = '5.371 sur -3.9565,3.9565 k 0.6/1.0'; f.ys.value = '-3.9565, -3, -1.978, 0, 1.978, 3, 3.9565';
   f.Leq.value = ''; f.leqMethod.value = 'fleches'; f.alpha.value = 'FR2'; f.nRetenue.value = 0; f.classe.value = '1'; f.nu.value = 0; f.chamoaSign.checked = true;
-  f.hEdge.value = ''; f.joue.value = ''; f.EI.value = '38032, 0.09272'; f.withTherm.checked = false; f.fck.value = 30.6; f.fyk.value = 400; f.cover.value = 0.025;
+  f.hEdge.value = ''; f.joue.value = ''; f.EI.value = '38032, 0.09272'; f.withTherm.checked = false; f.fck.value = 30.6; f.fyk.value = 400; f.cover.value = 0.025; f.fiss.value = 'peu nuisible';
   f.psi.value = 80; f.tirantAir.value = ''; f.typeDalle.value = 'auto'; f.Dabout.value = 25; f.rhoMax.value = 1.0; f.transDir.value = 'appuis'; f.nBearings.value = ''; f.xFixed.value = ''; f.epsSlow.value = 0.00025; f.dTu.value = 30;
   f.withChantier.checked = false; f.lm3.value = ''; f.cant.value = ''; f.fatLambda1.value = 1.0; f.fatCat.value = '2'; f.bearingPitch.value = '';
   $('#hs-min').value = ''; $('#hs-max').value = '';

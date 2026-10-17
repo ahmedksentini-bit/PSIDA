@@ -20,7 +20,7 @@ const GR = Math.PI / 200;
 /** Ordres de grandeur du guide SETRA 1989 (références de paragraphes dans les textes). */
 export const GUIDE89 = {
   DA: { portees12: [7, 15], portees3: [6, 18], elancement: { 1: 20, 2: 26, 3: 28 } },
-  DP: { portees: [14, 25], porteeMax: 30, encorbellementsConseilles: 20, elancement: { 1: [22, 25], 2: { rect: 25, enc: 28 }, 3: { rect: 33, enc: 28 } }, longueurCablesFilants: 80 },
+  DP: { portees: [14, 25], porteeMax: 30, encorbellementsConseilles: 20, elancement: { 1: [22, 25], 2: { rect: 28, enc: 25 }, 3: { rect: 33, enc: 28 } }, longueurCablesFilants: 80 },
   travure: { rMin: 0.5, rMinBiais: 0.6, rMax: 0.85, nombreOr: 0.618, hauteurMax4Travees: 8 },
   largeur: { min: 5.5, max: 16, demiTabliers: 15 },
   biais: { phiMecMin: 70, option1DA: 80, option1DP: 70, angleMinFers: 60, deblaiFaible: 75 },
@@ -79,10 +79,11 @@ export function epaisseurAbaqueDA(spans) {
   const table = n === 3 ? DA3 : DA4;
   const keys = Object.keys(table).map(Number).sort((a, b) => a - b);
   const central = n === 3 ? [spans[1]] : spans.slice(1, n - 1);
-  const L = Math.max(...central), thetaL = Math.max(spans[0], spans[n - 1]);
-  let note = n >= 5 ? `${n} travées : abaque à 4 travées appliqué à la plus longue travée intermédiaire (§ 3.1.3, « moyennant adaptations ») ; ` : '';
+  // § 3.1.3 (p. 64) : 9-14-15-13-8 m → 8-15-15-8 m : travée centrale la plus longue, travée de rive la plus courte (côté sécurité)
+  const L = Math.max(...central), thetaL = Math.min(spans[0], spans[n - 1]);
+  let note = n >= 5 ? `${n} travées : abaque à 4 travées, plus longue travée intermédiaire et plus courte travée de rive (exemple du guide 9-14-15-13-8 → 8-15-15-8, § 3.1.3) ; ` : '';
   if (n === 4 && spans[1] !== spans[2]) note += 'travées centrales inégales, la plus longue est retenue ; ';
-  if (n === 3 && spans[0] !== spans[2]) note += 'travées de rive inégales, la plus longue est retenue (exemple du guide 18-25-20 → 20-25-20) ; ';
+  if (spans[0] !== spans[n - 1]) note += 'travées de rive inégales, la plus courte est retenue (§ 3.1.3, p. 64) ; ';
   const lo = keys[0], hi = keys[keys.length - 1];
   const read = (Lk, u) => curveAt(table[Lk], u);
   let h25, extrap = false;
@@ -225,18 +226,22 @@ export function verifierBiais({ spans, width, h, I = null, psi = 100, type = 'DA
   const angleFers = psi * 0.9;
   if (psi >= lim) items.push({ level: 'info', text: `Direction des fers (§ 3.4.2) : option 1 conseillée — longitudinaux parallèles aux bords libres, transversaux parallèles aux lignes d'appui (angle entre familles ${angleFers.toFixed(0)}° ≥ 60°).` });
   else if (psi >= 70) items.push({ level: 'info', text: `Direction des fers (§ 3.4.2) : ψ entre 70 et 80 gr — option 1 (transversaux parallèles aux lignes d'appui, angle ${angleFers.toFixed(0)}°) ou option 2 (transversaux perpendiculaires aux bords libres), au choix pratique.` });
-  else items.push({ level: 'warn', text: `Direction des fers (§ 3.4.2) : biais prononcé — option 2 (fers parallèles et perpendiculaires aux bords libres) ; l'option 1 donnerait un angle de ${angleFers.toFixed(0)}° < 60° entre familles.` });
+  else items.push({ level: 'warn', text: `Direction des fers (§ 3.4.2) : biais prononcé (ψ < 70 gr) — option 2 (fers parallèles et perpendiculaires aux bords libres) ; l'option 1 donnerait un angle de ${angleFers.toFixed(0)}° entre familles${angleFers < 60 ? ' < 60°' : ', proche de la limite de 60°'}.` });
   items.push({ level: 'info', text: `Appuis (§ 2.5) : appareils d'appui disposés suivant le biais, ou appuis intermédiaires ponctuels pour un ouvrage peu large ; appuis d'extrémité conçus pour l'encastrement en torsion. Culées en retrait de préférence perpendiculaires à l'axe.` });
-  if (psi < GUIDE89.biais.deblaiFaible && spans.length === 3) items.push({ level: 'info', text: `Biais < 75 gr : le 3 travées est réservé aux biais faibles ; 4 travées s'accommode d'un biais important (§ 1.2, schéma des cas d'emploi).` });
+  if (psi < GUIDE89.biais.deblaiFaible && (spans.length === 2 || spans.length === 3)) items.push({ level: 'info', text: `Biais < 75 gr : les 2 et 3 travées sont réservés aux biais faibles ; 4 travées s'accommode d'un biais important (§ 1.2, schéma p. 17).` });
+  if (psi < 50 && spans.length === 1) items.push({ level: 'info', text: 'Travée unique : biais modéré conseillé (ψ ≥ 50 gr, schéma p. 17).' });
   return { items, phiMec, Be };
 }
 
 /** Pourcentage minimal d'aciers transversaux inférieurs en travée (§ 3.4.3). */
 export function minTransversalGuide({ width, spans, h, psi = 100, parallelesAppuis = true }) {
-  const n = width / Math.max(...spans);
-  let rho = Math.min(1.3 * n, 2) / 1000;
+  // § 3.4.3 : η = largeur / portée de la travée considérée (travée par travée — note PSIDP.EL, guide p. 80)
+  const perSpan = spans.map(L => Math.min(1.3 * width / L, 2) / 1000);
+  const n = width / Math.min(...spans);
+  const rho = Math.max(...perSpan);
   const k = psi < 100 && parallelesAppuis ? 1 / Math.sin(psi * GR) : 1;
-  return { n, rho: rho * k, rhoBase: rho, k, As: rho * k * h * 1e4, text: `Aciers transversaux inférieurs minimaux en travée (gradient thermique, § 3.4.3) : ρ ≥ min(1,3 n ; 2) ‰ avec n = largeur/portée = ${n.toFixed(2)} → ${(rho * 1000).toFixed(2)} ‰${k > 1 ? ` × 1/sin ψ = ${k.toFixed(3)} (fers parallèles aux lignes d'appui)` : ''} = ${(rho * k * h * 1e4).toFixed(1)} cm²/m.` };
+  const detail = spans.length > 1 ? ` (par travée : ${perSpan.map(r => (r * 1000).toFixed(2)).join(' / ')} ‰)` : '';
+  return { n, rho: rho * k, rhoBase: rho, perSpan: perSpan.map(r => r * k), k, As: rho * k * h * 1e4, text: `Aciers transversaux inférieurs minimaux en travée (gradient thermique, § 3.4.3) : ρ ≥ min(1,3 η ; 2) ‰ avec η = largeur/portée de chaque travée${detail} → au plus ${(rho * 1000).toFixed(2)} ‰${k > 1 ? ` × 1/sin ψ = ${k.toFixed(3)} (fers parallèles aux lignes d'appui)` : ''} = ${(rho * k * h * 1e4).toFixed(1)} cm²/m.` };
 }
 
 /** Longueur d'about (§ 3.2) : BA 0,1 + 15 D ; BP 0,5 (1 + |cot ψ|), mesurée suivant l'axe. */
@@ -262,7 +267,7 @@ export function descenteCharges(deck, perm) {
   const [lo, hi] = GUIDE89.poidsPropre;
   items.push({ level: tPerM2 >= lo && tPerM2 <= hi ? 'ok' : 'info', text: `Poids propre de la dalle ${gDalle.toFixed(1)} kN/m² = ${tPerM2.toFixed(2)} t/m² (guide : 1,2 à 2 t/m² selon les portées, § 1.3.1).` });
   const rc = reactions.filter(r => r.kind === 'culée').map(r => r.tPerM), rp = reactions.filter(r => r.kind === 'pile').map(r => r.tPerM);
-  items.push({ level: 'info', text: `Réactions permanentes par mètre de largeur : culées ${rc.map(v => v.toFixed(1)).join(' / ')} t/m${rp.length ? `, piles ${rp.map(v => v.toFixed(1)).join(' / ')} t/m` : ''} (guide : ≈ 20 t/m en pile-culée, ≈ 70 t/m en pile intermédiaire, charges d'exploitation comprises, § 1.3.1). Fondations superficielles souvent possibles (semelles de 1,5 à 4 m, sol ≤ 200–300 kPa).` });
+  items.push({ level: 'info', text: `Réactions permanentes par mètre de largeur : culées ${rc.map(v => v.toFixed(1)).join(' / ')} t/m${rp.length ? `, piles ${rp.map(v => v.toFixed(1)).join(' / ')} t/m` : ''} (guide : de l'ordre de 20 t/m en pile-culée à 70 t/m en pile intermédiaire, par mètre de largeur droite, § 1.3.1). Fondations superficielles souvent possibles (semelles de 1,5 à 4 m, sol ≤ 200–300 kPa).` });
   items.push({ level: 'info', text: `Tassements différentiels admissibles : 2 à 3 cm sans renforcement, 6 à 7 cm moyennant peu de renforcements (§ 1.3.3, § 2.7).` });
   return { gDalle, tPerM2, reactions, items };
 }

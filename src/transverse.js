@@ -9,8 +9,9 @@
  * Effets thermiques et tassements : m_y = ν · m_x (plaque isotrope, dilatation transversale libre).
  */
 import { transverseMoments } from './guyon.js';
+import { mechanicalSkew, equivalentWidth } from './skew.js';
 import { notionalLanes, lm1, lm2, TS_GEOM, FOOTWAY } from './loads_ec.js';
-import { classePont, voiesF61, chargeA, BC, BT, MC120, D240, TROTTOIR, deltaDyn, maxAxleLoadOnLength } from './loads_f61.js';
+import { classePont, voiesF61, chargeA, BC, BT, MC120, D240, TROTTOIR, deltaDyn, maxAxleLoadOnLength, maxStripTrainLoad } from './loads_f61.js';
 
 function permutations(arr) {
   if (arr.length <= 1) return [arr.slice()];
@@ -30,12 +31,18 @@ export class TransverseModel {
    * @param {import('./analysis.js').SlabDeck} deck
    * @param {{tRev?:number, nHarm?:number, ys?:number[], diffuseToMidPlane?:boolean}} opt
    */
-  constructor(deck, { tRev = 0.08, nHarm = 15, ys = null, diffuseToMidPlane = true } = {}) {
+  constructor(deck, { tRev = 0.08, nHarm = 15, ys = null, diffuseToMidPlane = true, nu = null, skewEquivalent = false, I = null } = {}) {
     this.deck = deck;
     this.tRev = tRev;
     this.nHarm = nHarm;
     this.ys = ys || deck.ys;
     this.diffuse = diffuseToMidPlane;
+    this.nu = nu ?? deck.nu;
+    // biais (option skewEquivalent, pratique SETRA du Fascicule 61) : dalle droite équivalente (PSI-DA 68 § 2.5.2.1.2, PSIDA.EL,
+    // PSIDP.EL) de largeur 2b/sin φ et de portée L_eq·sin φ, φ biais mécanique de la travée ; CHAMOA (Eurocodes) ne transforme pas
+    const psi = deck.g.psi || 100;
+    const Be = equivalentWidth({ width: 2 * deck.b, h: deck.h, I });
+    this.sinPhi = deck.spans.map(L => (skewEquivalent && psi < 100 ? Math.sin(mechanicalSkew({ psi, Be, L }) * Math.PI / 200) : 1));
     this._cache = new Map();
   }
 
@@ -49,10 +56,13 @@ export class TransverseModel {
   response(j, key, patches) {
     const k = `${j}|${key}`;
     if (this._cache.has(k)) return this._cache.get(k);
-    const L = this.deck.Leq[j], b = this.deck.b;
-    const clipped = patches.map(p => ({ ...p, x1: Math.max(0, p.x1), x2: Math.min(L, p.x2) })).filter(p => p.x2 - p.x1 > 1e-6 && p.e2 > -b && p.e1 < b)
+    const sp = this.sinPhi[j], L = this.deck.Leq[j] * sp, b = this.deck.b / sp;
+    // charges : abscisses × sin φ, ordonnées / sin φ ; intensité × sin φ pour garder la charge linéique de chaque file
+    // (convention PSI-DA 68 / PSIDA.EL : coefficients d'étalement rapportés à la portée biaise, voies de largeur v/sin φ)
+    const clipped = patches.map(p => ({ ...p, q: p.q * sp, x1: Math.max(0, p.x1 * sp), x2: Math.min(L, p.x2 * sp), e1: p.e1 / sp, e2: p.e2 / sp }))
+      .filter(p => p.x2 - p.x1 > 1e-6 && p.e2 > -b && p.e1 < b)
       .map(p => ({ ...p, e1: Math.max(-b, p.e1), e2: Math.min(b, p.e2) }));
-    const r = transverseMoments({ b, L, patches: clipped, x: L / 2, ys: this.ys, nHarm: this.nHarm, nu: this.deck.nu, alpha: this.deck.alphaTorsion });
+    const r = transverseMoments({ b, L, patches: clipped, x: L / 2, ys: this.ys.map(y => y / sp), nHarm: this.nHarm, nu: this.nu, alpha: this.deck.alphaTorsion });
     this._cache.set(k, r);
     return r;
   }
@@ -199,10 +209,12 @@ export class TransverseModel {
       Bt = scale(this.envelope(j, arrBt), dBc);
     }
     const arrMc = slidePositions(yc1 + 2.15, yc2 - 2.15, 0, deck.laneStep).map(e => [{ key: `mc|${e.toFixed(3)}`, patches: this.mcPatches(j, e), coef: 1 }]);
-    const Mc120 = scale(this.envelope(j, arrMc), deltaDyn(Lj, gT * Lj, MC120.P * Math.min(1, Lj / MC120.trackLength)));
+    const Mc120 = scale(this.envelope(j, arrMc), deltaDyn(Lj, gT * Lj, maxStripTrainLoad(Lj, MC120.trackLength, MC120.trackLength + MC120.gapMin, MC120.P)));
     const arrD = slidePositions(yc1 + D240.width / 2, yc2 - D240.width / 2, 0, deck.laneStep).map(e => [{ key: `d|${e.toFixed(3)}`, patches: this.dPatches(j, e), coef: 1 }]);
     const D = this.envelope(j, arrD);
-    const trott = this.envelope(j, [(deck.g.footways || []).map(f => ({ key: `bd|${f.y1.toFixed(3)}|${f.y2.toFixed(3)}`, patches: this.bandPatches(j, f.y1, f.y2), coef: TROTTOIR.q }))]);
+    // trottoirs : charge locale 4,5 kN/m² (art. 6, éléments de couverture — PSI-DA 68, PSIDA.EL, PONTYPE), un trottoir ou les deux
+    const fws = (deck.g.footways || []).map(f => ({ key: `bd|${f.y1.toFixed(3)}|${f.y2.toFixed(3)}`, patches: this.bandPatches(j, f.y1, f.y2), coef: TROTTOIR.qLocal }));
+    const trott = this.envelope(j, fws.length === 2 ? [[fws[0]], [fws[1]], fws] : [fws]);
     return { A: this.envelope(j, arrA), Bc, Bt, Mc120, D240: D, trottoir: trott, classe: cl, nv, v };
   }
 
@@ -212,14 +224,15 @@ export class TransverseModel {
    */
   run({ alpha, f61opt = {}, thermal = null, settle = null } = {}) {
     const deck = this.deck, spans = [];
-    const gT = deck.permanent().gTotal;
+    // G de δ : ½(G_min + G_max) (comme le calcul longitudinal)
+    const gT = deck.permanentFiles().reduce((a, f) => a + f.q * ((f.kmin ?? 1) + (f.kmax ?? 1)) / 2, 0);
     for (let j = 0; j < deck.spans.length; j++) {
       const sec = deck.beam.sectionIndex(j, 0.5);
       // profil transversal du couplage ν : forme de la réponse à une charge uniforme (nulle aux bords libres)
       const pp = this.response(j, 'pp', this.bandPatches(j, -deck.b, deck.b));
       const ref = Math.max(...pp.my.map(Math.abs));
       const shape = this.ys.map((_, i) => (ref > 1e-9 ? pp.my[i] / ref : 0));
-      const nuT = (res, key) => (res ? this.ys.map((_, i) => deck.nu * res[key][sec] / (2 * deck.b) * shape[i]) : this.ys.map(() => 0));
+      const nuT = (res, key) => (res ? this.ys.map((_, i) => this.nu * res[key][sec] / (2 * deck.b) * shape[i]) : this.ys.map(() => 0));
       spans.push({
         j, L: deck.Leq[j], x: deck.Leq[j] / 2,
         perm: this.permanent(j), ec: this.eurocode(j, alpha), f61: this.fascicule61(j, { ...f61opt, G: gT }),

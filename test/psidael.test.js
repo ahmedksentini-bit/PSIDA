@@ -94,25 +94,31 @@ test('PSIDA.EL — charges Fascicule 61 : δ, coefficients de répartition, mome
     roadway: { y1: -3, y2: 3 }, footways: [{ y1: -B, y2: -3 }, { y1: 3, y2: B }],
     bands: [{ q: 42.5 / W, y1: -B, y2: B, kmin: 0.6, kmax: 1.0, label: 'QSUP' }],
     leqMethod: 'fleches', nu: 0, nGrid: 100, ys: Array.from({ length: 17 }, (_, i) => -B + W * i / 16) });
-  const f = deck.fascicule61({ classe: 1, nRetenue: 0, Gspan: SPANS.map((L, j) => 128.64 * (L + (j === 0 || j === 3 ? 0.35 : 0))) });
+  // convention SETRA par défaut : K et δ de la travée porteuse ; G de δ = ½(G min + G max)·L
+  const f = deck.fascicule61({ classe: 1, nRetenue: 0 });
+  rel(f.deltaBc[0], 1.201, 1e-3, 'δB travée 1 (défaut)'); rel(f.deltaMc[0], 1.238, 1e-3, 'δMc travée 1 (défaut)');
   assert.equal(f.nv, 2); assert.equal(f.v, 3);
   const s04 = deck.beam.sectionIndex(0, 0.4), P1 = deck.beam.supportSectionIndex(1), s25 = deck.beam.sectionIndex(1, 0.5);
+  // coefficients de répartition de la travée (convention « section » : K = max_y m_x / (M/2b) d'une seule travée)
+  const fS = deck.fascicule61({ classe: 1, nRetenue: 0, convention: 'section' });
   const K = r => deck.transverseFactors(r).K;
-  const KA = K(f.A), KBc = K(f.Bc), KBt = K(f.Bt), KMc = K(f.Mc120), KT = K(f.trottoir);
+  const KA = K(fS.A), KBc = K(fS.Bc), KBt = K(fS.Bt), KMc = K(fS.Mc120), KT = K(fS.trottoir);
   // coefficients correctifs travée 1 (récapitulation p. 20 ; Bc hors bc = 1,157 / 1,1)
   rel(KA[s04], 1.024, 3e-3, 'K A'); rel(KBc[s04], 1.157 / 1.1, 5e-3, 'K Bc'); rel(KBt[s04], 1.023, 3e-3, 'K Bt');
   rel(KMc[s04], 1.127, 5e-3, 'K Mc120'); rel(KT[s04], 1.129, 5e-3, 'K trottoirs');
-  const MK = (r, k, s, w = 'Mmax') => r[w][s] * k[s] / 10;
+  // moment de la note = Σ_travées K_j·δ_j·M_j = max_y m_x(y)·2b
+  const MK = (r, k, s, w = 'Mmax') => (w === 'Mmax' ? Math.max(...r.mxMax[s]) : Math.min(...r.mxMin[s])) * W / 10;
   // A(l) : 0,4 L travée 1, appui 2, 0,5 L travée 2
   rel(MK(f.A, KA, s04), 125.46, 3e-3, 'A 0,4 L'); rel(MK(f.A, KA, P1, 'Mmin'), -146.54, 3e-3, 'A appui 2'); rel(MK(f.A, KA, s25), 155.68, 3e-3, 'A 0,5 L travée 2');
   // B = max(Bc, Bt) en travée (Bt gouverne), Bc sur appui
   rel(Math.max(MK(f.Bc, KBc, s04), MK(f.Bt, KBt, s04)), 138.20, 6e-3, 'B 0,4 L');
   rel(Math.max(MK(f.Bc, KBc, s25), MK(f.Bt, KBt, s25)), 155.03, 8e-3, 'B 0,5 L travée 2');
   rel(Math.min(MK(f.Bc, KBc, P1, 'Mmin'), MK(f.Bt, KBt, P1, 'Mmin')), -151.50, 2e-2, 'B appui 2');
-  // Mc120 en travée ; sur appui l'outil retient K (L_eq moyenne) et δ maximal des deux travées → +6 % (côté sécurité)
+  // Mc120 (convoi) en travée et sur appui (K et δ de la travée porteuse ; en convention « section » : +6 %)
   rel(MK(f.Mc120, KMc, s04), 204.11, 6e-3, 'Mc120 0,4 L'); rel(MK(f.Mc120, KMc, s25), 232.61, 6e-3, 'Mc120 0,5 L travée 2');
   const mcP1 = MK(f.Mc120, KMc, P1, 'Mmin');
-  assert.ok(mcP1 <= -169.90 && mcP1 >= -169.90 * 1.08, 'Mc120 appui 2 : conservatif de moins de 8 % ' + mcP1);
+  rel(mcP1, -169.90, 1e-2, 'Mc120 appui 2');
+  assert.ok(MK(fS.Mc120, KMc, P1, 'Mmin') < mcP1, 'convention « section » plus défavorable sur appui');
   // trottoirs : la note charge 1,00 m de trottoir réel, l'outil 0,9565 m de largeur équivalente → −4 %
   rel(MK(f.trottoir, KT, s04), 3.52 * 0.9565, 2e-2, 'trottoirs 0,4 L (largeur équivalente)');
   // combinaison ELU sur appui 2 (1,125 × [1,2 (G + tassements) + 1,42 B + 1,42 trottoirs]) : −595,81 t·m
@@ -137,4 +143,9 @@ test('PSIDA.EL — flexion transversale : coefficient μ (ν = 0,2) et MY sous A
   const deck = new SlabDeck({ spans: SPANS, width: 8.092, h: 0.52, roadway: { y1: -half, y2: half }, Leq: [8.818, 11.29, 11.29, 8.818], nu: 0, ys: [0, -1.978] });
   const r = new TransverseModel(deck, { tRev: 0.08, nHarm: 25 }).fascicule61(0, { classe: 1, G: 128.64 * 10.1 / 9.75 });
   rel(r.A.myMax[0] / 10, 1.470, 1e-2, 'MY A axe'); rel(r.A.myMax[1] / 10, 1.886, 2e-2, 'MY A fibre 2');
+  // même calcul par la transformation automatique de l'outil (dalle droite équivalente au biais mécanique, ψ = 80 gr)
+  const deckS = new SlabDeck({ spans: SPANS, overhangs: [0.35, 0.35], width: W, h: 0.52, roadway: { y1: -3, y2: 3 }, leqMethod: 'fleches', nu: 0, psi: 80, ys: [0, -1.978 * Math.sin(86.574 * Math.PI / 200)] });
+  const tS = new TransverseModel(deckS, { tRev: 0.08, nHarm: 25, skewEquivalent: true });
+  rel(tS.sinPhi[0], Math.sin(86.574 * Math.PI / 200), 1e-6, 'sin φ_mec travée 1');
+  rel(tS.fascicule61(0, { classe: 1 }).A.myMax[0] / 10, 1.470, 1e-2, 'MY A axe (transformation automatique)');
 });

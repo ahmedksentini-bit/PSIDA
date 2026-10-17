@@ -116,14 +116,23 @@ export function meanDeflection(h, pieces = 64) {
  * @param {{b:number, L:number, e:number, y:number, nu?:number}} p
  *   b demi-largeur de la dalle, L portée (équivalente), e excentricité de la charge, y ordonnée
  */
-export function coefK({ b, L, e, y, nu = 0, alpha = 1 }) {
+export function coefK({ b, L, e, y, nu = 0, alpha = 1, alphaMode = 'massonnet' }) {
+  if (alpha < 1 - 1e-9 && alphaMode === 'massonnet') {
+    // interpolation de Massonnet K = K₀ + (K₁ − K₀)√α (pratique SETRA, PONTYPE/PAP : reproduite à 10⁻³ sur le Pont de Noé)
+    const k0 = coefK({ b, L, e, y, nu, alpha: 0, alphaMode: 'exact' }), k1 = coefK({ b, L, e, y, nu, alpha: 1 });
+    return k0 + (k1 - k0) * Math.sqrt(alpha);
+  }
   const h = plateHarmonic({ b, L, n: 1, e, nu, alpha });
   if (nu === 0) return 2 * b * Math.pow(h.k, 4) * h.Y(y);
   return h.Y(y) / meanDeflection(h);
 }
 
 /** Fonction K(y) pour une excentricité e donnée (évite de refaire la résolution). */
-export function coefKFunction({ b, L, e, nu = 0, alpha = 1 }) {
+export function coefKFunction({ b, L, e, nu = 0, alpha = 1, alphaMode = 'massonnet' }) {
+  if (alpha < 1 - 1e-9 && alphaMode === 'massonnet') {
+    const f0 = coefKFunction({ b, L, e, nu, alpha: 0, alphaMode: 'exact' }), f1 = coefKFunction({ b, L, e, nu, alpha: 1 }), r = Math.sqrt(alpha);
+    return y => f0(y) + (f1(y) - f0(y)) * r;
+  }
   const h = plateHarmonic({ b, L, n: 1, e, nu, alpha });
   const norm = nu === 0 ? 2 * b * Math.pow(h.k, 4) : 1 / meanDeflection(h);
   return y => norm * h.Y(y);
@@ -147,7 +156,11 @@ export function coefKBand({ b, L, e1, e2, y, nu = 0, alpha = 1, nGauss = 5 }) {
  * Coefficient μ de Guyon-Massonnet : moment transversal m_y = μ · b · p sous la charge-ligne
  * sinusoïdale p·sin(πx/L) placée en e (premier harmonique).
  */
-export function coefMu({ b, L, e, y, nu = 0, alpha = 1 }) {
+export function coefMu({ b, L, e, y, nu = 0, alpha = 1, alphaMode = 'massonnet' }) {
+  if (alpha < 1 - 1e-9 && alphaMode === 'massonnet') {
+    const m0 = coefMu({ b, L, e, y, nu, alpha: 0, alphaMode: 'exact' }), m1 = coefMu({ b, L, e, y, nu, alpha: 1 });
+    return m0 + (m1 - m0) * Math.sqrt(alpha);
+  }
   const h = plateHarmonic({ b, L, n: 1, e, nu, alpha });
   return -(h.d2(y) - nu * h.k * h.k * h.Y(y)) / b;
 }
@@ -166,7 +179,13 @@ export function tableK({ b, L, es, ys, nu = 0, alpha = 1 }) {
  *   p_n = (2q/(nπ)) [cos(nπx1/L) − cos(nπx2/L)]   (charge-ligne par unité de largeur).
  * @returns {{my:number[], mx:number[]}} moments [kN·m/m] aux ordonnées ys, à l'abscisse x
  */
-export function transverseMoments({ b, L, patches, x, ys, nHarm = 25, nu = 0, alpha = 1, nGauss = 4 }) {
+export function transverseMoments({ b, L, patches, x, ys, nHarm = 25, nu = 0, alpha = 1, nGauss = 4, alphaMode = 'massonnet' }) {
+  if (alpha < 1 - 1e-9 && alphaMode === 'massonnet') {
+    const r0 = transverseMoments({ b, L, patches, x, ys, nHarm, nu, alpha: 0, nGauss, alphaMode: 'exact' });
+    const r1 = transverseMoments({ b, L, patches, x, ys, nHarm, nu, alpha: 1, nGauss });
+    const r = Math.sqrt(alpha);
+    return { my: r0.my.map((v, i) => v + (r1.my[i] - v) * r), mx: r0.mx.map((v, i) => v + (r1.mx[i] - v) * r) };
+  }
   const my = ys.map(() => 0), mx = ys.map(() => 0);
   for (let n = 1; n <= nHarm; n++) {
     const sinx = Math.sin(n * Math.PI * x / L);

@@ -48,7 +48,7 @@ export function zonage(p) {
   });
   // zones courantes = complément
   const rules = [];
-  const option = p.optionFers || (psi >= 80 ? 1 : 2);
+  const option = p.optionFers || (psi >= (p.type === 'DP' ? 70 : 80) ? 1 : 2);   // § 3.4.2, p. 79
   rules.push({ level: 'info', text: `Chevêtres incorporés (§ 3.4.4) : ferraillages longitudinal, transversal et vertical renforcés par rapport aux zones centrales ; concentrations d'efforts près des appareils d'appui ; armatures de poinçonnement (BAEL A.5.2,4 / EC2 6.4) au voisinage des appareils.${option === 2 ? ' Option 2 (fers transversaux non parallèles aux lignes d\'appui) : ajouter dans les chevêtres sur piles-culées des renforts parallèles aux lignes d\'appui (chaînage).' : ''}` });
   const rhoEdge = 0.9e-3, AsEdge = rhoEdge * h * 1e4;
   rules.push({ level: 'info', text: `Bords libres (§ 3.4.5) : chaînage sur une largeur ${h.toFixed(2)} m (= h) le long de chaque bord libre, ≥ 0,9 ‰ par face et par direction = ${AsEdge.toFixed(1)} cm²/m, relié par des cadres ≥ 5 cm²/m ; ferraillage local des ancrages de BN4 selon le dossier GC du SETRA.` });

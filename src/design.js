@@ -142,14 +142,15 @@ export function designBAEL(deck, perm, f61, opt = {}) {
   }
   const envBot = bot.map(r => Math.max(...r)), envTop = top.map(r => Math.max(...r));
   const beam = combineBeamBAEL(perm, f61, { thermal, settle });
-  const KA = deck.transverseFactors(f61.Bc).K;
+  // coefficient de répartition propre à chaque cas (auparavant celui de Bc pour tous : non conservatif quand Bt gouverne)
+  const Kof = r => (r ? deck.transverseFactors(r).K : null);
+  const Ks = { A: Kof(f61.A), Bc: Kof(f61.Bc), Bt: Kof(f61.Bt), Mc120: Kof(f61.Mc120), D240: Kof(f61.D240) };
   const shear = deck.beam.sections.map((_, s) => {
-    const K = KA[s] || 1;
     const vG = Math.max(Math.abs(perm.Vm[s]), Math.abs(perm.Vp[s]));
-    const pick = (r, key) => (r ? Math.abs(r[key][s]) : 0);
-    const vAB = Math.max(pick(f61.A, 'Vmax'), pick(f61.A, 'Vmin'), pick(f61.Bc, 'Vmax'), pick(f61.Bc, 'Vmin'), pick(f61.Bt, 'Vmax'), pick(f61.Bt, 'Vmin'));
-    const vMc = Math.max(pick(f61.Mc120, 'Vmax'), pick(f61.Mc120, 'Vmin'), pick(f61.D240, 'Vmax'), pick(f61.D240, 'Vmin'));
-    const Vu = Math.max(1.35 * vG + 1.6 * K * vAB, 1.35 * vG + 1.35 * K * vMc) / (2 * deck.b) * kNm2MNm;
+    const pick = key => (f61[key] ? (Ks[key][s] || 1) * Math.max(Math.abs(f61[key].Vmax[s]), Math.abs(f61[key].Vmin[s])) : 0);
+    const vAB = Math.max(pick('A'), pick('Bc'), pick('Bt'));
+    const vMc = Math.max(pick('Mc120'), pick('D240'));
+    const Vu = Math.max(1.35 * vG + 1.6 * vAB, 1.35 * vG + 1.35 * vMc) / (2 * deck.b) * kNm2MNm;
     const r = shearBAEL(Vu, sec, mat);
     // BAEL A.5.1.23 (armatures droites) si τu > τ̄u des dalles : A_t/s_t ≥ (τu − 0,3 k ft28)·b/(0,9 fsu), k = 1, et τu ≤ min(0,2 fc28/γb ; 5 MPa)
     const tauMax = Math.min(0.2 * mat.fc28 / mat.gammaB, 5);
@@ -229,7 +230,7 @@ export function designTransverseEC(deck, trans, longEC, opt = {}) {
     }
     const nonSecBot = 0.2 * asLongBot;
     // minimum du guide SETRA 1989 § 3.4.3 (gradient thermique) : 1,3 n ‰ ≤ 2 ‰ de b·h, × 1/sin ψ si parallèles aux lignes d'appui
-    const nWL = 2 * deck.b / Math.max(...deck.spans);
+    const nWL = 2 * deck.b / deck.spans[j];   // § 3.4.3 : η = largeur / portée de la travée considérée
     const minGuide = Math.min(1.3 * nWL, 2) / 1000 * h * (skew && skew.psi2 < 100 ? 1 / Math.sin(skew.psi2 * Math.PI / 200) : 1);
     const botAs = Math.max(bot.flex, nonSecBot, mins.perFace, minGuide);
     const nonSecTop = Math.max(0.2 * asLongTop, 0.5 * botAs);
@@ -248,6 +249,15 @@ export function designTransverseBAEL(deck, trans, longBAEL, opt = {}) {
   const f61 = { A: asCase(spans, sp => sp.f61.A), Bc: asCase(spans, sp => sp.f61.Bc), Bt: spans[0].f61.Bt ? asCase(spans, sp => sp.f61.Bt) : null, Mc120: asCase(spans, sp => sp.f61.Mc120), D240: asCase(spans, sp => sp.f61.D240), trottoir: asCase(spans, sp => sp.f61.trottoir) };
   const thermal = asCase(spans, sp => sp.thermal), settle = asCase(spans, sp => sp.settle);
   const comb = combineBAEL(perm, f61, { thermal, settle });
+  // ELU avec ν = 0 (béton fissuré) si un second calcul transversal est fourni et que la fissuration est peu nuisible
+  // (pratique PSIDA.EL / MRB-EL ; l'ELS reste calculé avec ν de la dalle) — EN 1992-1-1 § 3.1.3(4)
+  if (opt.transELU && mat.fissuration === 'peu nuisible') {
+    const s0 = opt.transELU.spans;
+    const perm0 = { mxMax: s0.map(sp => sp.perm.myMax), mxMin: s0.map(sp => sp.perm.myMin) };
+    const f610 = { A: asCase(s0, sp => sp.f61.A), Bc: asCase(s0, sp => sp.f61.Bc), Bt: s0[0].f61.Bt ? asCase(s0, sp => sp.f61.Bt) : null, Mc120: asCase(s0, sp => sp.f61.Mc120), D240: asCase(s0, sp => sp.f61.D240), trottoir: asCase(s0, sp => sp.f61.trottoir) };
+    comb.ELU = combineBAEL(perm0, f610, { thermal: asCase(s0, sp => sp.thermal), settle: asCase(s0, sp => sp.settle) }).ELU;
+    comb.nuELU = 0;
+  }
   const mins = minimumSteelBAEL(sec, mat);
   const out = [];
   spans.forEach((sp, j) => {
@@ -263,7 +273,7 @@ export function designTransverseBAEL(deck, trans, longBAEL, opt = {}) {
       bot = { ...face(skew.max.ELU.M, skew.max.ELS.M), straight: bot, skew: skew.max };
       top = { ...face(-skew.min.ELU.M, -skew.min.ELS.M), straight: top, skew: skew.min };
     }
-    const nWL = 2 * deck.b / Math.max(...deck.spans);
+    const nWL = 2 * deck.b / deck.spans[j];   // § 3.4.3 : η = largeur / portée de la travée considérée
     const minGuide = Math.min(1.3 * nWL, 2) / 1000 * h * (skew && skew.psi2 < 100 ? 1 / Math.sin(skew.psi2 * Math.PI / 200) : 1);
     // armatures de répartition BAEL (B.7.4) : ≥ A_s,long/4 (charges réparties) ; ≥ A_s,long/3 pour charges concentrées
     const botAs = Math.max(bot.flex, asLongBot / 3, mins.dalle, minGuide), topAs = Math.max(top.flex, asLongTop / 3, mins.dalle);

@@ -7,7 +7,7 @@
  *  H1  Dalle isotrope de largeur totale 2b (encorbellements compris), inertie équivalente constante.
  *      Coefficient de Poisson ν = 0,2 par défaut (CHAMOA) ; ν = 0 reproduit les tables de Massonnet.
  *  H2  Flexion longitudinale sur poutre continue à EI constant, appuis simples, abouts en console
- *      chargés par les charges permanentes.
+ *      chargés par les charges permanentes et par le trafic (pratique PSIDA.EL / PSIDP.EL).
  *  H3  Répartition transversale au premier harmonique, θ = b / L_eq, L_eq = distance entre points de
  *      moment nul de la travée chargée seule par une charge uniforme (« méthode des moments » CHAMOA) ;
  *      sur appui, moyenne des L_eq des deux travées adjacentes.
@@ -19,9 +19,10 @@
  *  H6  Ouvrage droit (biais ≥ 70 gr : à corriger par les coefficients du guide SETRA 1989).
  */
 import { ContinuousBeam } from './beam.js';
+import { mechanicalSkew } from './skew.js';
 import { coefKFunction, coefKBand } from './guyon.js';
 import { EC_ALPHA, notionalLanes, lm1, lm2, TS_GEOM, FOOTWAY } from './loads_ec.js';
-import { classePont, voiesF61, chargeA, BC, BT, MC120, D240, TROTTOIR, deltaDyn, maxAxleLoadOnLength } from './loads_f61.js';
+import { classePont, voiesF61, chargeA, BC, BT, MC120, D240, TROTTOIR, deltaDyn, maxAxleLoadOnLength, maxStripTrainLoad } from './loads_f61.js';
 
 /** Permutations d'un tableau (petites tailles). */
 function permutations(arr) {
@@ -56,6 +57,8 @@ export class SlabDeck {
    * @param {number} [g.nSec=20] intervalles de sections par travée
    * @param {number[]} [g.ys] ordonnées de calcul transversal (défaut : 9 points de −b à b)
    * @param {number[]} [g.Leq] portées équivalentes imposées (sinon calculées, H3)
+   * @param {'section'|'travee'} [g.f61Convention='travee'] K et δ des charges du Fascicule 61 : de la travée porteuse (SETRA) ou de la section
+   * @param {boolean} [g.sin2Phi=false] minoration sin²φ_mec des moments d'exploitation Fasc. 61 (option PSIDP.EL)
    * @param {'moments'|'fleches'} [g.leqMethod='moments'] calcul de L_eq : points de moment nul (CHAMOA) ou flèche à mi-travée (PSIDA.EL)
    * @param {number} [g.nu=0.2] coefficient de Poisson de la dalle pour Guyon-Massonnet (0 = tables de Massonnet)
    * @param {number} [g.alphaTorsion=1] paramètre de torsion α de Guyon-Massonnet (1 = dalle isotrope)
@@ -207,11 +210,12 @@ export class SlabDeck {
 
   /** Enveloppes de poutre (M, V, R) d'une file, mises en cache par signature longitudinale. */
   _beamEnvelopes(f) {
-    const sig = f.kind + '|' + (f.kind === 'axles' ? JSON.stringify(f.axles) : f.kind === 'train' ? JSON.stringify([f.axles, f.nVeh, f.pitch]) : f.kind === 'strip' ? `${f.q}|${f.len}` : f.kind === 'spanwise' ? f.sigL : f.q);
+    const sig = f.kind + '|' + (f.kind === 'axles' ? JSON.stringify(f.axles) : f.kind === 'train' ? JSON.stringify([f.axles, f.nVeh, f.pitch]) : f.kind === 'strip' || f.kind === 'stripTrain' ? `${f.q}|${f.len}|${f.pitch || ''}` : f.kind === 'spanwise' ? f.sigL : f.q);
     if (this._envCache.has(sig)) return this._envCache.get(sig);
     const bm = this.beam;
     const envOf = il => {
-      if (f.kind === 'udl') return bm.udlEnvelope(il, f.q);
+      if (f.kind === 'udl') return { ...bm.udlEnvelope(il, f.q), ...bm.udlEnvelopeParts(il, f.q) };
+      if (f.kind === 'stripTrain') return bm.stripTrainEnvelope(il, f.q, f.len, { pitch: f.pitch, nVeh: f.nVeh });
       if (f.kind === 'axles') return bm.axleEnvelope(il, f.axles);
       if (f.kind === 'train') return bm.trainEnvelope(il, f.axles, { nVeh: f.nVeh, pitch: f.pitch });
       if (f.kind === 'strip') return bm.stripEnvelope(il, f.q, f.len);
@@ -219,9 +223,14 @@ export class SlabDeck {
       throw new Error('kind inconnu ' + f.kind);
     };
     const M = bm.sections.map((_, s) => envOf(bm.ILM[s]));
-    const V = bm.sections.map((_, s) => { const a = envOf(bm.ILVm[s]), c = envOf(bm.ILVp[s]); return { max: Math.max(a.max, c.max), min: Math.min(a.min, c.min) }; });
+    const V = bm.sections.map((_, s) => {
+      const a = envOf(bm.ILVm[s]), c = envOf(bm.ILVp[s]);
+      const hi = a.max >= c.max ? a : c, lo = a.min <= c.min ? a : c;
+      return { max: hi.max, min: lo.min, partsMax: hi.partsMax, partsMin: lo.partsMin };
+    });
     const R = bm.ILR.map(il => envOf(il));
-    const out = { M, V, R };
+    const T = bm.ILT.map(il => envOf(il));   // rotations d'appui (EI relatif = 1)
+    const out = { M, V, R, T };
     this._envCache.set(sig, out);
     return out;
   }
@@ -230,37 +239,81 @@ export class SlabDeck {
    * Un arrangement = liste de files { label, kind, q|axles|len|qOfL(+sigL), tracks:[{e1,e2,share}] }.
    * `arrangements` = alternatives transversales (même contenu longitudinal, positions différentes) :
    * les enveloppes de poutre sont calculées une fois, m_x(y) est enveloppé sur les arrangements.
+   * @param {object} [opt]
+   * @param {number[]} [opt.delta] majoration dynamique par travée (Fasc. 61) — appliquée ici
+   * @param {number} [opt.dEnd] δ « d'entrée » des réactions de culée : δ_culée = ½[δ + max(δ ; dEnd)] (PSI-DA 68 § 2.4.3,
+   *   PSIDP.EL : 1,5 pour B, 1,2 pour Mc120) ; appuis intermédiaires : max des δ des deux travées
+   * @param {'section'|'travee'} [opt.convention] 'section' : K (L_eq de la section, moyenne sur appui) et δ de la section
+   *   appliqués à toutes les charges (CHAMOA) ; 'travee' : chaque charge reçoit le K et le δ de la travée qui la porte
+   *   (PSI-DA 68 § 2.2.2, PSIDA.EL, PSIDP.EL)
+   * @param {number[]} [opt.momentFactor] facteur par travée porteuse appliqué aux seuls moments (option PSIDP.EL :
+   *   minoration sin²φ_mec des moments longitudinaux des charges d'exploitation ; convention 'travee' seulement)
    * @returns {{Mmax,Mmin,Vmax,Vmin,Rmax,Rmin,mxMax,mxMin}}
    */
-  evaluateArrangements(arrangements) {
-    const nS = this.beam.sections.length, nSup = this.spans.length + 1;
+  evaluateArrangements(arrangements, { delta = null, dEnd = null, convention = 'section', momentFactor = null } = {}) {
+    const nS = this.beam.sections.length, nSup = this.spans.length + 1, nSp = this.spans.length;
     const zeroS = () => new Array(nS).fill(0);
+    const dSp = delta || this.spans.map(() => 1);
+    const dAt = s => {
+      const sec = this.beam.sections[s];
+      if (sec.frac === 0 && sec.span > 0) return Math.max(dSp[sec.span - 1], dSp[sec.span]);
+      if (sec.frac === 1 && sec.span < nSp - 1) return Math.max(dSp[sec.span], dSp[sec.span + 1]);
+      return dSp[sec.span];
+    };
+    const dR = i => {
+      if (i === 0 || i === nSup - 1) { const d = dSp[i === 0 ? 0 : nSp - 1]; return dEnd ? 0.5 * (d + Math.max(d, dEnd)) : d; }
+      return Math.max(dSp[i - 1], dSp[i]);
+    };
+    const perSpan = convention === 'travee';
+    const mF = momentFactor || this.spans.map(() => 1);
     let out = null;
     for (const files of arrangements) {
       const Mmax = zeroS(), Mmin = zeroS(), Vmax = zeroS(), Vmin = zeroS();
-      const Rmax = new Array(nSup).fill(0), Rmin = new Array(nSup).fill(0);
+      const Rmax = new Array(nSup).fill(0), Rmin = new Array(nSup).fill(0), Tmax = new Array(nSup).fill(0), Tmin = new Array(nSup).fill(0);
       const mxMax = Array.from({ length: nS }, () => this.ys.map(() => 0));
       const mxMin = Array.from({ length: nS }, () => this.ys.map(() => 0));
       for (const f of files) {
         const env = this._beamEnvelopes(f);
+        for (let i = 0; i < nSup; i++) { const d = delta ? dR(i) : 1; Tmax[i] += env.T[i].max * d; Tmin[i] += env.T[i].min * d; }
         for (let s = 0; s < nS; s++) {
-          const em = env.M[s];
-          Mmax[s] += em.max; Mmin[s] += em.min; Vmax[s] += env.V[s].max; Vmin[s] += env.V[s].min;
-          const L = this.LeqAt(s);
+          const em = env.M[s], ev = env.V[s];
+          const useParts = perSpan && em.partsMax && em.partsMin;
+          const sumD = parts => parts.reduce((a, v, j) => a + dSp[j] * v, 0);
+          const sumDM = parts => parts.reduce((a, v, j) => a + dSp[j] * mF[j] * v, 0);
+          if (useParts) {
+            Mmax[s] += sumDM(em.partsMax); Mmin[s] += sumDM(em.partsMin);
+            Vmax[s] += ev.partsMax ? sumD(ev.partsMax) : ev.max * dAt(s); Vmin[s] += ev.partsMin ? sumD(ev.partsMin) : ev.min * dAt(s);
+          } else {
+            const d = dAt(s);
+            Mmax[s] += em.max * d; Mmin[s] += em.min * d; Vmax[s] += ev.max * d; Vmin[s] += ev.min * d;
+          }
           for (const t of f.tracks) {
-            const K = this.Kbar(L, t.e1, t.e2);
-            for (let iy = 0; iy < this.ys.length; iy++) {
-              const a = K[iy] * em.max * t.share / (2 * this.b), c = K[iy] * em.min * t.share / (2 * this.b);
-              mxMax[s][iy] += Math.max(a, c, 0); mxMin[s][iy] += Math.min(a, c, 0);
+            const k2 = t.share / (2 * this.b);
+            if (useParts) {
+              const Ks = this.spans.map((_, j) => this.Kbar(this.Leq[j], t.e1, t.e2));
+              for (let iy = 0; iy < this.ys.length; iy++) {
+                let a = 0, c = 0;
+                for (let j = 0; j < nSp; j++) { a += Ks[j][iy] * dSp[j] * mF[j] * em.partsMax[j]; c += Ks[j][iy] * dSp[j] * mF[j] * em.partsMin[j]; }
+                a *= k2; c *= k2;
+                mxMax[s][iy] += Math.max(a, c, 0); mxMin[s][iy] += Math.min(a, c, 0);
+              }
+            } else {
+              const K = this.Kbar(this.LeqAt(s), t.e1, t.e2), d = dAt(s);
+              for (let iy = 0; iy < this.ys.length; iy++) {
+                const a = K[iy] * em.max * d * k2, c = K[iy] * em.min * d * k2;
+                mxMax[s][iy] += Math.max(a, c, 0); mxMin[s][iy] += Math.min(a, c, 0);
+              }
             }
           }
         }
-        for (let i = 0; i < nSup; i++) { Rmax[i] += env.R[i].max; Rmin[i] += env.R[i].min; }
+        for (let i = 0; i < nSup; i++) { const d = delta ? dR(i) : 1; Rmax[i] += env.R[i].max * d; Rmin[i] += env.R[i].min * d; }
       }
-      const r = { Mmax, Mmin, Vmax, Vmin, Rmax, Rmin, mxMax, mxMin };
+      const r = { Mmax, Mmin, Vmax, Vmin, Rmax, Rmin, Tmax, Tmin, mxMax, mxMin };
       out = out ? SlabDeck.envelopeOf([out, r]) : r;
     }
-    return out || this.evaluateArrangements([[]]);
+    out = out || this.evaluateArrangements([[]]);
+    if (delta) { out.delta = delta.slice(); out.deltaR = Array.from({ length: nSup }, (_, i) => dR(i)); out.convention = convention; }
+    return out;
   }
 
   /** Un seul arrangement. */
@@ -270,8 +323,8 @@ export class SlabDeck {
   static envelopeOf(results) {
     const out = results[0];
     for (const r of results.slice(1)) {
-      for (const k of ['Mmax', 'Vmax', 'Rmax']) out[k] = out[k].map((v, i) => Math.max(v, r[k][i]));
-      for (const k of ['Mmin', 'Vmin', 'Rmin']) out[k] = out[k].map((v, i) => Math.min(v, r[k][i]));
+      for (const k of ['Mmax', 'Vmax', 'Rmax', 'Tmax']) if (out[k] && r[k]) out[k] = out[k].map((v, i) => Math.max(v, r[k][i]));
+      for (const k of ['Mmin', 'Vmin', 'Rmin', 'Tmin']) if (out[k] && r[k]) out[k] = out[k].map((v, i) => Math.min(v, r[k][i]));
       out.mxMax = out.mxMax.map((row, s) => row.map((v, i) => Math.max(v, r.mxMax[s][i])));
       out.mxMin = out.mxMin.map((row, s) => row.map((v, i) => Math.min(v, r.mxMin[s][i])));
     }
@@ -282,7 +335,7 @@ export class SlabDeck {
   static sum(results) {
     const out = JSON.parse(JSON.stringify(results[0]));
     for (const r of results.slice(1)) {
-      for (const k of ['Mmax', 'Mmin', 'Vmax', 'Vmin', 'Rmax', 'Rmin']) out[k] = out[k].map((v, i) => v + r[k][i]);
+      for (const k of ['Mmax', 'Mmin', 'Vmax', 'Vmin', 'Rmax', 'Rmin', 'Tmax', 'Tmin']) if (out[k] && r[k]) out[k] = out[k].map((v, i) => v + r[k][i]);
       out.mxMax = out.mxMax.map((row, s) => row.map((v, i) => v + r.mxMax[s][i]));
       out.mxMin = out.mxMin.map((row, s) => row.map((v, i) => v + r.mxMin[s][i]));
     }
@@ -292,7 +345,7 @@ export class SlabDeck {
   /** Résultat multiplié par un scalaire (ψ, γ…). */
   static scale(res, k) {
     const out = JSON.parse(JSON.stringify(res));
-    for (const key of ['Mmax', 'Mmin', 'Vmax', 'Vmin', 'Rmax', 'Rmin']) out[key] = out[key].map(v => v * k);
+    for (const key of ['Mmax', 'Mmin', 'Vmax', 'Vmin', 'Rmax', 'Rmin', 'Tmax', 'Tmin']) if (out[key]) out[key] = out[key].map(v => v * k);
     out.mxMax = out.mxMax.map(row => row.map(v => v * k)); out.mxMin = out.mxMin.map(row => row.map(v => v * k));
     return out;
   }
@@ -389,14 +442,21 @@ export class SlabDeck {
   /**
    * @param {{classe?:number, nRetenue?:number, Gspan?:number[]}} opt
    */
-  fascicule61({ classe = null, nRetenue = 0, Gspan = null } = {}) {
+  fascicule61({ classe = null, nRetenue = 0, Gspan = null, convention = null } = {}) {
     const { y1, y2 } = this.g.roadway;
     const Lr = y2 - y1, Lc = Lr - 0.5 * nRetenue;
     const cl = classe || classePont(Lr);
     const { nv, v } = voiesF61(Lc);
     const yc1 = y1 + (Lr - Lc) / 2, yc2 = y2 - (Lr - Lc) / 2;
-    const gT = this.permanent().gTotal;
-    const G = Gspan || this.spans.map(L => gT * L);
+    // convention SETRA par défaut : K et δ de la travée qui porte la charge (PSIDA.EL, PSIDP.EL, PSI-DA 68 § 2.2.2)
+    const conv = convention || this.g.f61Convention || 'travee';
+    // option PSIDP.EL : minoration sin²φ_mec (biais mécanique de chaque travée) des moments d'exploitation
+    const mF = this.g.sin2Phi && (this.g.psi || 100) < 100
+      ? this.spans.map(L => Math.sin(mechanicalSkew({ psi: this.g.psi, Be: 2 * this.b, L }) * Math.PI / 200) ** 2) : null;
+    const optsQ = { convention: conv, momentFactor: mF };
+    // G de δ : ½(G_min + G_max)·L (valeurs caractéristiques des permanentes) — PONTYPE, PSIDA.EL, PSIDP.EL
+    const gMean = this.permanentFiles().reduce((a, f) => a + f.q * ((f.kmin ?? 1) + (f.kmax ?? 1)) / 2, 0);
+    const G = Gspan || this.spans.map(L => gMean * L);
     const voies = Array.from({ length: nv }, (_, i) => ({ e1: yc1 + i * v, e2: yc1 + (i + 1) * v }));
 
     // --- A(l) : tout sous-ensemble des voies fixes ; a1 dépend du nombre de voies chargées
@@ -410,7 +470,7 @@ export class SlabDeck {
         tracks: [{ e1: ln.e1, e2: ln.e2, share: 1 }],
       })));
     }
-    const A = this.evaluateArrangements(arrA);
+    const A = this.evaluateArrangements(arrA, optsQ);
 
     // --- Bc : 1 à nv files de 2 camions (largeur 2,50 m), bloc de files accolées glissant dans Lc
     const arrBc = [];
@@ -430,7 +490,7 @@ export class SlabDeck {
     // un même coefficient pour Bc et Bt (cf. note PSIDA.EL commentée)
     const SBt0 = this.spans.map(L => (BT.bt[cl] ? Math.min(nv, 2) * BT.bt[cl] * maxAxleLoadOnLength(BT.axles, L) : 0));
     const deltaBc = this.spans.map((L, j) => deltaDyn(L, G[j], Math.max(SBc[j], SBt0[j])));
-    const Bc = this.applyDelta(this.evaluateArrangements(arrBc), deltaBc);
+    const Bc = this.evaluateArrangements(arrBc, { ...optsQ, delta: deltaBc, dEnd: 1.5 });
 
     // --- Bt : 1 ou 2 tandems (classes 1 et 2)
     let Bt = null, deltaBt = null;
@@ -447,28 +507,29 @@ export class SlabDeck {
         }
       }
       deltaBt = deltaBc;
-      Bt = this.applyDelta(this.evaluateArrangements(arrBt), deltaBt);
+      Bt = this.evaluateArrangements(arrBt, { ...optsQ, delta: deltaBt, dEnd: 1.5 });
     }
 
-    // --- Mc120 : un engin (largeur hors tout 4,30 m) glissant dans Lc
+    // --- Mc120 : engins de largeur hors tout 4,30 m glissant dans Lc, en convoi longitudinal
     const half = MC120.trackSpacing / 2;
+    // convoi d'engins Mc120 à espacement libre (distance libre ≥ 30,50 m, art. 9) — note modèle PSIDP.EL
     const arrMc = slidePositions(yc1 + 2.15, yc2 - 2.15, 0, this.laneStep).map(e => [{
-      label: 'Mc120', kind: 'strip', q: 2 * MC120.qTrack, len: MC120.trackLength,
+      label: 'Mc120', kind: 'stripTrain', pitch: MC120.trackLength + MC120.gapMin, q: 2 * MC120.qTrack, len: MC120.trackLength,
       tracks: [{ e1: e - half - 0.5, e2: e - half + 0.5, share: 0.5 }, { e1: e + half - 0.5, e2: e + half + 0.5, share: 0.5 }],
     }]);
-    const SMc = this.spans.map(L => MC120.P * Math.min(1, L / MC120.trackLength));
+    const SMc = this.spans.map(L => maxStripTrainLoad(L, MC120.trackLength, MC120.trackLength + MC120.gapMin, MC120.P));
     const deltaMc = this.spans.map((L, j) => deltaDyn(L, G[j], SMc[j]));
-    const Mc120 = this.applyDelta(this.evaluateArrangements(arrMc), deltaMc);
+    const Mc120 = this.evaluateArrangements(arrMc, { ...optsQ, delta: deltaMc, dEnd: 1.2 });
 
     // --- D240 : convoi seul, sans majoration dynamique
     const arrD = slidePositions(yc1 + D240.width / 2, yc2 - D240.width / 2, 0, this.laneStep).map(e => [{
       label: 'D240', kind: 'strip', q: D240.q, len: D240.length, tracks: [{ e1: e - D240.width / 2, e2: e + D240.width / 2, share: 1 }],
     }]);
-    const D = this.evaluateArrangements(arrD);
+    const D = this.evaluateArrangements(arrD, optsQ);
 
-    const trott = this.evaluateCase((this.g.footways || []).map(f => ({
+    const trott = this.evaluateArrangements([(this.g.footways || []).map(f => ({
       label: 'Trottoir', kind: 'udl', q: TROTTOIR.q * (f.y2 - f.y1), tracks: [{ e1: f.y1, e2: f.y2, share: 1 }],
-    })));
+    }))], optsQ);
 
     return { classe: cl, Lr, Lc, nv, v, G, A, Bc, deltaBc, Bt, deltaBt, Mc120, deltaMc, D240: D, trottoir: trott };
   }
