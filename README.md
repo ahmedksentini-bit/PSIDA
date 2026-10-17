@@ -50,6 +50,10 @@ src/design.js       ferraillage longitudinal et transversal, enveloppes, trancha
 src/transverse.js   flexion transversale m_y(y) par travée (dalle isostatique équivalente, Fourier)
 src/skew.js         biais : biais mécanique (SETRA 1989), moments dans les directions d'aciers (annexe 12A BPEL / CHAMOA, Wood-Armer)
 src/bearings.js     appareils d'appui en élastomère fretté : règles du guide § 3.6 (BT4), gamme standard, freinage EN 1991-2, rotations
+src/vehicles.js     véhicules généralisés : engins de chantier (profil provisoire, dyn 1,5) et convois LM3 (annexe A, incertitude 1,1, dyn annexe nationale)
+src/zonage.js       zonage du ferraillage : chevêtres incorporés, extensions, bords libres, angles, abouts (guide § 3.4.4–3.4.8)
+src/cantilever.js   encorbellements : moments d'encastrement (poids propre, superstructures, trottoir, TS/LM2/UDL diffusés) et aciers
+src/fatigue.js      fatigue des armatures : FLM3, λ_s (EN 1992-2 annexe NN), section fissurée
 src/conception.js   aide à la conception : règles du guide SETRA 1989, variantes de travure, recherche de l'épaisseur minimale vérifiée
 src/abaques1989.js  abaques d'épaisseur du guide SETRA 1989 numérisés (PSI.DA p. 65–67 ; plateaux PSI.DP p. 59–61)
 tools/abaques1989/  script de numérisation (suivi de courbes sur les pages scannées) et données brutes
@@ -148,6 +152,13 @@ et une liste d'aide détaille les données), résultats à droite :
    les aciers transversaux (parallèles aux lignes d'appui ou perpendiculaires aux bords libres, au choix) sont
    dimensionnés avec le moment dans leur direction M_APF de l'annexe 12A du BPEL (pratique CHAMOA, reproduite exactement).
 
+7 bis. **Phase de chantier, LM3, encorbellement, fatigue** — profil provisoire (remblai, enrobé, engins circulant seuls,
+   dyn 1,5), convoi exceptionnel LM3 seul (véhicules de l'annexe A ou personnalisé, incertitude 1,1, dynamique
+   1 + 0,7/(1 + 0,2 L)), avec les aciers du profil comparés au profil définitif et l'enveloppe retenue ; encorbellement
+   (moments d'encastrement, aciers) ; fatigue des armatures par la méthode λ_s avec FLM3 (essieux × 1,75 / 1,40, section
+   fissurée, Δσ_Rsk = 162,5 MPa).
+7 ter. **Zonage et dispositions constructives** — chevêtres incorporés et extensions (a/(3 sin ψ), 2a/(3 sin ψ)), chaînage des
+   bords libres (0,9 ‰, cadres 5 cm²/m), angles (1,2 ‰ ou 0,6/sin²(α/2) ‰), abouts, encorbellements, avec la vue en plan des zones.
 8. **Note de calcul** — bouton « Exporter la note de calcul » : page HTML autonome (données, modèle, tableaux,
    graphiques en PNG, hypothèses, références), à imprimer ou enregistrer en PDF depuis le navigateur.
 9. **Permalien** — les données du formulaire sont encodées dans l'URL après chaque calcul : un lien suffit pour
@@ -159,8 +170,11 @@ et une liste d'aide détaille les données), résultats à droite :
   est fait suivant les portées biaises (comme CHAMOA, sans correction) ; les aciers transversaux sont corrigés par
   l'annexe 12A (biais mécanique du guide 1989, reproduits exactement sur la note CHAMOA).
 - Appareils d'appui : prédimensionnement aux règles du BT4 reprises par le guide 1989, à confirmer selon NF EN 1337-3.
-- Fatigue des armatures : vérification simplifiée σs ≤ 300 MPa sous ELS caractéristique (pratique CHAMOA), pas la méthode λ_s de l'EN 1992-2 annexe NN.
-- Pas encore : LM3 / convois spéciaux EC, phase de chantier (profil provisoire), tassements probables, encorbellements.
+- Fatigue : critère simplifié σs ≤ 300 MPa (CHAMOA) et méthode λ_s de l'annexe NN ; λ_s,1 est à lire sur la figure NN.1 (saisi).
+- Phase de chantier : les tombereaux 23/34 m³ de la circulaire « delta 70 » ne sont pas prédéfinis (données non disponibles) ;
+  le véhicule spécial de la note CHAMOA est reproduit à 4 % (435 contre 451 kN·m à P1). LM3 : composition des lignes
+  d'essieux de l'annexe A à relire (`TODO_VERIF`). Encorbellement : méthode simplifiée (diffusion à 45°), pas l'annexe 3 du PSIDP.EL.
+- Pas encore : tassements probables, précontrainte (PSI.DP), appareils d'appui glissants ou à pot.
 - Le guide SETRA 1989 a été établi pour les charges du Fascicule 61 (classe I–II, deux voies) : ses abaques et élancements sont des
   ordres de grandeur (lecture des abaques à ±0,005 m), la recherche d'épaisseur de l'outil fait foi pour les charges Eurocodes.
 - Les tableaux `a1`, `bc`, `bt` du Fascicule 61 et les α de l'annexe française sont à relire contre

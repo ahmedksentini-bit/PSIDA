@@ -23,18 +23,10 @@ const kNm2MNm = 1e-3;
  * @param {object} ec     deck.eurocode()
  * @param {object} opt    { fck, fyk, c, phi, wkMax, tRev, alphaE, fsFat, kSlab }
  */
-export function designEC(deck, perm, ec, opt = {}) {
-  const { c = 0.03, phi = 0.020, wkMax = 0.3, tRev = 0.08, thermal = null, settle = null } = opt;
-  const mat = materialsEC2(opt);
-  const h = deck.h, d = h - c, sec = { b: 1, h, d };
-  // chanfreins : compression par l'intrados (moments sur appuis) sur largeur réduite
-  const wTop = deck.g.chamfer ? chamferWidthFn({ width: 2 * deck.b, h, hEdge: deck.g.chamfer.hEdge, joue: deck.g.chamfer.joue }) : null;
-  const secTop = { ...sec, widthFn: wTop };
-  const comb = combineEC(perm, ec, { thermal, settle });
+/** Boucle sections × fibres × faces à partir d'une combinaison EC {ELU, CAR, FREQ, QP} (max/min [s][iy]). */
+function facesEC(deck, comb, mat, sec, secTop, mins, { wkMax, phi, c }) {
   const nS = deck.beam.sections.length;
-  const mins = minimumSteel(sec, mat, { kSlab: opt.kSlab ?? 1.2 });
-  const perFibre = []; // [s][iy] = { bot:{...}, top:{...} }
-  const bot = [], top = [];
+  const perFibre = [], bot = [], top = [];
   for (let s = 0; s < nS; s++) {
     const rowB = [], rowT = [], fibres = [];
     for (let iy = 0; iy < deck.ys.length; iy++) {
@@ -52,7 +44,19 @@ export function designEC(deck, perm, ec, opt = {}) {
     }
     bot.push(rowB); top.push(rowT); perFibre.push(fibres);
   }
-  const envBot = bot.map(r => Math.max(...r)), envTop = top.map(r => Math.max(...r));
+  return { perFibre, bot, top, envBot: bot.map(r => Math.max(...r)), envTop: top.map(r => Math.max(...r)) };
+}
+
+export function designEC(deck, perm, ec, opt = {}) {
+  const { c = 0.03, phi = 0.020, wkMax = 0.3, tRev = 0.08, thermal = null, settle = null } = opt;
+  const mat = materialsEC2(opt);
+  const h = deck.h, d = h - c, sec = { b: 1, h, d };
+  // chanfreins : compression par l'intrados (moments sur appuis) sur largeur réduite
+  const wTop = deck.g.chamfer ? chamferWidthFn({ width: 2 * deck.b, h, hEdge: deck.g.chamfer.hEdge, joue: deck.g.chamfer.joue }) : null;
+  const secTop = { ...sec, widthFn: wTop };
+  const comb = combineEC(perm, ec, { thermal, settle });
+  const mins = minimumSteel(sec, mat, { kSlab: opt.kSlab ?? 1.2 });
+  const { perFibre, bot, top, envBot, envTop } = facesEC(deck, comb, mat, sec, secTop, mins, { wkMax, phi, c });
   // effort tranchant : combinaison de poutre avec le facteur K du cas dominant (LM1), par mètre
   const beam = combineBeamEC(perm, ec, { thermal, settle });
   const KL = deck.transverseFactors(ec.LM1).K;
@@ -78,6 +82,33 @@ export function designEC(deck, perm, ec, opt = {}) {
   };
   return { ref: 'EC', mat, d, h, c, phi, comb, beam, perFibre, bot, top, envBot, envTop, mins, shear, punch,
     transverseMin: { bot: Math.max(...envBot) * 0.2, top: Math.max(Math.max(...envTop) * 0.2, Math.max(...envBot) * 0.2 * 0.5) } };
+}
+
+/**
+ * Profil provisoire (phase de chantier) ou convoi LM3 seul : combinaisons avec une seule action variable Q
+ * (ELU = 1,35 G + 1,35 Q ; ELS car. = G + Ta + 0,6 T + Q ; ELS fréq. = G + 0,5 T + ψ₁ Q ; ELS QP = G + Ta + 0,5 T), puis
+ * aciers par face comme designEC ; `longEC` permet l'enveloppe des deux profils.
+ */
+export function designSingleActionEC(deck, perm, Q, opt = {}) {
+  const { c = 0.03, phi = 0.020, wkMax = 0.3, thermal = null, settle = null, psi1 = 0.75, label = 'Q' } = opt;
+  const mat = materialsEC2(opt);
+  const h = deck.h, d = h - c, sec = { b: 1, h, d };
+  const wTop = deck.g.chamfer ? chamferWidthFn({ width: 2 * deck.b, h, hEdge: deck.g.chamfer.hEdge, joue: deck.g.chamfer.joue }) : null;
+  const secTop = { ...sec, widthFn: wTop };
+  const mins = minimumSteel(sec, mat, { kSlab: opt.kSlab ?? 1.2 });
+  const nS = deck.beam.sections.length, ny = deck.ys.length;
+  const t = (key, s, iy) => (thermal ? thermal[key][s][iy] : 0), ta = (key, s, iy) => (settle ? settle[key][s][iy] : 0);
+  const q = (key, s, iy) => (Q ? Q[key][s][iy] : 0);
+  const mk = fn => Array.from({ length: nS }, (_, s) => Array.from({ length: ny }, (_, iy) => fn(s, iy)));
+  const comb = {
+    ELU: { max: mk((s, iy) => 1.35 * perm.mxMax[s][iy] + 1.35 * Math.max(q('mxMax', s, iy), 0)), min: mk((s, iy) => 1.35 * perm.mxMin[s][iy] + 1.35 * Math.min(q('mxMin', s, iy), 0)) },
+    CAR: { max: mk((s, iy) => perm.mxMax[s][iy] + ta('mxMax', s, iy) + 0.6 * t('mxMax', s, iy) + Math.max(q('mxMax', s, iy), 0)), min: mk((s, iy) => perm.mxMin[s][iy] + ta('mxMin', s, iy) + 0.6 * t('mxMin', s, iy) + Math.min(q('mxMin', s, iy), 0)) },
+    FREQ: { max: mk((s, iy) => perm.mxMax[s][iy] + 0.5 * t('mxMax', s, iy) + psi1 * Math.max(q('mxMax', s, iy), 0)), min: mk((s, iy) => perm.mxMin[s][iy] + 0.5 * t('mxMin', s, iy) + psi1 * Math.min(q('mxMin', s, iy), 0)) },
+    QP: { max: mk((s, iy) => perm.mxMax[s][iy] + ta('mxMax', s, iy) + 0.5 * t('mxMax', s, iy)), min: mk((s, iy) => perm.mxMin[s][iy] + ta('mxMin', s, iy) + 0.5 * t('mxMin', s, iy)) },
+  };
+  const beamM = { max: deck.beam.sections.map((_, s) => perm.Mmax[s] + (settle ? settle.Mmax[s] : 0) + 0.6 * (thermal ? thermal.Mmax[s] : 0) + Math.max(Q ? Q.Mmax[s] : 0, 0)), min: deck.beam.sections.map((_, s) => perm.Mmin[s] + (settle ? settle.Mmin[s] : 0) + 0.6 * (thermal ? thermal.Mmin[s] : 0) + Math.min(Q ? Q.Mmin[s] : 0, 0)) };
+  const r = facesEC(deck, comb, mat, sec, secTop, mins, { wkMax, phi, c });
+  return { ref: 'EC', label, mat, d, h, c, phi, comb, beamCAR: beamM, mins, ...r };
 }
 
 /**

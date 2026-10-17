@@ -215,8 +215,32 @@ l'écart venant des entrées MX (528 contre 435 : enveloppe du maximum de travé
 charges locales à 15 harmoniques) ; aciers 18,6 / 21,8 cm²/m contre 14,1 / 17,3. Les quantités sont données par mètre
 perpendiculaire aux aciers (× sin ψ par mètre d'axe, remarque [11] de la note).
 
+## 8 ter. Phase de chantier, convois LM3, encorbellements, fatigue, zonage
+
+* **Profil provisoire (phase de chantier)** : charges permanentes provisoires (remblai h·γ sur une largeur, enrobé) et
+  engins de chantier définis par leurs essieux (P@x), largeur, entraxe des roues et coefficient dynamique (1,5 pour un
+  engin « rapide », pratique CHAMOA), circulant seuls sur la chaussée de chantier moins les bandes neutralisées — les
+  roues extrêmes restant dans la largeur chargeable (sur l'exemple, le véhicule spécial 2 × 100 kN donne 435 kN·m à P1
+  contre 451 dans la note) ; ELU 1,35 G + 1,35 Q, ELS car. G + Ta + 0,6 T + Q ; les aciers du profil provisoire sont
+  comparés à ceux du profil définitif, l'enveloppe des deux est retenue (c'est ce qui gouverne les aciers d'appui de la
+  note CHAMOA, avec des tombereaux non reproduits ici).
+* **Convois exceptionnels LM3** (EN 1991-2 § 4.3.4 et annexe A, annexe nationale) : véhicules spéciaux 600/150 … 3600/200
+  (lignes d'essieux à 1,50 m, largeur 3,00 ou 4,50 m) ou personnalisés, charges × 1,1 (incertitude), coefficient dynamique
+  1 + 0,7/(1 + 0,2 L_min) à vitesse normale (1 au pas), convoi seul avec bandes de 1 m neutralisées ; même chaîne que les
+  engins de chantier.
+* **Encorbellement** : console de portée Lc et d'épaisseur variable ; m = γ(h_r L²/2 + (h_t − h_r) L²/3) + Σ g·e + Σ q(x₂² − x₁²)/2
+  + trottoir (5 ou 3 kN/m²) + roues : tandem TS diffusé à 45° (b_eff = 0,40 + 2 t_rev + h_m + 1,20 + 2x), LM2
+  (b_eff = 0,60 + 2 t_rev + h_m + 2x), UDL ; ELU/ELS car./fréq. ; aciers supérieurs d'encastrement EC2.
+* **Fatigue (EN 1992-2 annexe NN)** : FLM3 (4 × 120 kN, 1,2 – 6,0 – 1,2 m, roues à 2 m) sur la voie lente, essieux × 1,75
+  sur appuis et × 1,40 en travée ; Δσ_s,Ec en section fissurée avec les aciers calculés ; λ_s = φ_fat λ_s,1 λ_s,2 λ_s,3 λ_s,4,
+  λ_s,2 = Q̄ (N_obs/2·10⁶)^(1/9), λ_s,3 = (N_années/100)^(1/9), λ_s,4 = (Σ N_obs,i/N_obs,1)^(1/9) ; γ_F,fat Δσ_s,equ ≤ 162,5/1,15.
+* **Zonage (guide § 3.4.4 – 3.4.8)** : chevêtre sur pile-culée = about + a/(3 sin ψ), extension = 2a/(3 sin ψ) ; appui
+  intermédiaire ± a/(3 sin ψ) et extensions 2a/(3 sin ψ) (a = entraxe des appareils d'appui) ; chaînage des bords libres sur
+  une largeur h, ≥ 0,9 ‰ par face et par direction, cadres ≥ 5 cm²/m ; angles ≥ 1,2 ‰ (orthogonal) ou 0,6/sin²(α/2) ‰
+  (2,4 ‰ à 60°, 4,1 ‰ à 45°) ; encorbellements : aciers doublés dans les angles sur 1,5 Lc ; abouts : bielle et coin inférieur.
+
 ## 9. Ce que l'outil ne fait pas (encore)
 
-Phase de chantier (profil provisoire), convois LM3 de l'Eurocode, tassements probables, encorbellements, fatigue par la
-méthode λ_s de l'EN 1992-2 annexe NN, appareils d'appui glissants ou à pot (§ 3.6.2, § 3.7), chevêtres incorporés et
-zones d'about du § 3.4.4 (aciers de diffusion, étriers).
+Tassements probables, précontrainte (PSI.DP), appareils d'appui glissants ou à pot (§ 3.6.2, § 3.7), dalles à
+encorbellements massifs participant à la flexion longitudinale ; les tombereaux de la circulaire « delta 70 » ne sont pas
+prédéfinis ; λ_s,1 (figure NN.1) est saisi ; la composition des lignes d'essieux de l'annexe A est à relire.

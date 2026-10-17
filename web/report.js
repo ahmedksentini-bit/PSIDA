@@ -4,7 +4,7 @@
  */
 import { elevationSVG, crossSectionSVG } from './svg.js';
 import { tableK } from '../src/guyon.js';
-import { planSVG } from './schema.js';
+import { planSVG, zoningPlanSVG } from './schema.js';
 
 const cm = v => (v * 1e4).toFixed(1);
 const f0 = v => v.toFixed(0), f1 = v => v.toFixed(1), f3 = v => v.toFixed(3);
@@ -135,8 +135,23 @@ export async function buildReport(st) {
     h += `<tr><td>Travée ${sp.j + 1}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${f.y}</td><td>${f1(f.Mu)}</td><td>${f1(f.Mcar)}</td><td>${f1(f.Mfre)}</td><td>${cm(f.AsULS)}</td><td>${cm(f.AsSLS)}</td><td>${cm(f.AsWk)}</td><td>${cm(f.nonSec)}</td><td><b>${cm(f.As)}</b></td><td>${f1(fb.Ms)}</td><td><b>${cm(fb.As)}</b></td></tr>`; } });
   h += `</tbody></table>` + figs.my;
 
-  // 10. Références
-  h += `<h2>10. Hypothèses et références</h2><p class="small">H1 dalle isotrope de largeur totale, ν = ${deck.nu} ; H2 poutre continue à EI constant ; H3 premier harmonique, L_eq de la travée seule chargée (« méthode des moments ») ; H4 arrangement transversal le plus défavorable par fibre, files indépendantes longitudinalement ; H5 poids propre K = 1, charges excentrées K(e, y) ; H6 calcul longitudinal suivant les portées biaises sans correction (biais mécanique et annexe 12A dans le module biais) ; H7 flexion transversale sur dalle isostatique équivalente. Vérifications : 45 tests unitaires dont la note CHAMOA-PSIDA (Cerema, ch. 4) : moments permanents, travée équivalente, gradient thermique et tassements à 10⁻³, moment de calcul LM1 à 1 %, aciers de flexion à 1 %, biais mécanique et moments de l'annexe 12A à 10⁻⁴.</p>
+  // 10. Modules complémentaires
+  if (st.extra) {
+    const x = st.extra, cm2 = v => cm(v);
+    h += `<h2>10. Phase de chantier, convois LM3, encorbellement, fatigue, zonage</h2>`;
+    const tab = (title, dz, note) => { let t = `<h3>${title}</h3><p class="small">${note}</p><table><thead><tr><th>Section</th><th>M car. poutre</th><th>M ELU/m</th><th>M car./m</th><th>A_s inf</th><th>A_s sup</th><th>Retenu inf / sup (max avec le profil définitif)</th></tr></thead><tbody>`;
+      for (const k of keys) { const s2 = k.idx; const ib = dz.bot[s2].indexOf(Math.max(...dz.bot[s2])), it = dz.top[s2].indexOf(Math.max(...dz.top[s2])); const mc = Math.abs(dz.beamCAR.max[s2]) > Math.abs(dz.beamCAR.min[s2]) ? dz.beamCAR.max[s2] : dz.beamCAR.min[s2];
+        t += `<tr><td>${k.label}</td><td>${f0(mc)}</td><td>${f0(k.kind === 'support' ? dz.comb.ELU.min[s2][it] : dz.comb.ELU.max[s2][ib])}</td><td>${f0(k.kind === 'support' ? dz.comb.CAR.min[s2][it] : dz.comb.CAR.max[s2][ib])}</td><td>${cm2(dz.envBot[s2])}</td><td>${cm2(dz.envTop[s2])}</td><td><b>${cm2(Math.max(dz.envBot[s2], dEC.envBot[s2]))} / ${cm2(Math.max(dz.envTop[s2], dEC.envTop[s2]))}</b></td></tr>`; }
+      return t + `</tbody></table>`; };
+    if (x.chantier) h += tab('Profil provisoire (phase de chantier)', x.chantier.design, esc(`Poids propre + ${x.chantier.perm.files.slice(1).map(f => `${f.label} ${f.q.toFixed(1)} kN/m`).join(' + ')} ; engins ${x.chantier.vehicles.map(v => `${v.label} (× ${v.factor})`).join(', ')} seuls sur [${x.chantier.roadway.y1} ; ${x.chantier.roadway.y2}] moins ${x.chantier.neutral} m ; ELU 1,35 G + 1,35 Q, ELS car. G + Ta + 0,6 T + Q.`));
+    if (x.lm3) h += tab(`Convoi LM3 seul — ${x.lm3.vehicle.label}`, x.lm3.design, esc(`${x.lm3.vehicle.axles.length} essieux de ${x.lm3.vehicle.axles[0].P} kN, largeur ${x.lm3.vehicle.width} m, incertitude ${x.lm3.vehicle.unc}, dynamique ${x.lm3.vehicle.dyn.toFixed(3)}.`));
+    if (x.cantilever) { const m = x.cantilever.mom, cd = x.cantilever.design; h += `<h3>Encorbellement (${m.Lc} m, h ${m.hr} → ${m.ht} m)</h3><p class="small">G ${f1(m.G.m)} ; trottoir ${f1(m.footway.seul)} / ${f1(m.footway.avecLM1)}${m.ts ? ` ; TS ${f1(m.ts.m)} (b_eff ${m.ts.beff.toFixed(2)} m), LM2 ${f1(m.lm2.m)}, UDL ${f1(m.udl.m)}` : ''} kN·m/m ; ${esc(m.governing)} ; ELU ${f1(m.ELU)}, ELS car. ${f1(m.CAR)}, fréq. ${f1(m.FREQ)} ; aciers supérieurs d'encastrement ${cm2(cd.As)} cm²/m (ELU ${cm2(cd.AsULS)}, ELS ${cm2(cd.AsSLS)}, wk ${cm2(cd.AsWk)}).</p>`; }
+    if (x.fatigue) { const f = x.fatigue; h += `<h3>Fatigue des armatures (EN 1992-2 annexe NN, FLM3)</h3><p class="small">λ_s = ${f.phiFat} × ${f.lambda1} × ${f.lambda2.toFixed(3)} × ${f.lambda3.toFixed(3)} × ${f.lambda4.toFixed(3)} = ${f.lambdaS.toFixed(3)} ; essieux × 1,75 (appuis) / 1,40 (travées) ; limite ${(f.dSigRsk / f.gammaS).toFixed(1)} MPa.</p><table><thead><tr><th>Section</th><th>Face / y</th><th>A_s</th><th>ΔM × k</th><th>σs min → max</th><th>Δσ_s,equ</th><th>Taux</th></tr></thead><tbody>${f.rows.map(r => `<tr><td>${r.label}</td><td>${r.face === 'bot' ? 'inf' : 'sup'} / ${r.y}</td><td>${cm2(r.As)}</td><td>${f1(r.dM)}</td><td>${f0(r.sigLo)} → ${f0(r.sigHi)}</td><td>${f1(r.dSigEqu)}</td><td>${r.ratio.toFixed(2)} ${r.ok ? 'OK' : 'NON'}</td></tr>`).join('')}</tbody></table>`; }
+    if (x.zonage) { const z = x.zonage; h += `<h3>Zonage du ferraillage (guide SETRA 1989 § 3.4.4 à 3.4.8)</h3><div class="svg">${zoningPlanSVG({ spans: deck.spans, width: 2 * deck.b, overhangs: g.overhangs || [0, 0], psi: p.concept.psi, h: deck.h }, z)}</div><table><thead><tr><th>Zone</th><th>x début</th><th>x fin</th><th>Longueur</th></tr></thead><tbody>${z.zones.map(zz => `<tr><td>${zz.kind === 'chevetre' ? 'Chevêtre' : 'Extension'} ${zz.support}</td><td>${zz.x1.toFixed(2)}</td><td>${zz.x2.toFixed(2)}</td><td>${(zz.x2 - zz.x1).toFixed(2)}</td></tr>`).join('')}</tbody></table><ul class="small">${z.rules.map(r => `<li>${esc(r.text)}</li>`).join('')}</ul>`; }
+  }
+
+  // 11. Références
+  h += `<h2>11. Hypothèses et références</h2><p class="small">H1 dalle isotrope de largeur totale, ν = ${deck.nu} ; H2 poutre continue à EI constant ; H3 premier harmonique, L_eq de la travée seule chargée (« méthode des moments ») ; H4 arrangement transversal le plus défavorable par fibre, files indépendantes longitudinalement ; H5 poids propre K = 1, charges excentrées K(e, y) ; H6 calcul longitudinal suivant les portées biaises sans correction (biais mécanique et annexe 12A dans le module biais) ; H7 flexion transversale sur dalle isostatique équivalente. Vérifications : 49 tests unitaires dont la note CHAMOA-PSIDA (Cerema, ch. 4) : moments permanents, travée équivalente, gradient thermique et tassements à 10⁻³, moment de calcul LM1 à 1 %, aciers de flexion à 1 %, biais mécanique et moments de l'annexe 12A à 10⁻⁴.</p>
 <p class="small">Références : EN 1990 (A2), EN 1991-1-5, EN 1991-2, EN 1992-1-1, EN 1992-2 et annexes nationales ; Fascicule 61 titre II ; BAEL 91 ; SETRA, Ponts-dalles – guide de conception (1989) ; Cerema, CHAMOA-P PSIDA – guide technique ; Bareš & Massonnet (1966) ; Pücher (1977) ; Hambly (1991) ; Calgaro & Virlogeux.</p>
 </body></html>`;
   return h;

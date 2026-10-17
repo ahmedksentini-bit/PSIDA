@@ -9,7 +9,12 @@ import { TransverseModel } from '../src/transverse.js';
 import { buildReport } from './report.js';
 import { aideConception, rechercheEpaisseur } from '../src/conception.js';
 import { designBearings } from '../src/bearings.js';
-import { applyHelp, readGeometry, elevationInputSVG, crossSectionInputSVG, planSVG, summaryHTML } from './schema.js';
+import { applyHelp, readGeometry, elevationInputSVG, crossSectionInputSVG, planSVG, summaryHTML, zoningPlanSVG } from './schema.js';
+import { parseAxles, vehicleEnvelope, provisionalProfile, ANNEX_A_VEHICLES, dynLM3 } from '../src/vehicles.js';
+import { designSingleActionEC } from '../src/design.js';
+import { zonage } from '../src/zonage.js';
+import { cantileverMoments, cantileverDesign } from '../src/cantilever.js';
+import { flm3Envelope, fatigueCheck } from '../src/fatigue.js';
 
 const $ = s => document.querySelector(s);
 const nums = s => s.split(/[,;\s]+/).filter(Boolean).map(Number);
@@ -42,9 +47,68 @@ function parseForm(form) {
     alpha: d.alpha, nRetenue: +d.nRetenue, classe: d.classe.trim() ? +d.classe : null, chamoaSign: !!d.chamoaSign,
     withTherm: !!d.withTherm, dT: nums(d.dT), E: +EIv[0] || 34000, I: EIv[1] ? +EIv[1] : null, delta: +d.delta, phiFluage: +d.phiFluage,
     mat: { fck: +d.fck, fyk: +d.fyk, fc28: +d.fck, fe: +d.fyk, c: +d.cover, phi: +d.phi / 1000, phiT: +(d.phiT || 16) / 1000, wkMax: +d.wk, fissuration: d.fiss, tRev: +d.tRev },
+    extra: parseExtra(d),
     concept: { psi: +(d.psi || 100), tirantAir: (d.tirantAir || '').trim() ? +d.tirantAir : null, type: d.typeDalle || 'auto', D: +(d.Dabout || 25) / 1000, rhoMax: +(d.rhoMax || 1) / 100,
       transversePerpendicular: d.transDir === 'perp', nBearings: (d.nBearings || '').trim() ? +d.nBearings : null, xFixed: (d.xFixed || '').trim() ? +d.xFixed : null, epsSlow: +(d.epsSlow || 2.5e-4), dTu: +(d.dTu || 30) },
   };
+}
+
+/** « P@x ; P@x | w=3 e=2 dyn=1.5 unc=1.1 » → véhicule généralisé. */
+function parseVehicle(text, label = 'Véhicule') {
+  const [lhs, ...rest] = text.split('|');
+  let name = label, axlesTxt = lhs;
+  if (lhs.includes(':')) { const i = lhs.indexOf(':'); name = lhs.slice(0, i).trim() || label; axlesTxt = lhs.slice(i + 1); }
+  const axles = parseAxles(axlesTxt);
+  if (!axles.length) return null;
+  const opt = {}; for (const m of rest.join(' ').matchAll(/(w|e|dyn|unc|n)\s*=\s*([\d.]+)/g)) opt[m[1]] = +m[2];
+  return { label: name, axles, width: opt.w || 3, wheelSpacing: opt.e || 2, wheels: opt.n || 2, dyn: opt.dyn || 1, unc: opt.unc || 1, contact: { a: 0.2, b: 0.2 } };
+}
+const onY = t => { const [v, r] = String(t || '').split('sur'); const [a, b] = nums(r || ''); return +v > 0 && Number.isFinite(a) && Number.isFinite(b) ? { v: +v, y1: a, y2: b } : null; };
+function parseExtra(d) {
+  const ch = nums(d.chRoadway || '');
+  const remb = onY(d.chRemblai), enr = onY(d.chEnrobe);
+  const cant = nums(d.cant || '');
+  return {
+    withChantier: !!d.withChantier, chRoadway: ch.length >= 2 ? { y1: ch[0], y2: ch[1] } : null, chNeutral: +(d.chNeutral || 0),
+    remblai: remb ? { h: remb.v, y1: remb.y1, y2: remb.y2 } : null, enrobe: enr ? { t: enr.v, y1: enr.y1, y2: enr.y2 } : null,
+    chVehicles: String(d.chVehicles || '').split('\n').map(t => t.trim()).filter(Boolean).map((t, i) => parseVehicle(t, `Engin ${i + 1}`)).filter(Boolean),
+    lm3: d.lm3 || '', lm3Custom: d.lm3Custom || '', lm3Speed: d.lm3Speed || 'rapide',
+    cant: cant.length >= 3 ? { Lc: cant[0], hr: cant[1], ht: cant[2] } : null,
+    cantLines: String(d.cantLines || '').split(';').map(t => t.trim()).filter(Boolean).map(t => { const [g, e] = t.split('@').map(Number); return { g, e }; }).filter(l => Number.isFinite(l.g) && Number.isFinite(l.e)),
+    cantBands: String(d.cantBands || '').split(';').map(t => onY(t)).filter(Boolean).map(b => ({ q: b.v, x1: b.y1, x2: b.y2 })),
+    cantFootway: (() => { const f = nums(d.cantFootway || ''); return f.length >= 2 ? { x1: f[0], x2: f[1] } : null; })(),
+    cantRoad: +(d.cantRoad || 0),
+    fat: { lambda1: +(d.fatLambda1 || 1), trafic: d.fatTrafic || 'longue', categorie: +(d.fatCat || 2), nYears: +(d.fatYears || 100), nSlowLanes: +(d.fatLanes || 1), phiFat: +(d.fatPhi || 1) },
+    bearingPitch: String(d.bearingPitch || '').trim() ? +d.bearingPitch : null,
+  };
+}
+
+/** Modules complémentaires : phase de chantier, LM3, encorbellement, fatigue, zonage. */
+function computeExtra(p, deck, perm, ec, thermal, settle, design, bearings) {
+  const x = p.extra, out = {};
+  const matOpt = { ...p.mat, thermal, settle };
+  if (x.withChantier && x.chRoadway) {
+    const pp = provisionalProfile(deck, { roadway: x.chRoadway, neutral: x.chNeutral, remblai: x.remblai, enrobe: x.enrobe, vehicles: x.chVehicles });
+    out.chantier = { ...pp, design: designSingleActionEC(deck, pp.perm, pp.Q, { ...matOpt, label: 'Profil provisoire' }), roadway: x.chRoadway, neutral: x.chNeutral };
+  }
+  if (x.lm3) {
+    let v = x.lm3 === 'custom' ? parseVehicle(x.lm3Custom, 'LM3 personnalisé') : ANNEX_A_VEHICLES.find(a => a.label.startsWith(x.lm3));
+    if (v) {
+      v = { ...v, unc: v.unc || 1.1, dyn: x.lm3Speed === 'rapide' ? dynLM3(Math.min(...deck.spans)) : 1 };
+      const env = vehicleEnvelope(deck, v, { y1: deck.g.roadway.y1, y2: deck.g.roadway.y2, neutral: 1 });
+      out.lm3 = { vehicle: v, env, K: deck.transverseFactors(env).K, design: designSingleActionEC(deck, perm, env, { ...matOpt, label: 'LM3', psi1: 0 }) };
+    }
+  }
+  if (x.cant) {
+    const mom = cantileverMoments({ ...x.cant, lines: x.cantLines, bands: x.cantBands, footway: x.cantFootway, roadOverlap: x.cantRoad, tRev: p.mat.tRev, alphaQ1: ec.alpha.aQ[0], alphaq1: ec.alpha.aq1, betaQ: ec.alpha.aQ[0] });
+    out.cantilever = { mom, design: cantileverDesign(mom, { fck: p.mat.fck, fyk: p.mat.fyk, c: p.mat.c + 0.01, phi: p.mat.phiT, wkMax: p.mat.wkMax }) };
+  }
+  const flm = flm3Envelope(deck);
+  out.fatigue = fatigueCheck(deck, flm, perm, design, deck.keySections(), x.fat);
+  const pitch = x.bearingPitch || (bearings ? (2 * deck.b - 2 * Math.min(1, deck.b / 3)) / Math.max(bearings.nb - 1, 1) : 3);
+  out.zonage = zonage({ spans: deck.spans, overhangs: deck.g.overhangs, width: 2 * deck.b, h: deck.h, psi: p.concept.psi, bearingPitch: pitch, optionFers: p.concept.transversePerpendicular ? 2 : 1, cantilever: x.cant ? x.cant.Lc : 0 });
+  out.zonage.pitch = pitch;
+  return out;
 }
 
 /** Données de l'aide à la conception à partir du formulaire analysé et des résultats disponibles. */
@@ -86,7 +150,8 @@ function compute(p) {
   ];
   if (thermal) cases.push({ id: 'therm', label: 'Gradient thermique (±)', res: { ...thermal, Vmax: thermal.Vmax, Vmin: thermal.Vmin }, ref: 'EC' }, { id: 'settle', label: 'Tassements aléatoires (±)', res: settle, ref: 'EC' });
   const concept = aideConception(conceptInput(p), { deck, perm, design: design.EC, transDesign: transDesign.EC });
-  return { p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transDesign, concept, bearings, dt: (performance.now() - t0) / 1000 };
+  const extra = computeExtra(p, deck, perm, ec, thermal, settle, design.EC, bearings);
+  return { p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transDesign, concept, bearings, extra, dt: (performance.now() - t0) / 1000 };
 }
 
 /** Aide à la conception seule : géométrie, charges permanentes et règles du guide (quelques dixièmes de seconde). */
@@ -231,7 +296,51 @@ function renderStatic(st) {
   h += `<h3>Fascicule 61 titre II (valeurs caractéristiques, δ inclus pour B et Mc)</h3>` + st.cases.filter(c => c.ref === 'F61').map(c => tableEnv(st, c.res, c.label)).join('');
   $('#tables').innerHTML = h;
   $('#trans-span').innerHTML = deck.spans.map((L, j) => `<option value="${j}">Travée ${j + 1} (${L} m)</option>`).join('');
-  renderConception(st); renderCase(st); renderSection(st); renderDesign(st); renderTransverse(st);
+  renderConception(st); renderCase(st); renderSection(st); renderDesign(st); renderTransverse(st); renderExtra(st);
+}
+
+function renderExtra(st) {
+  const { deck, keys, extra, design } = st;
+  const cm = v => (v * 1e4).toFixed(1), f0 = v => v.toFixed(0), f1 = v => v.toFixed(1);
+  let h = '';
+  const sectionTable = (title, dz, note) => {
+    let t = `<h3>${title}</h3><p class="small">${note}</p><table><thead><tr><th>Section</th><th>M car. poutre [kN·m]</th><th>M ELU/m</th><th>M car./m</th><th>A_s inf [cm²/m]</th><th>A_s sup</th><th>A_s inf profil définitif</th><th>A_s sup définitif</th><th>Retenu inf / sup</th></tr></thead><tbody>`;
+    for (const k of keys) {
+      const s = k.idx; const ib = dz.bot[s].indexOf(Math.max(...dz.bot[s])), it = dz.top[s].indexOf(Math.max(...dz.top[s]));
+      const mcar = Math.abs(dz.beamCAR.max[s]) > Math.abs(dz.beamCAR.min[s]) ? dz.beamCAR.max[s] : dz.beamCAR.min[s];
+      const Mu = k.kind === 'support' ? dz.comb.ELU.min[s][it] : dz.comb.ELU.max[s][ib], Mc = k.kind === 'support' ? dz.comb.CAR.min[s][it] : dz.comb.CAR.max[s][ib];
+      t += `<tr><td>${k.label}</td><td>${f0(mcar)}</td><td>${f0(Mu)}</td><td>${f0(Mc)}</td><td>${cm(dz.envBot[s])}</td><td>${cm(dz.envTop[s])}</td><td>${cm(design.EC.envBot[s])}</td><td>${cm(design.EC.envTop[s])}</td><td><b>${cm(Math.max(dz.envBot[s], design.EC.envBot[s]))} / ${cm(Math.max(dz.envTop[s], design.EC.envTop[s]))}</b>${dz.envTop[s] > design.EC.envTop[s] * 1.001 || dz.envBot[s] > design.EC.envBot[s] * 1.001 ? ' <span class="badge warn">gouverne</span>' : ''}</td></tr>`;
+    }
+    return t + `</tbody></table>`;
+  };
+  if (extra.chantier) {
+    const c = extra.chantier;
+    h += `<p class="small">Profil provisoire : poids propre + ${c.perm.files.slice(1).map(f => `${f.label} ${f.q.toFixed(1)} kN/m`).join(' + ') || 'aucune charge provisoire'} ; engins ${c.vehicles.map(v => `${v.label} (× ${v.factor})`).join(', ') || 'aucun'} circulant seuls sur la chaussée [${c.roadway.y1} ; ${c.roadway.y2}] moins ${c.neutral} m de chaque côté (roues dans la largeur chargeable), gradient et tassements comme en service. Combinaisons : ELU 1,35 G + 1,35 Q ; ELS car. G + Ta + 0,6 T + Q (pratique CHAMOA). Les tombereaux 23/34 m³ de la circulaire « delta 70 » ne sont pas prédéfinis (données non disponibles) : les saisir comme engins.</p>`;
+    h += sectionTable('Phase de chantier (profil provisoire)', c.design, `Moments par mètre à la fibre la plus sollicitée ; comparaison avec le profil définitif et enveloppe retenue.`);
+  }
+  if (extra.lm3) {
+    const l = extra.lm3, v = l.vehicle;
+    h += sectionTable(`Convoi exceptionnel LM3 seul — ${v.label}`, l.design, `${v.axles.length} essieux de ${v.axles[0].P} kN (${v.axles.map(a => a.x).join(' / ')} m), largeur ${v.width} m, ${v.wheels} roues à ${v.wheelSpacing} m ; coefficient d'incertitude ${v.unc}, dynamique ${v.dyn.toFixed(3)} (${st.p.extra.lm3Speed === 'rapide' ? '1 + 0,7/(1 + 0,2 L_min), annexe nationale' : 'au pas'}) ; convoi seul, bandes de 1 m neutralisées, K aux sections clés : ${keys.map(k => l.K[k.idx].toFixed(2)).join(' / ')}. Combinaison LM3 seul : ELU 1,35 (G + Q), ELS car. G + Ta + 0,6 T + Q. TODO_VERIF : composition des lignes d'essieux de l'annexe A (nombre et entraxe des roues).`);
+  }
+  if (extra.cantilever) {
+    const { mom, design: cd } = extra.cantilever;
+    h += `<h3>Encorbellement (console de ${mom.Lc} m, h ${mom.hr} → ${mom.ht} m)</h3><p class="small">Moments d'encastrement par mètre : poids propre ${f1(mom.G.mG)} + superstructures ${f1(mom.G.mSup)} kN·m/m ; trottoir ${f1(mom.footway.seul)} (5 kN/m²) / ${f1(mom.footway.avecLM1)} (3 kN/m²)${mom.ts ? ` ; tandem TS ${f1(mom.ts.m)} (2 × ${mom.ts.Q} kN à ${mom.ts.xQ.toFixed(2)} m, b_eff = ${mom.ts.beff.toFixed(2)} m), LM2 ${f1(mom.lm2.m)}, UDL ${f1(mom.udl.m)}` : ' ; pas de chaussée sur l\'encorbellement'} ; cas dimensionnant : ${mom.governing}. ELU ${f1(mom.ELU)}, ELS car. ${f1(mom.CAR)}, ELS fréq. ${f1(mom.FREQ)} kN·m/m ; V_ELU ${f1(mom.VELU)} kN/m. Aciers supérieurs d'encastrement (EC2, d = ${cd.d.toFixed(3)} m) : ELU ${cm(cd.AsULS)}, ELS ${cm(cd.AsSLS)} (σs ${f0(cd.sigS)} MPa), wk ${cm(cd.AsWk)}, min ${cm(Math.max(cd.as921, cd.perFace))} → <b>${cm(cd.As)} cm²/m</b>. Diffusion des roues à 45° (revêtement + feuillet moyen, puis en plan jusqu'à l'encastrement) ; CHAMOA § 4.2 et annexe 3 du guide PSIDP.EL pour le calcul détaillé.</p>`;
+  }
+  if (extra.fatigue) {
+    const f = extra.fatigue;
+    h += `<h3>Fatigue des armatures (EN 1992-2 annexe NN, FLM3)</h3><p class="small">λ_s = φ_fat · λ_s,1 · λ_s,2 · λ_s,3 · λ_s,4 = ${f.phiFat} × ${f.lambda1} × ${f.lambda2.toFixed(3)} × ${f.lambda3.toFixed(3)} × ${f.lambda4.toFixed(3)} = <b>${f.lambdaS.toFixed(3)}</b> (Q̄ trafic ${f.trafic}, N_obs = ${f.Nobs.toExponential(2)}/an, ${f.nYears} ans, k₂ = ${f.k2}) ; FLM3 sur la voie lente au bord de la chaussée, essieux × 1,75 sur appuis et × 1,40 en travée (NN.2.1) ; contraintes en section fissurée avec les aciers du profil définitif ; critère γ_F,fat Δσ_s,equ ≤ Δσ_Rsk(10⁶)/γ_s,fat = ${f.dSigRsk}/${f.gammaS} = ${(f.dSigRsk / f.gammaS).toFixed(1)} MPa.</p>
+    <table><thead><tr><th>Section</th><th>Face / y</th><th>A_s [cm²/m]</th><th>m_G [kN·m/m]</th><th>ΔM FLM3 × k</th><th>σs min → max [MPa]</th><th>Δσ_s,Ec</th><th><b>Δσ_s,equ</b></th><th>Limite</th><th>Taux</th></tr></thead><tbody>`;
+    for (const r of f.rows) h += `<tr><td>${r.label}</td><td>${r.face === 'bot' ? 'inf' : 'sup'} / ${r.y}</td><td>${cm(r.As)}</td><td>${f1(r.mG)}</td><td>${f1(r.dM)}</td><td>${f0(r.sigLo)} → ${f0(r.sigHi)}</td><td>${f1(r.dSigEc)}</td><td><b>${f1(r.dSigEqu)}</b></td><td>${f1(r.lim)}</td><td>${r.ratio.toFixed(2)} ${r.ok ? badge('ok') : badge('warn')}</td></tr>`;
+    h += `</tbody></table><p class="small">λ_s,1 se lit sur la figure NN.1 selon la portée et la zone (valeur saisie) ; φ_fat = 1,3 à moins de 6 m d'un joint de chaussée (EN 1991-2 § 4.6.1). Cette vérification complète le critère simplifié σs ≤ 300 MPa sous ELS caractéristique.</p>`;
+  }
+  $('#extra-tables').innerHTML = h || '<p class="small">Activer la phase de chantier, un convoi LM3 ou un encorbellement dans le formulaire.</p>';
+  // zonage
+  const z = extra.zonage;
+  $('#zoning-plan').innerHTML = zoningPlanSVG({ spans: deck.spans, width: 2 * deck.b, overhangs: deck.g.overhangs || [0, 0], psi: st.p.concept.psi, h: deck.h }, z);
+  let zt = `<p class="small">Entraxe des appareils d'appui retenu a = ${z.pitch.toFixed(2)} m, ψ = ${st.p.concept.psi} gr (sin ψ = ${z.sinPsi.toFixed(3)}), option de ferraillage ${z.option} (angle entre familles ${z.alpha.toFixed(0)}°).</p><table><thead><tr><th>Zone</th><th>x début [m]</th><th>x fin [m]</th><th>Longueur [m]</th><th>Définition (§ 3.4.4)</th></tr></thead><tbody>`;
+  for (const zz of z.zones) zt += `<tr><td>${zz.kind === 'chevetre' ? 'Chevêtre' : 'Extension'} ${zz.support}</td><td>${zz.x1.toFixed(2)}</td><td>${zz.x2.toFixed(2)}</td><td>${(zz.x2 - zz.x1).toFixed(2)}</td><td style="white-space:normal;text-align:left">${zz.text}</td></tr>`;
+  zt += `</tbody></table><ul class="checks">${z.rules.map(r => `<li>${badge(r.level)}${r.text}</li>`).join('')}</ul>`;
+  $('#zoning-tables').innerHTML = zt;
 }
 
 function renderCase(st) {
@@ -388,6 +497,8 @@ $('#btn-chamoa').addEventListener('click', () => {
   f.Leq.value = ''; f.alpha.value = 'FR2'; f.nRetenue.value = 0; f.classe.value = ''; f.nu.value = 0.2; f.chamoaSign.checked = true;
   f.hEdge.value = 0.40; f.joue.value = 1.0; f.EI.value = '34077, 0.43077'; f.withTherm.checked = true; f.fck.value = 35; f.fyk.value = 500; f.cover.value = 0.03;
   f.psi.value = 80; f.tirantAir.value = ''; f.typeDalle.value = 'auto'; f.Dabout.value = 25; f.rhoMax.value = 1.0; f.transDir.value = 'appuis'; f.nBearings.value = ''; f.xFixed.value = ''; f.epsSlow.value = 0.00025; f.dTu.value = 30;
+  f.withChantier.checked = true; f.chRoadway.value = '-4, 4'; f.chNeutral.value = 1; f.chRemblai.value = '0.5 sur -5,5'; f.chEnrobe.value = '0.2 sur -4,4'; f.chVehicles.value = 'Véhicule spécial : 100@1 ; 100@9 | w=3 e=2 dyn=1.5';
+  f.lm3.value = 'VS 1200/200'; f.lm3Speed.value = 'rapide'; f.cant.value = ''; f.fatLambda1.value = 1.0; f.fatCat.value = '2'; f.bearingPitch.value = '';
   $('#hs-min').value = ''; $('#hs-max').value = '';
   renderScheme();
 });

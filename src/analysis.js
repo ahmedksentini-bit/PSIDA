@@ -126,8 +126,10 @@ export class SlabDeck {
    * Sollicitations permanentes : valeurs nominales (M, V, R, mx) et enveloppes min/max par les
    * coefficients de valeur caractéristique kmin/kmax de chaque composante (EN 1991-1-1 §5.2.3, CHAMOA).
    */
-  permanent() {
-    const files = this.permanentFiles();
+  permanent() { return this.permanentFromFiles(this.permanentFiles()); }
+
+  /** Idem pour une liste de composantes permanentes quelconque (profil provisoire de chantier, variantes). */
+  permanentFromFiles(files) {
     const nS = this.beam.sections.length, nSup = this.spans.length + 1;
     const z = () => new Array(nS).fill(0), zy = () => Array.from({ length: nS }, () => this.ys.map(() => 0));
     const M = z(), Vm = z(), Vp = z(), Mmax = z(), Mmin = z();

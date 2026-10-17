@@ -42,6 +42,7 @@ par barre (max des fibres) et prend comme moment de calcul par mètre M_ST1/2b s
 | A_s,min 9.2.1.1 ×1,2 (bt = 11,12 m) / 7.3.2 [cm²] | 165,2 / 75,8 | 165,2 / 74,1 | < 2 % |
 | Biais mécanique travée 1 / 2 [gr] (Be = 12,253 m) | 82,5322 / 86,5105 | 82,5322 / 86,5105 | 10⁻⁵ |
 | M_APF annexe 12A, travée 1 CARA max (MX 435,08, MY 114,89) [kN·m/m] | 288,10 | 288,10 | 10⁻⁴ (11 valeurs) |
+| Véhicule spécial de chantier (2 × 100 kN × 1,5) à P1, KTRANS inclus [kN·m] | 451,05 | 435,1 | −3,5 % (roues dans la largeur chargeable) |
 
 Formules de combinaison relevées dans la note et reproduites (combinations.js) : ELS caractéristique = G + Ta + max(T + ψ0·Q ; 0,6 T + Q_LM1 ; Q_LM2) ;
 ELS fréquent = G + max(0,6 T ; 0,5 T + ψ1·Q_LM1 ; 0,75 Q_LM2) ; ELU = 1,35 G + 1,35 Q (ζ = 0 pour T et Ta).
@@ -99,7 +100,7 @@ Note : le biais de 80 gr de l'exemple n'intervient pas dans le calcul longitudin
 
 Bibliographie : Bareš & Massonnet (1966) ; Pücher (1977) ; Homberg (1968) ; Calgaro & Virlogeux ; Hambly (1991) ; O'Brien, Keogh & O'Connor (2014) ; EN 1991-2, EN 1992-1-1, EN 1992-2 ; Fascicule 61 titre II ; BAEL 91.
 
-## 4. Vérifications internes déjà en place (`npm test`, 45 tests)
+## 4. Vérifications internes déjà en place (`npm test`, 49 tests)
 
 - Poutre : PL/4 ; −qL²/8 et 9/128·qL² (2 travées) ; −qL²/10, 0,08 qL², 0,025 qL² (3 travées) ; enveloppe une travée chargée 0,0957 qL² ; convoi glissant ; portées équivalentes 0,8L / 0,447L.
 - Guyon-Massonnet : conditions de bord libre exactes, saut de Y''' = 1 sous la charge, flèche moyenne = poutre (∫K = 2b à 10⁻⁵), réciprocité K(y,e) = K(e,y), symétrie, limite θ → 0 ⇒ K = 1, continuité en charge de bord, μ nul aux bords, ∫m_x dy = moment de poutre (séries de Fourier).

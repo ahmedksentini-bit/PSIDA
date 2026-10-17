@@ -308,3 +308,32 @@ export function summaryHTML(g) {
   items.push(`<b>Appareils d'appui</b> : ${g.nBearings || Math.max(2, Math.round((g.width || 0) / 3))} par ligne, point fixe ${g.xFixed === null ? 'au milieu' : `à x = ${fr(g.xFixed)} m`}, ε = ${g.epsSlow}, ΔT = ${g.dTu} °C.`);
   return `<ul class="checks">${items.map(t => `<li>${t}</li>`).join('')}</ul>`;
 }
+
+/** Vue en plan des zones de ferraillage (chevêtres, extensions, bords libres, angles) — guide § 3.4.4 à 3.4.6. */
+export function zoningPlanSVG(g, z) {
+  const W = 1000, H = 300;
+  const [aL, aR] = g.overhangs, L = g.spans.reduce((a, b) => a + b, 0), b = g.width / 2;
+  const psi = g.psi, a = psi * GR, cot = Math.abs(psi - 100) < 1e-9 ? 0 : Math.cos(a) / Math.sin(a);
+  const m = { l: 60, r: 60, t: 50, b: 70 };
+  const xmin = -aL - b * Math.abs(cot), xmax = L + aR + b * Math.abs(cot);
+  const sxp = (W - m.l - m.r) / (xmax - xmin), syp = (H - m.t - m.b) / (2 * b);
+  const sc = Math.min(sxp, syp * 2.2);
+  const sx = x => m.l + (x - xmin) * sc, sy = y => (H + m.t - m.b) / 2 - y * Math.min(sc, syp);
+  const lineAt = (x, y) => x + y * cot;
+  const poly = (x1, x2, y1, y2) => [[lineAt(x1, y2), y2], [lineAt(x2, y2), y2], [lineAt(x2, y1), y1], [lineAt(x1, y1), y1]].map(([x, y]) => `${sx(x)},${sy(y)}`).join(' ');
+  let s = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif" font-size="12" fill="currentColor" role="img" aria-label="Zonage">`;
+  s += `<text x="${m.l}" y="22" font-weight="600">Zonage du ferraillage (vue en plan) — chevêtres incorporés, extensions, chaînage des bords libres, angles</text>`;
+  s += `<polygon points="${poly(-aL, L + aR, -b, b)}" fill="var(--slab, #9aa5b8)" fill-opacity="0.35" stroke="currentColor" stroke-width="1.2"/>`;
+  for (const zz of z.zones) s += `<polygon points="${poly(zz.x1, zz.x2, -b, b)}" fill="${zz.kind === 'chevetre' ? 'var(--warn, #9a5b00)' : 'var(--acc, #0b5fa5)'}" fill-opacity="${zz.kind === 'chevetre' ? 0.45 : 0.2}" stroke="none"/>`;
+  // chaînage des bords libres (largeur h)
+  for (const yb of [b, -b]) s += `<polygon points="${poly(-aL, L + aR, yb - Math.sign(yb) * g.h, yb)}" fill="none" stroke="var(--warn, #9a5b00)" stroke-dasharray="5 3" stroke-width="1.2"/>`;
+  // angles (carrés 1,5 h)
+  const ca = 1.5 * g.h;
+  for (const [x, dir] of [[-aL, 1], [L + aR, -1]]) for (const yb of [b, -b]) s += `<polygon points="${poly(dir > 0 ? x : x - ca, dir > 0 ? x + ca : x, yb - Math.sign(yb) * ca, yb)}" fill="var(--warn, #9a5b00)" fill-opacity="0.6"/>`;
+  // lignes d'appui
+  const x0 = [0]; g.spans.forEach(v => x0.push(x0[x0.length - 1] + v));
+  x0.forEach((x, i) => { s += `<line x1="${sx(lineAt(x, -b))}" y1="${sy(-b)}" x2="${sx(lineAt(x, b))}" y2="${sy(b)}" stroke="currentColor" stroke-width="1.4"/><text x="${sx(lineAt(x, -b))}" y="${sy(-b) + 16}" text-anchor="middle" font-weight="600">${i === 0 ? 'C0' : i === x0.length - 1 ? 'C' + i : 'P' + i}</text>`; });
+  s += `<g font-size="11"><rect x="${m.l}" y="${H - 34}" width="14" height="10" fill="var(--warn, #9a5b00)" fill-opacity="0.45"/><text x="${m.l + 18}" y="${H - 25}">chevêtre incorporé</text><rect x="${m.l + 150}" y="${H - 34}" width="14" height="10" fill="var(--acc, #0b5fa5)" fill-opacity="0.2"/><text x="${m.l + 168}" y="${H - 25}">extension de chevêtre</text><rect x="${m.l + 320}" y="${H - 34}" width="14" height="10" fill="none" stroke="var(--warn, #9a5b00)" stroke-dasharray="4 2"/><text x="${m.l + 338}" y="${H - 25}">chaînage des bords libres (largeur h, ≥ 0,9 ‰)</text><rect x="${m.l + 620}" y="${H - 34}" width="14" height="10" fill="var(--warn, #9a5b00)" fill-opacity="0.6"/><text x="${m.l + 638}" y="${H - 25}">angles (quadrillage renforcé)</text></g>`;
+  s += `</svg>`;
+  return s;
+}
