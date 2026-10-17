@@ -239,6 +239,20 @@ perpendiculaire aux aciers (× sin ψ par mètre d'axe, remarque [11] de la note
   une largeur h, ≥ 0,9 ‰ par face et par direction, cadres ≥ 5 cm²/m ; angles ≥ 1,2 ‰ (orthogonal) ou 0,6/sin²(α/2) ‰
   (2,4 ‰ à 60°, 4,1 ‰ à 45°) ; encorbellements : aciers doublés dans les angles sur 1,5 Lc ; abouts : bielle et coin inférieur.
 
+## 8 quater. Plan de ferraillage
+
+Les aciers requis par mètre (enveloppe sur la largeur, profils définitif, chantier et LM3) sont décalés de a_l = d
+(EC2 9.3.1.1(4)). Pour chaque travée, les aciers inférieurs sont répartis en **filantes** (au moins 50 % des aciers de
+travée et les besoins près des appuis, prolongées jusqu'aux appuis avec recouvrement l₀ sur les appuis intermédiaires et
+retours au-delà des appuis d'extrémité) et **renforts** intercalés, arrêtés à l_bd au-delà du point où l'épure décalée
+redescend sous la capacité des filantes. En nappe supérieure : filantes sur toute la longueur (besoin des zones de
+travée, à plus de 0,35 L des appuis intermédiaires), renforts sur appuis selon la même règle. Le couple (φ, e) est choisi
+pour minimiser la masse (pondérée par les longueurs, HA32 pénalisés) avec e ≤ min(3h ; 40 cm) et e/2 ≤ min(2h ; 25 cm)
+aux moments maximaux. l_b,rqd = (φ/4) f_yd/f_bd, f_bd = 2,25 η₁ f_ctd (η₁ = 0,7 en nappe supérieure), l₀ = 1,5 l_bd ; barres de
+12 m au plus. Aciers transversaux par travée (option 1 : longueur (2b − 2c)/sin ψ + retours), cadres de chaînage des bords
+libres (≥ 5 cm²/m), épingles dans les zones V_Ed > V_Rd,c (maille ≤ 0,75 d). Sur l'exemple CHAMOA : HA25 e = 25 + renforts
+en travée, HA20 e = 15 + HA25 e = 15 sur appuis, ≈ 52 t soit ≈ 115 kg/m³.
+
 ## 9. Ce que l'outil ne fait pas (encore)
 
 Tassements probables, précontrainte (PSI.DP), appareils d'appui glissants ou à pot (§ 3.6.2, § 3.7), dalles à

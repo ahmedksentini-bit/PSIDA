@@ -54,6 +54,8 @@ src/vehicles.js     véhicules généralisés : engins de chantier (profil provi
 src/zonage.js       zonage du ferraillage : chevêtres incorporés, extensions, bords libres, angles, abouts (guide § 3.4.4–3.4.8)
 src/cantilever.js   encorbellements : moments d'encastrement (poids propre, superstructures, trottoir, TS/LM2/UDL diffusés) et aciers
 src/fatigue.js      fatigue des armatures : FLM3, λ_s (EN 1992-2 annexe NN), section fissurée
+src/rebar.js        plan de ferraillage : choix φ/e, épure décalée, filantes + renforts, ancrages, recouvrements, transversaux, cadres, épingles, métré
+web/rebarplan.js    dessins du plan de ferraillage (coupe longitudinale, coupes transversales), nomenclature, A_s mis en place / requis
 src/conception.js   aide à la conception : règles du guide SETRA 1989, variantes de travure, recherche de l'épaisseur minimale vérifiée
 src/abaques1989.js  abaques d'épaisseur du guide SETRA 1989 numérisés (PSI.DA p. 65–67 ; plateaux PSI.DP p. 59–61)
 tools/abaques1989/  script de numérisation (suivi de courbes sur les pages scannées) et données brutes
@@ -159,12 +161,18 @@ et une liste d'aide détaille les données), résultats à droite :
    fissurée, Δσ_Rsk = 162,5 MPa).
 7 ter. **Zonage et dispositions constructives** — chevêtres incorporés et extensions (a/(3 sin ψ), 2a/(3 sin ψ)), chaînage des
    bords libres (0,9 ‰, cadres 5 cm²/m), angles (1,2 ‰ ou 0,6/sin²(α/2) ‰), abouts, encorbellements, avec la vue en plan des zones.
+7 quater. **Plan de ferraillage** — sur l'enveloppe des aciers requis (profil définitif, chantier, LM3) : choix des barres
+   (φ, espacement), schéma filantes + renforts intercalés (≥ 50 % des aciers inférieurs sur appuis), arrêts de barres sur
+   épure décalée a_l = d + l_bd, ancrages et recouvrements EC2 8.4 / 8.7, éléments de 12 m au plus, aciers transversaux par
+   travée, cadres de chaînage des bords libres, épingles d'effort tranchant ; coupe longitudinale repérée, coupes
+   transversales en travée et sur appui (aciers inférieurs suivant les chanfreins), graphique A_s mis en place / requis,
+   nomenclature et métré (masse par repère et par diamètre, kg/m³).
 8. **Note de calcul** — bouton « Exporter la note de calcul » : page HTML autonome (données, modèle, tableaux,
    graphiques en PNG, hypothèses, références), à imprimer ou enregistrer en PDF depuis le navigateur.
 9. **Permalien** — les données du formulaire sont encodées dans l'URL après chaque calcul : un lien suffit pour
    partager ou rejouer un cas (utile en cours).
 
-## État et limites (v0.6)
+## État et limites (v0.8)
 
 - Dalle pleine de hauteur constante, appuis simples, abouts en console (charges permanentes). Biais : le calcul longitudinal
   est fait suivant les portées biaises (comme CHAMOA, sans correction) ; les aciers transversaux sont corrigés par

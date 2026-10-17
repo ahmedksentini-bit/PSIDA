@@ -5,6 +5,7 @@
 import { elevationSVG, crossSectionSVG } from './svg.js';
 import { tableK } from '../src/guyon.js';
 import { planSVG, zoningPlanSVG } from './schema.js';
+import { longitudinalRebarSVG, crossRebarSVG, scheduleHTML } from './rebarplan.js';
 
 const cm = v => (v * 1e4).toFixed(1);
 const f0 = v => v.toFixed(0), f1 = v => v.toFixed(1), f3 = v => v.toFixed(3);
@@ -52,7 +53,7 @@ export async function buildReport(st) {
 </style></head><body>
 <div class="noprint" style="margin-bottom:12px"><button onclick="window.print()" style="padding:8px 14px;font:inherit">Imprimer / enregistrer en PDF</button></div>
 <h1>Note de calcul — pont-dalle en béton armé (PSI-DA)</h1>
-<div class="meta">Calcul manuel assisté — moteur PSIDA v${esc(st.version || '0.6')} · ${date} · référentiels : Eurocodes (EN 1990/1991-2/1992) et Fascicule 61 titre II + BAEL 91</div>`;
+<div class="meta">Calcul manuel assisté — moteur PSIDA v${esc(st.version || '0.8')} · ${date} · référentiels : Eurocodes (EN 1990/1991-2/1992) et Fascicule 61 titre II + BAEL 91</div>`;
 
   // 1. Données
   h += `<h2>1. Données</h2><div class="box">
@@ -150,8 +151,16 @@ export async function buildReport(st) {
     if (x.zonage) { const z = x.zonage; h += `<h3>Zonage du ferraillage (guide SETRA 1989 § 3.4.4 à 3.4.8)</h3><div class="svg">${zoningPlanSVG({ spans: deck.spans, width: 2 * deck.b, overhangs: g.overhangs || [0, 0], psi: p.concept.psi, h: deck.h }, z)}</div><table><thead><tr><th>Zone</th><th>x début</th><th>x fin</th><th>Longueur</th></tr></thead><tbody>${z.zones.map(zz => `<tr><td>${zz.kind === 'chevetre' ? 'Chevêtre' : 'Extension'} ${zz.support}</td><td>${zz.x1.toFixed(2)}</td><td>${zz.x2.toFixed(2)}</td><td>${(zz.x2 - zz.x1).toFixed(2)}</td></tr>`).join('')}</tbody></table><ul class="small">${z.rules.map(r => `<li>${esc(r.text)}</li>`).join('')}</ul>`; }
   }
 
-  // 11. Références
-  h += `<h2>11. Hypothèses et références</h2><p class="small">H1 dalle isotrope de largeur totale, ν = ${deck.nu} ; H2 poutre continue à EI constant ; H3 premier harmonique, L_eq de la travée seule chargée (« méthode des moments ») ; H4 arrangement transversal le plus défavorable par fibre, files indépendantes longitudinalement ; H5 poids propre K = 1, charges excentrées K(e, y) ; H6 calcul longitudinal suivant les portées biaises sans correction (biais mécanique et annexe 12A dans le module biais) ; H7 flexion transversale sur dalle isostatique équivalente. Vérifications : 49 tests unitaires dont la note CHAMOA-PSIDA (Cerema, ch. 4) : moments permanents, travée équivalente, gradient thermique et tassements à 10⁻³, moment de calcul LM1 à 1 %, aciers de flexion à 1 %, biais mécanique et moments de l'annexe 12A à 10⁻⁴.</p>
+  // 11. Plan de ferraillage
+  if (st.rebar) {
+    const r = st.rebar, x0 = deck.beam.x0;
+    const jm = deck.spans.indexOf(Math.max(...deck.spans));
+    h += `<h2>11. Plan de ferraillage</h2><p class="small">Enveloppe des aciers requis (profils ${esc(r.governing.join(', '))}) ; épure décalée a_l = d = ${r.al.toFixed(3)} m ; ≥ 50 % des aciers inférieurs prolongés sur appuis ; ancrages et recouvrements EC2 8.4 / 8.7 ; barres de 12 m au plus. ${r.deficits.length ? `ATTENTION : ${r.deficits.length} section(s) en déficit.` : 'Aciers mis en place ≥ aciers requis dans toutes les sections.'}</p>
+<div class="svg">${longitudinalRebarSVG(deck, r)}</div><div class="svg">${crossRebarSVG(deck, r, x0[jm] + deck.spans[jm] / 2, `Coupe transversale — mi-travée ${jm + 1}`)}</div>${deck.spans.length > 1 ? `<div class="svg">${crossRebarSVG(deck, r, x0[1], 'Coupe transversale — appui P1')}</div>` : ''}<h3>Nomenclature et métré</h3>${scheduleHTML(r)}`;
+  }
+
+  // 12. Références
+  h += `<h2>12. Hypothèses et références</h2><p class="small">H1 dalle isotrope de largeur totale, ν = ${deck.nu} ; H2 poutre continue à EI constant ; H3 premier harmonique, L_eq de la travée seule chargée (« méthode des moments ») ; H4 arrangement transversal le plus défavorable par fibre, files indépendantes longitudinalement ; H5 poids propre K = 1, charges excentrées K(e, y) ; H6 calcul longitudinal suivant les portées biaises sans correction (biais mécanique et annexe 12A dans le module biais) ; H7 flexion transversale sur dalle isostatique équivalente. Vérifications : 51 tests unitaires dont la note CHAMOA-PSIDA (Cerema, ch. 4) : moments permanents, travée équivalente, gradient thermique et tassements à 10⁻³, moment de calcul LM1 à 1 %, aciers de flexion à 1 %, biais mécanique et moments de l'annexe 12A à 10⁻⁴.</p>
 <p class="small">Références : EN 1990 (A2), EN 1991-1-5, EN 1991-2, EN 1992-1-1, EN 1992-2 et annexes nationales ; Fascicule 61 titre II ; BAEL 91 ; SETRA, Ponts-dalles – guide de conception (1989) ; Cerema, CHAMOA-P PSIDA – guide technique ; Bareš & Massonnet (1966) ; Pücher (1977) ; Hambly (1991) ; Calgaro & Virlogeux.</p>
 </body></html>`;
   return h;

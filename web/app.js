@@ -15,6 +15,8 @@ import { designSingleActionEC } from '../src/design.js';
 import { zonage } from '../src/zonage.js';
 import { cantileverMoments, cantileverDesign } from '../src/cantilever.js';
 import { flm3Envelope, fatigueCheck } from '../src/fatigue.js';
+import { rebarPlan } from '../src/rebar.js';
+import { longitudinalRebarSVG, crossRebarSVG, scheduleHTML, providedPlot } from './rebarplan.js';
 
 const $ = s => document.querySelector(s);
 const nums = s => s.split(/[,;\s]+/).filter(Boolean).map(Number);
@@ -151,7 +153,19 @@ function compute(p) {
   if (thermal) cases.push({ id: 'therm', label: 'Gradient thermique (±)', res: { ...thermal, Vmax: thermal.Vmax, Vmin: thermal.Vmin }, ref: 'EC' }, { id: 'settle', label: 'Tassements aléatoires (±)', res: settle, ref: 'EC' });
   const concept = aideConception(conceptInput(p), { deck, perm, design: design.EC, transDesign: transDesign.EC });
   const extra = computeExtra(p, deck, perm, ec, thermal, settle, design.EC, bearings);
-  return { p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transDesign, concept, bearings, extra, dt: (performance.now() - t0) / 1000 };
+  // plan de ferraillage sur l'enveloppe des profils (définitif, chantier, LM3)
+  const env = { ...design.EC, envBot: design.EC.envBot.slice(), envTop: design.EC.envTop.slice() };
+  const governing = ['définitif'];
+  for (const [k, lab] of [['chantier', 'chantier'], ['lm3', 'LM3']]) {
+    const dz = extra[k] && extra[k].design; if (!dz) continue;
+    let used = false;
+    dz.envBot.forEach((v, i) => { if (v > env.envBot[i] + 1e-9) { env.envBot[i] = v; used = true; } });
+    dz.envTop.forEach((v, i) => { if (v > env.envTop[i] + 1e-9) { env.envTop[i] = v; used = true; } });
+    if (used) governing.push(lab);
+  }
+  const rebar = rebarPlan({ deck, design: env, trans: transDesign.EC, opt: { fck: p.mat.fck, fyk: p.mat.fyk, phiLong: Math.round(p.mat.phi * 1000), phiTrans: Math.round(p.mat.phiT * 1000) } });
+  rebar.governing = governing;
+  return { rebar, p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transDesign, concept, bearings, extra, dt: (performance.now() - t0) / 1000 };
 }
 
 /** Aide à la conception seule : géométrie, charges permanentes et règles du guide (quelques dixièmes de seconde). */
@@ -296,7 +310,22 @@ function renderStatic(st) {
   h += `<h3>Fascicule 61 titre II (valeurs caractéristiques, δ inclus pour B et Mc)</h3>` + st.cases.filter(c => c.ref === 'F61').map(c => tableEnv(st, c.res, c.label)).join('');
   $('#tables').innerHTML = h;
   $('#trans-span').innerHTML = deck.spans.map((L, j) => `<option value="${j}">Travée ${j + 1} (${L} m)</option>`).join('');
-  renderConception(st); renderCase(st); renderSection(st); renderDesign(st); renderTransverse(st); renderExtra(st);
+  renderConception(st); renderCase(st); renderSection(st); renderDesign(st); renderTransverse(st); renderExtra(st); renderRebar(st);
+}
+
+function renderRebar(st) {
+  const { deck, rebar } = st;
+  $('#rebar-info').innerHTML = `Ferraillage établi sur l'enveloppe des aciers requis (profil${rebar.governing.length > 1 ? 's' : ''} ${rebar.governing.join(', ')}) : épure décalée a_l = d = ${rebar.al.toFixed(3)} m, au moins 50 % des aciers inférieurs prolongés sur appuis (filantes + renforts intercalés), espacements ≤ ${(rebar.sMaxMain * 100).toFixed(0)} cm (≤ ${(rebar.sMaxPeak * 100).toFixed(0)} cm aux moments maximaux, renforts compris), ancrages et recouvrements EC2 8.4 / 8.7 (α₆ = 1,5, barres de 12 m au plus). ${rebar.deficits.length ? `<span class="badge warn">ATTENTION</span> ${rebar.deficits.length} section(s) où les aciers mis en place sont inférieurs aux aciers requis.` : '<span class="badge ok">OK</span> aciers mis en place ≥ aciers requis dans toutes les sections.'} Total ${(rebar.totalMass / 1000).toFixed(1)} t, soit ${rebar.ratio.toFixed(0)} kg/m³.`;
+  $('#rebar-long').innerHTML = longitudinalRebarSVG(deck, rebar);
+  const opts = [];
+  deck.spans.forEach((L, j) => { opts.push({ x: deck.beam.x0[j] + L / 2, label: `mi-travée ${j + 1}` }); if (j < deck.spans.length - 1) opts.push({ x: deck.beam.x0[j + 1], label: `appui P${j + 1}` }); });
+  const sel = $('#rebar-x'); const prev = sel.value;
+  sel.innerHTML = opts.map(o => `<option value="${o.x}">${o.label} (x = ${o.x.toFixed(2)})</option>`).join('');
+  if (prev && opts.some(o => String(o.x) === prev)) sel.value = prev;
+  const x = +sel.value; const o = opts.find(q => q.x === x);
+  $('#rebar-cross').innerHTML = crossRebarSVG(deck, rebar, x, `Coupe transversale — ${o ? o.label : ''}`);
+  providedPlot($('#plot-rebar'), deck, rebar);
+  $('#rebar-schedule').innerHTML = scheduleHTML(rebar);
 }
 
 function renderExtra(st) {
@@ -469,6 +498,7 @@ $('#concept-travures').addEventListener('click', ev => {
   $('#btn-concept').click();
 });
 $('#btn-hsearch').addEventListener('click', runThicknessSearch);
+$('#rebar-x').addEventListener('change', () => state && state.rebar && renderRebar(state));
 if (hashToForm($('#f'))) $('#f').requestSubmit();
 $('#case-select').addEventListener('change', () => state && renderCase(state));
 $('#surface-which').addEventListener('change', () => state && renderCase(state));
@@ -478,7 +508,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!state) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.6', hSearch: lastSearch });
+    const html = await buildReport({ ...state, version: '0.8', hSearch: lastSearch });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
