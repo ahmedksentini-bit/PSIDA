@@ -194,7 +194,7 @@ function skewMoments(deck, j, longComb, transComb, opt) {
 }
 
 /** Pseudo-résultats [travée][y] pour réutiliser les combinaisons longitudinales. */
-function asCase(spans, pick) { return { mxMax: spans.map(sp => pick(sp).myMax), mxMin: spans.map(sp => pick(sp).myMin) }; }
+function asCase(spans, pick) { if (!pick(spans[0])) return null; return { mxMax: spans.map(sp => pick(sp).myMax), mxMin: spans.map(sp => pick(sp).myMin) }; }
 
 /**
  * @param {object} trans   résultat de TransverseModel.run()

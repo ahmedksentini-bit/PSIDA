@@ -26,6 +26,11 @@ combinaisons ELS/ELU et la section d'acier sur appui (`test/psidael.test.js`, `d
 reproduits la 2e note PSIDA.EL du guide PSI-PAP, la note modèle PSIDP.EL (hors précontrainte), les formules de PSI-DA 68,
 la répartition PONTYPE/PAP du Pont de Noé et les règles du guide 1989 relues page par page (§ 1 quinquies).
 
+**Note de calcul** : au format des notes SETRA (plan de la note commentée PSIDA.EL pour le Fascicule 61 / BAEL, de CHAMOA
+pour les Eurocodes) — données, lignes d'influence, dénivellations, majoration dynamique, coefficients de répartition, moments
+par section, positions des charges, efforts tranchants, réactions, flexion transversale, ferraillage, appareils d'appui,
+chevêtres et nomenclature, avec commentaires — en HTML imprimable ou en document Word (.docx), depuis le bouton « Note de calcul ».
+
 **Aide à la conception** : les règles du guide SETRA *Ponts-dalles – guide de conception* (1989) — domaine
 d'emploi, **abaques d'épaisseur numérisés** (PSI.DA à 1, 2, 3 et 4 travées, pages 65–67 ; plateaux PSI.DP pages 59–61),
 élancements, travure, biais, coupe transversale, abouts, descente de charges, points de vigilance — sont codées dans

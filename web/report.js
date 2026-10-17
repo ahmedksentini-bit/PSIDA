@@ -53,7 +53,7 @@ export async function buildReport(st) {
 </style></head><body>
 <div class="noprint" style="margin-bottom:12px"><button onclick="window.print()" style="padding:8px 14px;font:inherit">Imprimer / enregistrer en PDF</button></div>
 <h1>Note de calcul — pont-dalle en béton armé (PSI-DA)</h1>
-<div class="meta">Calcul manuel assisté — moteur PSIDA v${esc(st.version || '0.11')} · ${date} · référentiels : Eurocodes (EN 1990/1991-2/1992) et Fascicule 61 titre II + BAEL 91</div>`;
+<div class="meta">Calcul manuel assisté — moteur PSIDA v${esc(st.version || '0.12')} · ${date} · référentiels : Eurocodes (EN 1990/1991-2/1992) et Fascicule 61 titre II + BAEL 91</div>`;
 
   // 1. Données
   h += `<h2>1. Données</h2><div class="box">
@@ -98,7 +98,7 @@ export async function buildReport(st) {
   h += `<h2>5. Charges d'exploitation (valeurs caractéristiques)</h2><h3>5.1 Eurocodes — EN 1991-2</h3>`;
   for (const [t, r] of [['LM1 – TS', ec.TS], ['LM1 – UDL', ec.UDL], ['gr1a = TS + UDL + trottoirs 3 kN/m²', ec.gr1a], ['gr1b = LM2', ec.gr1b], ['gr3 = trottoirs 5 kN/m²', ec.gr3]]) h += tableCase(deck, keys, r, t);
   h += `<h3>5.2 Fascicule 61 titre II (δ inclus pour B et Mc)</h3>`;
-  for (const [t, r] of [['A(l)', f61.A], ['Bc', f61.Bc], ...(f61.Bt ? [['Bt', f61.Bt]] : []), ['Mc120', f61.Mc120], ['D240', f61.D240], ['Trottoirs 1,5 kN/m²', f61.trottoir]]) h += tableCase(deck, keys, r, t);
+  for (const [t, r] of [['A(l)', f61.A], ['Bc', f61.Bc], ...(f61.Bt ? [['Bt', f61.Bt]] : []), ['Mc120', f61.Mc120], ['D240', f61.D240], ['Trottoirs 1,5 kN/m²', f61.trottoir]].filter(([, r]) => r)) h += tableCase(deck, keys, r, t);
   h += figs.M + figs.V + figs.R;
 
   // 6. Répartition transversale

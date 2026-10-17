@@ -42,6 +42,10 @@ Autres choix :
 - Appareils d'appui : réaction de l'appareil le plus chargé par les **coefficients d'inégalité de répartition** de PSI-DA 68 § 2.4.2 (CP,
   A/UDL, B/TS, Mc120 ; reproduits sur la note PSIDA.EL à 0,3–1 %) au lieu de R/n (−35 à −60 % sous trafic) ; entraxe par défaut
   E/sinψ/(n − 0,1) ; contrôle u_g > min(a,b)/10 (appareil glissant, guide § 3.6.2) ; freinage Fascicule 61 disponible (`brakingF61`).
+- Combinaisons BAEL / Fascicule 61 alignées sur les notes PSIDA.EL et PSIDP.EL : trottoirs cumulés avec A, B **et Mc120** (pas avec D240),
+  tassements aléatoires à l'ELU avec 1,35 (1,125 × 1,2) et tassements probables seuls à l'ELS ; charges militaires et exceptionnelles selon
+  l'itinéraire (Mc120, D240, les deux ou aucune). La note de calcul reproduit le tableau des moments extrêmes pondérés de PSIDA.EL à 0,1–0,5 %
+  (ELU appui 2 : −5954,8 contre −5958,1 kN·m ; ELS 0,5 L travée 2 : 3622,2 contre 3624,1) — `test/note.test.js`.
 - Unités : 1 t = 10 kN (A(l) = 2,3 + 360/(l + 12) kN/m², Bc = 300 kN) ; les programmes qui convertissent avec g = 9,81 donnent 1,9 % de moins.
 
 ## 1 bis. Résultats du benchmark CHAMOA-PSIDA (test/chamoa.test.js)
@@ -195,7 +199,7 @@ ponctuelles transversalement et le seul tandem arrière de Bc : l'outil diffuse 
 
 Bibliographie : Bareš & Massonnet (1966) ; Pücher (1977) ; Homberg (1968) ; Calgaro & Virlogeux ; Hambly (1991) ; O'Brien, Keogh & O'Connor (2014) ; EN 1991-2, EN 1992-1-1, EN 1992-2 ; Fascicule 61 titre II ; BAEL 91.
 
-## 4. Vérifications internes déjà en place (`npm test`, 88 tests)
+## 4. Vérifications internes déjà en place (`npm test`, 90 tests)
 
 - Poutre : PL/4 ; −qL²/8 et 9/128·qL² (2 travées) ; −qL²/10, 0,08 qL², 0,025 qL² (3 travées) ; enveloppe une travée chargée 0,0957 qL² ; convoi glissant ; portées équivalentes 0,8L / 0,447L.
 - Guyon-Massonnet : conditions de bord libre exactes, saut de Y''' = 1 sous la charge, flèche moyenne = poutre (∫K = 2b à 10⁻⁵), réciprocité K(y,e) = K(e,y), symétrie, limite θ → 0 ⇒ K = 1, continuité en charge de bord, μ nul aux bords, ∫m_x dy = moment de poutre (séries de Fourier).

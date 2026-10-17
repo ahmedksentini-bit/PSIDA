@@ -80,6 +80,7 @@
     <div class="row">
       <label>F61 : dispositifs de retenue<input name="nRetenue" value="2" type="number" step="1" min="0" max="2"></label>
       <label>F61 : classe imposée<input name="classe" value=""></label>
+      <label>F61 : charges militaires / exceptionnelles<select name="mil"><option value="Mc120+D240">Mc120 et D240</option><option value="Mc120">Mc120 seule</option><option value="D240">D240 seul</option><option value="aucune">aucune</option></select></label>
     </div>
     <details><summary>Chanfreins, température, tassements</summary>
       <div class="row">
@@ -199,7 +200,7 @@
       </div>
       <div id="hsearch"></div>
     </div>
-    <div class="card full-only"><div class="toolbar"><h2 style="margin:0;flex:1">Modèle</h2><button type="button" id="btn-report" style="width:auto;margin:0;padding:8px 14px">Exporter la note de calcul</button></div><p id="model-info" class="small"></p>
+    <div class="card full-only"><div class="toolbar"><h2 style="margin:0;flex:1">Modèle</h2><button type="button" id="btn-report" style="width:auto;margin:0;padding:8px 14px">Rapport de synthèse</button><select id="note-ref" style="width:auto;margin:0 0 0 8px;padding:7px"><option value="F61">Note SETRA — Fascicule 61 / BAEL</option><option value="EC">Note — Eurocodes (CHAMOA)</option></select><button type="button" id="btn-note" style="width:auto;margin:0 0 0 6px;padding:8px 14px">Note de calcul (HTML)</button><button type="button" id="btn-note-docx" style="width:auto;margin:0 0 0 6px;padding:8px 14px">Note de calcul (Word)</button></div><p id="model-info" class="small"></p>
       <div class="svgbox" id="elevation"></div>
       <div class="toolbar"><label>Cas de charge affiché <select id="case-select"></select></label></div>
       <div class="svgbox" id="cross"></div>

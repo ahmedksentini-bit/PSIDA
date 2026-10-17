@@ -20,7 +20,9 @@ export const EC_COMBI = {
   psi1: { TS: 0.75, UDL: 0.40, footway: 0.40, LM2: 0.75, gr3: 0 },
   psi0T: 0.6, psi1T: 0.6, psi2T: 0.5, rho0: 1, rho1: 0, rhoQP: 1,
 };
-export const BAEL_COMBI = { ELU: { G: 1.35, Gfav: 1.0, AB: 1.6, trott: 1.6, Mc: 1.35, D: 1.35, T: 0, Ta: 0 }, ELS: { G: 1.0, AB: 1.2, trott: 1.0, Mc: 1.0, D: 1.0, T: 0.6, Ta: 1.0 } };
+// tassements aléatoires à l'ELU avec 1,35 (1,125 × 1,2), probables seuls à l'ELS (pris nuls) ; trottoirs cumulés avec A, B et
+// Mc120 (pas avec D240) — combinaisons des notes PSIDA.EL / PSIDP.EL (ELU = 1,125 [1,2 (G + T) + 1,42 (A|B) | 1,2 Mc + 1,42 trott.])
+export const BAEL_COMBI = { ELU: { G: 1.35, Gfav: 1.0, AB: 1.6, trott: 1.6, Mc: 1.35, D: 1.35, T: 0, Ta: 1.35 }, ELS: { G: 1.0, AB: 1.2, trott: 1.0, Mc: 1.0, D: 1.0, T: 0.6, Ta: 0 } };
 
 const gPlus = (G, gam, gamFav) => (G >= 0 ? gam * G : gamFav * G);
 const gMinus = (G, gam, gamFav) => (G <= 0 ? gam * G : gamFav * G);
@@ -79,8 +81,8 @@ export function combineBAEL(perm, f61, { thermal = null, settle = null, k = BAEL
         const t = pick(T), ta = pick(Ta);
         const E = k.ELU, S = k.ELS;
         const gE = which === 'max' ? gPlus(g, E.G, E.Gfav) : gMinus(g, E.G, E.Gfav);
-        r.ELU[i].push(sel(gE + E.AB * ab + E.trott * tr, gE + E.Mc * mc, gE + E.D * d) + E.T * t + E.Ta * ta);
-        r.ELS[i].push(S.G * g + S.Ta * ta + S.T * t + sel(S.AB * ab + S.trott * tr, S.Mc * mc, S.D * d, 0));
+        r.ELU[i].push(sel(gE + E.AB * ab + E.trott * tr, gE + E.Mc * mc + E.trott * tr, gE + E.D * d) + E.T * t + E.Ta * ta);
+        r.ELS[i].push(S.G * g + S.Ta * ta + S.T * t + sel(S.AB * ab + S.trott * tr, S.Mc * mc + S.trott * tr, S.D * d, 0));
         r.QP[i].push(g + S.Ta * ta + S.T * t);
       }
     }
@@ -127,8 +129,8 @@ export function combineBeamBAEL(perm, f61, { thermal = null, settle = null, k = 
         const ab = sel(pick(f61.A, which, i), pick(f61.Bc, which, i), pick(f61.Bt, which, i), 0), tr = sel(pick(f61.trottoir, which, i), 0), mc = sel(pick(f61.Mc120, which, i), 0), d = sel(pick(f61.D240, which, i), 0);
         const t = pick(thermal, which, i), ta = pick(settle, which, i);
         const gE = which === 'max' ? gPlus(g, E.G, E.Gfav) : gMinus(g, E.G, E.Gfav);
-        out['ELU' + which].push(sel(gE + E.AB * ab + E.trott * tr, gE + E.Mc * mc, gE + E.D * d) + E.T * t + E.Ta * ta);
-        out['ELS' + which].push(S.G * g + S.Ta * ta + S.T * t + sel(S.AB * ab + S.trott * tr, S.Mc * mc, S.D * d, 0));
+        out['ELU' + which].push(sel(gE + E.AB * ab + E.trott * tr, gE + E.Mc * mc + E.trott * tr, gE + E.D * d) + E.T * t + E.Ta * ta);
+        out['ELS' + which].push(S.G * g + S.Ta * ta + S.T * t + sel(S.AB * ab + S.trott * tr, S.Mc * mc + S.trott * tr, S.D * d, 0));
       }
     }
     return out;

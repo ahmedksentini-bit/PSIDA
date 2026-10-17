@@ -423,8 +423,8 @@ export class ContinuousBeam {
       for (let i = 0; i < n; i++) { const x = x0 + i * step; let v = 0; for (const ax of axles) v += ax.P * this.ilAt(il, x + dir * ax.d); f[i] = v; }
       const dp = this._trainDP(f, off, nVeh);
       const partsOf = pos => pos.reduce((acc, i) => { const pp = this._axleParts(il, axles, x0 + i * step, dir); return acc.map((v, j) => v + pp[j]); }, new Array(this.n).fill(0));
-      if (dp.max.v > res.max) { res.max = dp.max.v; res.partsMax = partsOf(dp.max.pos); }
-      if (dp.min.v < res.min) { res.min = dp.min.v; res.partsMin = partsOf(dp.min.pos); }
+      if (dp.max.v > res.max) { res.max = dp.max.v; res.partsMax = partsOf(dp.max.pos); res.posMax = dp.max.pos.map(i => x0 + i * step); res.dirMax = dir; }
+      if (dp.min.v < res.min) { res.min = dp.min.v; res.partsMin = partsOf(dp.min.pos); res.posMin = dp.min.pos.map(i => x0 + i * step); res.dirMin = dir; }
     }
     return res;
   }
@@ -458,7 +458,7 @@ export class ContinuousBeam {
     for (let i = 0; i < n; i++) { const x = x0 + i * step; const a = Math.max(this.xMin, x), b = Math.min(this.xMax, x + len); f[i] = b > a ? q * this.integrateIL(il, a, b, 0) : 0; }
     const dp = this._trainDP(f, off, nv);
     const partsOf = pos => pos.reduce((acc, i) => { const x = x0 + i * step; const a = Math.max(this.xMin, x), b = Math.min(this.xMax, x + len); const pp = b > a ? this.integrateByspan(il, a, b) : new Array(this.n).fill(0); return acc.map((v, j) => v + q * pp[j]); }, new Array(this.n).fill(0));
-    return { max: dp.max.v, min: dp.min.v, partsMax: partsOf(dp.max.pos), partsMin: partsOf(dp.min.pos) };
+    return { max: dp.max.v, min: dp.min.v, partsMax: partsOf(dp.max.pos), partsMin: partsOf(dp.min.pos), posMax: dp.max.pos.map(i => x0 + i * step), posMin: dp.min.pos.map(i => x0 + i * step) };
   }
 
   /** Enveloppe d'une charge répartie q sur les zones défavorables, ventilée par travée porteuse. */

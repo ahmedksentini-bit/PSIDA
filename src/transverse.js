@@ -178,7 +178,7 @@ export class TransverseModel {
   }
 
   /** Cas Fascicule 61 par travée : A(l) (voies fixes, sous-ensembles), Bc, Bt, Mc120, D240, trottoirs ; δ inclus. */
-  fascicule61(j, { classe = null, nRetenue = 0, G = null } = {}) {
+  fascicule61(j, { classe = null, nRetenue = 0, G = null, mil = 'Mc120+D240' } = {}) {
     const deck = this.deck, { y1, y2 } = deck.g.roadway;
     const Lr = y2 - y1, Lc = Lr - 0.5 * nRetenue, cl = classe || classePont(Lr);
     const { nv, v } = voiesF61(Lc);
@@ -209,9 +209,10 @@ export class TransverseModel {
       Bt = scale(this.envelope(j, arrBt), dBc);
     }
     const arrMc = slidePositions(yc1 + 2.15, yc2 - 2.15, 0, deck.laneStep).map(e => [{ key: `mc|${e.toFixed(3)}`, patches: this.mcPatches(j, e), coef: 1 }]);
-    const Mc120 = scale(this.envelope(j, arrMc), deltaDyn(Lj, gT * Lj, maxStripTrainLoad(Lj, MC120.trackLength, MC120.trackLength + MC120.gapMin, MC120.P)));
+    const withMc = /Mc120/.test(mil), withD = /D240/.test(mil);
+    const Mc120 = !withMc ? null : scale(this.envelope(j, arrMc), deltaDyn(Lj, gT * Lj, maxStripTrainLoad(Lj, MC120.trackLength, MC120.trackLength + MC120.gapMin, MC120.P)));
     const arrD = slidePositions(yc1 + D240.width / 2, yc2 - D240.width / 2, 0, deck.laneStep).map(e => [{ key: `d|${e.toFixed(3)}`, patches: this.dPatches(j, e), coef: 1 }]);
-    const D = this.envelope(j, arrD);
+    const D = withD ? this.envelope(j, arrD) : null;
     // trottoirs : charge locale 4,5 kN/m² (art. 6, éléments de couverture — PSI-DA 68, PSIDA.EL, PONTYPE), un trottoir ou les deux
     const fws = (deck.g.footways || []).map(f => ({ key: `bd|${f.y1.toFixed(3)}|${f.y2.toFixed(3)}`, patches: this.bandPatches(j, f.y1, f.y2), coef: TROTTOIR.qLocal }));
     const trott = this.envelope(j, fws.length === 2 ? [[fws[0]], [fws[1]], fws] : [fws]);

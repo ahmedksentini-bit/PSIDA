@@ -442,7 +442,7 @@ export class SlabDeck {
   /**
    * @param {{classe?:number, nRetenue?:number, Gspan?:number[]}} opt
    */
-  fascicule61({ classe = null, nRetenue = 0, Gspan = null, convention = null } = {}) {
+  fascicule61({ classe = null, nRetenue = 0, Gspan = null, convention = null, mil = 'Mc120+D240' } = {}) {
     const { y1, y2 } = this.g.roadway;
     const Lr = y2 - y1, Lc = Lr - 0.5 * nRetenue;
     const cl = classe || classePont(Lr);
@@ -519,19 +519,21 @@ export class SlabDeck {
     }]);
     const SMc = this.spans.map(L => maxStripTrainLoad(L, MC120.trackLength, MC120.trackLength + MC120.gapMin, MC120.P));
     const deltaMc = this.spans.map((L, j) => deltaDyn(L, G[j], SMc[j]));
-    const Mc120 = this.evaluateArrangements(arrMc, { ...optsQ, delta: deltaMc, dEnd: 1.2 });
+    // charges militaires et exceptionnelles selon l'itinéraire (art. 9 et 10) : 'Mc120', 'D240', 'Mc120+D240' ou 'aucune'
+    const withMc = /Mc120/.test(mil), withD = /D240/.test(mil);
+    const Mc120 = withMc ? this.evaluateArrangements(arrMc, { ...optsQ, delta: deltaMc, dEnd: 1.2 }) : null;
 
     // --- D240 : convoi seul, sans majoration dynamique
     const arrD = slidePositions(yc1 + D240.width / 2, yc2 - D240.width / 2, 0, this.laneStep).map(e => [{
       label: 'D240', kind: 'strip', q: D240.q, len: D240.length, tracks: [{ e1: e - D240.width / 2, e2: e + D240.width / 2, share: 1 }],
     }]);
-    const D = this.evaluateArrangements(arrD, optsQ);
+    const D = withD ? this.evaluateArrangements(arrD, optsQ) : null;
 
     const trott = this.evaluateArrangements([(this.g.footways || []).map(f => ({
       label: 'Trottoir', kind: 'udl', q: TROTTOIR.q * (f.y2 - f.y1), tracks: [{ e1: f.y1, e2: f.y2, share: 1 }],
     }))], optsQ);
 
-    return { classe: cl, Lr, Lc, nv, v, G, A, Bc, deltaBc, Bt, deltaBt, Mc120, deltaMc, D240: D, trottoir: trott };
+    return { classe: cl, Lr, Lc, nv, v, G, A, Bc, deltaBc, Bt, deltaBt, Mc120, deltaMc, D240: D, trottoir: trott, mil };
   }
 
   /** Applique un coefficient de majoration dynamique par travée (sur appui : max des deux). */

@@ -25,6 +25,7 @@ export const HELP = {
   nu: 'Coefficient de Poisson de la dalle dans Guyon-Massonnet : 0,2 reproduit CHAMOA, 0 reproduit les tables de Massonnet et les coefficients K de PSIDA.EL.',
   laneStep: 'Pas de glissement transversal des voies et files de camions pour trouver la position la plus défavorable [m].',
   Leq: 'Portées équivalentes imposées (θ = b/L_eq) [m] ; vide = calcul automatique par la travée seule chargée (points de moment nul).',
+  mil: 'Charges militaires et exceptionnelles du Fascicule 61 (art. 9 et 10) : elles ne s\'appliquent que sur les itinéraires classés (Mc120 pour les itinéraires militaires, D240 pour les convois exceptionnels). L\'exemple PSIDA.EL ne prend que Mc120.',
   leqMethod: 'Définition de la portée équivalente de Guyon-Massonnet : distance entre points de moment nul de la travée seule chargée (CHAMOA, avec ν = 0,2) ou travée isostatique de même flèche à mi-travée (programme SETRA PSIDA.EL 1984, avec ν = 0). Les deux couples reproduisent les notes de référence (docs/hypotheses.md § 1 quater).',
   alpha: 'Coefficients d\'ajustement α du modèle LM1 : valeurs recommandées (α = 1) ou annexe nationale française (classe 1 : trafic lourd ; classe 2 : trafic courant, exemple CHAMOA).',
   nRetenue: 'Fascicule 61 : nombre de dispositifs de retenue (0 à 2) ; largeur chargeable Lc = Lr − 0,5 par dispositif.',
