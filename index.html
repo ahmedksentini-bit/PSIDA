@@ -34,6 +34,34 @@
   button { margin-top:12px; width:100%; padding:10px; border:0; border-radius:8px; background:var(--acc); color:#fff; font-weight:600; cursor:pointer; }
   button.secondary { background:transparent; color:var(--acc); border:1px solid var(--acc); }
   .row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  /* Formulaires de saisie : une donnée par ligne, libellé à gauche, champ dans une colonne alignée à droite ;
+     listes de choix, textes et éditeurs multi-valeurs (web/fields.js) en pleine largeur sous leur titre. */
+  .form-card { --fw: 7.4rem; } .cols > .form-card { display:block; } /* pas d'écart de grille entre les lignes de saisie */
+  .form-card label { display:grid; grid-template-columns:minmax(0,1fr) var(--fw); align-items:center; column-gap:10px; margin-top:7px; line-height:1.3; }
+  .form-card label:has(> select):not(.in), .form-card label.wide, .form-card label:has(> textarea) { grid-template-columns:minmax(0,1fr); row-gap:4px; }
+  .form-card label:has(> input[type=checkbox]) { display:flex; align-items:flex-start; gap:8px; color:var(--ink); margin-top:10px; }
+  .form-card label > input[type=checkbox] { margin:2px 0 0; flex:none; }
+  .form-card input, .form-card select { padding:5px 7px; min-width:0; }
+  .form-card input[type=number], .form-card label:not(.wide) > input, .form-card .ed-in { text-align:right; }
+  .form-card [hidden] { display:none !important; }
+  .form-card .grp { margin:18px 0 2px; padding-bottom:3px; border-bottom:1px solid var(--line); font-weight:650; font-size:13.5px; color:var(--ink); }
+  .form-card h2 + .grp, .form-card details > .grp:first-child, .form-card #help-box + .grp { margin-top:8px; }
+  .form-card .sub { margin:12px 0 0; font-size:12.5px; font-weight:600; color:var(--muted); }
+  .form-card .fld { margin-top:7px; font-size:13px; color:var(--muted); line-height:1.3; }
+  .form-card .hint { margin:4px 0 0; }
+  .ed-row { display:grid; grid-template-columns:minmax(0,1fr) var(--fw); align-items:center; column-gap:10px; margin-top:4px; padding-left:14px; font-size:12.5px; }
+  .ed-head { padding-left:0; font-size:13px; }
+  .ed-count { display:flex; align-items:center; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--ink); }
+  .ed-count b { flex:1; text-align:center; font-weight:600; }
+  button.ed-btn { width:auto; margin:0; padding:1px 9px; background:transparent; color:var(--acc); border:0; font-weight:700; font-size:16px; line-height:1.4; }
+  .ed-table { display:grid; gap:4px; margin-top:3px; }
+  .ed-th, .ed-tr { display:grid; grid-template-columns:repeat(var(--nc), minmax(0,1fr)) 24px; gap:4px; align-items:center; }
+  .ed-th span { font-size:11.5px; color:var(--muted); text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ed-tr .ed-in { padding:4px 5px; } .ed-table:not(:has(.ed-tr)) { display:none; }
+  button.ed-del { padding:0; font-size:15px; color:var(--muted); }
+  button.ed-add { width:auto; margin:5px 0 0; padding:3px 9px; font-size:12px; background:transparent; color:var(--acc); border:1px dashed var(--acc); border-radius:6px; font-weight:600; }
+  .ed-checks { display:flex; flex-wrap:wrap; gap:4px 16px; padding-left:14px; margin-top:4px; }
+  .ed-chk { display:inline-flex; align-items:center; gap:4px; color:var(--ink); font-size:13px; cursor:pointer; }
   table { border-collapse: collapse; width:100%; font-size:12.5px; margin: 6px 0 14px; }
   th, td { border-bottom:1px solid var(--line); padding:4px 6px; text-align:right; white-space:nowrap; }
   th:first-child, td:first-child { text-align:left; } thead th { color:var(--muted); font-weight:600; }
@@ -85,66 +113,47 @@
   <div class="cols">
     <div class="card form-card"><h2>Tablier</h2>
     <details id="help-box"><summary>Aide sur les données (survoler un champ affiche aussi son explication)</summary><div id="help-list" class="small"></div></details>
-    <label>Portées [m]<input name="spans" value="14, 18, 14"></label>
-    <div class="row">
-      <label>Largeur dalle 2b [m]<input name="width" value="12" type="number" step="any"></label>
-      <label>Épaisseur h [m]<input name="h" value="0.70" type="number" step="any"></label>
-    </div>
-    <div class="row">
-      <label>Aire section [m²] (vide = 2b·h)<input name="area" value=""></label>
-      <label>Abouts gauche, droit [m]<input name="overhangs" value="0, 0"></label>
-    </div>
-    <label>Chaussée y1, y2 [m] (repère −b…+b)<input name="roadway" value="-5, 5"></label>
-    <label>Trottoirs y1,y2 ; …<input name="footways" value="-6,-5 ; 5,6"></label>
-    <label>Charges linéaires permanentes : g [kN/m] @ e [m] ; …<textarea name="lines">5 @ -5.9 ; 5 @ 5.9 ; 6.5 @ -5.3 ; 6.5 @ 5.3 ; 5 @ -5.5 ; 5 @ 5.5</textarea></label>
-    <label>Charges surfaciques permanentes : q [kN/m²] sur y1,y2 ; …<input name="bands" value="2.6 sur -5,5"></label>
-    <label>Ordonnées de calcul y [m]<input name="ys" value="-6, -4.5, -3, -1.5, 0, 1.5, 3, 4.5, 6"></label>
-    <div class="row">
-      <label>ν (Guyon) — 0,2 CHAMOA, 0 Massonnet<input name="nu" value="0.2" type="number" step="0.05" min="0" max="0.3"></label>
-      <label>Pas de glissement des voies [m]<input name="laneStep" value="0.5" type="number" step="0.1" min="0.1"></label>
-    </div>
-    <div class="row">
-      <label>L_eq imposées [m] (vide = calcul)<input name="Leq" value=""></label>
-      <label>Calcul de L_eq<select name="leqMethod"><option value="moments">points de moment nul (CHAMOA)</option><option value="fleches">flèche à mi-travée (PSIDA.EL 1984)</option></select></label>
-    </div>
+    <div class="grp">Géométrie du tablier</div>
+    <div class="fld">Portées des travées [m]<input type="hidden" name="spans" value="14, 18, 14" data-ed="list" data-item="Travée T" data-count="Nombre de travées"></div>
+    <label>Largeur de la dalle 2b [m]<input name="width" value="12" type="number" step="any"></label>
+    <label>Épaisseur de la dalle h [m]<input name="h" value="0.70" type="number" step="any"></label>
+    <label>Aire de la section [m²]<input name="area" value="" placeholder="2b·h"></label>
+    <div class="fld">Abouts au-delà des appuis d'extrémité [m]<input type="hidden" name="overhangs" value="0, 0" data-ed="tuple" data-items="côté gauche|côté droit"></div>
+    <div class="grp">Profil en travers (repère y de −b à +b)</div>
+    <div class="fld">Chaussée [m]<input type="hidden" name="roadway" value="-5, 5" data-ed="tuple" data-items="bord gauche y1|bord droit y2"></div>
+    <div class="fld">Trottoirs [m]<input type="hidden" name="footways" value="-6,-5 ; 5,6" data-ed="table" data-fmt="pairs" data-cols="y1|y2" data-add="Ajouter un trottoir"></div>
+    <div class="grp">Superstructures (charges permanentes)</div>
+    <div class="fld">Charges linéaires : g [kN/m] à l'abscisse e [m]<input type="hidden" name="lines" value="5 @ -5.9 ; 5 @ 5.9 ; 6.5 @ -5.3 ; 6.5 @ 5.3 ; 5 @ -5.5 ; 5 @ 5.5" data-ed="table" data-fmt="lines" data-cols="g [kN/m]|e [m]|k min|k max" data-add="Ajouter une charge linéaire"></div>
+    <div class="fld">Charges réparties : q [kN/m²] entre y1 et y2 [m]<input type="hidden" name="bands" value="2.6 sur -5,5" data-ed="table" data-fmt="bands" data-cols="q [kN/m²]|y1 [m]|y2 [m]|k min|k max" data-add="Ajouter une charge répartie"></div>
+    <div class="grp">Répartition transversale (Guyon-Massonnet)</div>
+    <div class="fld">Ordonnées de calcul y [m]<input type="hidden" name="ys" value="-6, -4.5, -3, -1.5, 0, 1.5, 3, 4.5, 6" data-ed="list" data-item="y" data-count="Nombre d'ordonnées"></div>
+    <label>Coefficient de Poisson ν<input name="nu" value="0.2" type="number" step="0.05" min="0" max="0.3"></label>
+    <label>Pas de glissement des voies [m]<input name="laneStep" value="0.5" type="number" step="0.1" min="0.1"></label>
+    <label>L_eq imposées, une par travée [m]<input name="Leq" value="" placeholder="calculées"></label>
+    <label>Calcul de L_eq<select name="leqMethod"><option value="moments">points de moment nul (CHAMOA)</option><option value="fleches">flèche à mi-travée (PSIDA.EL 1984)</option></select></label>
+    <div class="grp">Charges de trafic</div>
     <label>Coefficients α (Eurocode)<select name="alpha"><option value="recommended">EN 1991-2 valeurs recommandées (α = 1)</option><option value="FR1">NF EN 1991-2/NA classe 1</option><option value="FR2">NF EN 1991-2/NA classe 2</option></select></label>
-    <div class="row">
-      <label>F61 : dispositifs de retenue<input name="nRetenue" value="2" type="number" step="1" min="0" max="2"></label>
-      <label>F61 : classe imposée<input name="classe" value=""></label>
-      <label>F61 : charges militaires / exceptionnelles<select name="mil"><option value="Mc120+D240">Mc120 et D240</option><option value="Mc120">Mc120 seule</option><option value="D240">D240 seul</option><option value="aucune">aucune</option></select></label>
-    </div>
-    <div class="card"><h2>Chanfreins, température, tassements</h2>
-
-      <div class="row">
-        <label>Chanfreins : hauteur au bord [m] (vide = sans)<input name="hEdge" value=""></label>
-        <label>Largeur de la joue [m]<input name="joue" value=""></label>
-      </div>
-      <label><input type="checkbox" name="withTherm" checked>Gradient thermique (EN 1991-1-5) et tassements aléatoires</label>
-      <div class="row">
-        <label>ΔT échauffement / refroidissement [°C]<input name="dT" value="12, -6"></label>
-        <label>E [MPa], I total [m⁴] (vide = 2b·h³/12)<input name="EI" value="34077,"></label>
-      </div>
-      <div class="row">
-        <label>Tassement aléatoire δ [m]<input name="delta" value="0.01" type="number" step="0.001"></label>
-        <label>Fluage φ (module différé E/(1+φ))<input name="phiFluage" value="2" type="number" step="0.1"></label>
-      </div>
-    </div>
-    <div class="card"><h2>Matériaux et ferraillage</h2>
-
-      <div class="row">
-        <label>fck / fc28 [MPa]<input name="fck" value="35" type="number" step="any"></label>
-        <label>fyk / fe [MPa]<input name="fyk" value="500" type="number" step="10"></label>
-      </div>
-      <div class="row">
-        <label>Enrobage à l'axe c [m]<input name="cover" value="0.03" type="number" step="0.005"></label>
-        <label>φ long. / φ transv. [mm] (fissuration)<div class="row"><input name="phi" value="20" type="number" step="1"><input name="phiT" value="16" type="number" step="1"></div></label>
-      </div>
-      <div class="row">
-        <label>wk max [mm] (ELS fréquent)<input name="wk" value="0.3" type="number" step="0.05"></label>
-        <label>Fissuration BAEL<select name="fiss"><option value="prejudiciable">préjudiciable</option><option value="tres prejudiciable">très préjudiciable</option><option value="peu nuisible">peu nuisible</option></select></label>
-      </div>
-      <label>Épaisseur de revêtement pour la diffusion des roues [m]<input name="tRev" value="0.08" type="number" step="0.01"></label>
-    </div>
+    <label>F61 : nombre de dispositifs de retenue<input name="nRetenue" value="2" type="number" step="1" min="0" max="2"></label>
+    <label>F61 : classe du pont imposée<input name="classe" value="" placeholder="auto"></label>
+    <label>F61 : charges militaires et exceptionnelles<select name="mil"><option value="Mc120+D240">Mc120 et D240</option><option value="Mc120">Mc120 seule</option><option value="D240">D240 seul</option><option value="aucune">aucune</option></select></label>
+    <div class="grp">Chanfreins</div>
+    <label>Hauteur au bord libre [m]<input name="hEdge" value="" placeholder="sans"></label>
+    <label>Largeur de la joue [m]<input name="joue" value="" placeholder="sans"></label>
+    <div class="grp">Température, tassements, fluage</div>
+    <label><input type="checkbox" name="withTherm" checked>Gradient thermique (EN 1991-1-5) et tassements aléatoires</label>
+    <div class="fld" data-show="withTherm">Gradient thermique ΔT [°C]<input type="hidden" name="dT" value="12, -6" data-ed="tuple" data-items="échauffement|refroidissement"></div>
+    <div class="fld">Rigidité de la dalle<input type="hidden" name="EI" value="34077," data-ed="tuple" data-items="module E [MPa]|inertie totale I [m⁴]" data-ph="|2b·h³/12"></div>
+    <label data-show="withTherm">Tassement aléatoire δ [m]<input name="delta" value="0.01" type="number" step="0.001"></label>
+    <label>Fluage φ (module différé E/(1+φ))<input name="phiFluage" value="2" type="number" step="0.1"></label>
+    <div class="grp">Matériaux et ferraillage</div>
+    <label>Béton f_ck (EC) / f_c28 (BAEL) [MPa]<input name="fck" value="35" type="number" step="any"></label>
+    <label>Acier f_yk (EC) / f_e (BAEL) [MPa]<input name="fyk" value="500" type="number" step="10"></label>
+    <label>Enrobage à l'axe des aciers c [m]<input name="cover" value="0.03" type="number" step="0.005"></label>
+    <label>Ø des aciers longitudinaux [mm]<input name="phi" value="20" type="number" step="1"></label>
+    <label>Ø des aciers transversaux [mm]<input name="phiT" value="16" type="number" step="1"></label>
+    <label>Ouverture de fissure w_k max (ELS fréquent) [mm]<input name="wk" value="0.3" type="number" step="0.05"></label>
+    <label>Fissuration (BAEL)<select name="fiss"><option value="prejudiciable">préjudiciable</option><option value="tres prejudiciable">très préjudiciable</option><option value="peu nuisible">peu nuisible</option></select></label>
+    <label>Revêtement (diffusion des roues) [m]<input name="tRev" value="0.08" type="number" step="0.01"></label>
     <label><input type="checkbox" name="chamoaSign">Convention CHAMOA (moment + = fibre supérieure tendue) sur le graphique M(x)</label>
     <button type="submit">Calculer</button>
     <button type="button" class="secondary" id="btn-concept">Aide à la conception seule (rapide)</button>
@@ -165,24 +174,17 @@
   <div class="cols">
     <div class="card form-card"><h2>Conception (guide SETRA 1989)</h2>
 
-      <div class="row">
-        <label>Biais ψ [gr] (100 = droit)<input name="psi" value="100" type="number" step="1" min="30" max="100"></label>
-        <label>Hauteur libre sous tablier [m] (facultatif)<input name="tirantAir" value=""></label>
-      </div>
-      <div class="row">
-        <label>Type de dalle<select name="typeDalle"><option value="auto">automatique (portées)</option><option value="DA">PSI.DA (béton armé)</option><option value="DP">PSI.DP (précontraint)</option></select></label>
-        <label>Plus gros fer d'about D [mm]<input name="Dabout" value="25" type="number" step="1"></label>
-      </div>
-      <label>Taux d'armatures maximal par face pour la recherche d'épaisseur [%]<input name="rhoMax" value="1.0" type="number" step="0.1" min="0.3" max="4"></label>
+      <label>Biais ψ [gr] (100 = pont droit)<input name="psi" value="100" type="number" step="1" min="30" max="100"></label>
+      <label>Hauteur libre sous tablier [m]<input name="tirantAir" value="" placeholder="facultatif"></label>
+      <label>Type de dalle<select name="typeDalle"><option value="auto">automatique (selon les portées)</option><option value="DA">PSI.DA (béton armé)</option><option value="DP">PSI.DP (précontraint)</option></select></label>
+      <label>Plus gros fer d'about D [mm]<input name="Dabout" value="25" type="number" step="1"></label>
+      <label>Taux d'armatures maximal par face (recherche d'épaisseur) [%]<input name="rhoMax" value="1.0" type="number" step="0.1" min="0.3" max="4"></label>
       <label>Aciers transversaux (ouvrage biais, annexe 12A)<select name="transDir"><option value="appuis">parallèles aux lignes d'appui (CHAMOA)</option><option value="perp">perpendiculaires aux bords libres</option></select></label>
-      <div class="row">
-        <label>Appareils d'appui par ligne (vide = auto)<input name="nBearings" value=""></label>
-        <label>Point fixe x [m] (vide = milieu)<input name="xFixed" value=""></label>
-      </div>
-      <div class="row">
-        <label>Raccourcissement lent ε (retrait + fluage)<input name="epsSlow" value="0.00025" type="number" step="0.00005"></label>
-        <label>Variation uniforme de température [°C]<input name="dTu" value="30" type="number" step="5"></label>
-      </div>
+      <div class="grp">Appareils d'appui et déplacements</div>
+      <label>Appareils d'appui par ligne<input name="nBearings" value="" placeholder="auto"></label>
+      <label>Point fixe x [m]<input name="xFixed" value="" placeholder="milieu"></label>
+      <label>Raccourcissement lent ε (retrait + fluage)<input name="epsSlow" value="0.00025" type="number" step="0.00005"></label>
+      <label>Variation uniforme de température [°C]<input name="dTu" value="30" type="number" step="5"></label>
     <button type="button" class="secondary" id="btn-concept2">Aide à la conception seule (rapide)</button>
     </div>
     <div>
@@ -256,39 +258,34 @@
   <div class="cols">
     <div class="card form-card"><h2>Phase de chantier, convois LM3, encorbellements, fatigue, zonage</h2>
 
+      <div class="grp">Phase de chantier</div>
       <label><input type="checkbox" name="withChantier">Profil provisoire (phase de chantier)</label>
-      <div class="row">
-        <label>Chaussée de chantier y1, y2 [m]<input name="chRoadway" value="-4, 4"></label>
-        <label>Bande neutralisée de chaque côté [m]<input name="chNeutral" value="1" type="number" step="0.5"></label>
+      <div data-show="withChantier">
+      <div class="fld">Chaussée de chantier [m]<input type="hidden" name="chRoadway" value="-4, 4" data-ed="tuple" data-items="bord gauche y1|bord droit y2"></div>
+      <label>Bande neutralisée de chaque côté [m]<input name="chNeutral" value="1" type="number" step="0.5"></label>
+      <div class="fld">Remblai provisoire<input type="hidden" name="chRemblai" value="0.5 sur -5,5" data-ed="tuple" data-fmt="sur" data-items="hauteur h [m]|de y1 [m]|à y2 [m]"></div>
+      <div class="fld">Enrobé provisoire<input type="hidden" name="chEnrobe" value="0.2 sur -4,4" data-ed="tuple" data-fmt="sur" data-items="épaisseur t [m]|de y1 [m]|à y2 [m]"></div>
+      <label class="wide">Engins de chantier, un par ligne : « nom : P@x ; P@x | w=largeur e=entraxe des roues dyn=coefficient »<textarea name="chVehicles">Véhicule spécial : 100@1 ; 100@9 | w=3 e=2 dyn=1.5</textarea></label>
       </div>
-      <div class="row">
-        <label>Remblai provisoire : h [m] sur y1,y2<input name="chRemblai" value="0.5 sur -5,5"></label>
-        <label>Enrobé provisoire : t [m] sur y1,y2<input name="chEnrobe" value="0.2 sur -4,4"></label>
-      </div>
-      <label>Engins de chantier (un par ligne) : P@x ; P@x | w=largeur e=entraxe roues dyn=coef<textarea name="chVehicles">Véhicule spécial : 100@1 ; 100@9 | w=3 e=2 dyn=1.5</textarea></label>
-      <label>Convoi exceptionnel LM3<select name="lm3"><option value="">aucun</option><option value="VS 600/150">VS 600/150</option><option value="VS 900/150">VS 900/150</option><option value="VS 1200/150">VS 1200/150</option><option value="VS 1200/200">VS 1200/200</option><option value="VS 1500/200">VS 1500/200</option><option value="VS 1800/200">VS 1800/200</option><option value="VS 2400/200">VS 2400/200</option><option value="VS 3000/200">VS 3000/200</option><option value="VS 3600/200">VS 3600/200</option><option value="VS 2400/240">VS 2400/240</option><option value="custom">personnalisé (ci-dessous)</option></select></label>
-      <div class="row">
-        <label>LM3 personnalisé : P@x ; … | w= e= unc=<input name="lm3Custom" value=""></label>
-        <label>Circulation<select name="lm3Speed"><option value="rapide">vitesse normale (dyn = 1 + 0,7/(1 + 0,2 L))</option><option value="lent">au pas (dyn = 1)</option></select></label>
-      </div>
-      <label>Encorbellement : Lc, h encastrement, h extrémité [m] (vide = sans)<input name="cant" value=""></label>
-      <div class="row">
-        <label>Charges linéiques sur l'encorbellement : g@x ; …<input name="cantLines" value="10@2.35"></label>
-        <label>Bandes permanentes : q sur x1,x2 ; …<input name="cantBands" value=""></label>
-      </div>
-      <div class="row">
-        <label>Trottoir sur l'encorbellement x1, x2 [m]<input name="cantFootway" value=""></label>
-        <label>Chaussée empiétant sur l'encorbellement [m]<input name="cantRoad" value="0" type="number" step="0.1"></label>
-      </div>
-      <div class="row">
-        <label>Fatigue : λ_s,1 (figure NN.1)<input name="fatLambda1" value="1.0" type="number" step="0.05"></label>
-        <label>Trafic (Q̄)<select name="fatTrafic"><option value="longue">longue distance (1,0)</option><option value="moyenne">moyenne distance (0,94)</option><option value="locale">local (0,82)</option></select></label>
-      </div>
-      <div class="row">
-        <label>Catégorie de trafic (N_obs)<select name="fatCat"><option value="1">1 (2·10⁶/an)</option><option value="2" selected>2 (0,5·10⁶/an)</option><option value="3">3 (0,125·10⁶/an)</option><option value="4">4 (0,05·10⁶/an)</option></select></label>
-        <label>Durée [ans] / voies lentes / φ_fat<div class="row"><input name="fatYears" value="100" type="number"><input name="fatLanes" value="1" type="number"><input name="fatPhi" value="1.0" type="number" step="0.1"></div></label>
-      </div>
-      <label>Entraxe des appareils d'appui [m] (zonage ; vide = déduit du nombre d'appareils)<input name="bearingPitch" value=""></label>
+      <div class="grp">Convoi exceptionnel LM3</div>
+      <label>Convoi<select name="lm3"><option value="">aucun</option><option value="VS 600/150">VS 600/150</option><option value="VS 900/150">VS 900/150</option><option value="VS 1200/150">VS 1200/150</option><option value="VS 1200/200">VS 1200/200</option><option value="VS 1500/200">VS 1500/200</option><option value="VS 1800/200">VS 1800/200</option><option value="VS 2400/200">VS 2400/200</option><option value="VS 3000/200">VS 3000/200</option><option value="VS 3600/200">VS 3600/200</option><option value="VS 2400/240">VS 2400/240</option><option value="custom">personnalisé (ci-dessous)</option></select></label>
+      <label class="wide" data-show="lm3=custom">Convoi personnalisé : « P@x ; … | w= e= unc= »<input name="lm3Custom" value=""></label>
+      <label>Circulation<select name="lm3Speed"><option value="rapide">vitesse normale (dyn = 1 + 0,7/(1 + 0,2 L))</option><option value="lent">au pas (dyn = 1)</option></select></label>
+      <div class="grp">Encorbellement</div>
+      <div class="fld">Géométrie (vide = sans encorbellement) [m]<input type="hidden" name="cant" value="" data-ed="tuple" data-items="longueur L_c|h à l'encastrement|h à l'extrémité" data-ph="sans|sans|sans"></div>
+      <div class="fld">Charges linéiques : g [kN/m] à x [m] de l'encastrement<input type="hidden" name="cantLines" value="10@2.35" data-ed="table" data-fmt="lines0" data-cols="g [kN/m]|x [m]" data-add="Ajouter une charge"></div>
+      <div class="fld">Bandes permanentes : q [kN/m²] de x1 à x2 [m]<input type="hidden" name="cantBands" value="" data-ed="table" data-fmt="bands0" data-cols="q [kN/m²]|x1 [m]|x2 [m]" data-add="Ajouter une bande"></div>
+      <div class="fld">Trottoir sur l'encorbellement [m]<input type="hidden" name="cantFootway" value="" data-ed="tuple" data-items="de x1|à x2" data-ph="sans|sans"></div>
+      <label>Chaussée empiétant sur l'encorbellement [m]<input name="cantRoad" value="0" type="number" step="0.1"></label>
+      <div class="grp">Fatigue (EN 1992-2 annexe NN)</div>
+      <label>λ_s,1 (figure NN.1)<input name="fatLambda1" value="1.0" type="number" step="0.05"></label>
+      <label>Trafic (Q̄)<select name="fatTrafic"><option value="longue">longue distance (1,0)</option><option value="moyenne">moyenne distance (0,94)</option><option value="locale">local (0,82)</option></select></label>
+      <label>Catégorie de trafic (N_obs)<select name="fatCat"><option value="1">1 (2·10⁶/an)</option><option value="2" selected>2 (0,5·10⁶/an)</option><option value="3">3 (0,125·10⁶/an)</option><option value="4">4 (0,05·10⁶/an)</option></select></label>
+      <label>Durée d'utilisation [ans]<input name="fatYears" value="100" type="number"></label>
+      <label>Nombre de voies lentes<input name="fatLanes" value="1" type="number"></label>
+      <label>Coefficient φ_fat<input name="fatPhi" value="1.0" type="number" step="0.1"></label>
+      <div class="grp">Zonage du ferraillage</div>
+      <label>Entraxe des appareils d'appui [m]<input name="bearingPitch" value="" placeholder="auto"></label>
     </div>
     <div>
 <p class="small nores">Lancer le calcul (bouton « Calculer » en haut de page) pour afficher les résultats.</p>
@@ -300,35 +297,36 @@
   <div class="cols">
     <div class="card form-card"><h2>Pont à poutres (travées indépendantes)</h2>
       <p class="small">VIPP, PRAD, poutres BA : répartition transversale de Guyon-Massonnet du réseau poutres + hourdis, efforts par poutre (Fascicule 61 et Eurocodes), réactions par ligne d'appui. Valeurs par défaut : Pont de Noé (VIPP 33 m, 4 poutres).</p>
-      <div class="row">
-        <label>Portées des travées [m]<input name="pt_spans" value="33, 33, 33, 33"></label>
-        <label>Type de poutres<select name="pt_type"><option value="BP">précontraintes (VIPP)</option><option value="BA">béton armé</option></select></label>
-      </div>
-      <div class="row">
-        <label>Nombre de poutres / entraxe b₁ [m]<div class="row"><input name="pt_n" value="4" type="number"><input name="pt_b1" value="3.28" type="number" step="any"></div></label>
-        <label>Épaisseur du hourdis [m]<input name="pt_hd" value="0.30" type="number" step="any"></label>
-      </div>
-      <label>Poutre + hourdis : A [m²] / I [m⁴] / K torsion [m⁴]<div class="row"><input name="pt_A" value="2.047" type="number" step="any"><input name="pt_I" value="1.006057" type="number" step="any"><input name="pt_K" value="0.036412" type="number" step="any"></div></label>
-      <label>v / v' [m] / hauteur totale H [m]<div class="row"><input name="pt_v" value="0.65" type="number" step="any"><input name="pt_vp" value="1.67" type="number" step="any"><input name="pt_H" value="2.32" type="number" step="any"></div></label>
-      <label>Ou géométrie de la poutre (rectangles du talon vers la table, b h ; … — le hourdis est ajouté) : calcule A, I, K, v, v'<input name="pt_parts" value="" placeholder="ex. 0.6 0.25 ; 0.25 1.47 ; 1.0 0.3"></label>
-      <div class="row">
-        <label>Chaussée y1, y2 [m]<input name="pt_road" value="-4, 4"></label>
-        <label>Trottoirs y1,y2 ; …<input name="pt_foot" value="-6.56,-4 ; 4,6.56"></label>
-      </div>
-      <label>Superstructures linéaires g [kN/m] @ e [m] ; … (e peut dépasser b : corniches)<input name="pt_lines" value="18 @ -6.87 ; 18 @ 6.87"></label>
-      <div class="row">
-        <label>Superstructures réparties q [kN/m²] sur y1,y2<input name="pt_bands" value="1.79 sur -6.56,6.56"></label>
-        <label>Poids propre complémentaire (entretoises…) [kN/m]<input name="pt_extra" value="0" type="number" step="any"></label>
-      </div>
-      <div class="row">
-        <label>F61 : dispositifs de retenue (réduction de Lc)<input name="pt_ret" value="0" type="number" min="0" max="2"></label>
-        <label>F61 : charges militaires<select name="pt_mil"><option value="Mc120">Mc120</option><option value="Mc120+D240">Mc120 et D240</option><option value="aucune">aucune</option></select></label>
-      </div>
-      <div class="row">
-        <label>Béton f_ck / acier f_yk [MPa]<div class="row"><input name="pt_fck" value="35" type="number" step="any"><input name="pt_fyk" value="500" type="number" step="any"></div></label>
-        <label>BA : âme b₀ / enrobage à l'axe [m]<div class="row"><input name="pt_b0" value="0.25" type="number" step="any"><input name="pt_cover" value="0.12" type="number" step="any"></div></label>
-      </div>
-      <label>BP : précontrainte finale P∞ par poutre [kN] / excentricité e₀ à mi-travée [m] (négative sous le c.d.g.)<div class="row"><input name="pt_P" value="6500" type="number" step="any"><input name="pt_e0" value="-1.46" type="number" step="any"></div></label>
+      <div class="grp">Travées et poutres</div>
+      <div class="fld">Portées des travées [m]<input type="hidden" name="pt_spans" value="33, 33, 33, 33" data-ed="list" data-item="Travée T" data-count="Nombre de travées"></div>
+      <label>Type de poutres<select name="pt_type"><option value="BP">précontraintes (VIPP)</option><option value="BA">béton armé</option></select></label>
+      <label>Nombre de poutres<input name="pt_n" value="4" type="number"></label>
+      <label>Entraxe des poutres b₁ [m]<input name="pt_b1" value="3.28" type="number" step="any"></label>
+      <label>Épaisseur du hourdis [m]<input name="pt_hd" value="0.30" type="number" step="any"></label>
+      <div class="grp">Section poutre + hourdis</div>
+      <label>Aire A [m²]<input name="pt_A" value="2.047" type="number" step="any"></label>
+      <label>Inertie de flexion I [m⁴]<input name="pt_I" value="1.006057" type="number" step="any"></label>
+      <label>Inertie de torsion K [m⁴]<input name="pt_K" value="0.036412" type="number" step="any"></label>
+      <label>v (c.d.g. – fibre supérieure) [m]<input name="pt_v" value="0.65" type="number" step="any"></label>
+      <label>v' (c.d.g. – fibre inférieure) [m]<input name="pt_vp" value="1.67" type="number" step="any"></label>
+      <label>Hauteur totale H [m]<input name="pt_H" value="2.32" type="number" step="any"></label>
+      <label class="wide">Ou rectangles de la poutre, du talon vers la table : « b h ; … » [m] (le hourdis est ajouté ; calcule A, I, K, v, v')<input name="pt_parts" value="" placeholder="ex. 0.6 0.25 ; 0.25 1.47 ; 1.0 0.3"></label>
+      <div class="grp">Profil en travers et superstructures</div>
+      <div class="fld">Chaussée [m]<input type="hidden" name="pt_road" value="-4, 4" data-ed="tuple" data-items="bord gauche y1|bord droit y2"></div>
+      <div class="fld">Trottoirs [m]<input type="hidden" name="pt_foot" value="-6.56,-4 ; 4,6.56" data-ed="table" data-fmt="pairs" data-cols="y1|y2" data-add="Ajouter un trottoir"></div>
+      <div class="fld">Superstructures linéaires : g [kN/m] à e [m] (e peut dépasser b : corniches)<input type="hidden" name="pt_lines" value="18 @ -6.87 ; 18 @ 6.87" data-ed="table" data-fmt="lines0" data-cols="g [kN/m]|e [m]" data-add="Ajouter une charge"></div>
+      <div class="fld">Superstructures réparties : q [kN/m²] de y1 à y2 [m]<input type="hidden" name="pt_bands" value="1.79 sur -6.56,6.56" data-ed="table" data-fmt="bands0" data-cols="q [kN/m²]|y1 [m]|y2 [m]" data-add="Ajouter une charge"></div>
+      <label>Poids propre complémentaire (entretoises…) [kN/m]<input name="pt_extra" value="0" type="number" step="any"></label>
+      <div class="grp">Charges de trafic (Fascicule 61)</div>
+      <label>Dispositifs de retenue (réduction de L_c)<input name="pt_ret" value="0" type="number" min="0" max="2"></label>
+      <label>Charges militaires<select name="pt_mil"><option value="Mc120">Mc120</option><option value="Mc120+D240">Mc120 et D240</option><option value="aucune">aucune</option></select></label>
+      <div class="grp">Matériaux</div>
+      <label>Béton f_ck [MPa]<input name="pt_fck" value="35" type="number" step="any"></label>
+      <label>Acier f_yk [MPa]<input name="pt_fyk" value="500" type="number" step="any"></label>
+      <label data-show="pt_type=BA">Poutres BA : épaisseur d'âme b₀ [m]<input name="pt_b0" value="0.25" type="number" step="any"></label>
+      <label data-show="pt_type=BA">Poutres BA : enrobage à l'axe [m]<input name="pt_cover" value="0.12" type="number" step="any"></label>
+      <label data-show="pt_type=BP">Poutres BP : précontrainte finale P∞ par poutre [kN]<input name="pt_P" value="6500" type="number" step="any"></label>
+      <label data-show="pt_type=BP">Poutres BP : excentricité e₀ à mi-travée [m] (négative sous le c.d.g.)<input name="pt_e0" value="-1.46" type="number" step="any"></label>
       <button type="button" id="btn-poutres">Calculer le pont à poutres</button>
       <button type="button" class="secondary" id="btn-poutres-appuis">Transmettre les réactions aux appuis (appuis seuls)</button>
     </div>
@@ -343,49 +341,42 @@
     <div class="card form-card"><h2>Dalle précontrainte (PSI-DP)</h2>
       <p class="small">Précontrainte longitudinale par post-tension, câbles filants tendus aux extrémités : dossier pilote SETRA PSI-DP et note modèle PSIDP-EL 84-1, BPEL 91 révisé 99 (classe II). Les charges sont celles du Fascicule 61 titre II du modèle PSIDA (moments de calcul max_y m_x · 2b).</p>
       <label class="chk"><input type="checkbox" name="bp_actif"> Calculer la dalle en béton précontraint</label>
-      <div class="row">
-        <label>Procédé de précontrainte (agrément)<select name="bp_agrement" id="bp-agrement"><option value="generique">Générique (BPEL annexe 3, plaques forfaitaires)</option></select></label>
-        <label>Unité<select name="bp_unite" id="bp-unite"><option value="12">12 T 15 S</option></select></label>
-        <label>Nombre d'unités (vide = minimum en classe II)<input name="bp_n" value="" type="number" step="1"></label>
-      </div>
-      <div class="row">
-        <label>f_prg / f_peg [MPa]<div class="row"><input name="bp_fprg" value="1860" type="number" step="any"><input name="bp_fpeg" value="1660" type="number" step="any"></div></label>
-        <label>σ_p0 [MPa] (vide = min(0,8 f_prg ; 0,9 f_peg))<input name="bp_sigma0" value="" type="number" step="any"></label>
-      </div>
-      <div class="row">
-        <label>Frottement f [1/rad] / φ [1/m] (vide = agrément, sinon BPEL annexe 3)<div class="row"><input name="bp_f" value="" placeholder="agrément" type="number" step="any"><input name="bp_phi" value="" placeholder="agrément" type="number" step="any"></div></label>
-        <label>Recul d'ancrage g [mm] (vide = agrément) ; cas de frottement BPEL annexe 3<div class="row"><input name="bp_g" value="" placeholder="agrément" type="number" step="any"><select name="bp_cas"><option value="I">I — sans reprises</option><option value="II">II — nombreuses reprises</option></select></div></label>
-      </div>
-      <div class="row">
-        <label>Ancrages actifs<select name="bp_ends"><option value="both">aux deux extrémités</option><option value="left">à gauche (C0)</option><option value="right">à droite</option></select></label>
-        <label>Déviation cumulée<select name="bp_friction"><option value="continu">variation totale de pente (BPEL)</option><option value="dixiemes">grille des dixièmes (programme PSIDP)</option></select></label>
-      </div>
-      <div class="row">
-        <label>ρ₁₀₀₀ [%] / μ₀<div class="row"><input name="bp_rho1000" value="2.5" type="number" step="any"><input name="bp_mu0" value="0.43" type="number" step="any"></div></label>
-        <label>E_p [MPa]<input name="bp_Ep" value="190000" type="number" step="any"></label>
-      </div>
-      <div class="row">
-        <label>f_cj à la mise en tension [MPa] (vide = 0,8 f_c28 + 2)<input name="bp_fcj" value="" type="number" step="any"></label>
-        <label>Retrait final ε_r (BPEL 2.1,51 : 1,5 / 2 / 3 / 4 / 5·10⁻⁴ du très humide au désertique ; tempéré sec par défaut)<input name="bp_epsR" value="0.0003" type="number" step="any"></label>
-      </div>
-      <div class="row">
-        <label>Règles des pertes<select name="bp_reg"><option value="BPEL91">BPEL 91 révisé 99</option><option value="PSIDP84">convention de la note PSIDP-EL 84 (BPEL 83)</option></select></label>
-        <label>Âge j à la mise en tension [jours] / r(j) mise en service / K_fl (PSIDP 84)<div class="row"><input name="bp_j" value="7" type="number" step="any"><input name="bp_rj" value="0.5" type="number" step="any"><input name="bp_Kfl" value="2" type="number" step="any"></div></label>
-      </div>
-      <h3>Tracé du câble moyen</h3>
+      <div data-show="bp_actif">
+      <div class="grp">Procédé et câbles</div>
+      <label>Procédé de précontrainte (agrément)<select name="bp_agrement" id="bp-agrement"><option value="generique">Générique (BPEL annexe 3, plaques forfaitaires)</option></select></label>
+      <label>Unité<select name="bp_unite" id="bp-unite"><option value="12">12 T 15 S</option></select></label>
+      <label>Nombre d'unités<input name="bp_n" value="" type="number" step="1" placeholder="minimum"></label>
+      <div class="grp">Acier de précontrainte</div>
+      <label>Résistance garantie f_prg [MPa]<input name="bp_fprg" value="1860" type="number" step="any"></label>
+      <label>Limite élastique f_peg [MPa]<input name="bp_fpeg" value="1660" type="number" step="any"></label>
+      <label>Tension à l'origine σ_p0 [MPa]<input name="bp_sigma0" value="" type="number" step="any" placeholder="BPEL"></label>
+      <label>Relaxation ρ₁₀₀₀ [%]<input name="bp_rho1000" value="2.5" type="number" step="any"></label>
+      <label>Coefficient μ₀ (relaxation)<input name="bp_mu0" value="0.43" type="number" step="any"></label>
+      <label>Module E_p [MPa]<input name="bp_Ep" value="190000" type="number" step="any"></label>
+      <div class="grp">Frottement et recul d'ancrage</div>
+      <label>Coefficient de frottement f [1/rad]<input name="bp_f" value="" placeholder="agrément" type="number" step="any"></label>
+      <label>Perte en ligne φ [1/m]<input name="bp_phi" value="" placeholder="agrément" type="number" step="any"></label>
+      <label>Recul d'ancrage g [mm]<input name="bp_g" value="" placeholder="agrément" type="number" step="any"></label>
+      <label>Cas de frottement (BPEL annexe 3, procédé générique)<select name="bp_cas"><option value="I">I — sans reprises</option><option value="II">II — nombreuses reprises</option></select></label>
+      <label>Ancrages actifs<select name="bp_ends"><option value="both">aux deux extrémités</option><option value="left">à gauche (C0)</option><option value="right">à droite</option></select></label>
+      <label>Déviation cumulée<select name="bp_friction"><option value="continu">variation totale de pente (BPEL)</option><option value="dixiemes">grille des dixièmes (programme PSIDP)</option></select></label>
+      <div class="grp">Béton et pertes différées</div>
+      <label>f_cj à la mise en tension [MPa]<input name="bp_fcj" value="" type="number" step="any" placeholder="0,8 f_c28 + 2"></label>
+      <label>Retrait final ε_r (BPEL 2.1,51)<input name="bp_epsR" value="0.0003" type="number" step="any"></label>
+      <label>Règles des pertes<select name="bp_reg"><option value="BPEL91">BPEL 91 révisé 99</option><option value="PSIDP84">convention de la note PSIDP-EL 84 (BPEL 83)</option></select></label>
+      <label>Âge j à la mise en tension [jours]<input name="bp_j" value="7" type="number" step="any"></label>
+      <label>r(j) à la mise en service<input name="bp_rj" value="0.5" type="number" step="any"></label>
+      <label>K_fl (convention PSIDP 84)<input name="bp_Kfl" value="2" type="number" step="any"></label>
+      <div class="grp">Tracé du câble moyen</div>
       <label>Tracé<select name="bp_trace"><option value="optimise">recherché (excentricités et points bas optimisés, nombre d'unités minimal)</option><option value="standard">standard (excentricités maximales, points bas à 0,4 L / 0,5 L)</option></select></label>
-      <div class="row">
-        <label>Distance axe câble – fibre sup. sur appuis [m] (vide = enrobage + Ø/2 + décalage)<input name="bp_eSup" value="" type="number" step="any"></label>
-        <label>Distance axe câble – fibre inf. en travée [m] (idem)<input name="bp_eLow" value="" type="number" step="any"></label>
-      </div>
-      <div class="row">
-        <label>Point bas des travées de rive [× L]<input name="bp_lowEnd" value="0.4" type="number" step="any"></label>
-        <label>Inflexion à a·L des appuis intermédiaires, a<input name="bp_a" value="0.1" type="number" step="any"></label>
-      </div>
-      <label>Paraboles imposées (option) : « A B C x_fin ; … | … » par travée, z [m] vers le haut depuis la fibre moyenne, x local<textarea name="bp_segs" rows="3" placeholder="vide = tracé automatique"></textarea></label>
-      <div class="row">
-        <label>Aciers passifs f_e [MPa]<input name="bp_fe" value="500" type="number" step="any"></label>
-        <label>Armatures d'âme minimales [MPa] (note PSIDP-EL ≈ 0,1)<input name="bp_atMin" value="0.1" type="number" step="any"></label>
+      <label>Axe du câble – fibre sup. sur appuis [m]<input name="bp_eSup" value="" type="number" step="any" placeholder="auto"></label>
+      <label>Axe du câble – fibre inf. en travée [m]<input name="bp_eLow" value="" type="number" step="any" placeholder="auto"></label>
+      <label>Point bas des travées de rive [× L]<input name="bp_lowEnd" value="0.4" type="number" step="any"></label>
+      <label>Inflexion à a·L des appuis intermédiaires, a<input name="bp_a" value="0.1" type="number" step="any"></label>
+      <label class="wide">Paraboles imposées (option) : « A B C x_fin ; … | … » par travée, z [m] vers le haut depuis la fibre moyenne, x local<textarea name="bp_segs" rows="3" placeholder="vide = tracé automatique"></textarea></label>
+      <div class="grp">Armatures passives</div>
+      <label>Aciers passifs f_e [MPa]<input name="bp_fe" value="500" type="number" step="any"></label>
+      <label>Armatures d'âme minimales [MPa]<input name="bp_atMin" value="0.1" type="number" step="any"></label>
       </div>
     </div>
     <div class="card full-only"><h2>Résultats de la précontrainte</h2><div id="bp-out"><p class="small">Cocher « Calculer la dalle en béton précontraint » puis lancer le calcul.</p></div></div>
@@ -395,45 +386,74 @@
   <div class="cols">
     <div class="card form-card"><h2>Appuis et fondations</h2>
 
-      <div class="row">
-        <label>Piles<select name="ap_pileType"><option value="voile">voile</option><option value="colonnes">colonnes</option></select></label>
-        <label>Hauteur des fûts H_f [m] (une valeur ou une par pile)<input name="ap_pileH" value="6"></label>
+      <div class="grp">Piles</div>
+      <label>Type de piles<select name="ap_pileType"><option value="voile">voile</option><option value="colonnes">colonnes</option></select></label>
+      <div class="fld">Hauteur des fûts H_f [m]<input type="hidden" name="ap_pileH" value="6" data-ed="per" data-per="piles" data-item="Pile P"></div>
+      <div data-show="ap_pileType=voile">
+      <label>Voile : épaisseur en pied [m]<input name="ap_pileB" value="0.6" type="number" step="any"></label>
+      <label>Voile : épaisseur en tête [m]<input name="ap_pileBtop" value="" type="number" step="any" placeholder="constante"></label>
+      <label>Voile : longueur [m]<input name="ap_pileLv" value="" type="number" step="any" placeholder="largeur tablier"></label>
+      <label>Voile plus court que la ligne d'appareils : hauteur de la tête en console [m]<input name="ap_hcons" value="1.0" type="number" step="any"></label>
       </div>
-      <div class="row">
-        <label>Voile : épaisseur en pied / longueur [m] (vide = largeur du tablier)<div class="row"><input name="ap_pileB" value="0.6" type="number" step="any"><input name="ap_pileLv" value="" type="number" step="any"></div></label>
-        <label>Voile : épaisseur en tête [m] (vide = épaisseur constante)<input name="ap_pileBtop" value="" type="number" step="any"></label>
-        <label>Pile de joint (pile double portant aussi un tablier adjacent)<select name="ap_joint"><option value="aucune">aucune : culées aux deux extrémités</option><option value="debut">au début (ligne 1)</option><option value="fin">à la fin (dernière ligne)</option><option value="deux">aux deux extrémités</option></select></label>
-        <label>Tablier adjacent / tablier étudié : réactions permanentes, trafic, efforts horizontaux (1 = symétrique)<div class="row"><input name="ap_jointG" value="1" type="number" step="any"><input name="ap_jointQ" value="1" type="number" step="any"><input name="ap_jointH" value="1" type="number" step="any"></div></label>
-        <label>Voile plus court que la ligne d'appareils : hauteur de la tête en console [m]<input name="ap_hcons" value="1.0" type="number" step="any"></label>
-        <label>Colonnes : nombre / Ø [m]<div class="row"><input name="ap_nCol" value="3" type="number"><input name="ap_D" value="0.8" type="number" step="any"></div></label>
+      <div data-show="ap_pileType=colonnes">
+      <label>Colonnes : nombre par pile<input name="ap_nCol" value="3" type="number"></label>
+      <label>Colonnes : diamètre Ø [m]<input name="ap_D" value="0.8" type="number" step="any"></label>
+      <label>Chevêtre : hauteur [m] (0 = sans chevêtre)<input name="ap_hc" value="0" type="number" step="any"></label>
+      <label>Chevêtre : largeur [m]<input name="ap_lc" value="1.2" type="number" step="any"></label>
       </div>
-      <label>Chevêtre de pile sur colonnes : hauteur / largeur [m] (hauteur 0 = sans)<div class="row"><input name="ap_hc" value="0" type="number" step="any"><input name="ap_lc" value="1.2" type="number" step="any"></div></label>
-      <div class="row">
-        <label>Culées<select name="ap_culType"><option value="remblayee">remblayée (mur de front)</option><option value="enterree">pile-culée noyée (chevêtre sur colonnes dans le remblai)</option><option value="apparente">pile-culée apparente (colonnes devant le talus, voile frontal)</option></select></label>
-        <label>Hauteur mur de front / colonnes [m]<input name="ap_Hm" value="3" type="number" step="any"></label>
+      <label>Pile de joint (pile double portant aussi un tablier adjacent)<select name="ap_joint"><option value="aucune">aucune : culées aux deux extrémités</option><option value="debut">au début (ligne 1)</option><option value="fin">à la fin (dernière ligne)</option><option value="deux">aux deux extrémités</option></select></label>
+      <div data-show="ap_joint!=aucune">
+      <div class="sub">Rapports tablier adjacent / tablier étudié (1 = symétrique)</div>
+      <label>Réactions permanentes<input name="ap_jointG" value="1" type="number" step="any"></label>
+      <label>Réactions de trafic<input name="ap_jointQ" value="1" type="number" step="any"></label>
+      <label>Efforts horizontaux<input name="ap_jointH" value="1" type="number" step="any"></label>
       </div>
-      <div class="row">
-        <label>Mur de front : épaisseur [m] ; garde-grève h [m] (vide = auto)<div class="row"><input name="ap_em" value="0.8" type="number" step="any"><input name="ap_hGG" value="" type="number" step="any"></div></label>
-        <label>Murs en retour : longueur [m]<input name="ap_Lret" value="4" type="number" step="any"></label>
-        <label>Dalle de transition appuyée sur le garde-grève / voile frontal d'une pile-culée apparente h_v [m]<div class="row"><select name="ap_dalleGG"><option value="oui">oui (garde-grève 0,30 m)</option><option value="non">non</option></select><input name="ap_culHv" value="1.0" type="number" step="any"></div></label>
+      <div class="grp">Culées</div>
+      <label>Type de culées<select name="ap_culType"><option value="remblayee">remblayée (mur de front)</option><option value="enterree">pile-culée noyée (chevêtre sur colonnes dans le remblai)</option><option value="apparente">pile-culée apparente (colonnes devant le talus, voile frontal)</option></select></label>
+      <label>Hauteur du mur de front ou des colonnes [m]<input name="ap_Hm" value="3" type="number" step="any"></label>
+      <label>Murs en retour : longueur [m]<input name="ap_Lret" value="4" type="number" step="any"></label>
+      <div data-show="ap_culType=remblayee">
+      <label>Mur de front : épaisseur [m]<input name="ap_em" value="0.8" type="number" step="any"></label>
+      <label>Garde-grève : hauteur [m]<input name="ap_hGG" value="" type="number" step="any" placeholder="auto"></label>
       </div>
-      <label>Pile-culée (noyée ou apparente) : colonnes nombre / Ø ; chevêtre h / largeur [m]<div class="row"><input name="ap_culNCol" value="3" type="number"><input name="ap_culD" value="0.8" type="number" step="any"><input name="ap_culHc" value="1.0" type="number" step="any"><input name="ap_culLc" value="1.6" type="number" step="any"></div></label>
-      <div class="row">
-        <label>Fondations<select name="ap_found"><option value="superficielle">semelles superficielles</option><option value="pieux">semelles sur pieux</option></select></label>
-        <label>Semelle : B (longitudinal) / épaisseur / encastrement D_e [m]<div class="row"><input name="ap_B" value="3" type="number" step="any"><input name="ap_hs" value="1" type="number" step="any"><input name="ap_De" value="1" type="number" step="any"></div></label>
+      <label>Dalle de transition appuyée sur le garde-grève<select name="ap_dalleGG"><option value="oui">oui (garde-grève 0,30 m)</option><option value="non">non</option></select></label>
+      <div data-show="ap_culType=enterree|apparente">
+      <label>Pile-culée : colonnes, nombre<input name="ap_culNCol" value="3" type="number"></label>
+      <label>Pile-culée : colonnes, Ø [m]<input name="ap_culD" value="0.8" type="number" step="any"></label>
+      <label>Pile-culée : chevêtre, hauteur [m]<input name="ap_culHc" value="1.0" type="number" step="any"></label>
+      <label>Pile-culée : chevêtre, largeur [m]<input name="ap_culLc" value="1.6" type="number" step="any"></label>
+      <label data-show="ap_culType=apparente">Pile-culée apparente : hauteur du voile frontal h_v [m]<input name="ap_culHv" value="1.0" type="number" step="any"></label>
       </div>
+      <div class="grp">Fondations</div>
+      <label>Type de fondations<select name="ap_found"><option value="superficielle">semelles superficielles</option><option value="pieux">semelles sur pieux</option></select></label>
+      <label>Semelle : largeur B (sens longitudinal) [m]<input name="ap_B" value="3" type="number" step="any"></label>
+      <label>Semelle : épaisseur [m]<input name="ap_hs" value="1" type="number" step="any"></label>
+      <label>Semelle : encastrement D_e [m]<input name="ap_De" value="1" type="number" step="any"></label>
+      <div data-show="ap_found=pieux">
       <label>Type de pieu<select name="ap_pieu"><option value="fore-boue">foré boue</option><option value="fore-simple">foré simple</option><option value="fore-tube-recupere">foré tubé (virole récupérée)</option><option value="fore-tube-perdu">foré tubé (virole perdue)</option><option value="battu-prefabrique">battu béton préfabriqué</option><option value="battu-moule">battu moulé</option><option value="metal-battu-ferme">battu acier fermé</option></select></label>
-      <label>Pieux : Ø [m] / par file / files / entraxe des files [m] / longueur [m]<div class="row"><input name="ap_pileD" value="0.8" type="number" step="any"><input name="ap_nPile" value="3" type="number"><input name="ap_nFiles" value="2" type="number"><input name="ap_sPile" value="2.4" type="number" step="any"><input name="ap_Lpile" value="15" type="number" step="any"></div></label>
-      <div class="row">
-        <label>Inclinaison de chaque file [°] (ex. 0, 0 ; vers l'extérieur) <input name="ap_incl" value=""></label>
-        <label>Liaison tête / pied des pieux ; k soutenu / k instantané<div class="row"><select name="ap_tete"><option value="encastre">tête encastrée</option><option value="articule">tête articulée</option></select><select name="ap_pied"><option value="libre">pied libre</option><option value="encastre">pied encastré</option></select><input name="ap_kSus" value="0.5" type="number" step="any"></div></label>
-        <label class="chk"><input type="checkbox" name="ap_pieuSO"> Pieux : excentricités additionnelle et du second ordre à l'ELU (option, BAEL A.4.4 ; l_f = 2 × longueur de transfert)</label>
+      <label>Pieux : diamètre Ø [m]<input name="ap_pileD" value="0.8" type="number" step="any"></label>
+      <label>Pieux : nombre par file<input name="ap_nPile" value="3" type="number"></label>
+      <label>Pieux : nombre de files<input name="ap_nFiles" value="2" type="number"></label>
+      <label>Pieux : entraxe des files [m]<input name="ap_sPile" value="2.4" type="number" step="any"></label>
+      <label>Pieux : longueur [m]<input name="ap_Lpile" value="15" type="number" step="any"></label>
+      <div class="fld">Inclinaison de chaque file, vers l'extérieur [°]<input type="hidden" name="ap_incl" value="" data-ed="per" data-per="files" data-item="File " data-ph="0"></div>
+      <label class="in">Liaison en tête<select name="ap_tete"><option value="encastre">tête encastrée</option><option value="articule">tête articulée</option></select></label>
+      <label class="in">Liaison en pied<select name="ap_pied"><option value="libre">pied libre</option><option value="encastre">pied encastré</option></select></label>
+      <label>Rapport k soutenu / k instantané<input name="ap_kSus" value="0.5" type="number" step="any"></label>
+      <label class="chk"><input type="checkbox" name="ap_pieuSO"> Excentricités additionnelle et du second ordre à l'ELU (option, BAEL A.4.4 ; l_f = 2 × longueur de transfert)</label>
+      <div class="sub">Culées : remblai traversé par les pieux sous la semelle</div>
+      <label>Hauteur h [m]<input name="ap_remH" value="0" type="number" step="any"></label>
+      <label>Coefficient de poussée K_a<input name="ap_remKa" value="0.33" type="number" step="any"></label>
+      <label>Module pressiométrique E_M [MPa]<input name="ap_remEM" value="5" type="number" step="any"></label>
+      <label>Pression de fluage nette p*_f [MPa]<input name="ap_remPf" value="0.3" type="number" step="any"></label>
+      <label><input type="checkbox" name="ap_fn">Frottement négatif aux culées (Combarieu)</label>
+      <div data-show="ap_fn">
+      <label>Hauteur du remblai d'accès [m]<input name="ap_fnH" value="" type="number" step="any" placeholder="auto"></label>
+      <label>Hauteur h₂ [m]<input name="ap_fnH2" value="" type="number" step="any" placeholder="auto"></label>
       </div>
-      <div class="row">
-        <label>Culées : remblai traversé par les pieux sous la semelle h [m] / K_a / E_M [MPa] / p*_f [MPa]<div class="row"><input name="ap_remH" value="0" type="number" step="any"><input name="ap_remKa" value="0.33" type="number" step="any"><input name="ap_remEM" value="5" type="number" step="any"><input name="ap_remPf" value="0.3" type="number" step="any"></div></label>
-        <label><input type="checkbox" name="ap_fn">Frottement négatif aux culées (Combarieu) : hauteur du remblai d'accès / h₂ [m] (vide = auto)<div class="row"><input name="ap_fnH" value="" type="number" step="any"><input name="ap_fnH2" value="" type="number" step="any"></div></label>
       </div>
-      <label>Profils pressiométriques (un par sondage, « [nom] » puis une couche par ligne, profondeurs depuis le terrain naturel) : « z0 z1 classe p*_l [MPa] E_M [MPa] α [p*_f MPa] » (« - » : valeur tirée des essais de la couche, p*_l moyenne géométrique, E_M moyenne harmonique, α de Ménard), et un essai par ligne « e z E_M p*_l [p*_f] » — classes du Fascicule 62 : argile-A/B/C, sable-A/B/C, craie-A/B/C, marne-A/B, roche-A/B<textarea name="ap_profil" rows="10">[SP1]
+      <div class="grp">Sol</div>
+      <label class="wide">Profils pressiométriques : un par sondage, « [nom] » puis une couche par ligne « z0 z1 classe p*_l E_M α [p*_f] » (profondeurs [m] depuis le terrain naturel, pressions et modules [MPa] ; « - » = valeur tirée des essais de la couche), et un essai par ligne « e z E_M p*_l [p*_f] »<textarea name="ap_profil" rows="10">[SP1]
 0 2 argile-B 0.8 6 0.67
 2 8 sable-B 1.2 12 0.33
 8 40 marne-A 2.5 30 0.67
@@ -449,53 +469,61 @@ e 18 33 2.7 1.6
 0 4 argile-A 0.5 4 0.67
 4 12 sable-B 1.4 14 0.33
 12 40 marne-A 2.8 35 0.67</textarea></label>
-      <label>Profil associé à chaque ligne d'appui, culées comprises (vide = le premier pour toutes)<input name="ap_profAssign" value="SP1, SP1, SP2, SP2"></label>
-      <div class="row">
-        <label>Remblai : φ' [°] / γ [kN/m³] / surcharge q [kN/m²]<div class="row"><input name="ap_phi" value="30" type="number" step="any"><input name="ap_gamma" value="20" type="number" step="any"><input name="ap_q" value="10" type="number" step="any"></div></label>
-        <label>Béton appuis f_ck / acier f_yk [MPa] / enrobage [m]<div class="row"><input name="ap_fck" value="25" type="number" step="any"><input name="ap_fyk" value="400" type="number" step="any"><input name="ap_c" value="0.05" type="number" step="any"></div></label>
-      </div>
-      <div class="row">
-        <label>Séisme (export Pont EC8) : zone / catégorie d'importance<div class="row"><select name="ap_zone"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option></select><select name="ap_catEC8"><option value="I">I</option><option value="II">II</option><option value="III" selected>III</option><option value="IV">IV</option></select></div></label>
-        <label>Classe de sol EC8<select name="ap_solEC8"><option value="A">A</option><option value="B" selected>B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option></select></label>
-      </div>
-      <label><input type="checkbox" name="ap_seisme">Séisme (EN 1998-2, mode fondamental — moteur de Pont EC8) : combinaison sismique des fûts et fondations</label>
+      <p class="small hint">Classes du Fascicule 62 : argile-A/B/C, sable-A/B/C, craie-A/B/C, marne-A/B, roche-A/B.</p>
+      <div class="fld">Sondage associé à chaque ligne d'appui<input type="hidden" name="ap_profAssign" value="SP1, SP1, SP2, SP2" data-ed="assign"></div>
+      <div class="sub">Remblai des culées</div>
+      <label>Angle de frottement φ' [°]<input name="ap_phi" value="30" type="number" step="any"></label>
+      <label>Poids volumique γ [kN/m³]<input name="ap_gamma" value="20" type="number" step="any"></label>
+      <label>Surcharge sur le remblai q [kN/m²]<input name="ap_q" value="10" type="number" step="any"></label>
+      <div class="grp">Matériaux des appuis</div>
+      <label>Béton f_ck [MPa]<input name="ap_fck" value="25" type="number" step="any"></label>
+      <label>Acier f_yk [MPa]<input name="ap_fyk" value="400" type="number" step="any"></label>
+      <label>Enrobage [m]<input name="ap_c" value="0.05" type="number" step="any"></label>
+      <div class="grp">Séisme</div>
+      <label class="in">Zone de sismicité<select name="ap_zone"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option></select></label>
+      <label class="in">Catégorie d'importance<select name="ap_catEC8"><option value="I">I</option><option value="II">II</option><option value="III" selected>III</option><option value="IV">IV</option></select></label>
+      <label class="in">Classe de sol EC8<select name="ap_solEC8"><option value="A">A</option><option value="B" selected>B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option></select></label>
+      <label><input type="checkbox" name="ap_seisme">Combinaison sismique des fûts et fondations (EN 1998-2, mode fondamental — moteur de Pont EC8)</label>
+      <div data-show="ap_seisme">
       <label>Efforts sismiques retenus<select name="ap_seismeSrc"><option value="auto">calculés ici sur le projet PSIDA (zone, classe de sol et q ci-dessous)</option><option value="onglet">reçus de l'onglet « Calcul sismique » (projet Pont EC8, modifiable)</option></select></label>
-      <div class="row">
-        <label>Coefficient de comportement q longitudinal / transversal<div class="row"><input name="ap_qL" value="1" type="number" step="any"><input name="ap_qT" value="1" type="number" step="any"></div></label>
-        <label>Choc de véhicule sur les piles (EN 1991-1-7 tab. 4.1)<select name="ap_choc"><option value="aucun">aucun</option><option value="autoroute">autoroute, route nationale ou principale (1000 / 500 kN)</option><option value="rurale">route de campagne (750 / 375 kN)</option><option value="urbaine">voie urbaine (500 / 250 kN)</option><option value="parking">cour, parking poids lourds (150 / 75 kN)</option></select></label>
+      <label>Coefficient de comportement q longitudinal<input name="ap_qL" value="1" type="number" step="any"></label>
+      <label>Coefficient de comportement q transversal<input name="ap_qT" value="1" type="number" step="any"></label>
       </div>
-      <div class="row">
-        <label>Hauteur du choc de véhicule au-dessus du dessus de semelle [m]<input name="ap_hV" value="1.25" type="number" step="any"></label>
-        <label>Choc de bateau (classe CEMT, EN 1991-1-7 C.3) / hauteur [m]<div class="row"><select name="ap_bateau"><option value="aucun">aucun</option><option>I</option><option>II</option><option>III</option><option>IV</option><option>Va</option><option>Vb</option><option>VIa</option><option>VIb</option><option>VIc</option></select><input name="ap_hB" value="2.0" type="number" step="any"></div></label>
+      <div class="grp">Chocs</div>
+      <label>Choc de véhicule sur les piles (EN 1991-1-7 tab. 4.1)<select name="ap_choc"><option value="aucun">aucun</option><option value="autoroute">autoroute, route nationale ou principale (1000 / 500 kN)</option><option value="rurale">route de campagne (750 / 375 kN)</option><option value="urbaine">voie urbaine (500 / 250 kN)</option><option value="parking">cour, parking poids lourds (150 / 75 kN)</option></select></label>
+      <label data-show="ap_choc!=aucun">Hauteur du choc au-dessus de la semelle [m]<input name="ap_hV" value="1.25" type="number" step="any"></label>
+      <label class="in">Choc de bateau (classe CEMT, EN 1991-1-7 C.3)<select name="ap_bateau"><option value="aucun">aucun</option><option>I</option><option>II</option><option>III</option><option>IV</option><option>Va</option><option>Vb</option><option>VIa</option><option>VIb</option><option>VIc</option></select></label>
+      <label data-show="ap_bateau!=aucun">Hauteur du choc de bateau [m]<input name="ap_hB" value="2.0" type="number" step="any"></label>
+      <div class="grp">Piles en rivière</div>
+      <label><input type="checkbox" name="ap_eau">Crue de projet : courant et embâcles (EN 1991-1-6 § 4.9), poussée d'Archimède, affouillement local (FHWA HEC-18)</label>
+      <div data-show="ap_eau">
+      <label>Hauteur d'eau PHE − lit [m]<input name="ap_hEau" value="3" type="number" step="any"></label>
+      <label>Vitesse moyenne du courant [m/s]<input name="ap_vEau" value="2" type="number" step="any"></label>
+      <label>Biais du courant sur l'axe des piles [°]<input name="ap_thEau" value="0" type="number" step="any"></label>
+      <label class="in">Forme de l'avant-bec<select name="ap_nez"><option value="rond">arrondi</option><option value="carre">carré</option><option value="pointu">pointu</option></select></label>
+      <label>État du lit K₃<select name="ap_K3"><option value="1.1">eaux claires, fond plat, petites dunes (1,1)</option><option value="1.2">dunes moyennes (1,2)</option><option value="1.3">grandes dunes (1,3)</option></select></label>
+      <label>Affouillement général + contraction [m]<input name="ap_hGen" value="0" type="number" step="any"></label>
+      <label>Embâcles : hauteur du radeau [m] (0 = aucun)<input name="ap_hDeb" value="0" type="number" step="any"></label>
+      <label>Embâcles : largeur du radeau [m]<input name="ap_bDeb" value="0" type="number" step="any"></label>
+      <div class="fld">Piles dans l'eau<input type="hidden" name="ap_eauLignes" value="" data-ed="water"></div>
       </div>
-      <label><input type="checkbox" name="ap_eau">Pile(s) en rivière — crue de projet : courant et embâcles (EN 1991-1-6 § 4.9), poussée d'Archimède, affouillement local (FHWA HEC-18)</label>
-      <div class="row">
-        <label>Hauteur d'eau PHE − lit [m] / vitesse moyenne [m/s]<div class="row"><input name="ap_hEau" value="3" type="number" step="any"><input name="ap_vEau" value="2" type="number" step="any"></div></label>
-        <label>Biais du courant sur l'axe des piles [°] / avant-bec<div class="row"><input name="ap_thEau" value="0" type="number" step="any"><select name="ap_nez"><option value="rond">arrondi</option><option value="carre">carré</option><option value="pointu">pointu</option></select></div></label>
-      </div>
-      <div class="row">
-        <label>État du lit K₃ / affouillement général + contraction [m]<div class="row"><select name="ap_K3"><option value="1.1">eaux claires, fond plat, petites dunes (1,1)</option><option value="1.2">dunes moyennes (1,2)</option><option value="1.3">grandes dunes (1,3)</option></select><input name="ap_hGen" value="0" type="number" step="any"></div></label>
-        <label>Embâcles : hauteur / largeur du radeau [m] (0 : aucun)<div class="row"><input name="ap_hDeb" value="0" type="number" step="any"><input name="ap_bDeb" value="0" type="number" step="any"></div></label>
-      </div>
-      <label>Lignes d'appui en eau (numéros, ex. 2, 3 ; vide : toutes les piles)<input name="ap_eauLignes" value=""></label>
-      <label>F61 : ε TLD / ε TCD (appuis)<div class="row"><input name="ap_TLD" value="0.0003" type="number" step="any"><input name="ap_TCD" value="0.0001" type="number" step="any"></div></label>
-      <label>Bossages sous appareils : débord [m] / f_ck [MPa] (vide = béton des appuis)<div class="row"><input name="ap_bosDeb" value="0.05" type="number" step="any"><input name="ap_bosFck" value="" type="number" step="any"></div></label>
-      <label>Dalle précontrainte : raccourcissement et réactions hyperstatiques du calcul PSI-DP pour les appuis<select name="ap_epsPSIDP"><option value="oui">oui</option><option value="non">non (valeur ε saisie)</option></select></label>
-      <details><summary>Appuis seuls — tablier quelconque (poutres, caisson, dalle précontrainte)</summary>
-
-      <p class="small">Calcule les appuis et fondations (section précédente) à partir des réactions par ligne d'appui, sans calculer le tablier. Une ligne par ligne d'appui, culées comprises, valeurs caractéristiques en kN (majorations dynamiques incluses) : G ; G min ; A(l) ; Bc ; Mc120 ; trottoirs ; TS ; UDL [; rotation permanente en rad].</p>
-      <div class="row">
-        <label>Portées [m]<input name="ss_spans" value="33, 33, 33, 33"></label>
-        <label>Largeur du tablier / largeur chargeable [m]<div class="row"><input name="ss_width" value="10" type="number" step="any"><input name="ss_Lc" value="8" type="number" step="any"></div></label>
-      </div>
-      <div class="row">
-        <label>Hauteur du tablier [m] / aire de la section [m²]<div class="row"><input name="ss_h" value="2.0" type="number" step="any"><input name="ss_area" value="4.5" type="number" step="any"></div></label>
-        <label>Superstructures [kN/m]<input name="ss_super" value="45" type="number" step="any"></label>
-      </div>
-      <div class="row">
-        <label>Appareils par ligne / type (« auto » ou a×b×n(t+ts) en mm)<div class="row"><input name="ss_nb" value="4" type="number"><input name="ss_bearing" value="400×400×4(12+3)"></div></label>
-      </div>
-      <label>Réactions par ligne d'appui [kN]<textarea name="ss_lines" rows="5">1275 ; 1275 ; 710 ; 650 ; 900 ; 50 ; 900 ; 600
+      <div class="grp">Tablier et appareils d'appui</div>
+      <label>F61 : raccourcissement ε TLD (appuis)<input name="ap_TLD" value="0.0003" type="number" step="any"></label>
+      <label>F61 : raccourcissement ε TCD (appuis)<input name="ap_TCD" value="0.0001" type="number" step="any"></label>
+      <label>Bossages sous appareils : débord [m]<input name="ap_bosDeb" value="0.05" type="number" step="any"></label>
+      <label>Bossages : béton f_ck [MPa]<input name="ap_bosFck" value="" type="number" step="any" placeholder="béton appuis"></label>
+      <label>Dalle précontrainte : raccourcissement et réactions hyperstatiques du calcul PSI-DP<select name="ap_epsPSIDP"><option value="oui">oui</option><option value="non">non (valeur ε saisie)</option></select></label>
+      <details id="standalone"><summary>Appuis seuls — tablier quelconque (poutres, caisson, dalle précontrainte)</summary>
+      <p class="small">Calcule les appuis et fondations (données ci-dessus) à partir des réactions par ligne d'appui, sans calculer le tablier.</p>
+      <div class="fld">Portées des travées [m]<input type="hidden" name="ss_spans" value="33, 33, 33, 33" data-ed="list" data-item="Travée T" data-count="Nombre de travées"></div>
+      <label>Largeur du tablier [m]<input name="ss_width" value="10" type="number" step="any"></label>
+      <label>Largeur chargeable [m]<input name="ss_Lc" value="8" type="number" step="any"></label>
+      <label>Hauteur du tablier [m]<input name="ss_h" value="2.0" type="number" step="any"></label>
+      <label>Aire de la section [m²]<input name="ss_area" value="4.5" type="number" step="any"></label>
+      <label>Superstructures [kN/m]<input name="ss_super" value="45" type="number" step="any"></label>
+      <label>Appareils d'appui par ligne<input name="ss_nb" value="4" type="number"></label>
+      <label>Appareil : « auto » ou a×b×n(t+ts) [mm]<input name="ss_bearing" value="400×400×4(12+3)"></label>
+      <label class="wide">Réactions par ligne d'appui [kN], culées comprises, une ligne par appui : G ; G min ; A(l) ; Bc ; Mc120 ; trottoirs ; TS ; UDL [; rotation permanente en rad] (valeurs caractéristiques, majorations dynamiques incluses)<textarea name="ss_lines" rows="5">1275 ; 1275 ; 710 ; 650 ; 900 ; 50 ; 900 ; 600
 2550 ; 2550 ; 1100 ; 900 ; 1300 ; 80 ; 1300 ; 1000
 2550 ; 2550 ; 1100 ; 900 ; 1300 ; 80 ; 1300 ; 1000
 2550 ; 2550 ; 1100 ; 900 ; 1300 ; 80 ; 1300 ; 1000
@@ -520,49 +548,36 @@ e 18 33 2.7 1.6
   <div class="cols">
     <div class="card form-card"><h2>Indice de danger (Cerema 2021)</h2>
       <p class="small">Choix du niveau de retenue d'un dispositif en bord libre d'ouvrage d'art. Trafics actuels (les trafics à 15 ans sont calculés : × 1,25).</p>
-      <div class="row">
-        <label>Trafic de la voie portée [véh/j, 2 sens]<input name="dr_T" value="8000" type="number"></label>
-        <label>Poids lourds [PL/j]<input name="dr_PL" value="960" type="number"></label>
-      </div>
-      <div class="row">
-        <label>Type de trafic PL<select name="dr_typePL"><option value="local">local (2 essieux)</option><option value="moyen" selected>moyenne distance</option><option value="long">longue distance (≥ 4 essieux)</option></select></label>
-        <label>Vitesse limite [km/h]<input name="dr_V" value="90" type="number"></label>
-      </div>
+      <div class="grp">Voie portée</div>
+      <label>Trafic de la voie portée [véh/j, 2 sens]<input name="dr_T" value="8000" type="number"></label>
+      <label>Poids lourds [PL/j]<input name="dr_PL" value="960" type="number"></label>
+      <label>Type de trafic PL<select name="dr_typePL"><option value="local">local (2 essieux)</option><option value="moyen" selected>moyenne distance</option><option value="long">longue distance (≥ 4 essieux)</option></select></label>
+      <label>Vitesse limite [km/h]<input name="dr_V" value="90" type="number"></label>
       <label><input type="checkbox" name="dr_prov">Ouvrage provisoire (trafic actuel, pas de projection à 15 ans)</label>
-      <div class="row">
-        <label>Référentiel / configuration (R_m, R_dn)<select name="dr_ref"><option>ARP R60</option><option>ARP R80</option><option>ARP T80</option><option selected>ARP T100</option><option>ICTAAL L1</option><option>ICTAAL L2</option><option>ICTAAL relief difficile</option><option>VSA 70</option><option>VSA 90</option><option>VSA 90 dévers 5 %</option><option>VSA 110</option><option>VSA 110 dévers 5 %</option><option>Route 2×1 voie</option><option>Route 2×1 voie, créneau de dépassement</option><option>Branche ICTAAL 110 (2 voies)</option><option>Branche ICTAAL 90</option><option>Branche ICTAAL 70 (1 voie)</option><option>Branche VSA cat. A</option><option>Branche VSA cat. B</option><option>Bretelle VSA cat. C</option><option>Branche VSA 70</option></select></label>
-        <label>Rayon en plan R [m] (vide = alignement droit)<input name="dr_R" value="700"></label>
-      </div>
-      <div class="row">
-        <label>R_m / R_dn imposés [m] (vide = référentiel)<div class="row"><input name="dr_Rm" value=""><input name="dr_Rdn" value=""></div></label>
-        <label>Pente moyenne sur 300 m [%]<input name="dr_pente" value="5" type="number" step="any"></label>
-      </div>
+      <div class="grp">Tracé</div>
+      <label>Référentiel / configuration (R_m, R_dn)<select name="dr_ref"><option>ARP R60</option><option>ARP R80</option><option>ARP T80</option><option selected>ARP T100</option><option>ICTAAL L1</option><option>ICTAAL L2</option><option>ICTAAL relief difficile</option><option>VSA 70</option><option>VSA 90</option><option>VSA 90 dévers 5 %</option><option>VSA 110</option><option>VSA 110 dévers 5 %</option><option>Route 2×1 voie</option><option>Route 2×1 voie, créneau de dépassement</option><option>Branche ICTAAL 110 (2 voies)</option><option>Branche ICTAAL 90</option><option>Branche ICTAAL 70 (1 voie)</option><option>Branche VSA cat. A</option><option>Branche VSA cat. B</option><option>Bretelle VSA cat. C</option><option>Branche VSA 70</option></select></label>
+      <label>Rayon en plan R [m]<input name="dr_R" value="700" placeholder="alignement droit"></label>
+      <label>R_m imposé [m]<input name="dr_Rm" value="" placeholder="référentiel"></label>
+      <label>R_dn imposé [m]<input name="dr_Rdn" value="" placeholder="référentiel"></label>
+      <label>Pente moyenne sur 300 m [%]<input name="dr_pente" value="5" type="number" step="any"></label>
       <label><input type="checkbox" name="dr_exist">Ouvrage existant</label>
       <label><input type="checkbox" name="dr_conflit">Point de conflit (carrefour, bretelle) dans la distance d'arrêt</label>
-      <div class="row">
-        <label>Longueur de franchissement L_F [m]<input name="dr_LF" value="45" type="number" step="any"></label>
-        <label>Viabilité hivernale<select name="dr_vh"><option value="prioritaire">réseau prioritaire / sans risque</option><option value="secondaire">réseau secondaire</option><option value="non traite">non traité</option></select></label>
-      </div>
-      <div class="row">
-        <label>Hauteur de chute h_c [m]<input name="dr_hc" value="7" type="number" step="any"></label>
-        <label>Hauteur d'eau P (niveau moyen annuel) [m]<input name="dr_P" value="0" type="number" step="any"></label>
-      </div>
-      <div class="row">
-        <label>Trafic de la voie franchie [véh/j]<input name="dr_Tf" value="40000" type="number"></label>
-        <label>Trains réguliers par jour<input name="dr_trains" value="0" type="number"></label>
-      </div>
-      <div class="row">
-        <label>Habitations dans la zone de chute<select name="dr_hab"><option value="aucune">aucune</option><option value="faible">faible densité (1 à 10 habitants)</option><option value="forte">forte densité (&gt; 10 habitants)</option></select></label>
-        <label>Zones sensibles<select name="dr_zone"><option value="aucune">aucune</option><option value="sensible">sensible (zone d'activité, voie verte, parking…)</option><option value="tres sensible">très sensible (école, hôpital, Seveso, captage…)</option></select></label>
-      </div>
+      <label>Longueur de franchissement L_F [m]<input name="dr_LF" value="45" type="number" step="any"></label>
+      <label>Viabilité hivernale<select name="dr_vh"><option value="prioritaire">réseau prioritaire / sans risque</option><option value="secondaire">réseau secondaire</option><option value="non traite">non traité</option></select></label>
+      <div class="grp">Zone de chute</div>
+      <label>Hauteur de chute h_c [m]<input name="dr_hc" value="7" type="number" step="any"></label>
+      <label>Hauteur d'eau P (niveau moyen annuel) [m]<input name="dr_P" value="0" type="number" step="any"></label>
+      <label>Trafic de la voie franchie [véh/j]<input name="dr_Tf" value="40000" type="number"></label>
+      <label>Trains réguliers par jour<input name="dr_trains" value="0" type="number"></label>
+      <label>Habitations dans la zone de chute<select name="dr_hab"><option value="aucune">aucune</option><option value="faible">faible densité (1 à 10 habitants)</option><option value="forte">forte densité (&gt; 10 habitants)</option></select></label>
+      <label>Zones sensibles<select name="dr_zone"><option value="aucune">aucune</option><option value="sensible">sensible (zone d'activité, voie verte, parking…)</option><option value="tres sensible">très sensible (école, hôpital, Seveso, captage…)</option></select></label>
       <label><input type="checkbox" name="dr_rimp" checked>Franchissement d'une autoroute, RN ou RD de 1re catégorie (ouvrage neuf, PL &gt; 13 t, cars, engins agricoles)</label>
       <label>Piétons et cycles par jour<input name="dr_piet" value="0" type="number"></label>
-      <h3>Effort sur le tablier (dispositif choisi)</h3>
-      <div class="row">
-        <label>Classe d'effort de choc (EN 1991-2)<select name="dr_classe"><option value="A">A — 100 kN</option><option value="B">B — 200 kN</option><option value="C" selected>C — 400 kN</option><option value="D">D — 600 kN</option></select></label>
-        <label>Hauteur du dispositif [m]<input name="dr_hDR" value="1.0" type="number" step="any"></label>
-      </div>
-      <label>Épaisseur de dalle / distance à l'encastrement de l'encorbellement [m]<div class="row"><input name="dr_e" value="0.25" type="number" step="any"><input name="dr_dEnc" value="1.0" type="number" step="any"></div></label>
+      <div class="grp">Effort sur le tablier (dispositif choisi)</div>
+      <label>Classe d'effort de choc (EN 1991-2)<select name="dr_classe"><option value="A">A — 100 kN</option><option value="B">B — 200 kN</option><option value="C" selected>C — 400 kN</option><option value="D">D — 600 kN</option></select></label>
+      <label>Hauteur du dispositif [m]<input name="dr_hDR" value="1.0" type="number" step="any"></label>
+      <label>Épaisseur de la dalle d'encorbellement [m]<input name="dr_e" value="0.25" type="number" step="any"></label>
+      <label>Distance à l'encastrement de l'encorbellement [m]<input name="dr_dEnc" value="1.0" type="number" step="any"></label>
     </div>
     <div>
       <div class="card" id="card-ddr"><h2>Niveau de retenue</h2><div id="ddr-out"></div></div>
@@ -576,8 +591,8 @@ e 18 33 2.7 1.6
   </div>
 </section>
 </form>
-<!-- importmap:début (tools/version.mjs) --><script type="importmap">{"imports":{"./src/abaques1989.js":"./src/abaques1989.js?v=0.36","./src/analysis.js":"./src/analysis.js?v=0.36","./src/beam.js":"./src/beam.js?v=0.36","./src/beams/design.js":"./src/beams/design.js?v=0.36","./src/beams/index.js":"./src/beams/index.js?v=0.36","./src/beams/run.js":"./src/beams/run.js?v=0.36","./src/bearings.js":"./src/bearings.js?v=0.36","./src/cantilever.js":"./src/cantilever.js?v=0.36","./src/chevetre.js":"./src/chevetre.js?v=0.36","./src/combinations.js":"./src/combinations.js?v=0.36","./src/conception.js":"./src/conception.js?v=0.36","./src/ddr/indice.js":"./src/ddr/indice.js?v=0.36","./src/design.js":"./src/design.js?v=0.36","./src/ec8export.js":"./src/ec8export.js?v=0.36","./src/fatigue.js":"./src/fatigue.js?v=0.36","./src/geotech/frottement-negatif.js":"./src/geotech/frottement-negatif.js?v=0.36","./src/geotech/groupes.js":"./src/geotech/groupes.js?v=0.36","./src/geotech/lateral.js":"./src/geotech/lateral.js?v=0.36","./src/geotech/outils.js":"./src/geotech/outils.js?v=0.36","./src/geotech/pieux.js":"./src/geotech/pieux.js?v=0.36","./src/geotech/sols.js":"./src/geotech/sols.js?v=0.36","./src/geotech/superficielles.js":"./src/geotech/superficielles.js?v=0.36","./src/geotech/tassement-pieu.js":"./src/geotech/tassement-pieu.js?v=0.36","./src/geotech/tassements.js":"./src/geotech/tassements.js?v=0.36","./src/guyon.js":"./src/guyon.js?v=0.36","./src/linalg.js":"./src/linalg.js?v=0.36","./src/loads_ec.js":"./src/loads_ec.js?v=0.36","./src/loads_f61.js":"./src/loads_f61.js?v=0.36","./src/pipeline.js":"./src/pipeline.js?v=0.36","./src/psidp/agrements.js":"./src/psidp/agrements.js?v=0.36","./src/psidp/checks.js":"./src/psidp/checks.js?v=0.36","./src/psidp/index.js":"./src/psidp/index.js?v=0.36","./src/psidp/prestress.js":"./src/psidp/prestress.js?v=0.36","./src/rebar.js":"./src/rebar.js?v=0.36","./src/section_bael.js":"./src/section_bael.js?v=0.36","./src/section_ec2.js":"./src/section_ec2.js?v=0.36","./src/skew.js":"./src/skew.js?v=0.36","./src/supports/abutment.js":"./src/supports/abutment.js?v=0.36","./src/supports/actions.js":"./src/supports/actions.js?v=0.36","./src/supports/beam1d.js":"./src/supports/beam1d.js?v=0.36","./src/supports/bearings1337.js":"./src/supports/bearings1337.js?v=0.36","./src/supports/foundation.js":"./src/supports/foundation.js?v=0.36","./src/supports/index.js":"./src/supports/index.js?v=0.36","./src/supports/pier.js":"./src/supports/pier.js?v=0.36","./src/supports/pierhead.js":"./src/supports/pierhead.js?v=0.36","./src/supports/psh.js":"./src/supports/psh.js?v=0.36","./src/supports/section_nm.js":"./src/supports/section_nm.js?v=0.36","./src/supports/standalone.js":"./src/supports/standalone.js?v=0.36","./src/supports/water.js":"./src/supports/water.js?v=0.36","./src/transverse.js":"./src/transverse.js?v=0.36","./src/vehicles.js":"./src/vehicles.js?v=0.36","./src/vendor/fond-figures.js":"./src/vendor/fond-figures.js?v=0.36","./src/vendor/pont-ec8.js":"./src/vendor/pont-ec8.js?v=0.36","./src/zonage.js":"./src/zonage.js?v=0.36","./web/app.js":"./web/app.js?v=0.36","./web/beams_view.js":"./web/beams_view.js?v=0.36","./web/ddr_view.js":"./web/ddr_view.js?v=0.36","./web/guide_schema.js":"./web/guide_schema.js?v=0.36","./web/note.js":"./web/note.js?v=0.36","./web/note_figures.js":"./web/note_figures.js?v=0.36","./web/plots.js":"./web/plots.js?v=0.36","./web/psidp_view.js":"./web/psidp_view.js?v=0.36","./web/rebarplan.js":"./web/rebarplan.js?v=0.36","./web/report.js":"./web/report.js?v=0.36","./web/schema.js":"./web/schema.js?v=0.36","./web/seismic_note.js":"./web/seismic_note.js?v=0.36","./web/supports_view.js":"./web/supports_view.js?v=0.36","./web/svg.js":"./web/svg.js?v=0.36","./web/vendor/docx.js":"./web/vendor/docx.js?v=0.36"}}</script><!-- importmap:fin -->
-<script src="./web/tabs.js?v=0.36"></script>
+<!-- importmap:début (tools/version.mjs) --><script type="importmap">{"imports":{"./src/abaques1989.js":"./src/abaques1989.js?v=0.37","./src/analysis.js":"./src/analysis.js?v=0.37","./src/beam.js":"./src/beam.js?v=0.37","./src/beams/design.js":"./src/beams/design.js?v=0.37","./src/beams/index.js":"./src/beams/index.js?v=0.37","./src/beams/run.js":"./src/beams/run.js?v=0.37","./src/bearings.js":"./src/bearings.js?v=0.37","./src/cantilever.js":"./src/cantilever.js?v=0.37","./src/chevetre.js":"./src/chevetre.js?v=0.37","./src/combinations.js":"./src/combinations.js?v=0.37","./src/conception.js":"./src/conception.js?v=0.37","./src/ddr/indice.js":"./src/ddr/indice.js?v=0.37","./src/design.js":"./src/design.js?v=0.37","./src/ec8export.js":"./src/ec8export.js?v=0.37","./src/fatigue.js":"./src/fatigue.js?v=0.37","./src/geotech/frottement-negatif.js":"./src/geotech/frottement-negatif.js?v=0.37","./src/geotech/groupes.js":"./src/geotech/groupes.js?v=0.37","./src/geotech/lateral.js":"./src/geotech/lateral.js?v=0.37","./src/geotech/outils.js":"./src/geotech/outils.js?v=0.37","./src/geotech/pieux.js":"./src/geotech/pieux.js?v=0.37","./src/geotech/sols.js":"./src/geotech/sols.js?v=0.37","./src/geotech/superficielles.js":"./src/geotech/superficielles.js?v=0.37","./src/geotech/tassement-pieu.js":"./src/geotech/tassement-pieu.js?v=0.37","./src/geotech/tassements.js":"./src/geotech/tassements.js?v=0.37","./src/guyon.js":"./src/guyon.js?v=0.37","./src/linalg.js":"./src/linalg.js?v=0.37","./src/loads_ec.js":"./src/loads_ec.js?v=0.37","./src/loads_f61.js":"./src/loads_f61.js?v=0.37","./src/pipeline.js":"./src/pipeline.js?v=0.37","./src/psidp/agrements.js":"./src/psidp/agrements.js?v=0.37","./src/psidp/checks.js":"./src/psidp/checks.js?v=0.37","./src/psidp/index.js":"./src/psidp/index.js?v=0.37","./src/psidp/prestress.js":"./src/psidp/prestress.js?v=0.37","./src/rebar.js":"./src/rebar.js?v=0.37","./src/section_bael.js":"./src/section_bael.js?v=0.37","./src/section_ec2.js":"./src/section_ec2.js?v=0.37","./src/skew.js":"./src/skew.js?v=0.37","./src/supports/abutment.js":"./src/supports/abutment.js?v=0.37","./src/supports/actions.js":"./src/supports/actions.js?v=0.37","./src/supports/beam1d.js":"./src/supports/beam1d.js?v=0.37","./src/supports/bearings1337.js":"./src/supports/bearings1337.js?v=0.37","./src/supports/foundation.js":"./src/supports/foundation.js?v=0.37","./src/supports/index.js":"./src/supports/index.js?v=0.37","./src/supports/pier.js":"./src/supports/pier.js?v=0.37","./src/supports/pierhead.js":"./src/supports/pierhead.js?v=0.37","./src/supports/psh.js":"./src/supports/psh.js?v=0.37","./src/supports/section_nm.js":"./src/supports/section_nm.js?v=0.37","./src/supports/standalone.js":"./src/supports/standalone.js?v=0.37","./src/supports/water.js":"./src/supports/water.js?v=0.37","./src/transverse.js":"./src/transverse.js?v=0.37","./src/vehicles.js":"./src/vehicles.js?v=0.37","./src/vendor/fond-figures.js":"./src/vendor/fond-figures.js?v=0.37","./src/vendor/pont-ec8.js":"./src/vendor/pont-ec8.js?v=0.37","./src/zonage.js":"./src/zonage.js?v=0.37","./web/app.js":"./web/app.js?v=0.37","./web/beams_view.js":"./web/beams_view.js?v=0.37","./web/ddr_view.js":"./web/ddr_view.js?v=0.37","./web/fields.js":"./web/fields.js?v=0.37","./web/guide_schema.js":"./web/guide_schema.js?v=0.37","./web/note.js":"./web/note.js?v=0.37","./web/note_figures.js":"./web/note_figures.js?v=0.37","./web/plots.js":"./web/plots.js?v=0.37","./web/psidp_view.js":"./web/psidp_view.js?v=0.37","./web/rebarplan.js":"./web/rebarplan.js?v=0.37","./web/report.js":"./web/report.js?v=0.37","./web/schema.js":"./web/schema.js?v=0.37","./web/seismic_note.js":"./web/seismic_note.js?v=0.37","./web/supports_view.js":"./web/supports_view.js?v=0.37","./web/svg.js":"./web/svg.js?v=0.37","./web/vendor/docx.js":"./web/vendor/docx.js?v=0.37"}}</script><!-- importmap:fin -->
+<script src="./web/tabs.js?v=0.37"></script>
 <script type="module">import('./web/app.js').catch(e => { const el = document.getElementById('error'); if (el) el.textContent = 'Le calcul n\'a pas pu se charger (' + e.message + '). Recharger la page sans cache (Ctrl+F5) ; si le problème persiste, le signaler.'; });</script>
 <noscript><p style="padding:16px">PSIDA nécessite JavaScript.</p></noscript>
 </body>

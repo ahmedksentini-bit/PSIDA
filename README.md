@@ -165,7 +165,12 @@ L'application Pont EC8 (dépôt ouvpara) est intégrée en entier : sources dans
 ## Interface
 
 Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de référence ; chaque champ porte une infobulle
-et une liste d'aide détaille les données), résultats à droite :
+et une liste d'aide détaille les données), résultats à droite. Depuis la v0.37, une donnée par ligne : libellé à gauche,
+champ dans une colonne alignée à droite, intertitres par thème ; les données à plusieurs valeurs se saisissent valeur par
+valeur (`web/fields.js`) — nombre de travées et une case par portée, une case par pile, tableaux « + Ajouter / × » pour les
+trottoirs et les charges de superstructure, sondage par ligne d'appui, cases à cocher des piles en eau — et les champs sans
+objet sont masqués (pieux si fondations superficielles, voile ou colonnes selon le type de pile…). Les noms et formats des
+données (`spans = "14, 18, 14"`…) sont inchangés : liens partagés, notes et tests restent compatibles.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

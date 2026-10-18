@@ -12,22 +12,30 @@ const GR = Math.PI / 200;
 
 /** Aide contextuelle par champ (title des champs et liste d'aide). */
 export const HELP = {
-  spans: 'Portées entre axes d\'appuis, de gauche à droite, séparées par des virgules [m] — ex. 10, 15, 15, 10. Elles définissent les travées T1…Tn et les appuis C0, P1…, Cn.',
+  spans: 'Portées entre axes d\'appuis, de gauche à droite [m] : choisir le nombre de travées (− / +), puis saisir chaque portée — ex. 10 ; 15 ; 15 ; 10. Elles définissent les travées T1…Tn et les appuis C0, P1…, Cn.',
   width: 'Largeur droite totale de la dalle 2b, mesurée perpendiculairement aux bords libres, encorbellements compris [m]. Le repère transversal y va de −b (bord gauche) à +b (bord droit).',
   h: 'Épaisseur de la dalle (hauteur de la nervure Hd) [m] ; voir les abaques du guide 1989 dans l\'aide à la conception.',
+  bp_epsR: 'Retrait final ε_r (BPEL 91 art. 2.1,51) : 1,5·10⁻⁴ climat très humide, 2·10⁻⁴ humide, 3·10⁻⁴ tempéré sec (valeur par défaut), 4·10⁻⁴ chaud et sec, 5·10⁻⁴ très sec ou désertique.',
+  bp_sigma0: 'Tension à l\'origine σ_p0 [MPa] ; vide = min(0,8 f_prg ; 0,9 f_peg) (BPEL 91 art. 3.2).',
+  bp_fcj: 'Résistance du béton à la mise en tension [MPa] ; vide = 0,8 f_c28 + 2.',
+  bp_eSup: 'Distance de l\'axe du câble moyen à la fibre supérieure sur appuis [m] ; vide = enrobage + Ø/2 de la gaine + décalage du câble dans la gaine.',
+  bp_eLow: 'Distance de l\'axe du câble moyen à la fibre inférieure en travée [m] ; vide = même règle que sur appuis.',
+  ap_incl: 'Inclinaison de chaque file de pieux sur la verticale [°], comptée vers l\'extérieur de la fondation ; vide = pieux verticaux.',
+  ap_profAssign: 'Sondage (profil pressiométrique) utilisé pour chaque ligne d\'appui, culées comprises ; la liste propose les noms « [SP…] » du champ Profils pressiométriques.',
+  ap_eauLignes: 'Piles soumises au courant, aux embâcles et à l\'affouillement ; toutes cochées par défaut.',
   area: 'Aire de la section droite pour le poids propre [m²] ; vide = 2b·h (rectangle). Avec chanfreins ou encorbellements, saisir l\'aire réelle (8,91 m² pour l\'exemple CHAMOA).',
   overhangs: 'Abouts : longueur de dalle au-delà de l\'axe des appuis d\'extrémité, à gauche puis à droite [m] (consoles chargées par le permanent). Guide § 3.2 : ≥ 0,1 + 15 D en BA.',
   roadway: 'Bords de la largeur roulable y1, y2 dans le repère transversal (y = 0 à l\'axe) [m] — ex. −5, 5 pour une chaussée de 10 m centrée. Détermine les voies EN 1991-2 et la classe Fascicule 61.',
-  footways: 'Trottoirs : paires y1,y2 séparées par des points-virgules [m] — chargés à 3 kN/m² avec LM1 (gr1a), 5 kN/m² seuls (gr3) et 1,5 kN/m² (Fasc. 61).',
-  lines: 'Charges permanentes linéiques (corniches, garde-corps, BN4, trottoirs pleins…) : g [kN/m] @ e [m] (position transversale), option « k kmin/kmax » = coefficients de valeur caractéristique (EN 1991-1-1 § 5.2.3 ; CHAMOA 0,8/1,2). Séparateur « ; ».',
-  bands: 'Charges permanentes surfaciques (revêtement, chape, remblai) : q [kN/m²] sur y1,y2, option « k kmin/kmax » (enrobé 0,8/1,4 ; chape 0,8/1,2).',
+  footways: 'Trottoirs : une ligne par trottoir, bords y1 et y2 [m] (« + Ajouter un trottoir », × pour supprimer) — chargés à 3 kN/m² avec LM1 (gr1a), 5 kN/m² seuls (gr3) et 1,5 kN/m² (Fasc. 61).',
+  lines: 'Charges permanentes linéiques (corniches, garde-corps, BN4, trottoirs pleins…) : une ligne par charge : g [kN/m] et position transversale e [m] ; k min et k max = coefficients de valeur caractéristique (EN 1991-1-1 § 5.2.3 ; CHAMOA 0,8/1,2), vides = 1.',
+  bands: 'Charges permanentes surfaciques (revêtement, chape, remblai) : une ligne par charge : q [kN/m²] appliquée entre y1 et y2 [m] ; k min / k max (enrobé 0,8/1,4 ; chape 0,8/1,2), vides = 1.',
   ys: 'Ordonnées transversales de calcul de K(y) et m_x(y) [m] ; les bords ±b sont les fibres les plus sollicitées.',
   nu: 'Coefficient de Poisson de la dalle dans Guyon-Massonnet : 0,2 reproduit CHAMOA, 0 reproduit les tables de Massonnet et les coefficients K de PSIDA.EL.',
   laneStep: 'Pas de glissement transversal des voies et files de camions pour trouver la position la plus défavorable [m].',
   Leq: 'Portées équivalentes imposées (θ = b/L_eq) [m] ; vide = calcul automatique par la travée seule chargée (points de moment nul).',
   mil: 'Charges militaires et exceptionnelles du Fascicule 61 (art. 9 et 10) : elles ne s\'appliquent que sur les itinéraires classés (Mc120 pour les itinéraires militaires, D240 pour les convois exceptionnels). L\'exemple PSIDA.EL ne prend que Mc120.',
   ap_pileType: 'Pile voile (fût rectangulaire, appareils sous la dalle) ou palée de colonnes circulaires, avec ou sans chevêtre. Le fût est calculé en console encastrée en pied (l_f = 2 H) sous les efforts en tête combinés (BAEL annexe D ou EN 1990 A2).',
-  ap_pileH: 'Hauteur des fûts de la base (dessus de semelle) à la sous-face de la dalle ou du chevêtre, une valeur par pile ou une seule pour toutes.',
+  ap_pileH: 'Hauteur des fûts de la base (dessus de semelle) à la sous-face de la dalle ou du chevêtre, une valeur par pile (P1, P2… de gauche à droite) ; le nombre de piles suit le nombre de travées.',
   ap_culType: 'Culée remblayée : mur de front sous la poussée des terres (garde-grève compris) + garde-grève et murs en retour (PP73). Culée enterrée : chevêtre sur colonnes noyées dans le remblai, poussée sur une largeur fictive min(3D ; entraxe) par colonne.',
   ap_found: 'Semelles superficielles (portance pressiométrique NF P 94-261 ou F62-V, excentrement, glissement, ferraillage par bielles) ou semelles sur pieux (efforts par semelle rigide, Ménard, ferraillage, portance NF P 94-262 simplifiée, tirant par bielles).',
   ap_ple: 'Pression limite nette équivalente p*_le sous la semelle ou en pointe [MPa], module pressiométrique E_M [MPa] et coefficient rhéologique α de Ménard (0,33 à 0,67 selon le sol).',
@@ -70,10 +78,10 @@ export function applyHelp(form, listEl) {
     const el = form.elements[name];
     if (!el) continue;
     el.title = text;
-    const lab = el.closest('label'); if (lab) lab.title = text;
+    const lab = el.closest('label, .fld'); if (lab) lab.title = text;
   }
   if (listEl) {
-    const labelOf = name => { const el = form.elements[name]; const lab = el && el.closest('label'); return lab ? lab.childNodes[0].textContent.trim() : name; };
+    const labelOf = name => { const el = form.elements[name]; const lab = el && el.closest('label, .fld'); const t = lab ? [...lab.childNodes].find(n => n.nodeType === 3 && n.textContent.trim()) : null; return t ? t.textContent.trim() : name; };
     listEl.innerHTML = `<dl>${Object.keys(HELP).filter(n => form.elements[n]).map(n => `<dt>${esc(labelOf(n))}</dt><dd>${esc(HELP[n])}</dd>`).join('')}</dl>`;
   }
 }
