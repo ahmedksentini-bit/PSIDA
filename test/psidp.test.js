@@ -218,9 +218,11 @@ test('procédés de précontrainte : choix de l\'agrément et de l\'unité (Frey
   assert.equal(d.unite, '6812'); assert.equal(d.plate, 0.22); assert.equal(d.spacingMin, 0.355);
   assert.ok(Math.abs(d.edgeMin - 0.22) < 1e-12); assert.ok(Math.abs(d.phi - 0.001) < 1e-12); assert.equal(d.tensionOK, true);
   assert.equal(unitOf('dywidag', '12', { fcj: 30 }).tensionOK, false);
-  // BBR : trompe-plaque Ø 225 pour 1206, entraxe non lu ; unité de 13 torons Freyssinet ⇒ 1206 (nombre de torons le plus proche)
-  const bq = unitOf('bbr', '1206'); assert.equal(bq.plate, 0.225); assert.equal(bq.spacingMin, null);
-  assert.equal(unitOf('bbr', '13C15').unite, '1206');
+  // BBR (ETA-06/0147, 2025) : trompe-plaque A Ø 225 pour 1206 (annexe 8), entraxe 340 mm pour f_cm,0 = 28 MPa (annexe 37),
+  // R_min 8,1 m (annexe 31) ; unité de 13 torons Freyssinet ⇒ 1306
+  const bq = unitOf('bbr', '1206', { fcj: 30, cover: 0.05 }); assert.equal(bq.plate, 0.225); assert.equal(bq.spacingMin, 0.34); assert.equal(bq.Rmin, 8.1);
+  assert.ok(Math.abs(bq.edgeMin - (0.17 + 0.05 - 0.01)) < 1e-12);
+  assert.equal(unitOf('bbr', '13C15').unite, '1306');
   // générique inchangé (BPEL annexe 3, cas II)
   const g = unitOf('generique', '12', { cas: 'II' });
   assert.equal(g.f, 0.20); assert.equal(g.phi, 0.003); assert.deepEqual(g.manquants, []);

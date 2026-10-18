@@ -1,7 +1,7 @@
 /**
  * Appareils d'appui en élastomère fretté — vérifications de la NF EN 1337-3 § 5.3.3, selon la présentation du guide
  * technique Sétra « Appareils d'appui en élastomère fretté — utilisation sur les ponts, viaducs et structures similaires »
- * (juillet 2007), § 3.3 et 3.4 ; valeurs de l'application nationale (γm = 1, KL = 1, εu,d = 7).
+ * (juillet 2007), § 3.2 à 3.4 et exemple du § 4.2 ; valeurs de l'application nationale (γm = 1, KL = 1, εu,d = 7).
  *
  * Géométrie : a ≤ b dimensions en plan (a parallèle à l'axe de l'ouvrage), enrobage latéral c (a' = a − 2c, b' = b − 2c,
  * A' = a'b', surface des frettes), n feuillets intermédiaires d'épaisseur t, frettes ts, enrobages extérieurs e ;
@@ -9,14 +9,15 @@
  *   T_q = n t + 2e si e > 2,5 mm, sinon n t (distorsion, guide § 3.3.2.2) ;
  *   S = A'/(2 t (a' + b')) (feuillet intermédiaire) ; G = 0,9 MPa (actions lentes), G_dyn = 1,8 MPa (freinage) ; E_b = 2000 MPa.
  * Vérifications à l'ELU fondamental, combinaison par combinaison (efforts et déplacements concomitants) :
- *   v_x = v_lent + H_x T_e/(G_dyn A')  ;  ε_q = v_x/T_q ≤ 1  ;  A_r = A'(1 − v_x/a')
- *   ε_c = 1,5 F_z/(G A_r S)  ;  ε_α = a'² α t/(2 Σ t³) = a'² α/(2 n t²)  ;  ε_t = K_L(ε_c + ε_q + ε_α) ≤ 7
+ *   v_x = v_lent + H_x T_q/(G_dyn A')  ;  ε_q = v_x/T_q ≤ 1  ;  A_r = A'(1 − v_x/a')
+ *   ε_c = 1,5 F_z/(G A_r S)  ;  ε_α = a'² α t/(2 Σ t_i³) (enrobages comptés si e > 2,5 mm)  ;  ε_t = K_L(ε_c + ε_q + ε_α) ≤ 7
  *   flambement : F_z/A_r < 2 a' G S/(3 T_e)
- *   stabilité en rotation : Σ v_z − a' α/K_r ≥ 0, K_r = 3, Σ v_z = n (F_z t/A')(1/(5 G S²) + 1/E_b)
+ *   stabilité en rotation : Σ v_z − a' α/K_r ≥ 0, K_r = 3, Σ v_z = F_z T_q/A' (1/(5 G S²) + 1/E_b)
  *   frettes : t_s ≥ K_p F_z (t₁ + t₂) K_h γ_m/(A_r f_y) et ≥ 2 mm, K_p = 1,3, K_h = 1, f_y = 235 MPa
  *   non-glissement (F_z minimal concomitant) : F_xy ≤ μ_e F_z, μ_e = 0,1 + 1,5 K_f/σ_m, σ_m = F_z/A_r [MPa],
- *     K_f = 0,6 (béton) ou 0,2 (autres surfaces, mortier de résine), F_xy = G A' v_lent/T_e + H_x ;
- *   anti-cheminement : σ_m,min = F_z,Gmin/A_r ≥ 3 MPa sous charges permanentes.
+ *     K_f = 0,6 (béton) ou 0,2 (autres surfaces, mortier de résine), F_xy = G A' v_lent/T_q + H_x ;
+ *   anti-cheminement : σ_m,min = F_z,Gmin/A' ≥ 3 MPa sous charges permanentes (guide § 3.4.1.5, remarque).
+ * Texte relu sur le guide Sétra 2007 (§ 3.2-3.4 et exemple du § 4.2, contrôlé dans les tests).
  * α comprend le défaut de pose α₀ (0,003 rad en pose conjuguée, 0,010 rad si la structure est posée directement).
  * Unités : entrées en m, kN, rad ; calculs en MN et MPa.
  */
@@ -28,7 +29,9 @@ export function bearingGeometry({ a, b, n, t, ts, cLat = EN1337_DEFAULTS.cLat, e
   const ap = a - 2 * cLat, bp = b - 2 * cLat, Ap = ap * bp;
   const Te = n * t + 2 * e, Tq = e > 0.0025 + 1e-12 ? n * t + 2 * e : n * t;
   const S = Ap / (2 * t * (ap + bp));
-  return { a, b, n, t, ts, cLat, e, ap, bp, Ap, Te, Tq, S };
+  // Σ t_i³ : feuillets intermédiaires, plus les enrobages extérieurs s'ils sont comptés (e > 2,5 mm ; guide § 4.2.6)
+  const sumT3 = n * t ** 3 + (e > 0.0025 + 1e-12 ? 2 * e ** 3 : 0);
+  return { a, b, n, t, ts, cLat, e, ap, bp, Ap, Te, Tq, S, sumT3 };
 }
 
 /**
@@ -40,16 +43,16 @@ export function bearingGeometry({ a, b, n, t, ts, cLat = EN1337_DEFAULTS.cLat, e
 export function checkCombo1337(g, c, o = {}) {
   const P = { ...EN1337_DEFAULTS, ...o };
   const Fz = c.Fz / 1000, Hx = Math.abs(c.Hx || 0) / 1000, alpha = Math.abs(c.alpha);
-  const v2 = Hx * g.Te / (P.Gdyn * g.Ap);
+  const v2 = Hx * g.Tq / (P.Gdyn * g.Ap);                 // guide § 4.2.3 : H_x T_q/(2 G A′)
   const vx = Math.abs(c.vSlow) + v2;
   const epsQ = vx / g.Tq;
   const Ar = g.Ap * Math.max(0, 1 - vx / g.ap);
   const sig = Ar > 0 ? Fz / Ar : Infinity;
   const epsC = Ar > 0 ? 1.5 * Fz / (P.G * Ar * g.S) : Infinity;
-  const epsA = g.ap ** 2 * alpha / (2 * g.n * g.t ** 2);
+  const epsA = g.ap ** 2 * alpha * g.t / (2 * g.sumT3);
   const epsT = P.KL * (epsC + epsQ + epsA);
   const sigBuck = 2 * g.ap * P.G * g.S / (3 * g.Te);
-  const vz = g.n * (Fz * g.t / g.Ap) * (1 / (5 * P.G * g.S ** 2) + 1 / P.Eb);
+  const vz = Fz * g.Tq / g.Ap * (1 / (5 * P.G * g.S ** 2) + 1 / P.Eb);   // Σ t_i = T_q (guide § 3.3.2.1, § 4.2.7)
   const vzReq = g.ap * alpha / P.Kr;
   const tsReq = Math.max(0.002, Ar > 0 ? P.Kp * Fz * 2 * g.t * P.Kh * P.gm / (Ar * P.fy) : Infinity);
   const checks = {
@@ -59,7 +62,9 @@ export function checkCombo1337(g, c, o = {}) {
     rotation: vz >= vzReq - 1e-12,
     frettes: g.ts >= tsReq - 1e-9,
   };
-  return { ...c, v2, vx, epsQ, Ar, sig, epsC, epsA, epsT, sigBuck, vz, vzReq, tsReq, checks, ok: Object.values(checks).every(Boolean) };
+  // guide § 3.4.1.2, nota : b'/a' < 1,24 avec forte rotation ou près du flambement → t_s majorée de 5 à 10 %
+  const tsAdvice = g.bp / g.ap < 1.24 && (sig > 0.9 * sigBuck || vz < 1.5 * vzReq);
+  return { ...c, v2, vx, epsQ, Ar, sig, epsC, epsA, epsT, sigBuck, vz, vzReq, tsReq, tsAdvice, checks, ok: Object.values(checks).every(Boolean) };
 }
 
 /**
@@ -69,12 +74,12 @@ export function checkCombo1337(g, c, o = {}) {
 export function checkSliding1337(g, c, o = {}) {
   const P = { ...EN1337_DEFAULTS, ...o };
   const v = Math.abs(c.vSlow), Hx = Math.abs(c.Hx || 0) / 1000;
-  const Ar = g.Ap * Math.max(0, 1 - (v + Hx * g.Te / (P.Gdyn * g.Ap)) / g.ap);
+  const Ar = g.Ap * Math.max(0, 1 - (v + Hx * g.Tq / (P.Gdyn * g.Ap)) / g.ap);
   const Fz = Math.max(0, c.FzMin) / 1000, sig = Ar > 0 ? Fz / Ar : 0;
   const mu = sig > 0 ? 0.1 + 1.5 * P.Kf / sig : Infinity;
-  const Fxy = P.G * g.Ap * v / g.Te + Hx;
-  const ArP = g.Ap * Math.max(0, 1 - Math.abs(c.vPerm ?? v) / g.ap);
-  const sigPerm = ArP > 0 ? Math.max(0, c.FzGmin) / 1000 / ArP : 0;
+  const Fxy = P.G * g.Ap * v / g.Tq + Hx;                  // guide § 4.2.8
+  // σ_m,min sous charges permanentes sur A′ (guide § 3.4.1.5, remarque : l'appareil revient à déplacement nul)
+  const sigPerm = Math.max(0, c.FzGmin) / 1000 / g.Ap;
   return { Ar, sig, mu, Fxy, R: mu * Fz, okGlissement: Fz > 0 && Fxy <= mu * Fz + 1e-12, sigPerm, okPerm: sigPerm >= P.sigMinPerm - 1e-9, Kf: P.Kf };
 }
 

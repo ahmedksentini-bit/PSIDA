@@ -230,6 +230,9 @@ export function computeSupports(st, input = {}) {
     };
   });
   const distB = horizontalDistribution(lineData('BAEL')), distE = horizontalDistribution(lineData('EC'));
+  // appareils d'appui, référentiel EC (guide Sétra 2007 § 4.3.1 et 4.3.2.3.1) : appui (fût, fondation, sol) avec ses raideurs
+  // instantanées, élastomère G = 0,9 MPa pour les déformations lentes — distribution distincte de celle des fondations (différée)
+  const distEb = horizontalDistribution(lineData('EC').map(l => ({ ...l, sApp: { inst: l.sApp.inst, diff: l.sApp.inst } })));
 
   // --- actions en tête par ligne ---
   const chargeable = deck.g.roadway.y2 - deck.g.roadway.y1;
@@ -312,7 +315,7 @@ export function computeSupports(st, input = {}) {
       const R0 = dp.defl.rot, mx = q => Math.max(Math.abs(q.g ?? 0), Math.abs(q.d ?? 0));
       aG = Math.max(mx(R0.service[i]), mx({ g: (R0.cp[i].g ?? 0) + (R0.pI[i].g ?? 0), d: (R0.cp[i].d ?? 0) + (R0.pI[i].d ?? 0) }));
     }
-    const dist = code === 'BAEL' ? distB : distE;
+    const dist = code === 'BAEL' ? distB : distEb;
     const vRF = Math.abs(dist.imposed(RF, 'diff').disp[i]);
     // température : BAEL longue durée (module différé) + courte durée (instantané) ; EC variation uniforme T (guide 2007, G = 0,9 MPa)
     const vT = code === 'BAEL' ? Math.abs(dist.imposed(sp.eps.TLD, 'diff').disp[i]) + Math.abs(dist.imposed(sp.eps.TCD, 'inst').disp[i]) : Math.abs(dist.imposed(epsT, 'diff').disp[i]);
@@ -322,7 +325,7 @@ export function computeSupports(st, input = {}) {
     const QQ = code === 'BAEL'
       ? [{ label: 'A(l)', res: f61.A, add: tr, g: 1.605, H: brk.A * bB / nb }, { label: 'Bc', res: f61.Bc, add: tr, g: 1.605, H: brk.Bc * bB / nb },
         ...(f61.Mc120 ? [{ label: 'Mc120', res: f61.Mc120, add: tr, g: 1.35, H: 0 }] : [])]
-      : [{ label: 'gr1a', res: ec.gr1a, add: 0, g: 1.35, H: 0 }, { label: 'gr2 (freinage)', res: ec.gr1a, frac: R(ec.gr1a, i) > 0 ? (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)) / R(ec.gr1a, i) : 0, add: 0, g: 1.35, H: bearings.H * bE / nb }];
+      : [{ label: 'gr1a', res: ec.gr1a, add: 0, g: 1.35, H: 0 }, { label: 'gr2 (freinage)', noT: true, res: ec.gr1a, frac: R(ec.gr1a, i) > 0 ? (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)) / R(ec.gr1a, i) : 0, add: 0, g: 1.35, H: bearings.H * bE / nb }];
     // gradient thermique (réactions hyperstatiques N_θ du gradient, réparties sur les n appareils) : ψ₀ = 0,6 avec le trafic
     // dominant (BAEL 1,3 × 0,6 = 0,78 ; EC 1,5 × 0,6), 1,35 / 1,5 en action dominante, 1,0 dans les combinaisons minimales
     const th = st.thermal && st.thermal.Rmax ? st.thermal : null;
@@ -331,8 +334,8 @@ export function computeSupports(st, input = {}) {
     const psi0T = 0.6, combos = [];
     for (const q of QQ) {
       const f = q.frac ?? 1, Qmax = f * (row.kQ * R(q.res, i) + q.add) / nb, Qmin = f * Math.min(0, q.res ? q.res.Rmin[i] : 0) / nb, aQ = f * rotOf(q.res, i);
-      combos.push({ label: `ELU ${q.label} (max)`, Fz: 1.35 * Gb + Pmax + q.g * Qmax + gTq * NtMax, vSlow: vRF + 1.5 * psi0T * vT, Hx: q.g * q.H, alpha: 1.35 * aG + q.g * aQ + a0 });
-      if (Qmin < 0) combos.push({ label: `ELU ${q.label} (min, enveloppe)`, Fz: GbMin + Pmin + q.g * Qmin + gTq * NtMin, vSlow: vRF + 1.5 * psi0T * vT, Hx: q.g * q.H, alpha: aG + q.g * aQ + a0, minimal: true, indicatif: true });
+      combos.push({ label: `ELU ${q.label} (max)`, Fz: 1.35 * Gb + Pmax + q.g * Qmax + (q.noT ? 0 : gTq * NtMax), vSlow: vRF + (q.noT ? 0 : 1.5 * psi0T * vT), Hx: q.g * q.H, alpha: 1.35 * aG + q.g * aQ + a0 });
+      if (Qmin < 0) combos.push({ label: `ELU ${q.label} (min, enveloppe)`, Fz: GbMin + Pmin + q.g * Qmin + (q.noT ? 0 : gTq * NtMin), vSlow: vRF + (q.noT ? 0 : 1.5 * psi0T * vT), Hx: q.g * q.H, alpha: aG + q.g * aQ + a0, minimal: true, indicatif: true });
     }
     // température dominante (BAEL : comb. 8 de la pratique ; EC : 1,5 T + 1,35 ψ₀ trafic)
     const q0 = QQ[0], psiQ = code === 'BAEL' ? 0 : (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)) / Math.max(1e-9, R(ec.gr1a, i));
@@ -340,7 +343,7 @@ export function computeSupports(st, input = {}) {
     combos.push({ label: th ? 'G + P + N_θ (min)' : 'G + P (min)', Fz: GbMin + Pmin + NtMin, vSlow: vRF + vT, Hx: 0, alpha: aG + a0, minimal: true });
     // non-glissement : effort vertical minimal concomitant (permanent seul ; ou trafic minimal avec son freinage)
     const slides = [{ FzMin: GbMin + Pmin + NtMin, vSlow: vRF + vT, Hx: 0, FzGmin: GbMin + Pmin, vPerm: vRF, label: th ? 'G + P + N_θ (min)' : 'G + P (min)' },
-      ...QQ.filter(q => q.H > 0).map(q => ({ FzMin: GbMin + Pmin + NtMin + Math.min(0, q.res ? q.res.Rmin[i] : 0) / nb, vSlow: vRF + vT, Hx: q.H, FzGmin: GbMin + Pmin, vPerm: vRF, label: `G + P + ${q.label} (min) + freinage` }))];
+      ...QQ.filter(q => q.H > 0).map(q => ({ FzMin: GbMin + Pmin + NtMin + Math.min(0, q.res ? q.res.Rmin[i] : 0) / nb, vSlow: q.noT ? vRF : vRF + vT, Hx: q.H, FzGmin: GbMin + Pmin, vPerm: vRF, label: `G + P + ${q.label} (min) + freinage` }))];
     const res = verifyBearing1337(bd, combos, slides[0]);
     const sl = slides.map(sl0 => ({ ...verifyBearing1337(bd, [], sl0).slide, label: sl0.label }));
     res.slides = sl; res.slide = sl.reduce((m, x) => (!m || x.Fxy / Math.max(x.R, 1e-12) > m.Fxy / Math.max(m.R, 1e-12) ? x : m), null);
@@ -383,7 +386,8 @@ export function computeSupports(st, input = {}) {
     };
     const press = { ...pr(fckB, ab, bb), fck: fckB };
     const sc = Math.min(dA / a0, Math.min(pitch, width) / b0), pressDiff = { ...pr(fck, a0 * sc, b0 * sc), a: a0 * sc, b: b0 * sc, fck };
-    const split = bearingSplitting({ R: Ru, a0, b0, dA: Math.max(dA, a0), dB: Math.max(Math.min(pitch, width), b0), fe: fyk });
+    const Lline = end ? width : (P.type === 'voile' ? Math.min(Lv, width) : width), edge = Math.max(b0 / 2, (Lline - (nb - 1) * pitch) / 2);
+    const split = bearingSplitting({ R: Ru, a0, b0, dA: Math.max(dA, a0), pitch, edge, n: nb, fe: fyk });
     let corbel = null;
     if (!end && P.type === 'voile' && Lv < width - 1e-9) {
       const ys = Array.from({ length: nb }, (_, k) => (k - (nb - 1) / 2) * pitch);
