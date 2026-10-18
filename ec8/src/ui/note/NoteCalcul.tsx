@@ -22,6 +22,8 @@ export function References({ ids }: { ids: string[] }) {
                   <span className="ref-source">{SOURCES[premiere.source].abrege}</span> <span className="ref-loc">{premiere.localisation}</span>
                   {premiere.etat === "a_confirmer" && <span className="ref-etat etat-a_confirmer">à confirmer</span>}
                   {premiere.etat === "citee_par_guide" && <span className="ref-etat etat-citee_par_guide">citée par le guide</span>}
+                  {premiere.etat === "citee_par_an" && <span className="ref-etat etat-citee_par_guide">citée par l'AN</span>}
+                  {premiere.etat === "lue_projet" && <span className="ref-etat etat-lue_projet">lue sur le projet prEN</span>}
                 </>
               )}
               {guide && guide !== premiere && <span className="ref-page"> · guide p. {guide.page}</span>}

@@ -19,12 +19,13 @@ export const D_ED_APPUIS: Formule = {
   ],
   conditions: ["Combiner avec les signes les plus défavorables.", "Ajouter les effets du second ordre s'ils sont significatifs."],
   references: [
-    { source: "NF_EN_1998_2", localisation: "6.6.2.2", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "6.6.2.2", page: "81" },
     { source: "NF_EN_15129", localisation: "8.2.1.2.11(2)", etat: "citee_par_guide" },
     { source: "NF_EN_1990", localisation: "annexe A2, tableaux A2.1 à A2.3 (ψ2)", etat: "citee_par_guide" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §5.1", page: "194" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : 6.6.2.2(1)P renvoie à dEd = dE + dG + ψ2·dT (2.7), sans γIS (en EN 1998-2, γIS ne majore que les déplacements des isolateurs, 7.6.2(1)P ; son emploi ici vient de l'EN 15129). Retrait et fluage sont inclus dans dG ; ψ2 = 0,5 vient de l'EN 1990.",
 };
 
 export const BORNE_DEPLACEMENT_ELASTIQUE: Regle = {
@@ -50,8 +51,8 @@ export const DEPLACEMENTS_NON_CRITIQUES: ParametreTable<{ pE: number; pT: number
   cles: ["fraction"],
   valeurs: { pE: 0.4, pT: 0.5 },
   references: [
-    { source: "NF_EN_1998_2_NA", localisation: "2.3.6.3(5)", page: "6" },
-    { source: "NF_EN_1998_2", localisation: "2.3.6.3(5)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2_NA", localisation: "2.3.6.3(5)", page: "9" },
+    { source: "NF_EN_1998_2", localisation: "2.3.6.3(5)", page: "33" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §6.1", page: "203" },
   ],
   statut: "via_guide",
@@ -102,7 +103,7 @@ export const MODULE_G_ELASTOMERE: Formule = {
     { symbole: "G_b", description: "module de cisaillement dynamique nominal", unite: "MPa" },
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "7.5.2.4(5)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "7.5.2.4(5)", page: "96" },
     { source: "NF_EN_1337_3", localisation: "4.3.1.1", etat: "citee_par_guide" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §4.3.4 ; ch. 5 §5.4", page: "111, 196" },
   ],
@@ -125,7 +126,7 @@ export const DISTORSION_TOTALE: Formule = {
   references: [
     { source: "NF_EN_15129", localisation: "8.2.3.4.2", etat: "citee_par_guide" },
     { source: "NF_EN_1337_3", localisation: "annexe C", etat: "citee_par_guide" },
-    { source: "NF_EN_1998_2_NA", localisation: "7.6.2(5) : γm = 1,00", page: "9" },
+    { source: "NF_EN_1998_2_NA", localisation: "7.6.2(5) : γm = 1,00", page: "11" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §5.4", page: "196" },
   ],
   statut: "via_guide",
@@ -193,7 +194,7 @@ export const LIMITES_DISTORSION_HORIZONTALE: ParametreTable<{ service: number; u
   valeurs: { service: 1.0, ultime_NF_EN_15129: 2.5, ultime_conseille: 2.0 },
   references: [
     { source: "NF_EN_15129", localisation: "8.2.3.4.1", etat: "citee_par_guide" },
-    { source: "NF_EN_1998_2", localisation: "7.6.2(6)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "7.6.2(6)", page: "103" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §5.4", page: "197" },
   ],
   statut: "via_guide",
@@ -264,8 +265,8 @@ export const ANTI_SOULEVEMENT: ParametreTable<{ ductile: number; ductilite_limit
   cles: ["comportement"],
   valeurs: { ductile: 0.8, ductilite_limitee: 0.5 },
   references: [
-    { source: "NF_EN_1998_2_NA", localisation: "6.6.3.2(1)P", page: "8" },
-    { source: "NF_EN_1998_2", localisation: "6.6.3.2", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2_NA", localisation: "6.6.3.2(1)P", page: "10-11" },
+    { source: "NF_EN_1998_2", localisation: "6.6.3.2", page: "82" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §5.1", page: "195" },
   ],
   statut: "via_guide",
@@ -280,7 +281,7 @@ export const APPAREILS_FIXES: Regle = {
   enonce:
     "Dimensionner en capacité avec une sur-résistance d'au moins 1,3 (approche recommandée : F_C = f(1,3·M_Rd,pile) ≤ F_Rd, soit F_C = 1,3·F_Ed ≤ F_Rd en ductilité limitée), ou à défaut pour q·F_Ed ≤ F_Rd. Sans sur-résistance : attelages sismiques et remplacement aisé.",
   references: [
-    { source: "NF_EN_1998_2", localisation: "6.5.2 et 6.6.2.1", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "6.5.2 et 6.6.2.1", page: "79" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §3.2 et §5.2", page: "180, 185, 195" },
   ],
   statut: "via_guide",
@@ -307,11 +308,11 @@ export const LONGUEUR_APPUI_MINIMALE: Formule = {
     "Appui sur pile intermédiaire : ajouter le déplacement sismique dE en tête de pile.",
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "6.6.4", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "6.6.4", page: "84" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §5.5", page: "199" },
   ],
   statut: "via_guide",
-  note: "Le guide note εe ce que l'EN 1998-2 note εg.",
+  note: "EN 1998-2:2005 : 6.6.4(3) (6.12)-(6.15b) conformes ; près d'une faille active (< 5 km, M ≥ 6,5), deg est doublé faute d'étude sismologique spécifique (6.6.4(4)).",
 };
 
 export const BUTEES: Regle = {
@@ -322,10 +323,11 @@ export const BUTEES: Regle = {
   enonce:
     "Avec des appareils en élastomère : butées de blocage transversales aux culées (jeu de 1 à 2 cm) et butées de sécurité si la portée dépasse 40 m. Jeu d'une butée de sécurité : d = dG + 0,5·dTh + ddiff + dE. Efforts des butées de sécurité : 75 % de l'effort sismique, ou raideur sécante dont l'énergie vaut 1,5 fois celle au déplacement dEd. Butées de blocage : jeu ≤ 15 mm, dimensionnées en capacité.",
   references: [
-    { source: "NF_EN_1998_2", localisation: "6.6.1 (inspiration de l'approche énergétique)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "2.3.6.3(4)P (jeu au moins égal à dEd)", page: "33" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §5.6", page: "200-202" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : 6.6.1 (exigences générales sur les attelages) ne contient ni approche énergétique, ni les valeurs 75 %, 1,5 fois l'énergie, 15 mm, 40 m : ces règles sont du guide. Seul 2.3.6.3(4)P (éléments ductiles ou amortisseurs avec un jeu au moins égal à dEd) s'y rattache.",
 };
 
 export const ATTELAGES: Formule = {
@@ -337,10 +339,11 @@ export const ATTELAGES: Formule = {
   variables: [{ symbole: "M_d", description: "masse de la travée attelée (G non pondéré)", unite: "t" }],
   conditions: ["En capacité s'ils reprennent tout l'effort sismique."],
   references: [
-    { source: "NF_EN_1998_2", localisation: "6.6.3.1", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "6.6.3.1", page: "82" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §5.7", page: "202" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : 6.6.3.1(3)P cas (d) : 1,5·ag·S·Md, sans S_T (ajouté par le guide, l'accélération incluant l'amplification topographique) ; Md = masse du tronçon lié, ou la plus faible des deux de part et d'autre du joint, en l'absence d'analyse dynamique.",
 };
 
 export const JOINTS_CHAUSSEE: Regle = {
@@ -351,10 +354,11 @@ export const JOINTS_CHAUSSEE: Regle = {
   enonce:
     "Catégorie II : le séisme peut être ignoré pour les joints, sans endommager l'about ni la culée. Catégorie III : si |dE| ≤ 2 cm, joints dimensionnés au séisme ultime ; sinon souffle total = souffle de service + 0,4 × souffle sismique (0,2 si une sur-ouverture n'entraîne que des dégâts légers), avec souffle de service = déformations différées + 0,5 × thermique. Catégorie IV : règles de la catégorie III, avec option de joints intacts sous séisme ultime.",
   references: [
-    { source: "NF_EN_1998_2", localisation: "2.3.6.3(5) (pE = 0,4)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "2.3.6.3(5) (pE = 0,4)", page: "33" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §6.1", page: "203-204" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : seule la valeur recommandée pE = 0,4 (avec pT = 0,5) figure en 2.3.6.3(5) ; la modulation par catégorie, le seuil |dE| ≤ 2 cm et la variante 0,2 viennent du guide.",
 };
 
 export const KL: ParametreScalaire = {
@@ -448,10 +452,11 @@ export const SOUFFLE_JOINT: Formule = {
     { symbole: "d_T", description: "déplacement thermique", unite: "m" },
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "2.3.6.3", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "2.3.6.3", page: "33" },
     { source: "GUIDE_CEREMA_2015", localisation: "annexe 1 §8", page: "275" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : dEd = dE + dG + ψ2·dT (2.3.6.3(2)P) est conforme ; le souffle 2dE + 2dT + dG est propre au guide (2.3.6.3(5) prévoit plutôt les fractions pE et pT pour les éléments non critiques).",
 };
 
 export const APPUIS: EntreeReferentiel[] = [

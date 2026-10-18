@@ -48,7 +48,7 @@ export const CATEGORIES_IMPORTANCE: Regle = {
     "I : pont privé ne desservant pas d'ERP. II : pont public, ou privé desservant un ERP, non classé III ou IV. III : pont public portant, franchissant ou longeant une autoroute, une route express, une voie à grande circulation ou une LGV ; ponts-canaux ; ponts des ports ; ponts d'aérodromes non classés IV. IV : ponts de pistes ou de voies d'aéronefs de code C à F ; ponts primordiaux pour la sécurité civile, la défense ou l'ordre public (classement préfectoral) ; pont II ou III dont l'endommagement menacerait un ouvrage de catégorie IV.",
   references: [
     { source: "ARRETE_2011", localisation: "art. 2" },
-    { source: "NF_EN_1998_2_NA", localisation: "2.1(4)P", page: "6" },
+    { source: "NF_EN_1998_2_NA", localisation: "2.1(4)P", page: "9" },
     { source: "GUIDE_CEREMA_2015", localisation: "Introduction §2.2.3", page: "11-12" },
   ],
   statut: "verifie",
@@ -96,7 +96,7 @@ export const SEISME_ACCIDENTEL: Regle = {
   etape: "classification",
   libelle: "Nature de l'action sismique",
   enonce: "L'action sismique est une action accidentelle ; les exigences de 2.2.2(3) et 2.2.2(4) sont conservées.",
-  references: [{ source: "NF_EN_1998_2_NA", localisation: "2.2.2(5)", page: "6" }],
+  references: [{ source: "NF_EN_1998_2_NA", localisation: "2.2.2(5)", page: "9" }],
   statut: "verifie",
 };
 
@@ -111,7 +111,7 @@ export const GAMMA_I: ParametreTable<Record<CategorieSoumise, number>> = {
   valeurs: { II: 1.0, III: 1.2, IV: 1.4 },
   references: [
     { source: "ARRETE_2011", localisation: "art. 4 I, tableau" },
-    { source: "NF_EN_1998_2_NA", localisation: "2.1(6)", page: "6" },
+    { source: "NF_EN_1998_2_NA", localisation: "2.1(6)", page: "9" },
     { source: "GUIDE_CEREMA_2015", localisation: "Introduction §2.2.3", page: "12" },
   ],
   statut: "via_guide",
@@ -240,7 +240,7 @@ export const RHO_0: ParametreScalaire = {
   symbole: "\\rho_0",
   unite: "-",
   valeur: 1.5,
-  references: [{ source: "NF_EN_1998_2_NA", localisation: "4.1.8(2)", page: "7" }],
+  references: [{ source: "NF_EN_1998_2_NA", localisation: "4.1.8(2)", page: "10" }],
   statut: "verifie",
   note: "Borne de la partie gauche de l'expression (4.4) de l'EN 1998-2.",
 };
@@ -257,8 +257,8 @@ export const PSI_21: ParametreTable<Record<"cas_general" | "routier_trafic_inten
   cles: ["type de pont et de trafic"],
   valeurs: { cas_general: 0, routier_trafic_intense: 0.2, ferroviaire_trafic_intense: 0.3 },
   references: [
-    { source: "NF_EN_1998_2_NA", localisation: "4.1.2(4)P", page: "7" },
-    { source: "NF_EN_1998_2", localisation: "4.1.2(4)P, valeurs recommandées", etat: "a_confirmer" },
+    { source: "NF_EN_1998_2_NA", localisation: "4.1.2(4)P", page: "10" },
+    { source: "NF_EN_1998_2", localisation: "4.1.2(4)P, valeurs recommandées", page: "42" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §3.3 et §4.2", page: "91, 95" },
   ],
   statut: "via_guide",
@@ -272,7 +272,7 @@ export const ANNEXES_INFORMATIVES: Regle = {
   libelle: "Statut des annexes de l'EN 1998-2",
   enonce:
     "Les annexes A, B, C, D, E, F, H, JJ et K restent informatives. Pour l'annexe C (rigidité effective), la méthode simplifiée 1 est limitée à la zone effectivement fissurée.",
-  references: [{ source: "NF_EN_1998_2_NA", localisation: "1.1.1(8), AN 2 à AN 10", page: "6, 10-11" }],
+  references: [{ source: "NF_EN_1998_2_NA", localisation: "1.1.1(8), AN 2 à AN 10", page: "9, 12-13" }],
   statut: "verifie",
 };
 
@@ -282,7 +282,7 @@ export const VARIABILITE_SPATIALE: Regle = {
   etape: "modele",
   libelle: "Variabilité spatiale de l'action sismique",
   enonce: "Longueur de tablier, distance d'indépendance et coefficient d'opposition : valeurs recommandées de l'EN 1998-2.",
-  references: [{ source: "NF_EN_1998_2_NA", localisation: "3.3(1)P, 3.3(6) notes 1 et 2", page: "7" }],
+  references: [{ source: "NF_EN_1998_2_NA", localisation: "3.3(1)P, 3.3(6) notes 1 et 2", page: "9-10" }],
   statut: "verifie",
 };
 
@@ -294,13 +294,13 @@ export const FAIBLE_SISMICITE: Regle = {
   etape: "analyse",
   libelle: "Méthode simplifiée en faible sismicité",
   enonce:
-    "Ponts de catégorie I et II dont la surface utile de brèche est inférieure à 150 m², ou pour lesquels ag·S ≤ 0,15 g : méthode statique équivalente avec une accélération horizontale uniforme égale à ag·S, et dispositions constructives de ductilité limitée.",
+    "Ponts de catégorie I et II dont la surface utile de brèche est inférieure à 150 m² et pour lesquels ag·S ≤ 0,15 g : méthode statique équivalente avec une accélération horizontale uniforme égale à ag·S, et dispositions constructives de ductilité limitée.",
   references: [
-    { source: "NF_EN_1998_2_NA", localisation: "2.3.7(1)", page: "7" },
+    { source: "NF_EN_1998_2_NA", localisation: "2.3.7(1)", page: "9" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §5.2", page: "116" },
   ],
   statut: "verifie",
-  note: "L'AN pose la condition « 150 m² ou 0,15 g » ; le guide mentionne une proposition du groupe reflet de la remplacer par « 150 m² et 0,15 g », plus restrictive, et cite les catégories I à III là où l'AN vise I et II. Le moteur appliquera le texte de l'AN.",
+  note: "L'AN d'avril 2013 a remplacé « 150 m² ou 0,15 g » (édition d'octobre 2007) par « 150 m² et 0,15 g » ; les deux conditions sont donc cumulatives (catégories I et II).",
 };
 
 export const SECOND_ORDRE: Regle = {
@@ -309,7 +309,7 @@ export const SECOND_ORDRE: Regle = {
   etape: "analyse",
   libelle: "Effets du second ordre en analyse linéaire",
   enonce: "Méthode simplifiée recommandée par l'EN 1998-2.",
-  references: [{ source: "NF_EN_1998_2_NA", localisation: "5.4(1)", page: "7" }],
+  references: [{ source: "NF_EN_1998_2_NA", localisation: "5.4(1)", page: "10" }],
   statut: "verifie",
 };
 
@@ -325,7 +325,7 @@ export const D_LIM_CULEES: ParametreTable<Partial<Record<Categorie, number | nul
   cles: ["catégorie d'importance"],
   valeurs: { I: null, II: null, III: 50, IV: 50 },
   references: [
-    { source: "NF_EN_1998_2_NA", localisation: "6.7.3(7)", page: "8" },
+    { source: "NF_EN_1998_2_NA", localisation: "6.7.3(7)", page: "11" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §4.3", page: "190" },
   ],
   statut: "verifie",
@@ -345,9 +345,12 @@ export const LONGUEUR_ROTULE_PLASTIQUE: Formule = {
     { symbole: "f_{yk}", description: "limite d'élasticité caractéristique des armatures longitudinales", unite: "MPa" },
     { symbole: "d_{bL}", description: "diamètre des armatures longitudinales", unite: "m" },
   ],
-  references: [{ source: "NF_EN_1998_2_NA", localisation: "2.3.5.3(1)", page: "6" }],
+  references: [
+    { source: "NF_EN_1998_2_NA", localisation: "2.3.5.3(1)", page: "9" },
+    { source: "NF_EN_1998_2", localisation: "annexe E, E.3.2(5), expression (E.19)", page: "126" },
+  ],
   statut: "verifie",
-  note: "Unités (MPa, m) à confirmer sur le texte de l'EN 1998-2.",
+  note: "EN 1998-2:2005, E.3.2(5) : f_yk en MPa (valeur numérique), L et d_bL en m : pour f_yk = 500 MPa et d_bL = 0,025 m, 0,015 f_yk d_bL = 0,19 m.",
 };
 
 export const GAMMA_BD_OPTION: Regle = {
@@ -356,7 +359,7 @@ export const GAMMA_BD_OPTION: Regle = {
   etape: "verif_piles",
   libelle: "γBd des éléments ductiles hors rotules plastiques",
   enonce: "Option 2 : 1 ≤ γBd = γBd1.",
-  references: [{ source: "NF_EN_1998_2_NA", localisation: "5.6.3.3(1)P b)", page: "8" }],
+  references: [{ source: "NF_EN_1998_2_NA", localisation: "5.6.3.3(1)P b)", page: "10" }],
   statut: "verifie",
 };
 
@@ -366,7 +369,7 @@ export const DUCTILITE_LIMITEE_FAIBLE: Regle = {
   etape: "verif_piles",
   libelle: "Vérifications simplifiées des ponts à ductilité limitée en faible sismicité",
   enonce: "Règles recommandées par l'EN 1998-2.",
-  references: [{ source: "NF_EN_1998_2_NA", localisation: "6.5.1(1)P", page: "8" }],
+  references: [{ source: "NF_EN_1998_2_NA", localisation: "6.5.1(1)P", page: "10" }],
   statut: "verifie",
 };
 
@@ -376,7 +379,7 @@ export const SPIRES_INTERDITES: Regle = {
   etape: "dispositions_constructives",
   libelle: "Type d'armatures de confinement",
   enonce: "Les spires hélicoïdales sont interdites dans les zones critiques.",
-  references: [{ source: "NF_EN_1998_2_NA", localisation: "6.2.1.4(1)P", page: "8" }],
+  references: [{ source: "NF_EN_1998_2_NA", localisation: "6.2.1.4(1)P", page: "10" }],
   statut: "verifie",
 };
 
@@ -387,7 +390,7 @@ export const ELASTOMERE_FONCTIONNALITE: Regle = {
   libelle: "Appareils en élastomère pouvant être détériorés",
   enonce:
     "Le pont doit garder une fonctionnalité immédiate pour les circulations d'urgence : la transmission des charges verticales entre tablier et appui doit être maintenue.",
-  references: [{ source: "NF_EN_1998_2_NA", localisation: "6.6.2.3(3)", page: "8" }],
+  references: [{ source: "NF_EN_1998_2_NA", localisation: "6.6.2.3(3)", page: "10" }],
   statut: "verifie",
 };
 
@@ -398,7 +401,7 @@ export const ISOLATION_CHOIX: Regle = {
   libelle: "Ponts avec isolation sismique (hors V1)",
   enonce:
     "TD du spectre de calcul, γIS, δw, δb et coefficients λ : valeurs recommandées de l'EN 1998-2. γm = 1,00 pour les appareils d'appui en élastomère.",
-  references: [{ source: "NF_EN_1998_2_NA", localisation: "7.4.1(1)P, 7.6.2(1)P, 7.6.2(5), 7.7.1(2), J.2(1)", page: "8-9" }],
+  references: [{ source: "NF_EN_1998_2_NA", localisation: "7.4.1(1)P, 7.6.2(1)P, 7.6.2(5), 7.7.1(2), J.2(1)", page: "11-12" }],
   statut: "verifie",
 };
 
@@ -411,7 +414,7 @@ export const TEMPERATURE_MIN_ISOLATEUR: ParametreTable<Record<"beton" | "mixte" 
   unite: "°C",
   cles: ["matériau du tablier"],
   valeurs: { beton: 7.5, mixte: 5.0, acier: -2.5 },
-  references: [{ source: "NF_EN_1998_2_NA", localisation: "J.1(2), tableau J.1 N", page: "9" }],
+  references: [{ source: "NF_EN_1998_2_NA", localisation: "J.1(2), tableau J.1 N", page: "11-12" }],
   statut: "verifie",
   note: "Tmin selon EN 1991-1-5 6.1.3.2 (probabilité annuelle de dépassement 0,02).",
 };

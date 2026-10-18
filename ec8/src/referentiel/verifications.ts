@@ -31,8 +31,8 @@ export const GAMMA_BD1: ParametreScalaire = {
   unite: "-",
   valeur: 1.25,
   references: [
-    { source: "NF_EN_1998_2_NA", localisation: "5.6.2(2)P b)", page: "8" },
-    { source: "NF_EN_1998_2", localisation: "5.6.2(2)P", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2_NA", localisation: "5.6.2(2)P b)", page: "10" },
+    { source: "NF_EN_1998_2", localisation: "5.6.2(2)P", page: "61" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §1", page: "170" },
   ],
   statut: "via_guide",
@@ -49,12 +49,12 @@ export const GAMMA_0: Formule = {
   variables: [{ symbole: "\\eta_k", description: "effort normal réduit de la rotule en béton armé", unite: "-" }],
   conditions: ["Ne s'applique ni aux zones de rotules potentielles ni aux seuils des dispositifs élasto-plastiques, frottants ou fusibles."],
   references: [
-    { source: "NF_EN_1998_2_NA", localisation: "5.3(4)", page: "7" },
-    { source: "NF_EN_1998_2", localisation: "5.3 et 5.3(4)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2_NA", localisation: "5.3(4)", page: "10" },
+    { source: "NF_EN_1998_2", localisation: "5.3 et 5.3(4)", page: "58" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §2.3", page: "172-173" },
   ],
   statut: "via_guide",
-  note: "Utilisé en conception ductile (hors V1) et pour les composants dimensionnés en capacité.",
+  note: "Utilisé en conception ductile (hors V1) et pour les composants dimensionnés en capacité. EN 1998-2:2005 : la majoration 1 + 2(ηk − 0,1)² ne vise que les sections en BA à armatures de confinement conformes à 6.2.1 ; la condition d'exclusion est du guide (5.3(7)P fixe γof = 1,30 pour les appareils glissants).",
 };
 
 export const GAMMA_RD_DISPOSITIFS: ParametreScalaire = {
@@ -86,7 +86,7 @@ export const FLEXION_PILE_DL: Formule = {
   ],
   conditions: ["q ≤ 1,5. Pas de coefficient de surcapacité."],
   references: [
-    { source: "NF_EN_1998_2", localisation: "5.6.2", etat: "a_confirmer" },
+    { source: "NF_EN_1998_2", localisation: "5.6.2(1)P, expression (5.5) ; résistances de calcul : 5.2.2(1)P (renvoi à l'EN 1998-1, 5.2.4)", page: "61" },
     { source: "NF_EN_1992", localisation: "flexion composée (EC2)", etat: "a_confirmer" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §3.1", page: "174" },
   ],
@@ -105,7 +105,7 @@ export const TRANCHANT_PILE_DL: Formule = {
   ],
   conditions: ["q ≤ 1,5."],
   references: [
-    { source: "NF_EN_1998_2", localisation: "5.6.2(2)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "5.6.2(2)", page: "61" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §3.2", page: "174, 180" },
   ],
   statut: "via_guide",
@@ -124,11 +124,11 @@ export const STRUCTURE_DISPOSITIFS: Formule = {
   ],
   references: [
     { source: "NF_EN_15129", localisation: "4.3.2", etat: "citee_par_guide" },
-    { source: "NF_EN_1998_2", localisation: "7.5.2.4", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "7.5.2.4", page: "96" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §3.1, §3.2 et §3.4", page: "180-181, 184" },
   ],
   statut: "via_guide",
-  note: "Cas courant des ponts sur appareils en élastomère fretté.",
+  note: "Cas courant des ponts sur appareils en élastomère fretté. EN 1998-2:2005 : 7.5.2.4(3)P (analyse UBDP pour les efforts maximaux) fonde le dimensionnement avec les propriétés majorées ; γIS ne majore que les déplacements des isolateurs (7.6.2(1)P) ; 7.6.3(2) admet q ≤ 1,50 ; γRd = 1,1 vient de l'EN 15129.",
 };
 
 export const MOMENT_SECTION_CIRCULAIRE: Formule = {
@@ -201,10 +201,11 @@ export const STABILITE_EXTERNE_CULEE: Formule = {
     { symbole: "F_{ht},\\,F_{vt}", description: "efforts transmis par le tablier (cumulés en phase)", unite: "MN" },
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "6.7.2", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "6.7.2", page: "85" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §4.3", page: "191" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : 6.7.2(2) a) à c) et (3) conformes (poussées sismiques des terres, inerties de la culée et du remblai avec ag·S, actions des appareils) ; le cumul + 0,3 × composante verticale relève de la règle générale 4.2.1.4.",
 };
 
 export const MONONOBE_OKABE: Formule = {
@@ -244,7 +245,7 @@ export const FONDATIONS_EFFETS: Regle = {
   enonce:
     "Conception à ductilité limitée (q ≤ 1,5) : efforts sismiques multipliés par q, soit q·MEd ≤ MRd(fck/1,3 ; fyk/1,0). Conception dissipative : effets de capacité avec sur-résistance, plafonnés aux effets élastiques (q = 1). Vérification préalable de la liquéfaction ; vérifications géotechniques selon l'EC7.",
   references: [
-    { source: "NF_EN_1998_2", localisation: "5.8.1(1)P, 5.8.2(2)P et 5.3(2)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "5.8.1(1)P, 5.8.2(2)P et 5.3(2)", page: "71" },
     { source: "NF_EN_1998_5", localisation: "5.3", etat: "citee_par_guide" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §3.1 et §4.4", page: "174, 191" },
   ],
@@ -261,7 +262,7 @@ export const ZONES_CRITIQUES: Regle = {
   enonce:
     "Zone critique là où MRd < 1,3·MEd (MRd ≥ MEd restant imposé) : confinement et anti-flambement requis. Au-delà de 1,3·MEd, aucune disposition particulière.",
   references: [
-    { source: "NF_EN_1998_2", localisation: "6.5", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "6.5", page: "79" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 6 §4.1", page: "220" },
   ],
   statut: "via_guide",
@@ -275,10 +276,11 @@ export const CONFINEMENT_CONDITIONS: Regle = {
   enonce:
     "ηk ≤ 0,08 : aucun confinement imposé. ηk > 0,08 : confinement si la ductilité en courbure admissible est inférieure à 7 (dispense si elle dépasse 7 avec εcu < 3,5 ‰, ou 2 ‰ pour les sections creuses). Piles creuses avec ηk < 0,20 : confinement non requis si l'anti-flambement est vérifié.",
   references: [
-    { source: "NF_EN_1998_2", localisation: "6.2.1.1(2)P et 6.2.4", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "6.2.1.1(2)P et 6.2.4", page: "72" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 6 §4.3", page: "220-221" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : ηk > 0,08 (6.2.1.1(2)P) et dispense si µΦ = 7 atteint avec εcu2 = 0,35 % (6.2.1.1(3)P) conformes ; « 2 ‰ pour les sections creuses » est du guide ; piles creuses : ηk ≤ 0,20 (6.2.4(4)), sous réserve de 6.2.2.",
 };
 
 export const OMEGA_WD: Formule = {
@@ -295,7 +297,7 @@ export const OMEGA_WD: Formule = {
     { symbole: "A_{sp},\\,D_{sp}", description: "section d'une cerce et diamètre de la cerce", unite: "m², m" },
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "éq. (6.3)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "éq. (6.3)", page: "72" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 6 §4.3", page: "221" },
   ],
   statut: "via_guide",
@@ -314,7 +316,7 @@ export const OMEGA_W_REQ: Formule = {
     { symbole: "\\lambda,\\,\\omega_{w,min}", description: "0,28 et 0,12 en ductilité limitée ; 0,37 et 0,18 en conception ductile", unite: "-" },
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "éq. (6.6), (6.7), (6.8) et tableau 6.1", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "éq. (6.6), (6.7), (6.8) et tableau 6.1", page: "75" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 6 §4.3 et §6", page: "221-222, 231" },
   ],
   statut: "via_guide",
@@ -333,11 +335,11 @@ export const ANTI_FLAMBEMENT: Formule = {
     { symbole: "d_{bL}", description: "diamètre des barres longitudinales", unite: "m" },
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "éq. (6.9) et (6.10)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "éq. (6.9) et (6.10)", page: "77" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 6 §4.4", page: "222" },
   ],
   statut: "via_guide",
-  note: "Le guide cite aussi « 6.5.4.1P » pour l'expression (6.10) : numéro à confirmer.",
+  note: "EN 1998-2:2005 : (6.10) est en 6.2.2(4)P ; la référence « 6.5.4.1P » imprimée par le guide n'existe pas (6.5 ne comprend que 6.5.1 et 6.5.2). At et ΣAs en mm², sT en m, ftk/fyk de l'armature transversale.",
 };
 
 export const DISPOSITIONS_PILES_DL: Regle = {
@@ -346,12 +348,13 @@ export const DISPOSITIONS_PILES_DL: Regle = {
   etape: "dispositions_constructives",
   libelle: "Piles en ductilité limitée : dispositions des zones critiques",
   enonce:
-    "Armatures longitudinales : φ ≥ 10 mm, classe B, espacement ≤ 200 mm, recouvrements évités ou alternés. Armatures transversales : VRd > q·γBd1·VEd, φ ≥ 10 mm, classe B, sL ≤ δ·dbL, sT ≤ 200 mm. Pieux : q ≥ 1,3 évite en général les zones critiques.",
+    "Armatures longitudinales : φ ≥ 10 mm, classe B, espacement ≤ 200 mm, pas de recouvrement dans les zones critiques (guide : évités ou alternés). Armatures transversales : VRd > q·γBd1·VEd, φ ≥ 10 mm, classe B, sL ≤ δ·dbL, sT ≤ 200 mm. Pieux : q ≥ 1,3 évite en général les zones critiques.",
   references: [
-    { source: "NF_EN_1998_2", localisation: "6.2.3(3)P (recouvrements)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "6.2.3(3)P (recouvrements)", page: "77" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 6 §4 et §6", page: "220, 231" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : 6.2.3(3)P interdit toute jonction par recouvrement ou soudure des armatures longitudinales dans les zones de rotules plastiques (règle des ponts ductiles) ; en ductilité limitée, 6.5.1(4)P n'impose que le confinement (6.2.1.4) et l'anti-flambement (6.2.2). φ ≥ 10 mm, espacement ≤ 200 mm et q ≥ 1,3 pour les pieux sont du guide ; classe B : 5.2.1(2) ; sT ≤ 200 mm : 6.2.1.2(2)P et 6.2.2(3).",
 };
 
 export const VERIFICATIONS: EntreeReferentiel[] = [

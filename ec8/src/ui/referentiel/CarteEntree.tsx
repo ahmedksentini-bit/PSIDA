@@ -10,12 +10,16 @@ export const LIBELLES_STATUT: Record<Statut, string> = {
 };
 
 const LIBELLES_ETAT: Record<Exclude<EtatReference, "lue">, string> = {
+  lue_projet: "lue sur le projet prEN",
   citee_par_guide: "citée par le guide",
+  citee_par_an: "citée par l'AN",
   a_confirmer: "à confirmer",
 };
 
 const TITRES_ETAT: Record<Exclude<EtatReference, "lue">, string> = {
+  lue_projet: "Clause lue dans le projet prEN 1998-2 (juillet 2003) ; à recouper sur l'EN 1998-2:2005 publiée et l'amendement A1",
   citee_par_guide: "Numéro de clause imprimé par le guide Cerema ; texte de la norme non consulté",
+  citee_par_an: "Numéro de clause cité par l'annexe nationale NF EN 1998-2/NA (2013) ; texte de la norme non consulté",
   a_confirmer: "Numéro de clause attendu, cité par aucun document consulté",
 };
 

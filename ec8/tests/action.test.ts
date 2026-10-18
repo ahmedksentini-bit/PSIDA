@@ -97,13 +97,17 @@ test("zone 5 : paramètres des Antilles", () => {
   proche(a.avg, 0.8 * a.ag);
 });
 
-test("catégorie II, faible sismicité : méthode simplifiée admise", () => {
+test("catégorie II, faible sismicité : méthode simplifiée admise si L·B < 150 m² ET ag·S ≤ 0,15 g (AN 2013, 2.3.7(1))", () => {
   const p = copie();
   p.site.zone = 2;
   p.site.categorie = "II";
   p.site.classeSol = "A";
-  const a = actionSismique(p);
-  assert.equal(a.faibleSismicite.applicable, true); // ag·S = 0,7 m/s² < 0,15 g
+  // brèche de l'exemple (> 150 m²) : conditions cumulatives depuis l'AN d'avril 2013, méthode non admise
+  assert.equal(actionSismique(p).faibleSismicite.applicable, false);
+  // petite brèche : 12 m × 10 m = 120 m² < 150 m², ag·S = 0,7 m/s² < 0,15 g
+  p.tablier.travees = [12];
+  p.tablier.largeur = 10;
+  assert.equal(actionSismique(p).faibleSismicite.applicable, true);
 });
 
 test("note de calcul : toutes les références existent dans le référentiel", () => {

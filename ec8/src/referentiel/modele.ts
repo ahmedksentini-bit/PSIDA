@@ -13,10 +13,11 @@ export const MASSES: Regle = {
   enonce:
     "Masses permanentes avec leur valeur moyenne, mobilisées dans toutes les directions, augmentées de ψ2,1 fois les charges de trafic (pont chargé sur toute sa longueur, valeurs non pondérées). Tablier sur appareils glissants ou en élastomère : masse des piles traitée séparément (inertie propre). Tablier bloqué sur la pile : ajouter au tablier la moitié supérieure de la pile. Masses en kg ou t, efforts en N ou kN (g = 9,81 m/s²).",
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.1.2", etat: "a_confirmer" },
+    { source: "NF_EN_1998_2", localisation: "4.1.2", page: "42" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §4.2 et §5.5", page: "95, 127" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : 4.1.2(1)P à (4)P (masses permanentes moyennes = caractéristiques, ψ2,1·Qk,1) ; la moitié supérieure des piles n'est ajoutée qu'en 4.2.2.3(2)P (tablier rigide). Le traitement séparé des piles sous appareils glissants ou en élastomère est du guide.",
 };
 
 // --- Raideurs ---------------------------------------------------------------
@@ -29,7 +30,7 @@ export const INERTIES_PILES: Regle = {
   enonce:
     "Conception élastique (q = 1) ou à ductilité limitée (q ≤ 1,5) : inerties brutes non fissurées (inertie fissurée sécante également admise). Ponts sur appareils en élastomère fretté : inerties brutes en général. Conception ductile : inertie effective fissurée (annexe C).",
   references: [
-    { source: "NF_EN_1998_2", localisation: "2.3.6.1 et annexe C", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "2.3.6.1 et annexe C", page: "31" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §1.5 et §4.3", page: "63, 96-99" },
   ],
   statut: "via_guide",
@@ -65,7 +66,7 @@ export const RAIDEUR_ELASTOMERE: Formule = {
   ],
   conditions: ["Raideurs verticale et en rotation prises infinie et nulle dans le modèle simplifié."],
   references: [
-    { source: "NF_EN_1998_2", localisation: "expression A_b·G_b/t_e", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "expression A_b·G_b/t_e", page: "92" },
     { source: "NF_EN_1337_3", localisation: "5.3.3.7, tableau 4", etat: "citee_par_guide" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §4.3.4, tableau 18", page: "110" },
   ],
@@ -96,7 +97,7 @@ export const RAIDEUR_TORSION_TABLIER: ParametreTable<{ profils_ouverts_et_dalles
   cles: ["type de tablier"],
   valeurs: { profils_ouverts_et_dalles: 0, caissons_precontraints: 0.5, caissons_beton_arme: 0.3 },
   references: [
-    { source: "NF_EN_1998_2", localisation: "2.3.6.1", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "2.3.6.1", page: "31" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §4.3.1", page: "96" },
   ],
   statut: "via_guide",
@@ -114,8 +115,8 @@ export const INERTIE_EFFECTIVE: Formule = {
     { symbole: "\\varphi_y", description: "courbure à la limite élastique", unite: "1/m" },
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "annexe C (informative) ; E.3.2(3)", etat: "citee_par_guide" },
-    { source: "NF_EN_1998_2_NA", localisation: "AN 4", page: "10" },
+    { source: "NF_EN_1998_2", localisation: "annexe C (informative) ; E.3.2(3)", page: "112" },
+    { source: "NF_EN_1998_2_NA", localisation: "AN 4", page: "12" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §4.3.3", page: "100" },
   ],
   statut: "via_guide",
@@ -130,11 +131,12 @@ export const BORNES_G: Regle = {
   enonce:
     "Analyse avec les propriétés limites inférieures (LBDP : Gb,min = Gb) pour les déplacements maximaux, et supérieures (UBDP : Gb,max = 1,2·Gb si Tmin,b ≥ 0 °C, sinon valeur à Tmin,b) pour les efforts maximaux. Dispense de la fourchette si UBDP et LBDP modifient les déplacements de moins de ±15 %.",
   references: [
-    { source: "NF_EN_1998_2", localisation: "7.5.2.4(4) et 7.5.2.4(6) (amendement A1)", etat: "citee_par_guide" },
-    { source: "NF_EN_1998_2_NA", localisation: "J.1(2) : Tmin,b", page: "9" },
+    { source: "NF_EN_1998_2", localisation: "7.5.2.4(3)P, (4) et (6) ; valeur 1,2 Gb : amendement A1", page: "96" },
+    { source: "NF_EN_1998_2_NA", localisation: "J.1(2) : Tmin,b", page: "11" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §4.3.4", page: "111" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : 7.5.2.4(3)P (analyses UBDP et LBDP), (4) (±15 %, propriétés nominales admises) et (6) sont présents ; mais l'édition 2005 donne Gb,max = 1,5·Gb pour Tmin,b ≥ 0 °C. La valeur 1,2·Gb, retenue par le guide, vient de l'amendement A1 (non consulté) : appliquer 1,5·Gb si le marché vise l'EN 2005 sans A1.",
 };
 
 // --- Amortissement ----------------------------------------------------------
@@ -155,10 +157,11 @@ export const AMORTISSEMENT_MATERIAUX: ParametreTable<Record<string, number>> = {
     "Élastomère fretté à faible amortissement": 0.05,
   },
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.1.3", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "4.1.3", page: "43" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §4.4", page: "114" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : 4.1.3(1) donne acier soudé 0,02, boulonné 0,04, BA 0,05, BP 0,02 ; l'élastomère à faible amortissement (0,05) est en 7.5.2.4(5) et 7.5.1(3).",
 };
 
 export const AMORTISSEMENT_GLOBAL: Formule = {
@@ -189,11 +192,12 @@ export const CONDITIONS_MONOMODAL: Regle = {
   enonce:
     "Masse modale du mode fondamental ≥ 90 % de la masse totale (ou ≥ 70 % en majorant les effets par M/ΣMi). Longitudinal : tablier continu à peu près rectiligne, masse des piles < 20 % de celle du tablier. Transversal : excentricité centre de raideur / centre de masse ≤ 5 % de la longueur. Biais : angle > 78 grades et raideurs à ±10 % du pont droit. Courbure : angle balayé < 25°. Exclus : arcs, béquilles, ponts à câbles, encorbellements.",
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.2.2.1", etat: "a_confirmer" },
-    { source: "NF_EN_1998_2", localisation: "4.1.5(1)P (biais)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "4.2.2.2(1) a) à c) ; 4.2.1.2(2)-(3) pour les masses modales", page: "51" },
+    { source: "NF_EN_1998_2", localisation: "4.1.5(1)P (biais)", page: "44" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §5.3.1", page: "116-118" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : 4.2.2.1 est la définition, le domaine d'application est en 4.2.2.2 (masse des piles < 20 % du tablier, eo ≤ 5 % L) ; les seuils de masse modale 90 % / 70 % sont en 4.2.1.2 (analyse multimodale). 4.1.5(1)P impose la torsion pour φ > 20° et pour B/L > 2,0, sans fixer de domaine de validité de la méthode. Angle balayé < 25°, exclusions (arcs, béquilles…) et raideurs à ±10 % du pont droit sont du guide.",
 };
 
 export const TABLIER_RIGIDE: Formule = {
@@ -214,7 +218,7 @@ export const TABLIER_RIGIDE: Formule = {
     "Avec q = 1, Sd(T) = Se(T).",
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.2.2.2", etat: "a_confirmer" },
+    { source: "NF_EN_1998_2", localisation: "4.2.2.3(1) (4.11), (2)P (4.12)-(4.13), (3)", page: "51" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §5.3.2", page: "119-121" },
   ],
   statut: "via_guide",
@@ -239,17 +243,18 @@ export const TORSION_EXCENTRICITE: Formule = {
   type: "formule",
   etape: "analyse",
   libelle: "Moment de torsion d'axe vertical",
-  latex: "M_t = \\pm\\,e\\,F, \\qquad e = e_0 + e_a, \\qquad e_a = 0{,}05\\,L\\ \\ \\text{(séisme transversal)}\\ \\text{ou}\\ 0{,}05\\,B\\ \\ \\text{(longitudinal)}",
+  latex: "M_t = \\pm\\,e\\,F, \\qquad e = e_0 + e_a, \\qquad e_a = 0{,}05\\,L\\ \\ \\text{(séisme transversal)}\\ \\text{ou}\\ 0{,}05\\,B\\ \\ \\text{(longitudinal, guide)}",
   variables: [
     { symbole: "e_0", description: "excentricité entre centre de raideur et centre de masse", unite: "m" },
     { symbole: "e_a", description: "excentricité accidentelle", unite: "m" },
   ],
-  conditions: ["Ponts biais (angle < 78 grades et B/L > 0,5) : excentricité globale 0,08·L ou 0,08·B."],
+  conditions: ["Ponts biais (φ > 20°, soit un angle de biais < 78 grades) et ponts à B/L > 2,0 (EN 4.1.5(1)P) ; critère du guide pour le biais : angle < 78 grades et B/L > 0,5. Excentricité globale e = ea + ed = 0,08 fois la dimension perpendiculaire à l'excitation (4.1.5(3)P, (4.1))."],
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.2.2.5 ; 4.1.5 (biais)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "4.2.2.5 ; 4.1.5 (biais)", page: "53" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §5.3.4", page: "125" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : 4.2.2.5(1) (4.16) ne traite que de la direction transversale : e = eo + 0,05·L ; le terme 0,05·B en longitudinal est du guide. 4.1.5(1)P vise deux familles distinctes, ponts biais (φ > 20°) et ponts larges (B/L > 2,0), et non leur cumul avec B/L > 0,5.",
 };
 
 export const RAYLEIGH: Formule = {
@@ -266,11 +271,11 @@ export const RAYLEIGH: Formule = {
   ],
   conditions: ["Vérifier a posteriori Mms ≥ 0,9·Mtot (tablier et piles), ou Mms ≥ 0,7·Mtot en majorant les effets par Mtot/Mms."],
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.2.2.4 (tel qu'imprimé)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "4.2.2.4 (tel qu'imprimé)", page: "52" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §4.1 et §5.3.3", page: "93, 121-123" },
   ],
   statut: "via_guide",
-  note: "Le guide imprime Se(T) ; Sd(T) se confond avec Se(T) pour q = 1. Le guide renvoie à l'article 4.2.2.4, alors que la méthode du tablier flexible serait en 4.2.2.3 : à confirmer.",
+  note: "EN 1998-2:2005 : 4.2.2.4 (tablier flexible) est bien le numéro exact, 4.2.2.3 étant le tablier rigide ; (4.14) et (4.15) conformes avec Sd(T). La vérification Mms ≥ 0,9 (ou 0,7)·Mtot reprend les seuils de 4.2.1.2. Le guide imprime Se(T), confondu avec Sd(T) pour q = 1.",
 };
 
 export const PILE_INDEPENDANTE: Formule = {
@@ -280,12 +285,13 @@ export const PILE_INDEPENDANTE: Formule = {
   libelle: "Modèle de la pile indépendante",
   latex: "T_i = 2\\pi\\sqrt{\\dfrac{M_i}{K_i}}, \\qquad F_i = M_i\\,S_d(T_i)",
   variables: [{ symbole: "M_i", description: "masse affectée à la pile i", unite: "kg" }],
-  conditions: ["Admis si 0,90 < Ti/Ti+1 ≤ 1,10 pour toutes les piles adjacentes ; sinon redistribuer les masses."],
+  conditions: ["Admis si 0,90 ≤ Ti/Ti+1 ≤ 1,10 pour toutes les piles adjacentes ; sinon redistribuer les masses."],
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.2.2.4", etat: "a_confirmer" },
+    { source: "NF_EN_1998_2", localisation: "4.2.2.6(1) (4.17)-(4.18), (2) (4.19)", page: "53" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §5.3.3", page: "123" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : 4.2.2.6 limite ce modèle à la direction transversale et à une première approximation pour des analyses préliminaires ; bornes 0,90 et 1,10 incluses.",
 };
 
 export const PERIODE_PILE_CONSOLE: Formule = {
@@ -316,11 +322,12 @@ export const SECOND_ORDRE: Formule = {
   ],
   conditions: ["À évaluer pour les piles hautes si ΔM dépasse 5 % du moment du premier ordre."],
   references: [
-    { source: "NF_EN_1998_2", localisation: "5.4", etat: "citee_par_guide" },
-    { source: "NF_EN_1998_2_NA", localisation: "5.4(1)", page: "7" },
+    { source: "NF_EN_1998_2", localisation: "5.4", page: "60" },
+    { source: "NF_EN_1998_2_NA", localisation: "5.4(1)", page: "10" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §5.5", page: "129" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : (5.3) est la méthode recommandée en note de 5.4(1) (choix national) ; dEd = déplacement transversal relatif des extrémités de l'élément ductile. Le seuil de 5 % est du guide (l'EN parle d'effet défavorable significatif).",
 };
 
 export const REACTIONS_VERTICALES: Formule = {
@@ -337,10 +344,11 @@ export const REACTIONS_VERTICALES: Formule = {
   ],
   conditions: ["Réactions vers le haut et vers le bas, cumulées aux charges permanentes et combinées au séisme horizontal."],
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.1.7(3)P (effets verticaux sur les appareils d'appui)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "4.1.7(3)P (effets verticaux sur les appareils d'appui)", page: "47" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §5.3.5, tableau 22", page: "124" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : 4.1.7(3)P impose seulement de considérer les effets verticaux sur appareils et attelages, 4.1.7(4) admet le mode fondamental avec le modèle à tablier flexible ; la formule Ri = ±a·b·μ·L et ses coefficients sont du guide.",
 };
 
 type LigneB = { "Ψ = 0,5": number; "Ψ = 0,6": number; "Ψ = 0,7": number; "Ψ = 0,8": number; "Ψ = 0,9": number; "Ψ = 1,0": number };
@@ -408,7 +416,7 @@ export const TMIN_B: Formule = {
     { symbole: "\\Delta T_1", description: "7,5 (béton), 5,0 (mixte), −2,5 (acier)", unite: "°C" },
   ],
   references: [
-    { source: "NF_EN_1998_2_NA", localisation: "J.1(2), tableau J.1 N", page: "9" },
+    { source: "NF_EN_1998_2_NA", localisation: "J.1(2), tableau J.1 N", page: "11-12" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §4.3.4 ; annexe 1 §2.2.2", page: "111, 248" },
   ],
   statut: "verifie",
@@ -427,12 +435,12 @@ export const LAMBDA_U: Formule = {
   ],
   conditions: ["Tmin,b ≥ 0 °C : Gb,max = 1,2·Gb."],
   references: [
-    { source: "NF_EN_1998_2", localisation: "7.5.2.4(6) (A1), annexe J, tableaux JJ.1 et JJ.2", etat: "citee_par_guide" },
-    { source: "NF_EN_1998_2_NA", localisation: "J.2(1) : coefficients λ recommandés", page: "9" },
+    { source: "NF_EN_1998_2", localisation: "7.5.2.4(6) (A1), annexe J, tableaux JJ.1 et JJ.2", page: "135" },
+    { source: "NF_EN_1998_2_NA", localisation: "J.2(1) : coefficients λ recommandés", page: "12" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §4.3.4 ; annexe 1 §2.2.2", page: "111, 249" },
   ],
   statut: "via_guide",
-  note: "Valeurs de ψfi par catégorie à confirmer sur l'EN 1998-2 ; saisies par l'utilisateur.",
+  note: "EN 1998-2:2005 : annexe J (J.4), (J.5) et tableau J.2, annexe JJ (tableaux JJ.1 : λmax = 1,1 ; JJ.2 : 1,0 / 1,3 / 1,4 / 1,5 à 20 / 0 / −10 / −30 °C) conformes. ψfi du tableau J.2 par classe d'importance de l'EN : III → 0,90, II → 0,70, I → 0,60 ; le 0,70 du guide correspond à la classe II de l'EN (correspondance avec les catégories françaises par l'AN). La règle Gb,max = 1,2·Gb diffère de l'EN 2005 (1,5·Gb) : elle vient de l'amendement A1, via le guide.",
 };
 
 export const CULEE_RIGIDE: Regle = {

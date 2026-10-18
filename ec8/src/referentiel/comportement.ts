@@ -14,7 +14,7 @@ export const ETA_K: Formule = {
     { symbole: "f_{ck}", description: "résistance caractéristique du béton en compression", unite: "MPa" },
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.1.6", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "5.3(4), expression (5.2) ; renvoi de 4.1.6(5)P", page: "58" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §1.2", page: "64" },
   ],
   statut: "via_guide",
@@ -42,11 +42,11 @@ export const Q_MAX: ParametreTable<Record<string, LigneQ>> = {
     Arcs: { "ductilité limitée": 1.2, "ductile (ηk < 0,3)": 2.0 },
   },
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.1.6 ; 4.1.6(9) et (10) pour les structures bloquées", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "4.1.6 ; 4.1.6(9) et (10) pour les structures bloquées", page: "46" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §1.2, tableau 4", page: "65" },
   ],
   statut: "via_guide",
-  note: "Tableau 4.1 de l'EN 1998-2 (numéro à confirmer). Pour ηk ≥ 0,3, voir q_reduction_effort_normal.",
+  note: "EN 1998-2:2005 : tableau 4.1 en 4.1.6(3)P confirmé, valable pour ηk ≤ 0,30 (4.1.6(5)P).",
 };
 
 export const LAMBDA_ALPHA_S: Formule = {
@@ -55,17 +55,18 @@ export const LAMBDA_ALPHA_S: Formule = {
   etape: "comportement",
   libelle: "Facteur λ(αs) des piles en béton armé",
   latex:
-    "\\alpha_s = \\dfrac{L_s}{h}, \\qquad \\lambda(\\alpha_s) = \\begin{cases} 1{,}0 & \\alpha_s \\ge 3 \\\\ \\sqrt{\\alpha_s / 3} & \\alpha_s < 3 \\end{cases}",
+    "\\alpha_s = \\dfrac{L_s}{h}, \\qquad \\lambda(\\alpha_s) = \\begin{cases} 1{,}0 & \\alpha_s \\ge 3 \\\\ \\sqrt{\\alpha_s / 3} & 1{,}0 \\le \\alpha_s < 3 \\end{cases}",
   variables: [
     { symbole: "L_s", description: "distance entre la rotule plastique et la section de moment nul", unite: "m" },
     { symbole: "h", description: "hauteur de la section dans le plan de flexion", unite: "m" },
   ],
   conditions: ["Piles rectangulaires à zone comprimée triangulaire : retenir la plus petite valeur de αs des deux directions."],
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.1.6", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "4.1.6", page: "46" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §1.2", page: "65" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : tableau 4.1 : λ = √(αs/3) pour 3 > αs ≥ 1,0 seulement ; pour αs < 1,0 (pile très trapue), le tableau ne donne pas de valeur et le comportement ductile n'y est pas couvert ; λ = 1,0 pour αs ≥ 3.",
 };
 
 export const Q_REDUCTION_EFFORT_NORMAL: Formule = {
@@ -80,11 +81,11 @@ export const Q_REDUCTION_EFFORT_NORMAL: Formule = {
     { symbole: "q", description: "valeur maximale du tableau pour ηk < 0,3", unite: "-" },
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.1.6", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "4.1.6", page: "46" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §1.2, tableau 4", page: "65" },
   ],
   statut: "a_verifier",
-  note: "Le guide imprime q_r = (ηk − 0,3)/0,3 · (q − 1) ≥ 1,0, sans le terme « q − ». Cette forme est discontinue (q_r = 1 à ηk = 0,3) ; la forme retenue ici assure la continuité (choix validé le 17/10/2026). À confirmer sur le texte de l'EN 1998-2.",
+  note: "EN 1998-2:2005 : (4.2) qr = q − (ηk − 0,3)/0,3·(q − 1) ≥ 1,0, et qr = 1,0 pour ηk ≥ 0,6 : la forme retenue est celle de l'EN ; le guide a perdu le terme « q − ».",
 };
 
 export const Q_VERTICAL: Regle = {
@@ -94,7 +95,7 @@ export const Q_VERTICAL: Regle = {
   libelle: "Coefficient de comportement vertical",
   enonce: "Pour la composante verticale, q = 1,0 : on utilise le spectre de réponse élastique vertical.",
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.1.6(12)P", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "4.1.6(12)P", page: "47" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.5", page: "83" },
   ],
   statut: "via_guide",
@@ -108,10 +109,11 @@ export const Q_ELASTOMERE: Regle = {
   enonce:
     "Ponts usuels sur élastomère fretté, à piles rigides et légères : comportement quasi élastique, q = 1, avec les dispositions constructives de ductilité limitée.",
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.1.6(11)P, 7.3.2, 7.5.1(3), 7.6.3(2)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "4.1.6(11)P ; 7.3(2)P ; 7.5.1(3) ; 7.6.3(2)", page: "47" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §1.2", page: "65" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : 7.3(2)P et 7.6.3(2) admettent une réponse à ductilité limitée (q ≤ 1,5) des sous-structures ; q = 1 est le choix du guide, repris par l'annexe nationale de 2013 (7.3(2)P) pour les ponts courants à piles rigides sur appareils.",
 };
 
 export const Q_ROTULES_INACCESSIBLES: Regle = {
@@ -120,13 +122,13 @@ export const Q_ROTULES_INACCESSIBLES: Regle = {
   etape: "comportement",
   libelle: "Rotules plastiques non accessibles",
   enonce:
-    "Si les rotules plastiques ne sont pas accessibles pour inspection et réparation, multiplier les valeurs de q du tableau par 0,6, sans descendre sous 1,0.",
+    "Si les rotules plastiques ne sont pas accessibles pour inspection et réparation, multiplier les valeurs de q « ductile » du tableau 4.1 par 0,6 : q = max(0,6·q ; 1,0).",
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.1.6 ; accessibilité : 4.1.6(6) note", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "4.1.6 ; accessibilité : 4.1.6(6) note", page: "46" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §1.2 ; ch. 3 §7.1", page: "65, 61" },
   ],
   statut: "via_guide",
-  note: "Le guide écrit « q restant supérieur à 1,0 » ; la formulation exacte est à confirmer sur l'EN 1998-2.",
+  note: "EN 1998-2:2005 : 4.1.6(6) : multiplier les valeurs « ductile » du tableau 4.1 par 0,6, sans qu'il soit nécessaire de descendre sous 1,0, soit q = max(0,6·q ; 1,0) ; la note définit seulement « accessible ».",
 };
 
 export const Q_STRUCTURES_BLOQUEES: Regle = {
@@ -135,12 +137,13 @@ export const Q_STRUCTURES_BLOQUEES: Regle = {
   etape: "comportement",
   libelle: "Structures bloquées",
   enonce:
-    "q = 1,0 pour les structures très raides (période propre < 0,03 s), les cadres, les culées encastrées sur au moins 80 % de leur surface latérale et les ouvrages de soutènement.",
+    "q = 1,0 pour les structures très raides (période propre T ≤ 0,03 s), dont les tabliers liés rigidement aux deux culées enchâssées dans un sol naturel raide sur au moins 80 % de leur surface latérale ; sinon, si T > 0,03 s, q = 1,5. Cadres et murs de soutènement : q = 1 (guide ; EN 6.7.3(9) et 6.7.5).",
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.1.6(9) et (10)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "4.1.6(9) et (10)", page: "47" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §1.2, tableau 4, note 3", page: "65" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : 4.1.6(9) range aussi dans cette catégorie les culées liées de façon flexible au tablier ; 4.1.6(10) vise le tablier horizontal lié aux deux culées. Les cadres et ouvrages de soutènement sont ajoutés par le guide (culée enterrée à plus de 80 % : 6.7.3(9) ; murs : 6.7.5).",
 };
 
 export const Q_PLUSIEURS_TYPES: Regle = {
@@ -150,7 +153,7 @@ export const Q_PLUSIEURS_TYPES: Regle = {
   libelle: "Plusieurs types d'éléments ductiles dans une direction",
   enonce: "Retenir le q du type d'appuis qui contribue le plus à la résistance au séisme dans la direction considérée.",
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.1.6(3)P", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "4.1.6(3)P", page: "45" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 2 §2.4 ; ch. 4 §1.2", page: "40, 65" },
   ],
   statut: "via_guide",
@@ -171,8 +174,8 @@ export const REGULARITE: Formule = {
     "Les éléments dont la contribution cumulée à l'effort tranchant sismique total ne dépasse pas 20 % peuvent être exclus du calcul de rmin et rmax.",
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.1.8, expression (4.4)", etat: "citee_par_guide" },
-    { source: "NF_EN_1998_2_NA", localisation: "4.1.8(2)", page: "7" },
+    { source: "NF_EN_1998_2", localisation: "4.1.8, expression (4.4)", page: "48" },
+    { source: "NF_EN_1998_2_NA", localisation: "4.1.8(2)", page: "10" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §1.2", page: "64" },
   ],
   statut: "via_guide",
@@ -188,7 +191,7 @@ export const Q_IRREGULIER: Formule = {
   variables: [{ symbole: "\\rho", description: "rapport rmax / rmin", unite: "-" }],
   conditions: ["Alternative : analyse non linéaire."],
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.1.8(3)", etat: "a_confirmer" },
+    { source: "NF_EN_1998_2", localisation: "4.1.8(4)P, expression (4.5)", page: "48" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §1.2", page: "64" },
   ],
   statut: "via_guide",
@@ -208,7 +211,7 @@ export const MU_D: Formule = {
   ],
   conditions: ["Périodes très faibles (T < 0,033 s) : q = 1, donc μd = 1."],
   references: [
-    { source: "NF_EN_1998_2", localisation: "2.3.6.1(6)P et 2.3.6.1(8)P", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "2.3.6.1(6)P et 2.3.6.1(8)P", page: "32" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.5 et §5.8", page: "82, 135" },
   ],
   statut: "via_guide",

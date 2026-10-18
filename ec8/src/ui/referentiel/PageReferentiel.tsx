@@ -7,6 +7,7 @@ import { BadgeStatut, CarteEntree, LIBELLES_STATUT } from "./CarteEntree.tsx";
 const LIBELLES_DISPO: Record<Disponibilite, string> = {
   fourni: "Fourni",
   public: "Texte public",
+  projet: "Projet (prEN) lu",
   non_fourni: "Non consulté",
 };
 
@@ -86,6 +87,8 @@ export function PageReferentiel({ sous = null, ancre = null }: { sous?: string |
     const toutes = REFERENTIEL.flatMap((e) => e.references);
     return {
       citees: toutes.filter((r) => r.etat === "citee_par_guide").length,
+      an: toutes.filter((r) => r.etat === "citee_par_an").length,
+      projet: toutes.filter((r) => r.etat === "lue_projet").length,
       aConfirmer: toutes.filter((r) => r.etat === "a_confirmer").length,
     };
   }, []);
@@ -128,8 +131,8 @@ export function PageReferentiel({ sous = null, ancre = null }: { sous?: string |
           ))}
         </div>
         <p className="refs-bilan">
-          Numéros de clause des normes non consultées : {references.citees} cités par le guide, {references.aConfirmer} à
-          confirmer sur les textes.
+          Numéros de clause : {references.projet} lus sur le projet prEN 1998-2 (juillet 2003), {references.an} cités par
+          l'annexe nationale, {references.citees} cités par le guide, {references.aConfirmer} à confirmer sur les textes.
         </p>
         <label className="recherche">
           <span className="sr">Rechercher dans tout le référentiel</span>

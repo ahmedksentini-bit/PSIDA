@@ -88,15 +88,15 @@ export function actionSismique(p: Projet): ActionSismique {
   const surfaceBreche = d.longueur * p.tablier.largeur;
   const agSsurG = (ag * S) / G;
   const categoriePetite = site.categorie === "I" || site.categorie === "II";
-  const faibleSismicite = categoriePetite && (surfaceBreche < 150 || agSsurG <= 0.15)
+  const faibleSismicite = categoriePetite && surfaceBreche < 150 && agSsurG <= 0.15
     ? {
         applicable: true,
-        motif: `Catégorie ${site.categorie} et ${surfaceBreche < 150 ? `surface de brèche ${nombre(surfaceBreche, 0)} m² < 150 m²` : `ag·S = ${nombre(agSsurG, 3)} g ≤ 0,15 g`} : méthode statique équivalente admise avec une accélération uniforme ag·S.`,
+        motif: `Catégorie ${site.categorie}, surface de brèche ${nombre(surfaceBreche, 0)} m² < 150 m² et ag·S = ${nombre(agSsurG, 3)} g ≤ 0,15 g : méthode statique équivalente admise avec une accélération uniforme ag·S.`,
       }
     : {
         applicable: false,
         motif: categoriePetite
-          ? `Surface de brèche ${nombre(surfaceBreche, 0)} m² ≥ 150 m² et ag·S = ${nombre(agSsurG, 3)} g > 0,15 g : méthode simplifiée non admise.`
+          ? `${surfaceBreche >= 150 ? `Surface de brèche ${nombre(surfaceBreche, 0)} m² ≥ 150 m²` : ''}${surfaceBreche >= 150 && agSsurG > 0.15 ? ' et ' : ''}${agSsurG > 0.15 ? `ag·S = ${nombre(agSsurG, 3)} g > 0,15 g` : ''} : méthode simplifiée non admise (AN avril 2013 : conditions cumulatives).`
           : `Catégorie ${site.categorie} : méthode simplifiée réservée aux catégories I et II.`,
       };
 
@@ -164,7 +164,7 @@ export function actionSismique(p: Projet): ActionSismique {
     {
       id: "faible_sismicite",
       titre: "Méthode simplifiée des zones à sismicité faible",
-      formule: "\\dfrac{a_g\\,S}{g} \\le 0{,}15 \\ \\text{ou}\\ L \\cdot B < 150\\ \\text{m}^2",
+      formule: "\\dfrac{a_g\\,S}{g} \\le 0{,}15 \\ \\text{et}\\ L \\cdot B < 150\\ \\text{m}^2",
       application: `\\dfrac{${tex(ag, 3)} \\times ${tex(S, 2)}}{${tex(G, 2)}} = ${tex(agSsurG, 3)}, \\qquad ${tex(d.longueur, 2)} \\times ${tex(p.tablier.largeur, 2)} = ${tex(surfaceBreche, 0)}\\ \\text{m}^2`,
       resultat: { symbole: "\\text{méthode simplifiée}", valeur: faibleSismicite.applicable ? "admise" : "non admise" },
       references: ["faible_sismicite_methode_simplifiee"],

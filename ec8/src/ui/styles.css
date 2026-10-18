@@ -346,6 +346,10 @@ body {
   color: var(--guide);
   background: var(--guide-fond);
 }
+.dispo-projet {
+  color: var(--guide);
+  background: var(--guide-fond);
+}
 .statut-a_verifier.badge,
 .dispo-non_fourni {
   color: var(--alerte);
@@ -485,6 +489,11 @@ table.valeurs td.vide {
 
 .etat-citee_par_guide {
   color: var(--guide);
+  background: var(--guide-fond);
+}
+
+.etat-lue_projet {
+  color: var(--texte-2);
   background: var(--guide-fond);
 }
 

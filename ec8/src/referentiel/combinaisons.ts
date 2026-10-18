@@ -12,7 +12,7 @@ export const COMBINAISON_100_30_30: Formule = {
   variables: [{ symbole: "E_1,\\,E_2,\\,E_3", description: "effets du séisme dans chacune des trois directions, la direction 1 étant prépondérante", unite: "" }],
   conditions: ["24 combinaisons : 3 permutations de la direction prépondérante × 2³ signes."],
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.2.1.4(2)", etat: "a_confirmer" },
+    { source: "NF_EN_1998_2", localisation: "4.2.1.4(2)", page: "50" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §3.2", page: "89" },
   ],
   statut: "via_guide",
@@ -26,7 +26,7 @@ export const COMBINAISON_SRSS: Formule = {
   latex: "E = \\sqrt{E_1^2 + E_2^2 + E_3^2}",
   variables: [{ symbole: "E_1,\\,E_2,\\,E_3", description: "effets du séisme dans chacune des trois directions", unite: "" }],
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.2.1.4(1)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "4.2.1.4(1)", page: "50" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §3.2", page: "90" },
   ],
   statut: "via_guide",
@@ -46,7 +46,7 @@ export const COMBINAISON_SISMIQUE: Formule = {
     { symbole: "Q_2", description: "valeur quasi permanente des actions de longue durée (poussée des terres, flottabilité…)", unite: "" },
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "5.5", etat: "a_confirmer" },
+    { source: "NF_EN_1998_2", localisation: "5.5", page: "60" },
     { source: "NF_EN_1990", localisation: "6.4.3.4 et annexe A2", etat: "a_confirmer" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §3.3", page: "90" },
   ],
@@ -66,10 +66,11 @@ export const COMBINAISON_EQUIPEMENTS: Formule = {
     { symbole: "S_{diff}", description: "effets des déformations différées (retrait, fluage)", unite: "" },
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "2.3.6.3(2)", etat: "a_confirmer" },
+    { source: "NF_EN_1998_2", localisation: "2.3.6.3(2)", page: "33" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §3.3", page: "91" },
   ],
   statut: "via_guide",
+  note: "EN 1998-2:2005 : 2.3.6.3(2)P combine des déplacements ; la prise en compte des déformations imposées dans la combinaison d'actions relève de 5.5(3)P (ponts sur élastomère fretté). Le 0,5 sur STh est le ψ2 de l'EN 1990.",
 };
 
 export const LG: ParametreTable<Record<ClasseSol, number>> = {
@@ -82,8 +83,8 @@ export const LG: ParametreTable<Record<ClasseSol, number>> = {
   cles: ["classe de sol"],
   valeurs: { A: 600, B: 500, C: 400, D: 300, E: 500 },
   references: [
-    { source: "NF_EN_1998_2", localisation: "3.3(6), note 1", etat: "a_confirmer" },
-    { source: "NF_EN_1998_2_NA", localisation: "3.3(6) note 1", page: "7" },
+    { source: "NF_EN_1998_2", localisation: "3.3(6), note 1", page: "40" },
+    { source: "NF_EN_1998_2_NA", localisation: "3.3(6) note 1", page: "10" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §3.4, tableau 15", page: "91" },
   ],
   statut: "via_guide",
@@ -98,8 +99,8 @@ export const L_LIM: Formule = {
   latex: "L_{lim} = \\dfrac{L_g}{1{,}5}",
   variables: [{ symbole: "L_g", description: "distance d'indépendance des mouvements du sol", unite: "m" }],
   references: [
-    { source: "NF_EN_1998_2", localisation: "3.3", etat: "citee_par_guide" },
-    { source: "NF_EN_1998_2_NA", localisation: "3.3(1)P", page: "7" },
+    { source: "NF_EN_1998_2", localisation: "3.3", page: "38" },
+    { source: "NF_EN_1998_2_NA", localisation: "3.3(1)P", page: "9-10" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §3.4", page: "91" },
   ],
   statut: "via_guide",
@@ -119,7 +120,7 @@ export const DEPLACEMENTS_DIFFERENTIELS: Formule = {
     { symbole: "\\beta_r", description: "0,5 si les trois appuis sont sur le même sol, 1,0 sinon", unite: "-" },
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "3.3(6)", etat: "a_confirmer" },
+    { source: "NF_EN_1998_2", localisation: "3.3(6)", page: "39" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §3.4", page: "92" },
   ],
   statut: "via_guide",
@@ -136,11 +137,11 @@ export const COMBINAISON_VARIABILITE: Formule = {
     { symbole: "A_{dépl\\,diff}", description: "effets des déplacements différentiels", unite: "" },
   ],
   references: [
-    { source: "NF_EN_1998_2", localisation: "3.3", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "3.3", page: "41" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §3.4", page: "91-92" },
   ],
   statut: "a_verifier",
-  note: "Le §3.2 du guide indique que translations d'ensemble et déplacements différentiels ne sont pas à considérer simultanément, mais le §3.4 les combine. À trancher sur l'EN 1998-2 3.3.",
+  note: "EN 1998-2:2005 : 3.3(7) impose le cumul quadratique de la réponse inertielle et des déplacements différentiels ; ce que 3.3(6) dispense de combiner, ce sont les deux ensembles A et B entre eux.",
 };
 
 export const COMPOSANTE_VERTICALE: Regle = {
@@ -151,7 +152,7 @@ export const COMPOSANTE_VERTICALE: Regle = {
   enonce:
     "Zones 2 et 3 : tabliers en béton précontraint (composante ascendante, à vide), appareils d'appui et attelages. Zones 4 et 5 : en plus, piles très fléchies sous les actions permanentes du tablier, ou pont à moins de 5 km d'une faille active.",
   references: [
-    { source: "NF_EN_1998_2", localisation: "4.1.7 ; 4.1.7(2)P pour le béton précontraint", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "4.1.7 ; 4.1.7(2)P pour le béton précontraint", page: "47" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 3 §4.4 ; ch. 4 §3.2", page: "53, 90" },
   ],
   statut: "via_guide",

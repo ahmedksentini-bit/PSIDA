@@ -392,7 +392,7 @@ const ETA = {
 	references: [{
 		source: "NF_EN_1998_1",
 		localisation: "3.2.2.2(3), éq. (3.6)",
-		etat: "a_confirmer"
+		page: "34"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §2.5",
@@ -433,7 +433,7 @@ const SE = {
 	references: [{
 		source: "NF_EN_1998_1",
 		localisation: "3.2.2.2(1)P, éq. (3.2) à (3.5)",
-		etat: "a_confirmer"
+		page: "32"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §2.5",
@@ -460,7 +460,7 @@ const SVE = {
 	references: [{
 		source: "NF_EN_1998_1",
 		localisation: "3.2.2.3(1)P, éq. (3.8) à (3.11)",
-		etat: "a_confirmer"
+		page: "35"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §2.5",
@@ -474,7 +474,7 @@ const SD = {
 	type: "formule",
 	etape: "action_sismique",
 	libelle: "Spectre de calcul horizontal pour l'analyse élastique",
-	latex: "S_d(T) = a_g\\,S\\,S_T \\times \\begin{cases} \\dfrac{2}{3} + \\dfrac{T}{T_B}\\left(\\dfrac{2{,}5}{q} - \\dfrac{2}{3}\\right) & 0 \\le T \\le T_B \\\\[6pt] \\dfrac{2{,}5}{q} & T_B \\le T \\le T_C \\\\[6pt] \\dfrac{2{,}5}{q}\\,\\dfrac{T_C}{T} & T_C \\le T \\le T_D \\\\[6pt] \\dfrac{2{,}5}{q}\\,\\dfrac{T_C\\,T_D}{T^2} & T_D \\le T \\le 4\\ \\text{s} \\end{cases} \\qquad S_d(T) \\ge \\beta\\,a_g \\ \\text{pour}\\ T \\ge T_C",
+	latex: "S_d(T) = a_g\\,S\\,S_T \\times \\begin{cases} \\dfrac{2}{3} + \\dfrac{T}{T_B}\\left(\\dfrac{2{,}5}{q} - \\dfrac{2}{3}\\right) & 0 \\le T \\le T_B \\\\[6pt] \\dfrac{2{,}5}{q} & T_B \\le T \\le T_C \\\\[6pt] \\dfrac{2{,}5}{q}\\,\\dfrac{T_C}{T} & T_C \\le T \\le T_D \\\\[6pt] \\dfrac{2{,}5}{q}\\,\\dfrac{T_C\\,T_D}{T^2} & T_D \\le T \\end{cases} \\qquad S_d(T) \\ge \\beta\\,a_g \\ \\text{pour}\\ T \\ge T_C",
 	variables: [{
 		symbole: "q",
 		description: "coefficient de comportement",
@@ -487,7 +487,7 @@ const SD = {
 	references: [{
 		source: "NF_EN_1998_1",
 		localisation: "3.2.2.5(4)P, éq. (3.13) à (3.16)",
-		etat: "a_confirmer"
+		page: "36"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §2.5",
@@ -507,8 +507,8 @@ const BETA = {
 	references: [
 		{
 			source: "NF_EN_1998_1",
-			localisation: "3.2.2.5(4)P, note",
-			etat: "a_confirmer"
+			localisation: "3.2.2.5(4)P, note (valeur recommandée β = 0,2)",
+			page: "36"
 		},
 		{
 			source: "NF_EN_1998_1_NA",
@@ -538,8 +538,8 @@ const SDE = {
 	conditions: ["Valable pour T ≤ 4 s."],
 	references: [{
 		source: "NF_EN_1998_1",
-		localisation: "3.2.2.2(5), éq. (3.7)",
-		etat: "a_confirmer"
+		localisation: "3.2.2.2(5)P et (6), éq. (3.7)",
+		page: "35"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §2.5",
@@ -561,8 +561,8 @@ const SDE_LONGUES_PERIODES = {
 	references: [
 		{
 			source: "NF_EN_1998_1",
-			localisation: "annexe A (informative)",
-			etat: "citee_par_guide"
+			localisation: "annexe A (informative), A.2, éq. (A.1) et (A.2)",
+			page: "169"
 		},
 		{
 			source: "NF_EN_1998_1_NA",
@@ -576,7 +576,7 @@ const SDE_LONGUES_PERIODES = {
 		}
 	],
 	statut: "via_guide",
-	note: "Annexe informative. Le guide ne précise pas la branche entre 4 s et T_E (à vérifier)."
+	note: "Annexe informative. Entre 4 s et T_E, l'EN 1998-1 (A.2) prolonge les expressions (3.2) à (3.5) converties par (3.7) : S_De reste constant au-delà de T_D jusqu'à T_E."
 };
 const TE_TF = {
 	id: "TE_TF",
@@ -611,7 +611,7 @@ const TE_TF = {
 	references: [{
 		source: "NF_EN_1998_1",
 		localisation: "annexe A, tableau A.1",
-		etat: "a_confirmer"
+		page: "169"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §2.5, tableau 14",
@@ -662,7 +662,7 @@ const ACTION = [
 		references: [{
 			source: "NF_EN_1998_1",
 			localisation: "3.2.2.4(1), éq. (3.12)",
-			etat: "a_confirmer"
+			page: "35"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §2.5",
@@ -689,7 +689,7 @@ const ACTION = [
 		references: [{
 			source: "NF_EN_1998_1",
 			localisation: "3.1.2(3), éq. (3.1)",
-			etat: "a_confirmer"
+			page: "30"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §2.3",
@@ -734,8 +734,8 @@ const ACTION = [
 		},
 		references: [{
 			source: "NF_EN_1998_1",
-			localisation: "3.1.2, tableau 3.1",
-			etat: "a_confirmer"
+			localisation: "3.1.2(1), tableau 3.1",
+			page: "29-30"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §2.3, tableau 8",
@@ -753,14 +753,14 @@ const ACTION = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "3.2.2.1 et 3.3(4)",
-			etat: "citee_par_guide"
+			page: "36"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §2.3 et §3.4",
 			page: "76, 91"
 		}],
 		statut: "via_guide",
-		note: "L'existence de la clause 3.2.2.1 imprimée par le guide reste à confirmer."
+		note: "EN 1998-2:2005 : 3.2.2.1(1)P renvoie à 3.3 lorsque plusieurs classes de sol se rencontrent sous les appuis, et 3.3(4) impose une action unique correspondant au sol le plus défavorable. Le déclassement en cas de doute et l'enveloppe des spectres sont du guide."
 	},
 	{
 		id: "ST",
@@ -768,15 +768,24 @@ const ACTION = [
 		etape: "action_sismique",
 		libelle: "Coefficient d'amplification topographique S_T",
 		enonce: "Pentes de hauteur > 30 m et d'inclinaison > 15° : S_T ≥ 1,2 pour un versant ou une pente isolée près de la crête ; S_T ≥ 1,4 pour une butte à crête étroite de pente moyenne > 30° (≥ 1,2 si < 30°) ; majoration de 20 % en présence d'une couche lâche en surface ; variation linéaire depuis la base, où S_T = 1. Sinon S_T = 1. S_T multiplie l'accélération de calcul.",
-		references: [{
-			source: "NF_EN_1998_5",
-			localisation: "annexe A",
-			etat: "citee_par_guide"
-		}, {
-			source: "GUIDE_CEREMA_2015",
-			localisation: "ch. 4 §2.4",
-			page: "78"
-		}],
+		references: [
+			{
+				source: "NF_EN_1998_5",
+				localisation: "annexe A",
+				etat: "citee_par_guide"
+			},
+			{
+				source: "GUIDE_CEREMA_2015",
+				localisation: "ch. 4 §2.4",
+				page: "78"
+			},
+			{
+				source: "NF_EN_1998_5_NA",
+				localisation: "AN 1, clause 1.1(4), et AN 2 (annexe A informative en France)",
+				page: "5",
+				etat: "lue_projet"
+			}
+		],
 		statut: "via_guide"
 	}
 ];
@@ -813,7 +822,7 @@ const CATEGORIES_IMPORTANCE = {
 		{
 			source: "NF_EN_1998_2_NA",
 			localisation: "2.1(4)P",
-			page: "6"
+			page: "9"
 		},
 		{
 			source: "GUIDE_CEREMA_2015",
@@ -874,7 +883,7 @@ const SEISME_ACCIDENTEL = {
 	references: [{
 		source: "NF_EN_1998_2_NA",
 		localisation: "2.2.2(5)",
-		page: "6"
+		page: "9"
 	}],
 	statut: "verifie"
 };
@@ -899,7 +908,7 @@ const GAMMA_I = {
 		{
 			source: "NF_EN_1998_2_NA",
 			localisation: "2.1(6)",
-			page: "6"
+			page: "9"
 		},
 		{
 			source: "GUIDE_CEREMA_2015",
@@ -1142,7 +1151,7 @@ const RHO_0 = {
 	references: [{
 		source: "NF_EN_1998_2_NA",
 		localisation: "4.1.8(2)",
-		page: "7"
+		page: "10"
 	}],
 	statut: "verifie",
 	note: "Borne de la partie gauche de l'expression (4.4) de l'EN 1998-2."
@@ -1164,12 +1173,12 @@ const PSI_21 = {
 		{
 			source: "NF_EN_1998_2_NA",
 			localisation: "4.1.2(4)P",
-			page: "7"
+			page: "10"
 		},
 		{
 			source: "NF_EN_1998_2",
 			localisation: "4.1.2(4)P, valeurs recommandées",
-			etat: "a_confirmer"
+			page: "42"
 		},
 		{
 			source: "GUIDE_CEREMA_2015",
@@ -1189,7 +1198,7 @@ const ANNEXES_INFORMATIVES = {
 	references: [{
 		source: "NF_EN_1998_2_NA",
 		localisation: "1.1.1(8), AN 2 à AN 10",
-		page: "6, 10-11"
+		page: "9, 12-13"
 	}],
 	statut: "verifie"
 };
@@ -1202,7 +1211,7 @@ const VARIABILITE_SPATIALE = {
 	references: [{
 		source: "NF_EN_1998_2_NA",
 		localisation: "3.3(1)P, 3.3(6) notes 1 et 2",
-		page: "7"
+		page: "9-10"
 	}],
 	statut: "verifie"
 };
@@ -1211,18 +1220,18 @@ const FAIBLE_SISMICITE = {
 	type: "regle",
 	etape: "analyse",
 	libelle: "Méthode simplifiée en faible sismicité",
-	enonce: "Ponts de catégorie I et II dont la surface utile de brèche est inférieure à 150 m², ou pour lesquels ag·S ≤ 0,15 g : méthode statique équivalente avec une accélération horizontale uniforme égale à ag·S, et dispositions constructives de ductilité limitée.",
+	enonce: "Ponts de catégorie I et II dont la surface utile de brèche est inférieure à 150 m² et pour lesquels ag·S ≤ 0,15 g : méthode statique équivalente avec une accélération horizontale uniforme égale à ag·S, et dispositions constructives de ductilité limitée.",
 	references: [{
 		source: "NF_EN_1998_2_NA",
 		localisation: "2.3.7(1)",
-		page: "7"
+		page: "9"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §5.2",
 		page: "116"
 	}],
 	statut: "verifie",
-	note: "L'AN pose la condition « 150 m² ou 0,15 g » ; le guide mentionne une proposition du groupe reflet de la remplacer par « 150 m² et 0,15 g », plus restrictive, et cite les catégories I à III là où l'AN vise I et II. Le moteur appliquera le texte de l'AN."
+	note: "L'AN d'avril 2013 a remplacé « 150 m² ou 0,15 g » (édition d'octobre 2007) par « 150 m² et 0,15 g » ; les deux conditions sont donc cumulatives (catégories I et II)."
 };
 const SECOND_ORDRE$1 = {
 	id: "second_ordre_choix",
@@ -1233,7 +1242,7 @@ const SECOND_ORDRE$1 = {
 	references: [{
 		source: "NF_EN_1998_2_NA",
 		localisation: "5.4(1)",
-		page: "7"
+		page: "10"
 	}],
 	statut: "verifie"
 };
@@ -1254,7 +1263,7 @@ const D_LIM_CULEES = {
 	references: [{
 		source: "NF_EN_1998_2_NA",
 		localisation: "6.7.3(7)",
-		page: "8"
+		page: "11"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 5 §4.3",
@@ -1289,10 +1298,14 @@ const LONGUEUR_ROTULE_PLASTIQUE = {
 	references: [{
 		source: "NF_EN_1998_2_NA",
 		localisation: "2.3.5.3(1)",
-		page: "6"
+		page: "9"
+	}, {
+		source: "NF_EN_1998_2",
+		localisation: "annexe E, E.3.2(5), expression (E.19)",
+		page: "126"
 	}],
 	statut: "verifie",
-	note: "Unités (MPa, m) à confirmer sur le texte de l'EN 1998-2."
+	note: "EN 1998-2:2005, E.3.2(5) : f_yk en MPa (valeur numérique), L et d_bL en m : pour f_yk = 500 MPa et d_bL = 0,025 m, 0,015 f_yk d_bL = 0,19 m."
 };
 const GAMMA_BD_OPTION = {
 	id: "gamma_Bd_option",
@@ -1303,7 +1316,7 @@ const GAMMA_BD_OPTION = {
 	references: [{
 		source: "NF_EN_1998_2_NA",
 		localisation: "5.6.3.3(1)P b)",
-		page: "8"
+		page: "10"
 	}],
 	statut: "verifie"
 };
@@ -1316,7 +1329,7 @@ const DUCTILITE_LIMITEE_FAIBLE = {
 	references: [{
 		source: "NF_EN_1998_2_NA",
 		localisation: "6.5.1(1)P",
-		page: "8"
+		page: "10"
 	}],
 	statut: "verifie"
 };
@@ -1329,7 +1342,7 @@ const SPIRES_INTERDITES = {
 	references: [{
 		source: "NF_EN_1998_2_NA",
 		localisation: "6.2.1.4(1)P",
-		page: "8"
+		page: "10"
 	}],
 	statut: "verifie"
 };
@@ -1342,7 +1355,7 @@ const ELASTOMERE_FONCTIONNALITE = {
 	references: [{
 		source: "NF_EN_1998_2_NA",
 		localisation: "6.6.2.3(3)",
-		page: "8"
+		page: "10"
 	}],
 	statut: "verifie"
 };
@@ -1355,7 +1368,7 @@ const ISOLATION_CHOIX = {
 	references: [{
 		source: "NF_EN_1998_2_NA",
 		localisation: "7.4.1(1)P, 7.6.2(1)P, 7.6.2(5), 7.7.1(2), J.2(1)",
-		page: "8-9"
+		page: "11-12"
 	}],
 	statut: "verifie"
 };
@@ -1375,7 +1388,7 @@ const TEMPERATURE_MIN_ISOLATEUR = {
 	references: [{
 		source: "NF_EN_1998_2_NA",
 		localisation: "J.1(2), tableau J.1 N",
-		page: "9"
+		page: "11-12"
 	}],
 	statut: "verifie",
 	note: "Tmin selon EN 1991-1-5 6.1.3.2 (probabilité annuelle de dépassement 0,02)."
@@ -1553,12 +1566,12 @@ function actionSismique(p) {
 	const surfaceBreche = d.longueur * p.tablier.largeur;
 	const agSsurG = ag * S / G;
 	const categoriePetite = site.categorie === "I" || site.categorie === "II";
-	const faibleSismicite = categoriePetite && (surfaceBreche < 150 || agSsurG <= .15) ? {
+	const faibleSismicite = categoriePetite && surfaceBreche < 150 && agSsurG <= .15 ? {
 		applicable: true,
-		motif: `Catégorie ${site.categorie} et ${surfaceBreche < 150 ? `surface de brèche ${nombre(surfaceBreche, 0)} m² < 150 m²` : `ag·S = ${nombre(agSsurG, 3)} g ≤ 0,15 g`} : méthode statique équivalente admise avec une accélération uniforme ag·S.`
+		motif: `Catégorie ${site.categorie}, surface de brèche ${nombre(surfaceBreche, 0)} m² < 150 m² et ag·S = ${nombre(agSsurG, 3)} g ≤ 0,15 g : méthode statique équivalente admise avec une accélération uniforme ag·S.`
 	} : {
 		applicable: false,
-		motif: categoriePetite ? `Surface de brèche ${nombre(surfaceBreche, 0)} m² ≥ 150 m² et ag·S = ${nombre(agSsurG, 3)} g > 0,15 g : méthode simplifiée non admise.` : `Catégorie ${site.categorie} : méthode simplifiée réservée aux catégories I et II.`
+		motif: categoriePetite ? `${surfaceBreche >= 150 ? `Surface de brèche ${nombre(surfaceBreche, 0)} m² ≥ 150 m²` : ""}${surfaceBreche >= 150 && agSsurG > .15 ? " et " : ""}${agSsurG > .15 ? `ag·S = ${nombre(agSsurG, 3)} g > 0,15 g` : ""} : méthode simplifiée non admise (AN avril 2013 : conditions cumulatives).` : `Catégorie ${site.categorie} : méthode simplifiée réservée aux catégories I et II.`
 	};
 	const lignesClassification = [{
 		id: "soumission",
@@ -1650,7 +1663,7 @@ function actionSismique(p) {
 		{
 			id: "faible_sismicite",
 			titre: "Méthode simplifiée des zones à sismicité faible",
-			formule: "\\dfrac{a_g\\,S}{g} \\le 0{,}15 \\ \\text{ou}\\ L \\cdot B < 150\\ \\text{m}^2",
+			formule: "\\dfrac{a_g\\,S}{g} \\le 0{,}15 \\ \\text{et}\\ L \\cdot B < 150\\ \\text{m}^2",
 			application: `\\dfrac{${tex(ag, 3)} \\times ${tex(S, 2)}}{${tex(G, 2)}} = ${tex(agSsurG, 3)}, \\qquad ${tex(d.longueur, 2)} \\times ${tex(p.tablier.largeur, 2)} = ${tex(surfaceBreche, 0)}\\ \\text{m}^2`,
 			resultat: {
 				symbole: "\\text{méthode simplifiée}",
@@ -2350,13 +2363,14 @@ const MASSES = {
 	references: [{
 		source: "NF_EN_1998_2",
 		localisation: "4.1.2",
-		etat: "a_confirmer"
+		page: "42"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §4.2 et §5.5",
 		page: "95, 127"
 	}],
-	statut: "via_guide"
+	statut: "via_guide",
+	note: "EN 1998-2:2005 : 4.1.2(1)P à (4)P (masses permanentes moyennes = caractéristiques, ψ2,1·Qk,1) ; la moitié supérieure des piles n'est ajoutée qu'en 4.2.2.3(2)P (tablier rigide). Le traitement séparé des piles sous appareils glissants ou en élastomère est du guide."
 };
 const INERTIES_PILES = {
 	id: "inerties_piles",
@@ -2367,7 +2381,7 @@ const INERTIES_PILES = {
 	references: [{
 		source: "NF_EN_1998_2",
 		localisation: "2.3.6.1 et annexe C",
-		etat: "citee_par_guide"
+		page: "31"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §1.5 et §4.3",
@@ -2439,7 +2453,7 @@ const RAIDEUR_ELASTOMERE = {
 		{
 			source: "NF_EN_1998_2",
 			localisation: "expression A_b·G_b/t_e",
-			etat: "citee_par_guide"
+			page: "92"
 		},
 		{
 			source: "NF_EN_1337_3",
@@ -2492,7 +2506,7 @@ const RAIDEUR_TORSION_TABLIER = {
 	references: [{
 		source: "NF_EN_1998_2",
 		localisation: "2.3.6.1",
-		etat: "citee_par_guide"
+		page: "31"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §4.3.1",
@@ -2527,12 +2541,12 @@ const INERTIE_EFFECTIVE = {
 		{
 			source: "NF_EN_1998_2",
 			localisation: "annexe C (informative) ; E.3.2(3)",
-			etat: "citee_par_guide"
+			page: "112"
 		},
 		{
 			source: "NF_EN_1998_2_NA",
 			localisation: "AN 4",
-			page: "10"
+			page: "12"
 		},
 		{
 			source: "GUIDE_CEREMA_2015",
@@ -2552,13 +2566,13 @@ const BORNES_G = {
 	references: [
 		{
 			source: "NF_EN_1998_2",
-			localisation: "7.5.2.4(4) et 7.5.2.4(6) (amendement A1)",
-			etat: "citee_par_guide"
+			localisation: "7.5.2.4(3)P, (4) et (6) ; valeur 1,2 Gb : amendement A1",
+			page: "96"
 		},
 		{
 			source: "NF_EN_1998_2_NA",
 			localisation: "J.1(2) : Tmin,b",
-			page: "9"
+			page: "11"
 		},
 		{
 			source: "GUIDE_CEREMA_2015",
@@ -2566,7 +2580,8 @@ const BORNES_G = {
 			page: "111"
 		}
 	],
-	statut: "via_guide"
+	statut: "via_guide",
+	note: "EN 1998-2:2005 : 7.5.2.4(3)P (analyses UBDP et LBDP), (4) (±15 %, propriétés nominales admises) et (6) sont présents ; mais l'édition 2005 donne Gb,max = 1,5·Gb pour Tmin,b ≥ 0 °C. La valeur 1,2·Gb, retenue par le guide, vient de l'amendement A1 (non consulté) : appliquer 1,5·Gb si le marché vise l'EN 2005 sans A1."
 };
 const AMORTISSEMENT_MATERIAUX = {
 	id: "amortissement_materiaux",
@@ -2586,13 +2601,14 @@ const AMORTISSEMENT_MATERIAUX = {
 	references: [{
 		source: "NF_EN_1998_2",
 		localisation: "4.1.3",
-		etat: "citee_par_guide"
+		page: "43"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §4.4",
 		page: "114"
 	}],
-	statut: "via_guide"
+	statut: "via_guide",
+	note: "EN 1998-2:2005 : 4.1.3(1) donne acier soudé 0,02, boulonné 0,04, BA 0,05, BP 0,02 ; l'élastomère à faible amortissement (0,05) est en 7.5.2.4(5) et 7.5.1(3)."
 };
 const AMORTISSEMENT_GLOBAL = {
 	id: "amortissement_global",
@@ -2626,13 +2642,13 @@ const CONDITIONS_MONOMODAL = {
 	references: [
 		{
 			source: "NF_EN_1998_2",
-			localisation: "4.2.2.1",
-			etat: "a_confirmer"
+			localisation: "4.2.2.2(1) a) à c) ; 4.2.1.2(2)-(3) pour les masses modales",
+			page: "51"
 		},
 		{
 			source: "NF_EN_1998_2",
 			localisation: "4.1.5(1)P (biais)",
-			etat: "citee_par_guide"
+			page: "44"
 		},
 		{
 			source: "GUIDE_CEREMA_2015",
@@ -2640,7 +2656,8 @@ const CONDITIONS_MONOMODAL = {
 			page: "116-118"
 		}
 	],
-	statut: "via_guide"
+	statut: "via_guide",
+	note: "EN 1998-2:2005 : 4.2.2.1 est la définition, le domaine d'application est en 4.2.2.2 (masse des piles < 20 % du tablier, eo ≤ 5 % L) ; les seuils de masse modale 90 % / 70 % sont en 4.2.1.2 (analyse multimodale). 4.1.5(1)P impose la torsion pour φ > 20° et pour B/L > 2,0, sans fixer de domaine de validité de la méthode. Angle balayé < 25°, exclusions (arcs, béquilles…) et raideurs à ±10 % du pont droit sont du guide."
 };
 const TABLIER_RIGIDE = {
 	id: "tablier_rigide",
@@ -2672,8 +2689,8 @@ const TABLIER_RIGIDE = {
 	],
 	references: [{
 		source: "NF_EN_1998_2",
-		localisation: "4.2.2.2",
-		etat: "a_confirmer"
+		localisation: "4.2.2.3(1) (4.11), (2)P (4.12)-(4.13), (3)",
+		page: "51"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §5.3.2",
@@ -2708,7 +2725,7 @@ const TORSION_EXCENTRICITE = {
 	type: "formule",
 	etape: "analyse",
 	libelle: "Moment de torsion d'axe vertical",
-	latex: "M_t = \\pm\\,e\\,F, \\qquad e = e_0 + e_a, \\qquad e_a = 0{,}05\\,L\\ \\ \\text{(séisme transversal)}\\ \\text{ou}\\ 0{,}05\\,B\\ \\ \\text{(longitudinal)}",
+	latex: "M_t = \\pm\\,e\\,F, \\qquad e = e_0 + e_a, \\qquad e_a = 0{,}05\\,L\\ \\ \\text{(séisme transversal)}\\ \\text{ou}\\ 0{,}05\\,B\\ \\ \\text{(longitudinal, guide)}",
 	variables: [{
 		symbole: "e_0",
 		description: "excentricité entre centre de raideur et centre de masse",
@@ -2718,17 +2735,18 @@ const TORSION_EXCENTRICITE = {
 		description: "excentricité accidentelle",
 		unite: "m"
 	}],
-	conditions: ["Ponts biais (angle < 78 grades et B/L > 0,5) : excentricité globale 0,08·L ou 0,08·B."],
+	conditions: ["Ponts biais (φ > 20°, soit un angle de biais < 78 grades) et ponts à B/L > 2,0 (EN 4.1.5(1)P) ; critère du guide pour le biais : angle < 78 grades et B/L > 0,5. Excentricité globale e = ea + ed = 0,08 fois la dimension perpendiculaire à l'excitation (4.1.5(3)P, (4.1))."],
 	references: [{
 		source: "NF_EN_1998_2",
 		localisation: "4.2.2.5 ; 4.1.5 (biais)",
-		etat: "citee_par_guide"
+		page: "53"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §5.3.4",
 		page: "125"
 	}],
-	statut: "via_guide"
+	statut: "via_guide",
+	note: "EN 1998-2:2005 : 4.2.2.5(1) (4.16) ne traite que de la direction transversale : e = eo + 0,05·L ; le terme 0,05·B en longitudinal est du guide. 4.1.5(1)P vise deux familles distinctes, ponts biais (φ > 20°) et ponts larges (B/L > 2,0), et non leur cumul avec B/L > 0,5."
 };
 const RAYLEIGH = {
 	id: "rayleigh",
@@ -2757,14 +2775,14 @@ const RAYLEIGH = {
 	references: [{
 		source: "NF_EN_1998_2",
 		localisation: "4.2.2.4 (tel qu'imprimé)",
-		etat: "citee_par_guide"
+		page: "52"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §4.1 et §5.3.3",
 		page: "93, 121-123"
 	}],
 	statut: "via_guide",
-	note: "Le guide imprime Se(T) ; Sd(T) se confond avec Se(T) pour q = 1. Le guide renvoie à l'article 4.2.2.4, alors que la méthode du tablier flexible serait en 4.2.2.3 : à confirmer."
+	note: "EN 1998-2:2005 : 4.2.2.4 (tablier flexible) est bien le numéro exact, 4.2.2.3 étant le tablier rigide ; (4.14) et (4.15) conformes avec Sd(T). La vérification Mms ≥ 0,9 (ou 0,7)·Mtot reprend les seuils de 4.2.1.2. Le guide imprime Se(T), confondu avec Sd(T) pour q = 1."
 };
 const PILE_INDEPENDANTE = {
 	id: "pile_independante",
@@ -2777,17 +2795,18 @@ const PILE_INDEPENDANTE = {
 		description: "masse affectée à la pile i",
 		unite: "kg"
 	}],
-	conditions: ["Admis si 0,90 < Ti/Ti+1 ≤ 1,10 pour toutes les piles adjacentes ; sinon redistribuer les masses."],
+	conditions: ["Admis si 0,90 ≤ Ti/Ti+1 ≤ 1,10 pour toutes les piles adjacentes ; sinon redistribuer les masses."],
 	references: [{
 		source: "NF_EN_1998_2",
-		localisation: "4.2.2.4",
-		etat: "a_confirmer"
+		localisation: "4.2.2.6(1) (4.17)-(4.18), (2) (4.19)",
+		page: "53"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §5.3.3",
 		page: "123"
 	}],
-	statut: "via_guide"
+	statut: "via_guide",
+	note: "EN 1998-2:2005 : 4.2.2.6 limite ce modèle à la direction transversale et à une première approximation pour des analyses préliminaires ; bornes 0,90 et 1,10 incluses."
 };
 const PERIODE_PILE_CONSOLE = {
 	id: "periode_pile_console",
@@ -2840,12 +2859,12 @@ const SECOND_ORDRE = {
 		{
 			source: "NF_EN_1998_2",
 			localisation: "5.4",
-			etat: "citee_par_guide"
+			page: "60"
 		},
 		{
 			source: "NF_EN_1998_2_NA",
 			localisation: "5.4(1)",
-			page: "7"
+			page: "10"
 		},
 		{
 			source: "GUIDE_CEREMA_2015",
@@ -2853,7 +2872,8 @@ const SECOND_ORDRE = {
 			page: "129"
 		}
 	],
-	statut: "via_guide"
+	statut: "via_guide",
+	note: "EN 1998-2:2005 : (5.3) est la méthode recommandée en note de 5.4(1) (choix national) ; dEd = déplacement transversal relatif des extrémités de l'élément ductile. Le seuil de 5 % est du guide (l'EN parle d'effet défavorable significatif)."
 };
 const REACTIONS_VERTICALES = {
 	id: "reactions_verticales",
@@ -2887,13 +2907,14 @@ const REACTIONS_VERTICALES = {
 	references: [{
 		source: "NF_EN_1998_2",
 		localisation: "4.1.7(3)P (effets verticaux sur les appareils d'appui)",
-		etat: "citee_par_guide"
+		page: "47"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §5.3.5, tableau 22",
 		page: "124"
 	}],
-	statut: "via_guide"
+	statut: "via_guide",
+	note: "EN 1998-2:2005 : 4.1.7(3)P impose seulement de considérer les effets verticaux sur appareils et attelages, 4.1.7(4) admet le mode fondamental avec le modèle à tablier flexible ; la formule Ri = ±a·b·μ·L et ses coefficients sont du guide."
 };
 const ligne = (v) => ({
 	"Ψ = 0,5": v[0],
@@ -3045,7 +3066,7 @@ const MODELE = [
 		references: [{
 			source: "NF_EN_1998_2_NA",
 			localisation: "J.1(2), tableau J.1 N",
-			page: "9"
+			page: "11-12"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §4.3.4 ; annexe 1 §2.2.2",
@@ -3081,12 +3102,12 @@ const MODELE = [
 			{
 				source: "NF_EN_1998_2",
 				localisation: "7.5.2.4(6) (A1), annexe J, tableaux JJ.1 et JJ.2",
-				etat: "citee_par_guide"
+				page: "135"
 			},
 			{
 				source: "NF_EN_1998_2_NA",
 				localisation: "J.2(1) : coefficients λ recommandés",
-				page: "9"
+				page: "12"
 			},
 			{
 				source: "GUIDE_CEREMA_2015",
@@ -3095,7 +3116,7 @@ const MODELE = [
 			}
 		],
 		statut: "via_guide",
-		note: "Valeurs de ψfi par catégorie à confirmer sur l'EN 1998-2 ; saisies par l'utilisateur."
+		note: "EN 1998-2:2005 : annexe J (J.4), (J.5) et tableau J.2, annexe JJ (tableaux JJ.1 : λmax = 1,1 ; JJ.2 : 1,0 / 1,3 / 1,4 / 1,5 à 20 / 0 / −10 / −30 °C) conformes. ψfi du tableau J.2 par classe d'importance de l'EN : III → 0,90, II → 0,70, I → 0,60 ; le 0,70 du guide correspond à la classe II de l'EN (correspondance avec les catégories françaises par l'AN). La règle Gb,max = 1,2·Gb diffère de l'EN 2005 (1,5·Gb) : elle vient de l'amendement A1, via le guide."
 	},
 	{
 		id: "culee_rigide",
@@ -3511,7 +3532,7 @@ const COMBINAISON_100_30_30 = {
 	references: [{
 		source: "NF_EN_1998_2",
 		localisation: "4.2.1.4(2)",
-		etat: "a_confirmer"
+		page: "50"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §3.2",
@@ -3533,7 +3554,7 @@ const COMBINAISON_SRSS = {
 	references: [{
 		source: "NF_EN_1998_2",
 		localisation: "4.2.1.4(1)",
-		etat: "citee_par_guide"
+		page: "50"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §3.2",
@@ -3578,7 +3599,7 @@ const COMBINAISON_SISMIQUE = {
 		{
 			source: "NF_EN_1998_2",
 			localisation: "5.5",
-			etat: "a_confirmer"
+			page: "60"
 		},
 		{
 			source: "NF_EN_1990",
@@ -3612,13 +3633,14 @@ const COMBINAISON_EQUIPEMENTS = {
 	references: [{
 		source: "NF_EN_1998_2",
 		localisation: "2.3.6.3(2)",
-		etat: "a_confirmer"
+		page: "33"
 	}, {
 		source: "GUIDE_CEREMA_2015",
 		localisation: "ch. 4 §3.3",
 		page: "91"
 	}],
-	statut: "via_guide"
+	statut: "via_guide",
+	note: "EN 1998-2:2005 : 2.3.6.3(2)P combine des déplacements ; la prise en compte des déformations imposées dans la combinaison d'actions relève de 5.5(3)P (ponts sur élastomère fretté). Le 0,5 sur STh est le ψ2 de l'EN 1990."
 };
 const LG = {
 	id: "Lg",
@@ -3639,12 +3661,12 @@ const LG = {
 		{
 			source: "NF_EN_1998_2",
 			localisation: "3.3(6), note 1",
-			etat: "a_confirmer"
+			page: "40"
 		},
 		{
 			source: "NF_EN_1998_2_NA",
 			localisation: "3.3(6) note 1",
-			page: "7"
+			page: "10"
 		},
 		{
 			source: "GUIDE_CEREMA_2015",
@@ -3676,12 +3698,12 @@ const COMBINAISONS = [
 			{
 				source: "NF_EN_1998_2",
 				localisation: "3.3",
-				etat: "citee_par_guide"
+				page: "38"
 			},
 			{
 				source: "NF_EN_1998_2_NA",
 				localisation: "3.3(1)P",
-				page: "7"
+				page: "9-10"
 			},
 			{
 				source: "GUIDE_CEREMA_2015",
@@ -3718,7 +3740,7 @@ const COMBINAISONS = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "3.3(6)",
-			etat: "a_confirmer"
+			page: "39"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §3.4",
@@ -3744,14 +3766,14 @@ const COMBINAISONS = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "3.3",
-			etat: "citee_par_guide"
+			page: "41"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §3.4",
 			page: "91-92"
 		}],
 		statut: "a_verifier",
-		note: "Le §3.2 du guide indique que translations d'ensemble et déplacements différentiels ne sont pas à considérer simultanément, mais le §3.4 les combine. À trancher sur l'EN 1998-2 3.3."
+		note: "EN 1998-2:2005 : 3.3(7) impose le cumul quadratique de la réponse inertielle et des déplacements différentiels ; ce que 3.3(6) dispense de combiner, ce sont les deux ensembles A et B entre eux."
 	},
 	{
 		id: "composante_verticale_a_considerer",
@@ -3762,7 +3784,7 @@ const COMBINAISONS = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "4.1.7 ; 4.1.7(2)P pour le béton précontraint",
-			etat: "citee_par_guide"
+			page: "47"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 3 §4.4 ; ch. 4 §3.2",
@@ -4431,13 +4453,14 @@ const APPUIS = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "2.3.6.3",
-			etat: "citee_par_guide"
+			page: "33"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "annexe 1 §8",
 			page: "275"
 		}],
-		statut: "via_guide"
+		statut: "via_guide",
+		note: "EN 1998-2:2005 : dEd = dE + dG + ψ2·dT (2.3.6.3(2)P) est conforme ; le souffle 2dE + 2dT + dG est propre au guide (2.3.6.3(5) prévoit plutôt les fractions pE et pT pour les éléments non critiques)."
 	},
 	{
 		id: "dEd_appuis",
@@ -4477,7 +4500,7 @@ const APPUIS = [
 			{
 				source: "NF_EN_1998_2",
 				localisation: "6.6.2.2",
-				etat: "citee_par_guide"
+				page: "81"
 			},
 			{
 				source: "NF_EN_15129",
@@ -4495,7 +4518,8 @@ const APPUIS = [
 				page: "194"
 			}
 		],
-		statut: "via_guide"
+		statut: "via_guide",
+		note: "EN 1998-2:2005 : 6.6.2.2(1)P renvoie à dEd = dE + dG + ψ2·dT (2.7), sans γIS (en EN 1998-2, γIS ne majore que les déplacements des isolateurs, 7.6.2(1)P ; son emploi ici vient de l'EN 15129). Retrait et fluage sont inclus dans dG ; ψ2 = 0,5 vient de l'EN 1990."
 	},
 	{
 		id: "borne_deplacement_elastique",
@@ -4530,12 +4554,12 @@ const APPUIS = [
 			{
 				source: "NF_EN_1998_2_NA",
 				localisation: "2.3.6.3(5)",
-				page: "6"
+				page: "9"
 			},
 			{
 				source: "NF_EN_1998_2",
 				localisation: "2.3.6.3(5)",
-				etat: "citee_par_guide"
+				page: "33"
 			},
 			{
 				source: "GUIDE_CEREMA_2015",
@@ -4606,7 +4630,7 @@ const APPUIS = [
 			{
 				source: "NF_EN_1998_2",
 				localisation: "7.5.2.4(5)",
-				etat: "citee_par_guide"
+				page: "96"
 			},
 			{
 				source: "NF_EN_1337_3",
@@ -4664,7 +4688,7 @@ const APPUIS = [
 			{
 				source: "NF_EN_1998_2_NA",
 				localisation: "7.6.2(5) : γm = 1,00",
-				page: "9"
+				page: "11"
 			},
 			{
 				source: "GUIDE_CEREMA_2015",
@@ -4806,7 +4830,7 @@ const APPUIS = [
 			{
 				source: "NF_EN_1998_2",
 				localisation: "7.6.2(6)",
-				etat: "citee_par_guide"
+				page: "103"
 			},
 			{
 				source: "GUIDE_CEREMA_2015",
@@ -4919,12 +4943,12 @@ const APPUIS = [
 			{
 				source: "NF_EN_1998_2_NA",
 				localisation: "6.6.3.2(1)P",
-				page: "8"
+				page: "10-11"
 			},
 			{
 				source: "NF_EN_1998_2",
 				localisation: "6.6.3.2",
-				etat: "citee_par_guide"
+				page: "82"
 			},
 			{
 				source: "GUIDE_CEREMA_2015",
@@ -4944,7 +4968,7 @@ const APPUIS = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "6.5.2 et 6.6.2.1",
-			etat: "citee_par_guide"
+			page: "79"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 5 §3.2 et §5.2",
@@ -4988,14 +5012,14 @@ const APPUIS = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "6.6.4",
-			etat: "citee_par_guide"
+			page: "84"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 5 §5.5",
 			page: "199"
 		}],
 		statut: "via_guide",
-		note: "Le guide note εe ce que l'EN 1998-2 note εg."
+		note: "EN 1998-2:2005 : 6.6.4(3) (6.12)-(6.15b) conformes ; près d'une faille active (< 5 km, M ≥ 6,5), deg est doublé faute d'étude sismologique spécifique (6.6.4(4))."
 	},
 	{
 		id: "butees",
@@ -5005,14 +5029,15 @@ const APPUIS = [
 		enonce: "Avec des appareils en élastomère : butées de blocage transversales aux culées (jeu de 1 à 2 cm) et butées de sécurité si la portée dépasse 40 m. Jeu d'une butée de sécurité : d = dG + 0,5·dTh + ddiff + dE. Efforts des butées de sécurité : 75 % de l'effort sismique, ou raideur sécante dont l'énergie vaut 1,5 fois celle au déplacement dEd. Butées de blocage : jeu ≤ 15 mm, dimensionnées en capacité.",
 		references: [{
 			source: "NF_EN_1998_2",
-			localisation: "6.6.1 (inspiration de l'approche énergétique)",
-			etat: "citee_par_guide"
+			localisation: "2.3.6.3(4)P (jeu au moins égal à dEd)",
+			page: "33"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 5 §5.6",
 			page: "200-202"
 		}],
-		statut: "via_guide"
+		statut: "via_guide",
+		note: "EN 1998-2:2005 : 6.6.1 (exigences générales sur les attelages) ne contient ni approche énergétique, ni les valeurs 75 %, 1,5 fois l'énergie, 15 mm, 40 m : ces règles sont du guide. Seul 2.3.6.3(4)P (éléments ductiles ou amortisseurs avec un jeu au moins égal à dEd) s'y rattache."
 	},
 	{
 		id: "attelages_travees_independantes",
@@ -5029,13 +5054,14 @@ const APPUIS = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "6.6.3.1",
-			etat: "citee_par_guide"
+			page: "82"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 5 §5.7",
 			page: "202"
 		}],
-		statut: "via_guide"
+		statut: "via_guide",
+		note: "EN 1998-2:2005 : 6.6.3.1(3)P cas (d) : 1,5·ag·S·Md, sans S_T (ajouté par le guide, l'accélération incluant l'amplification topographique) ; Md = masse du tronçon lié, ou la plus faible des deux de part et d'autre du joint, en l'absence d'analyse dynamique."
 	},
 	{
 		id: "joints_chaussee",
@@ -5046,13 +5072,14 @@ const APPUIS = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "2.3.6.3(5) (pE = 0,4)",
-			etat: "citee_par_guide"
+			page: "33"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 5 §6.1",
 			page: "203-204"
 		}],
-		statut: "via_guide"
+		statut: "via_guide",
+		note: "EN 1998-2:2005 : seule la valeur recommandée pE = 0,4 (avec pT = 0,5) figure en 2.3.6.3(5) ; la modulation par catégorie, le seuil |dE| ≤ 2 cm et la variante 0,2 viennent du guide."
 	}
 ];
 const COMPORTEMENT = [
@@ -5081,8 +5108,8 @@ const COMPORTEMENT = [
 		],
 		references: [{
 			source: "NF_EN_1998_2",
-			localisation: "4.1.6",
-			etat: "citee_par_guide"
+			localisation: "5.3(4), expression (5.2) ; renvoi de 4.1.6(5)P",
+			page: "58"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §1.2",
@@ -5139,21 +5166,21 @@ const COMPORTEMENT = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "4.1.6 ; 4.1.6(9) et (10) pour les structures bloquées",
-			etat: "citee_par_guide"
+			page: "46"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §1.2, tableau 4",
 			page: "65"
 		}],
 		statut: "via_guide",
-		note: "Tableau 4.1 de l'EN 1998-2 (numéro à confirmer). Pour ηk ≥ 0,3, voir q_reduction_effort_normal."
+		note: "EN 1998-2:2005 : tableau 4.1 en 4.1.6(3)P confirmé, valable pour ηk ≤ 0,30 (4.1.6(5)P)."
 	},
 	{
 		id: "lambda_alpha_s",
 		type: "formule",
 		etape: "comportement",
 		libelle: "Facteur λ(αs) des piles en béton armé",
-		latex: "\\alpha_s = \\dfrac{L_s}{h}, \\qquad \\lambda(\\alpha_s) = \\begin{cases} 1{,}0 & \\alpha_s \\ge 3 \\\\ \\sqrt{\\alpha_s / 3} & \\alpha_s < 3 \\end{cases}",
+		latex: "\\alpha_s = \\dfrac{L_s}{h}, \\qquad \\lambda(\\alpha_s) = \\begin{cases} 1{,}0 & \\alpha_s \\ge 3 \\\\ \\sqrt{\\alpha_s / 3} & 1{,}0 \\le \\alpha_s < 3 \\end{cases}",
 		variables: [{
 			symbole: "L_s",
 			description: "distance entre la rotule plastique et la section de moment nul",
@@ -5167,13 +5194,14 @@ const COMPORTEMENT = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "4.1.6",
-			etat: "citee_par_guide"
+			page: "46"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §1.2",
 			page: "65"
 		}],
-		statut: "via_guide"
+		statut: "via_guide",
+		note: "EN 1998-2:2005 : tableau 4.1 : λ = √(αs/3) pour 3 > αs ≥ 1,0 seulement ; pour αs < 1,0 (pile très trapue), le tableau ne donne pas de valeur et le comportement ductile n'y est pas couvert ; λ = 1,0 pour αs ≥ 3."
 	},
 	{
 		id: "q_reduction_effort_normal",
@@ -5193,14 +5221,14 @@ const COMPORTEMENT = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "4.1.6",
-			etat: "citee_par_guide"
+			page: "46"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §1.2, tableau 4",
 			page: "65"
 		}],
 		statut: "a_verifier",
-		note: "Le guide imprime q_r = (ηk − 0,3)/0,3 · (q − 1) ≥ 1,0, sans le terme « q − ». Cette forme est discontinue (q_r = 1 à ηk = 0,3) ; la forme retenue ici assure la continuité (choix validé le 17/10/2026). À confirmer sur le texte de l'EN 1998-2."
+		note: "EN 1998-2:2005 : (4.2) qr = q − (ηk − 0,3)/0,3·(q − 1) ≥ 1,0, et qr = 1,0 pour ηk ≥ 0,6 : la forme retenue est celle de l'EN ; le guide a perdu le terme « q − »."
 	},
 	{
 		id: "q_vertical",
@@ -5211,7 +5239,7 @@ const COMPORTEMENT = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "4.1.6(12)P",
-			etat: "citee_par_guide"
+			page: "47"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §2.5",
@@ -5227,49 +5255,51 @@ const COMPORTEMENT = [
 		enonce: "Ponts usuels sur élastomère fretté, à piles rigides et légères : comportement quasi élastique, q = 1, avec les dispositions constructives de ductilité limitée.",
 		references: [{
 			source: "NF_EN_1998_2",
-			localisation: "4.1.6(11)P, 7.3.2, 7.5.1(3), 7.6.3(2)",
-			etat: "citee_par_guide"
+			localisation: "4.1.6(11)P ; 7.3(2)P ; 7.5.1(3) ; 7.6.3(2)",
+			page: "47"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §1.2",
 			page: "65"
 		}],
-		statut: "via_guide"
+		statut: "via_guide",
+		note: "EN 1998-2:2005 : 7.3(2)P et 7.6.3(2) admettent une réponse à ductilité limitée (q ≤ 1,5) des sous-structures ; q = 1 est le choix du guide, repris par l'annexe nationale de 2013 (7.3(2)P) pour les ponts courants à piles rigides sur appareils."
 	},
 	{
 		id: "q_rotules_inaccessibles",
 		type: "regle",
 		etape: "comportement",
 		libelle: "Rotules plastiques non accessibles",
-		enonce: "Si les rotules plastiques ne sont pas accessibles pour inspection et réparation, multiplier les valeurs de q du tableau par 0,6, sans descendre sous 1,0.",
+		enonce: "Si les rotules plastiques ne sont pas accessibles pour inspection et réparation, multiplier les valeurs de q « ductile » du tableau 4.1 par 0,6 : q = max(0,6·q ; 1,0).",
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "4.1.6 ; accessibilité : 4.1.6(6) note",
-			etat: "citee_par_guide"
+			page: "46"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §1.2 ; ch. 3 §7.1",
 			page: "65, 61"
 		}],
 		statut: "via_guide",
-		note: "Le guide écrit « q restant supérieur à 1,0 » ; la formulation exacte est à confirmer sur l'EN 1998-2."
+		note: "EN 1998-2:2005 : 4.1.6(6) : multiplier les valeurs « ductile » du tableau 4.1 par 0,6, sans qu'il soit nécessaire de descendre sous 1,0, soit q = max(0,6·q ; 1,0) ; la note définit seulement « accessible »."
 	},
 	{
 		id: "q_structures_bloquees",
 		type: "regle",
 		etape: "comportement",
 		libelle: "Structures bloquées",
-		enonce: "q = 1,0 pour les structures très raides (période propre < 0,03 s), les cadres, les culées encastrées sur au moins 80 % de leur surface latérale et les ouvrages de soutènement.",
+		enonce: "q = 1,0 pour les structures très raides (période propre T ≤ 0,03 s), dont les tabliers liés rigidement aux deux culées enchâssées dans un sol naturel raide sur au moins 80 % de leur surface latérale ; sinon, si T > 0,03 s, q = 1,5. Cadres et murs de soutènement : q = 1 (guide ; EN 6.7.3(9) et 6.7.5).",
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "4.1.6(9) et (10)",
-			etat: "citee_par_guide"
+			page: "47"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §1.2, tableau 4, note 3",
 			page: "65"
 		}],
-		statut: "via_guide"
+		statut: "via_guide",
+		note: "EN 1998-2:2005 : 4.1.6(9) range aussi dans cette catégorie les culées liées de façon flexible au tablier ; 4.1.6(10) vise le tablier horizontal lié aux deux culées. Les cadres et ouvrages de soutènement sont ajoutés par le guide (culée enterrée à plus de 80 % : 6.7.3(9) ; murs : 6.7.5)."
 	},
 	{
 		id: "q_plusieurs_types",
@@ -5280,7 +5310,7 @@ const COMPORTEMENT = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "4.1.6(3)P",
-			etat: "citee_par_guide"
+			page: "45"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 2 §2.4 ; ch. 4 §1.2",
@@ -5316,12 +5346,12 @@ const COMPORTEMENT = [
 			{
 				source: "NF_EN_1998_2",
 				localisation: "4.1.8, expression (4.4)",
-				etat: "citee_par_guide"
+				page: "48"
 			},
 			{
 				source: "NF_EN_1998_2_NA",
 				localisation: "4.1.8(2)",
-				page: "7"
+				page: "10"
 			},
 			{
 				source: "GUIDE_CEREMA_2015",
@@ -5346,8 +5376,8 @@ const COMPORTEMENT = [
 		conditions: ["Alternative : analyse non linéaire."],
 		references: [{
 			source: "NF_EN_1998_2",
-			localisation: "4.1.8(3)",
-			etat: "a_confirmer"
+			localisation: "4.1.8(4)P, expression (4.5)",
+			page: "48"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §1.2",
@@ -5382,7 +5412,7 @@ const COMPORTEMENT = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "2.3.6.1(6)P et 2.3.6.1(8)P",
-			etat: "citee_par_guide"
+			page: "32"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §2.5 et §5.8",
@@ -5447,12 +5477,12 @@ const VERIFICATIONS = [
 			{
 				source: "NF_EN_1998_2_NA",
 				localisation: "5.6.2(2)P b)",
-				page: "8"
+				page: "10"
 			},
 			{
 				source: "NF_EN_1998_2",
 				localisation: "5.6.2(2)P",
-				etat: "citee_par_guide"
+				page: "61"
 			},
 			{
 				source: "GUIDE_CEREMA_2015",
@@ -5479,12 +5509,12 @@ const VERIFICATIONS = [
 			{
 				source: "NF_EN_1998_2_NA",
 				localisation: "5.3(4)",
-				page: "7"
+				page: "10"
 			},
 			{
 				source: "NF_EN_1998_2",
 				localisation: "5.3 et 5.3(4)",
-				etat: "citee_par_guide"
+				page: "58"
 			},
 			{
 				source: "GUIDE_CEREMA_2015",
@@ -5493,7 +5523,7 @@ const VERIFICATIONS = [
 			}
 		],
 		statut: "via_guide",
-		note: "Utilisé en conception ductile (hors V1) et pour les composants dimensionnés en capacité."
+		note: "Utilisé en conception ductile (hors V1) et pour les composants dimensionnés en capacité. EN 1998-2:2005 : la majoration 1 + 2(ηk − 0,1)² ne vise que les sections en BA à armatures de confinement conformes à 6.2.1 ; la condition d'exclusion est du guide (5.3(7)P fixe γof = 1,30 pour les appareils glissants)."
 	},
 	{
 		id: "gamma_Rd_dispositifs",
@@ -5533,8 +5563,8 @@ const VERIFICATIONS = [
 		references: [
 			{
 				source: "NF_EN_1998_2",
-				localisation: "5.6.2",
-				etat: "a_confirmer"
+				localisation: "5.6.2(1)P, expression (5.5) ; résistances de calcul : 5.2.2(1)P (renvoi à l'EN 1998-1, 5.2.4)",
+				page: "61"
 			},
 			{
 				source: "NF_EN_1992",
@@ -5568,7 +5598,7 @@ const VERIFICATIONS = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "5.6.2(2)",
-			etat: "citee_par_guide"
+			page: "61"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 5 §3.2",
@@ -5600,7 +5630,7 @@ const VERIFICATIONS = [
 			{
 				source: "NF_EN_1998_2",
 				localisation: "7.5.2.4",
-				etat: "citee_par_guide"
+				page: "96"
 			},
 			{
 				source: "GUIDE_CEREMA_2015",
@@ -5609,7 +5639,7 @@ const VERIFICATIONS = [
 			}
 		],
 		statut: "via_guide",
-		note: "Cas courant des ponts sur appareils en élastomère fretté."
+		note: "Cas courant des ponts sur appareils en élastomère fretté. EN 1998-2:2005 : 7.5.2.4(3)P (analyse UBDP pour les efforts maximaux) fonde le dimensionnement avec les propriétés majorées ; γIS ne majore que les déplacements des isolateurs (7.6.2(1)P) ; 7.6.3(2) admet q ≤ 1,50 ; γRd = 1,1 vient de l'EN 15129."
 	},
 	{
 		id: "moment_section_circulaire",
@@ -5719,13 +5749,14 @@ const VERIFICATIONS = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "6.7.2",
-			etat: "citee_par_guide"
+			page: "85"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 5 §4.3",
 			page: "191"
 		}],
-		statut: "via_guide"
+		statut: "via_guide",
+		note: "EN 1998-2:2005 : 6.7.2(2) a) à c) et (3) conformes (poussées sismiques des terres, inerties de la culée et du remblai avec ag·S, actions des appareils) ; le cumul + 0,3 × composante verticale relève de la règle générale 4.2.1.4."
 	},
 	{
 		id: "mononobe_okabe",
@@ -5787,7 +5818,7 @@ const VERIFICATIONS = [
 			{
 				source: "NF_EN_1998_2",
 				localisation: "5.8.1(1)P, 5.8.2(2)P et 5.3(2)",
-				etat: "citee_par_guide"
+				page: "71"
 			},
 			{
 				source: "NF_EN_1998_5",
@@ -5811,7 +5842,7 @@ const VERIFICATIONS = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "6.5",
-			etat: "citee_par_guide"
+			page: "79"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 6 §4.1",
@@ -5828,13 +5859,14 @@ const VERIFICATIONS = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "6.2.1.1(2)P et 6.2.4",
-			etat: "citee_par_guide"
+			page: "72"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 6 §4.3",
 			page: "220-221"
 		}],
-		statut: "via_guide"
+		statut: "via_guide",
+		note: "EN 1998-2:2005 : ηk > 0,08 (6.2.1.1(2)P) et dispense si µΦ = 7 atteint avec εcu2 = 0,35 % (6.2.1.1(3)P) conformes ; « 2 ‰ pour les sections creuses » est du guide ; piles creuses : ηk ≤ 0,20 (6.2.4(4)), sous réserve de 6.2.2."
 	},
 	{
 		id: "omega_wd",
@@ -5867,7 +5899,7 @@ const VERIFICATIONS = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "éq. (6.3)",
-			etat: "citee_par_guide"
+			page: "72"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 6 §4.3",
@@ -5901,7 +5933,7 @@ const VERIFICATIONS = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "éq. (6.6), (6.7), (6.8) et tableau 6.1",
-			etat: "citee_par_guide"
+			page: "75"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 6 §4.3 et §6",
@@ -5935,31 +5967,32 @@ const VERIFICATIONS = [
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "éq. (6.9) et (6.10)",
-			etat: "citee_par_guide"
+			page: "77"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 6 §4.4",
 			page: "222"
 		}],
 		statut: "via_guide",
-		note: "Le guide cite aussi « 6.5.4.1P » pour l'expression (6.10) : numéro à confirmer."
+		note: "EN 1998-2:2005 : (6.10) est en 6.2.2(4)P ; la référence « 6.5.4.1P » imprimée par le guide n'existe pas (6.5 ne comprend que 6.5.1 et 6.5.2). At et ΣAs en mm², sT en m, ftk/fyk de l'armature transversale."
 	},
 	{
 		id: "dispositions_piles_ductilite_limitee",
 		type: "regle",
 		etape: "dispositions_constructives",
 		libelle: "Piles en ductilité limitée : dispositions des zones critiques",
-		enonce: "Armatures longitudinales : φ ≥ 10 mm, classe B, espacement ≤ 200 mm, recouvrements évités ou alternés. Armatures transversales : VRd > q·γBd1·VEd, φ ≥ 10 mm, classe B, sL ≤ δ·dbL, sT ≤ 200 mm. Pieux : q ≥ 1,3 évite en général les zones critiques.",
+		enonce: "Armatures longitudinales : φ ≥ 10 mm, classe B, espacement ≤ 200 mm, pas de recouvrement dans les zones critiques (guide : évités ou alternés). Armatures transversales : VRd > q·γBd1·VEd, φ ≥ 10 mm, classe B, sL ≤ δ·dbL, sT ≤ 200 mm. Pieux : q ≥ 1,3 évite en général les zones critiques.",
 		references: [{
 			source: "NF_EN_1998_2",
 			localisation: "6.2.3(3)P (recouvrements)",
-			etat: "citee_par_guide"
+			page: "77"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 6 §4 et §6",
 			page: "220, 231"
 		}],
-		statut: "via_guide"
+		statut: "via_guide",
+		note: "EN 1998-2:2005 : 6.2.3(3)P interdit toute jonction par recouvrement ou soudure des armatures longitudinales dans les zones de rotules plastiques (règle des ponts ductiles) ; en ductilité limitée, 6.5.1(4)P n'impose que le confinement (6.2.1.4) et l'anti-flambement (6.2.2). φ ≥ 10 mm, espacement ≤ 200 mm et q ≥ 1,3 pour les pieux sont du guide ; classe B : 5.2.1(2) ; sT ≤ 200 mm : 6.2.1.2(2)P et 6.2.2(3)."
 	}
 ];
 //#endregion
@@ -6005,7 +6038,8 @@ const SOURCES = {
 		titre: "Eurocode 8 — Partie 1 : Règles générales, actions sismiques et règles pour les bâtiments",
 		edition: "Septembre 2005 (EN 1998-1:2004)",
 		nature: "norme",
-		disponibilite: "non_fourni"
+		disponibilite: "fourni",
+		remarque: "Pages : pagination de l'EN 1998-1:2004 imprimée dans la NF EN 1998-1."
 	},
 	NF_EN_1998_1_NA: {
 		id: "NF_EN_1998_1_NA",
@@ -6019,16 +6053,16 @@ const SOURCES = {
 		id: "NF_EN_1998_2",
 		abrege: "NF EN 1998-2",
 		titre: "Eurocode 8 — Partie 2 : Ponts",
-		edition: "Décembre 2006 (EN 1998-2:2005) et amendements",
+		edition: "EN 1998-2:2005 (NF EN 1998-2, décembre 2006) ; lue dans l'édition suisse SN EN 1998-2:2005 (SIA 260.802), version française",
 		nature: "norme",
-		disponibilite: "non_fourni",
-		remarque: "Le guide Cerema cite aussi l'amendement A1 (« EC8-2/A1 »). Éditions des amendements à préciser."
+		disponibilite: "fourni",
+		remarque: "Texte lu : SN EN 1998-2:2005, reproduction de l'EN 1998-2:2005 en français ; les pages indiquées sont celles de cette édition (la pagination de la NF EN 1998-2 peut différer). L'amendement A1 (2009), cité par le guide Cerema (« EC8-2/A1 »), n'a pas été consulté : ce qui en relève reste pris via le guide. Le projet prEN 1998-2 de juillet 2003 a aussi été lu, en appui seulement."
 	},
 	NF_EN_1998_2_NA: {
 		id: "NF_EN_1998_2_NA",
 		abrege: "NF EN 1998-2/NA",
 		titre: "Annexe nationale à la NF EN 1998-2:2006 — Ponts",
-		edition: "Octobre 2007 (P 06-032/NA)",
+		edition: "Avril 2013 (P 06-032/NA), remplace l'édition d'octobre 2007",
 		nature: "annexe_nationale",
 		disponibilite: "fourni"
 	},
@@ -6039,6 +6073,15 @@ const SOURCES = {
 		edition: "Septembre 2005, avec annexe nationale",
 		nature: "norme",
 		disponibilite: "non_fourni"
+	},
+	NF_EN_1998_5_NA: {
+		id: "NF_EN_1998_5_NA",
+		abrege: "NF EN 1998-5/NA",
+		titre: "Annexe nationale à la NF EN 1998-5:2005 — Fondations, ouvrages de soutènement et aspects géotechniques",
+		edition: "Projet soumis à enquête probatoire (pr NF EN 1998-5/NA, P 06-035/NA, septembre 2006)",
+		nature: "annexe_nationale",
+		disponibilite: "projet",
+		remarque: "Texte fourni : le projet d'enquête de 2006, lu (6 pages). Il retient les valeurs recommandées pour 3.1(3), 4.1.4(11) et 5.2(2)P c) et garde les annexes A, D et F informatives ; il est contradictoire sur l'annexe C (AN 1 : annulée et remplacée ; AN 3 : reste informative). Édition homologuée non consultée."
 	},
 	NF_EN_1337_3: {
 		id: "NF_EN_1337_3",

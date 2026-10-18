@@ -48,8 +48,13 @@ test("une entrée « vérifiée » s'appuie en premier sur un document consulté
 test("une localisation dans un document non consulté n'est jamais marquée « lue »", () => {
   for (const e of REFERENTIEL) {
     for (const r of e.references) {
-      if (SOURCES[r.source].disponibilite !== "non_fourni") continue;
-      assert.ok(r.etat && r.etat !== "lue", `${e.id} : ${r.source} ${r.localisation} doit être citee_par_guide ou a_confirmer`);
+      const dispo = SOURCES[r.source].disponibilite;
+      if (dispo === "projet") {
+        assert.ok(r.etat && r.etat !== "lue", `${e.id} : ${r.source} ${r.localisation} n'a été lu que sur le projet (lue_projet)`);
+        continue;
+      }
+      if (dispo !== "non_fourni") continue;
+      assert.ok(r.etat && r.etat !== "lue" && r.etat !== "lue_projet", `${e.id} : ${r.source} ${r.localisation} doit être citee_par_guide, citee_par_an ou a_confirmer`);
     }
   }
 });

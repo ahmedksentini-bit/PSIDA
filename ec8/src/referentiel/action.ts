@@ -43,7 +43,7 @@ export const ETA: Formule = {
   latex: "\\eta = \\sqrt{\\dfrac{10}{5 + \\xi}} \\ge 0{,}55",
   variables: [{ symbole: "\\xi", description: "coefficient d'amortissement visqueux", unite: "%" }],
   references: [
-    { source: "NF_EN_1998_1", localisation: "3.2.2.2(3), éq. (3.6)", etat: "a_confirmer" },
+    { source: "NF_EN_1998_1", localisation: "3.2.2.2(3), éq. (3.6)", page: "34" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.5", page: "79" },
   ],
   statut: "via_guide",
@@ -65,7 +65,7 @@ export const SE: Formule = {
   ],
   conditions: ["Valable pour T ≤ 4 s ; au-delà, utiliser le spectre en déplacement."],
   references: [
-    { source: "NF_EN_1998_1", localisation: "3.2.2.2(1)P, éq. (3.2) à (3.5)", etat: "a_confirmer" },
+    { source: "NF_EN_1998_1", localisation: "3.2.2.2(1)P, éq. (3.2) à (3.5)", page: "32" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.5", page: "79" },
   ],
   statut: "via_guide",
@@ -84,7 +84,7 @@ export const SVE: Formule = {
     { symbole: "T_B,\\,T_C,\\,T_D", description: "périodes de coin du spectre vertical (indépendantes du sol)", unite: "s" },
   ],
   references: [
-    { source: "NF_EN_1998_1", localisation: "3.2.2.3(1)P, éq. (3.8) à (3.11)", etat: "a_confirmer" },
+    { source: "NF_EN_1998_1", localisation: "3.2.2.3(1)P, éq. (3.8) à (3.11)", page: "35" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.5", page: "81" },
   ],
   statut: "via_guide",
@@ -97,13 +97,13 @@ export const SD: Formule = {
   etape: "action_sismique",
   libelle: "Spectre de calcul horizontal pour l'analyse élastique",
   latex:
-    "S_d(T) = a_g\\,S\\,S_T \\times \\begin{cases} \\dfrac{2}{3} + \\dfrac{T}{T_B}\\left(\\dfrac{2{,}5}{q} - \\dfrac{2}{3}\\right) & 0 \\le T \\le T_B \\\\[6pt] \\dfrac{2{,}5}{q} & T_B \\le T \\le T_C \\\\[6pt] \\dfrac{2{,}5}{q}\\,\\dfrac{T_C}{T} & T_C \\le T \\le T_D \\\\[6pt] \\dfrac{2{,}5}{q}\\,\\dfrac{T_C\\,T_D}{T^2} & T_D \\le T \\le 4\\ \\text{s} \\end{cases} \\qquad S_d(T) \\ge \\beta\\,a_g \\ \\text{pour}\\ T \\ge T_C",
+    "S_d(T) = a_g\\,S\\,S_T \\times \\begin{cases} \\dfrac{2}{3} + \\dfrac{T}{T_B}\\left(\\dfrac{2{,}5}{q} - \\dfrac{2}{3}\\right) & 0 \\le T \\le T_B \\\\[6pt] \\dfrac{2{,}5}{q} & T_B \\le T \\le T_C \\\\[6pt] \\dfrac{2{,}5}{q}\\,\\dfrac{T_C}{T} & T_C \\le T \\le T_D \\\\[6pt] \\dfrac{2{,}5}{q}\\,\\dfrac{T_C\\,T_D}{T^2} & T_D \\le T \\end{cases} \\qquad S_d(T) \\ge \\beta\\,a_g \\ \\text{pour}\\ T \\ge T_C",
   variables: [
     { symbole: "q", description: "coefficient de comportement", unite: "-" },
     { symbole: "\\beta", description: "coefficient de limite inférieure du spectre de calcul", unite: "-" },
   ],
   references: [
-    { source: "NF_EN_1998_1", localisation: "3.2.2.5(4)P, éq. (3.13) à (3.16)", etat: "a_confirmer" },
+    { source: "NF_EN_1998_1", localisation: "3.2.2.5(4)P, éq. (3.13) à (3.16)", page: "36" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.5", page: "82" },
   ],
   statut: "via_guide",
@@ -119,7 +119,7 @@ export const BETA: ParametreScalaire = {
   unite: "-",
   valeur: 0.2,
   references: [
-    { source: "NF_EN_1998_1", localisation: "3.2.2.5(4)P, note", etat: "a_confirmer" },
+    { source: "NF_EN_1998_1", localisation: "3.2.2.5(4)P, note (valeur recommandée β = 0,2)", page: "36" },
     { source: "NF_EN_1998_1_NA", localisation: "3.2.2.5(4)P", page: "7" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.5", page: "82" },
   ],
@@ -136,7 +136,7 @@ export const SDE: Formule = {
   variables: [{ symbole: "S_e(T)", description: "spectre élastique horizontal en accélération", unite: "m/s²" }],
   conditions: ["Valable pour T ≤ 4 s."],
   references: [
-    { source: "NF_EN_1998_1", localisation: "3.2.2.2(5), éq. (3.7)", etat: "a_confirmer" },
+    { source: "NF_EN_1998_1", localisation: "3.2.2.2(5)P et (6), éq. (3.7)", page: "35" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.5", page: "84" },
   ],
   statut: "via_guide",
@@ -151,12 +151,12 @@ export const SDE_LONGUES_PERIODES: Formule = {
     "S_{De}(T) = \\begin{cases} 0{,}025\\,a_g\\,S\\,S_T\\,T_C\\,T_D \\left[2{,}5\\,\\eta + \\dfrac{T - T_E}{T_F - T_E}\\,(1 - 2{,}5\\,\\eta)\\right] & T_E \\le T \\le T_F \\\\[6pt] d_g & T \\ge T_F \\end{cases}",
   variables: [{ symbole: "T_E,\\,T_F", description: "périodes de coin du spectre en déplacement", unite: "s" }],
   references: [
-    { source: "NF_EN_1998_1", localisation: "annexe A (informative)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_1", localisation: "annexe A (informative), A.2, éq. (A.1) et (A.2)", page: "169" },
     { source: "NF_EN_1998_1_NA", localisation: "AN 2", page: "18" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.5", page: "84" },
   ],
   statut: "via_guide",
-  note: "Annexe informative. Le guide ne précise pas la branche entre 4 s et T_E (à vérifier).",
+  note: "Annexe informative. Entre 4 s et T_E, l'EN 1998-1 (A.2) prolonge les expressions (3.2) à (3.5) converties par (3.7) : S_De reste constant au-delà de T_D jusqu'à T_E.",
 };
 
 export const TE_TF: ParametreTable<Record<ClasseSol, { TE: number; TF: number }>> = {
@@ -175,7 +175,7 @@ export const TE_TF: ParametreTable<Record<ClasseSol, { TE: number; TF: number }>
     E: { TE: 6.0, TF: 10 },
   },
   references: [
-    { source: "NF_EN_1998_1", localisation: "annexe A, tableau A.1", etat: "a_confirmer" },
+    { source: "NF_EN_1998_1", localisation: "annexe A, tableau A.1", page: "169" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.5, tableau 14", page: "84" },
   ],
   statut: "via_guide",
@@ -192,7 +192,7 @@ export const DG: Formule = {
     { symbole: "T_C,\\,T_D", description: "périodes de coin du spectre horizontal", unite: "s" },
   ],
   references: [
-    { source: "NF_EN_1998_1", localisation: "3.2.2.4(1), éq. (3.12)", etat: "a_confirmer" },
+    { source: "NF_EN_1998_1", localisation: "3.2.2.4(1), éq. (3.12)", page: "35" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.5", page: "84" },
   ],
   statut: "via_guide",
@@ -210,7 +210,7 @@ export const VS30: Formule = {
     { symbole: "v_i", description: "vitesse des ondes de cisaillement dans la couche i", unite: "m/s" },
   ],
   references: [
-    { source: "NF_EN_1998_1", localisation: "3.1.2(3), éq. (3.1)", etat: "a_confirmer" },
+    { source: "NF_EN_1998_1", localisation: "3.1.2(3), éq. (3.1)", page: "30" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.3", page: "75" },
   ],
   statut: "via_guide",
@@ -232,7 +232,7 @@ export const CLASSES_SOL: ParametreTable<Record<ClasseSol, { vs30: string; NSPT:
     E: { vs30: "alluvions C ou D de 5 à 20 m sur un substratum à vs > 800", NSPT: "—", cu: "—" },
   },
   references: [
-    { source: "NF_EN_1998_1", localisation: "3.1.2, tableau 3.1", etat: "a_confirmer" },
+    { source: "NF_EN_1998_1", localisation: "3.1.2(1), tableau 3.1", page: "29-30" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.3, tableau 8", page: "74" },
   ],
   statut: "via_guide",
@@ -247,11 +247,11 @@ export const CLASSE_DEFAVORABLE: Regle = {
   enonce:
     "Retenir la situation la plus défavorable : classe déclassée ou enveloppe des spectres, et une action unique correspondant au sol le plus défavorable sous tous les appuis.",
   references: [
-    { source: "NF_EN_1998_2", localisation: "3.2.2.1 et 3.3(4)", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_2", localisation: "3.2.2.1 et 3.3(4)", page: "36" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.3 et §3.4", page: "76, 91" },
   ],
   statut: "via_guide",
-  note: "L'existence de la clause 3.2.2.1 imprimée par le guide reste à confirmer.",
+  note: "EN 1998-2:2005 : 3.2.2.1(1)P renvoie à 3.3 lorsque plusieurs classes de sol se rencontrent sous les appuis, et 3.3(4) impose une action unique correspondant au sol le plus défavorable. Le déclassement en cas de doute et l'enveloppe des spectres sont du guide.",
 };
 
 export const ST: Regle = {
@@ -264,6 +264,7 @@ export const ST: Regle = {
   references: [
     { source: "NF_EN_1998_5", localisation: "annexe A", etat: "citee_par_guide" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.4", page: "78" },
+    { source: "NF_EN_1998_5_NA", localisation: "AN 1, clause 1.1(4), et AN 2 (annexe A informative en France)", page: "5", etat: "lue_projet" },
   ],
   statut: "via_guide",
 };

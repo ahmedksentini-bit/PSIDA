@@ -13,6 +13,7 @@ export type IdSource =
   | "NF_EN_1998_2"
   | "NF_EN_1998_2_NA"
   | "NF_EN_1998_5"
+  | "NF_EN_1998_5_NA"
   | "NF_EN_1337_3"
   | "NF_EN_15129"
   | "NF_EN_1992"
@@ -24,6 +25,7 @@ export type NatureSource = "reglementaire" | "norme" | "annexe_nationale" | "gui
 export type Disponibilite =
   | "fourni" // document fourni et lu
   | "public" // texte officiel en accès libre
+  | "projet" // seul un projet de la norme (prEN) a été fourni et lu
   | "non_fourni"; // texte non consulté : références prises via le guide
 
 export interface Source {
@@ -49,9 +51,11 @@ export type Statut = "verifie" | "via_guide" | "a_verifier";
  * Degré de confirmation de la localisation (clause, article, équation) d'une référence :
  * - `lue` : localisation lue dans le document lui-même (valeur par défaut) ;
  * - `citee_par_guide` : localisation imprimée par le guide Cerema, document non consulté ;
+ * - `citee_par_an` : numéro de clause confirmé par l'annexe nationale (qui le cite), texte de la norme non consulté ;
+ * - `lue_projet` : localisation lue dans le projet de norme (prEN) fourni ; à recouper sur l'édition publiée ;
  * - `a_confirmer` : localisation attendue mais citée par aucun document consulté.
  */
-export type EtatReference = "lue" | "citee_par_guide" | "a_confirmer";
+export type EtatReference = "lue" | "lue_projet" | "citee_par_guide" | "citee_par_an" | "a_confirmer";
 
 export interface Reference {
   source: IdSource;
