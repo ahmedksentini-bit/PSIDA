@@ -46,6 +46,36 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
   comment(`Souplesse d'une ligne = souplesse des appareils en élastomère fretté T_e/(n G a b) (G = 1,8 MPa instantané, 0,9 MPa différé ; T_e enrobages compris) + souplesse du fût console H³/(3EI) (${isF ? 'E_i = 11 000 f_c28^(1/3), E_v = 3 700 f_c28^(1/3)' : 'E_cm, E_cm/3 en différé'}) ; fondation supposée rigide, culée remblayée rigide. Freinage réparti au prorata des rigidités instantanées ; déformations imposées ε : H_i = K_i ε (x₀ − x_i), centre de déformation x₀ = ${F2(dist.x0.diff)} m (différé) / ${F2(dist.x0.inst)} m (instantané) ; ε retrait + fluage = ${F(sup.eps.RF * 1e4, 2)}·10⁻⁴${isF ? `, TLD ${F(sup.eps.TLD * 1e4, 1)}·10⁻⁴ (K différé), TCD ${F(sup.eps.TCD * 1e4, 1)}·10⁻⁴ (K instantané)` : `, température α ΔT_N = ${F(sup.eps.T * 1e4, 1)}·10⁻⁴`}. ${isF ? `Freinage Fascicule 61 : A(l) H = A·S/(20 + 0,0035 S) = ${F0(sup.braking.F61.A)} kN (S = ${F0(sup.braking.F61.S)} m²) ; Bc un camion de 300 kN.` : `Freinage EN 1991-2 § 4.4.1 : Q_lk = ${F0(sup.braking.EC)} kN (groupe gr2).`}`);
   if (!opts.noFigures) try { const dc = distributionChart(sup, code); if (dc) B.push(svgBlock(dc, 'Raideurs des lignes d\'appui (instantanée, différée) et répartition du freinage')); } catch (e) { /* figure indisponible */ }
 
+  // --- dalle précontrainte : réactions hyperstatiques et raccourcissements transmis aux appuis ---
+  if (sup.hyp || sup.eps.psidp) {
+    h2('Dalle précontrainte (PSI-DP) — actions transmises aux appuis');
+    if (sup.hyp) table(['Ligne', 'Réaction hyperstatique de précontrainte max [kN]', 'min [kN]'], Ls.map((L, i) => [lineName(L, n), F0(sup.hyp.max[i]), F0(sup.hyp.min[i])]));
+    const e = sup.eps.psidp;
+    if (e) comment(`Réactions hyperstatiques de précontrainte : enveloppe des phases (mise en tension, mise en service, en service ; valeurs probable, P1 et P2) du calcul PSI-DP, ajoutées aux réactions permanentes avec le coefficient 1 dans toutes les combinaisons (BPEL), aux appareils d'appui, fûts et fondations. Raccourcissement du tablier pris pour les appuis : élastique à la mise en tension σ_m/E_ij = ${F(e.el * 1e4, 2)}·10⁻⁴ (σ_m = P∞/B = ${F2(e.sigm)} MPa) + fluage K_fl σ_m/E_i28 = ${F(e.fl * 1e4, 2)}·10⁻⁴ (K_fl = ${F2(e.Kfl)}, BPEL 2.1,5) + retrait postérieur à la mise en tension ε_r [1 − r(j)] = ${F(e.r * 1e4, 2)}·10⁻⁴ (ε_r = ${F(e.epsR * 1e4, 1)}·10⁻⁴, j = ${F0(e.j)} jours, r_m = ${F1(e.rm * 100)} cm, r(j) = ${F3(e.rj)}, BPEL 2.1,51) = ${F(e.total * 1e4, 2)}·10⁻⁴, au lieu de la valeur saisie ${F(sup.eps.RFsaisi * 1e4, 2)}·10⁻⁴ (cas de la dalle armée) ; appliqué avec les rigidités différées.`);
+  }
+
+  // --- appareils d'appui : NF EN 1337-3 (guide Sétra 2007) ---
+  const brgs = Ls.map(L => L[code].brg).filter(b => b && !b.error);
+  if (brgs.length) {
+    h2('Appareils d\'appui en élastomère fretté — NF EN 1337-3 (guide Sétra 2007)');
+    const okS = b => (b ? 'OK' : 'NON');
+    table(['Ligne', 'Appareil (par ligne)', 'ε_q max ≤ 1', 'ε_t max ≤ 7', 'Flambement σ_m / σ_lim [MPa]', 'Rotation Σv_z / a′α/K_r [mm] (charge minimale)', 'Frettes t_s requis / t_s [mm]', 'Glissement F_xy / μ_e F_z [kN]', 'σ_m,min [MPa] ≥ 3', 'Verdict'],
+      Ls.map(L => {
+        const b = L[code].brg; if (!b || b.error) return [lineName(L, n), b && b.error ? `erreur : ${b.error}` : 'aucun appareil', '', '', '', '', '', '', '', ''];
+        const rs = b.rows.filter(r => !r.indicatif), wq = rs.reduce((m, r) => (r.epsQ > m.epsQ ? r : m)), wt = rs.reduce((m, r) => (r.epsT > m.epsT ? r : m));
+        const wb = rs.reduce((m, r) => (r.sig / r.sigBuck > m.sig / m.sigBuck ? r : m)), wf = rs.reduce((m, r) => (r.tsReq > m.tsReq ? r : m));
+        const mr = rs.filter(r => r.minimal).concat(rs).reduce((m, r) => (!m || r.vz / r.vzReq < m.vz / m.vzReq ? r : m), null);
+        const sl = b.slide;
+        return [lineName(L, n), `${b.nb} × ${b.label}`, `${F2(wq.epsQ)} ${okS(wq.checks.distorsion)}`, `${F2(wt.epsT)} ${okS(wt.checks.deformationTotale)}`, `${F1(wb.sig)} / ${F1(wb.sigBuck)} ${okS(wb.checks.flambement)}`,
+          `${F2(mr.vz * 1000)} / ${F2(mr.vzReq * 1000)} ${okS(mr.checks.rotation)} (${mr.label.replace(/^ELU /, '')})`, `${F2(wf.tsReq * 1000)} / ${F1(b.g.ts * 1000)} ${okS(wf.checks.frettes)}`,
+          `${F1(sl.Fxy * 1000)} / ${F1(sl.R * 1000)} ${okS(sl.okGlissement)}`, `${F2(sl.sigPerm)} ${okS(sl.okPerm)}`, b.ok ? 'conforme' : `non conforme${b.proposal ? ` — proposé : ${b.proposal.label}` : ''}`];
+      }), { small: true });
+    table(['Ligne', 'Combinaison ELU (appareil le plus chargé)', 'F_z [kN]', 'v_x [mm]', 'α [mrad]', 'A_r [m²]', 'ε_c', 'ε_q', 'ε_α', 'ε_t', 'Σv_z / a′α/3 [mm]', 'Contrôle'],
+      Ls.flatMap(L => { const b = L[code].brg; if (!b || b.error) return []; return b.rows.map(r => [lineName(L, n), `${r.label}${r.indicatif ? ' *' : ''}`, F0(r.Fz), F1(r.vx * 1000), F2(r.alpha * 1000), F3(r.Ar), F2(r.epsC), F2(r.epsQ), F2(r.epsA), F2(r.epsT), `${F2(r.vz * 1000)} / ${F2(r.vzReq * 1000)}`, r.ok ? 'OK' : (r.indicatif ? 'à examiner' : 'NON')]); }), { small: true });
+    const b0 = brgs[0];
+    comment(`NF EN 1337-3 § 5.3.3, présentation du guide Sétra « Appareils d'appui en élastomère fretté » (juillet 2007) § 3.3-3.4, application nationale γ_m = 1, K_L = 1 : a′ = a − 2 × ${F0(b0.g.cLat * 1000)} mm (enrobage latéral), A′ = a′b′, S = A′/(2t(a′ + b′)), T_e = n t + 2e (e = ${F1(b0.g.e * 1000)} mm), T_q = n t (e ≤ 2,5 mm) ; G = 0,9 MPa, G_dyn = 1,8 MPa (freinage). v_x = v_lent + H_x T_e/(G_dyn A′) ; ε_q = v_x/T_q ≤ 1 ; A_r = A′(1 − v_x/a′) ; ε_c = 1,5 F_z/(G A_r S) ; ε_α = a′² α/(2 n t²) ; ε_t = ε_c + ε_q + ε_α ≤ 7 ; flambement F_z/A_r < 2 a′ G S/(3 T_e) ; stabilité en rotation Σv_z = n (F_z t/A′)(1/(5 G S²) + 1/E_b) ≥ a′ α/K_r (K_r = 3, E_b = 2000 MPa), vérifiée aussi sous charge minimale ; frettes t_s ≥ 1,3 F_z · 2t/(A_r f_y) et ≥ 2 mm (f_y = 235 MPa) ; non-glissement F_xy = G A′ v/T_e + H_x ≤ (0,1 + 1,5 K_f/σ_m) F_z,min (K_f = 0,6, béton) ; σ_m,min ≥ 3 MPa sous charges permanentes. Combinaisons ${isF ? 'à la manière des notes BAEL : 1,35 G + P + 1,605 (A(l) ou Bc) ou 1,35 Mc120, freinage × 1,605, déplacements retrait + fluage + 1,5 × 0,6 × température (TLD différée + TCD instantanée) ; température dominante 1,35 G + P avec retrait + fluage + 1,5 × température' : 'du guide (tableau 4.1) : 1,35 G + P + 1,35 (gr1a ou gr2 avec freinage) + 1,5 × 0,6 T ; température dominante 1,35 G + P + 1,5 T + 1,35 ψ₀ trafic'} ; rotations : charges permanentes (module différé) × 1,35, trafic (lignes d'influence de rotation) × γ_Q, défaut de pose α₀ = ${F1(b0.a0 * 1000)} mrad. Combinaisons marquées * : charge minimale avec la rotation maximale du trafic (concomitance non établie, enveloppe majorante) : à examiner avec les concomitances réelles. Appareil proposé : plus petit appareil de la gamme standard vérifiant ces conditions sous les mêmes efforts et déplacements (la répartition des efforts horizontaux n'est pas recalculée).`);
+  }
+
   if (sup.seisme) {
     h2(`Séisme — EN 1998-2, méthode du mode fondamental (${sup.seisme.source === 'onglet' ? 'onglet « Calcul sismique » : Pont EC8 complet' : 'moteur de Pont EC8, projet PSIDA'})`);
     if (sup.seisme.error) para(`Calcul sismique impossible : ${sup.seisme.error}`);
@@ -63,6 +93,19 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
   const ch = sup.sp.choc;
   if ((ch.vehicule && ch.vehicule !== 'aucun') || (ch.bateau && ch.bateau !== 'aucun')) {
     comment(`Chocs sur les piles (EN 1991-1-7, valeurs recommandées à confronter à l'annexe nationale et au cahier des charges) : combinaison accidentelle G + A_d + ψ₁,₁ Q (TS 0,75, UDL 0,4) ; force max(F_dx ; F_dy) appliquée dans le sens longitudinal de l'ouvrage (le plus défavorable pour un voile), à ${F2(ch.hV)} m au-dessus de la semelle pour les véhicules${ch.bateau !== 'aucun' ? `, choc de bateau frontal F_dx à ${F2(ch.hB)} m` : ''} ; pour une pile à colonnes, le choc est repris par une seule colonne.`);
+  }
+
+  // --- tête d'appui : bossages et console ---
+  const hcs = Ls.map(L => L[code].headChk).filter(h => h && !h.error);
+  if (hcs.length) {
+    h2('Tête d\'appui sous les appareils — bossages, frettage, partie en console');
+    const okS = b => (b ? 'OK' : 'NON');
+    table(['Ligne', 'R_u par appareil [kN]', 'Bossage a × b [m]', 'Contact σ / K f_bu [MPa]', 'Diffusion dans l\'appui K f_bu [MPa]', 'Frettes de surface A_s [cm²]', 'Éclatement A_e long. / transv. [cm²]'],
+      Ls.map(L => { const h = L[code].headChk; if (!h || h.error) return null; return [lineName(L, n), F0(h.Ru), `${F2(h.ab)} × ${F2(h.bb)}`, `${F1(h.press.sig)} / ${F1(h.press.lim)} (K = ${F2(h.press.K)}${h.press.outside ? ', hors domaine → 1' : ''}) ${okS(h.press.ok)}`, `${F1(h.pressDiff.lim)} (K = ${F2(h.pressDiff.K)}) ${okS(h.pressDiff.ok)}`, CM(h.split.As), `${CM(h.split.planes[0].Ae)} / ${CM(h.split.planes[1].Ae)}`]; }).filter(Boolean), { small: true });
+    const cs = Ls.filter(L => L[code].headChk && L[code].headChk.corbel);
+    if (cs.length) table(['Ligne', 'Appareils en console', 'a [m] ; d [m] ; b₀ [m]', 'V_u / H_u [kN]', 'M_u [kN·m]', 'Type', 'τ_u / τ_lim [MPa]', 'z [m]', 'A tirant [cm²]', 'Σ A_r (λ) [cm²]', 'A_i [cm²]'],
+      cs.map(L => { const k = L[code].headChk.corbel; return [lineName(L, n), `${k.n} par côté`, `${F2(k.a)} ; ${F2(k.d)} ; ${F2(k.b0)}`, `${F0(k.Vu)} / ${F1(k.Hu)}`, F0(k.Mu), k.short ? 'console courte' : 'console longue (d < a)', k.short ? `${F2(k.tau)} / ${F2(k.tauLim)} ${okS(k.okTau)}` : '—', k.short ? F3(k.z) : '—', k.short ? CM(k.A) : `${CM(k.Along)} (flexion)`, k.short ? `${CM(k.Ar)} (${F2(k.lambda)})` : '—', k.short ? CM(k.Ai) : '—']; }), { small: true });
+    comment(`R_u : réaction ELU maximale de l'appareil le plus chargé (combinaisons des appareils d'appui ci-dessus). Pression localisée ${isF ? 'BAEL 91 A.8.4,1 : σ = R_u/(a₀ b₀) ≤ K f_bu, f_bu = 0,85 f_cj/1,5, K = 1 + [3 − 4/3 (α + β)] √[(1 − 4α/3)(1 − 4β/3)] ≤ 3,3 (α = a₀/a, β = b₀/b) ; pour α ou β > 3/4 (bossage à peine plus grand que l\'appareil) la formule n\'est plus applicable et K = 1 est retenu' : 'EN 1992-1-1 § 6.7 : F_Rdu = A_c0 f_cd √(A_c1/A_c0) ≤ 3 f_cd A_c0'} ; contact : rectangle homothétique limité au bossage (débord ${F2(hcs[0].deb)} m, béton f_ck = ${F0(hcs[0].press.fck)} MPa) ; diffusion : rectangle homothétique inscrit dans l'épaisseur de l'appui et l'entraxe des appareils. Frettage (annexe 4 du BPEL transposée aux réactions d'appui, σ_s,lim = 2/3 f_e) : frettes de surface 0,04 R_u/σ_s,lim ; éclatement R = 0,25 (1 − a₀/d) R_u, A_e = max(R ; 0,15 R_u)/σ_s,lim dans chaque plan. Voile plus court que la ligne d'appareils : appareils extrêmes portés par la tête du voile en console (hauteur ${F2(sup.sp.pile.hcons ?? 1)} m saisie), BAEL annexe E.6 si d ≥ a (J. Perchat, Techniques de l'Ingénieur C 2 314 § 2.7.4) : d plafonné à 4a + ℓ/2, δ = min(d/a ; 4), τ_u = V_u/(b₀ d)/(1 − 0,6 H_u/V_u) ≤ min[0,03 (2 + δ) f_cj ; 4 MPa], z = min[0,7 d (1 + 0,1 δ) ; 2,4 a (0,4 + 0,1 δ)], A = M_u/(z f_e/γ_s) + H_u/(f_e/γ_s), Σ A_r = λ A avec λ = max[¼ (δ + 12 τ_u/f_cj − 1) ; 0,1], A_i ≥ A/10 ; H_u : effort horizontal ELU par appareil (conservatif) ; poids propre de la console × 1,35. Console longue : flexion simple au nu du voile.`);
   }
 
   const iWat0 = B.length;

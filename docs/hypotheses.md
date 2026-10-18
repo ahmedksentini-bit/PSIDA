@@ -427,6 +427,26 @@ Le modèle reprend les principes du programme SETRA/CETE de l'Ouest PSH (« Calc
   d'armatures si τ_réd,u ≤ 0,09 f_cj/γ_b ; sinon (A_t/(b s_t)) f_e/γ_s ≥ (τ_réd,u − f_tj/2) tg β_u, minimum 0,1 MPa
   (0,4 MPa sur 0,5 h le long des bords libres) ; τ_réd,u ≤ (0,85 f_cj/3γ_b) sin 2β_u × (10h/3 si h < 0,30 m) ; contrôle ELS
   de la note (7.2,2) donné à titre indicatif ; appuis d'extrémité inclus.
+## 1 sexdecies. Appareils d'appui NF EN 1337-3, tête d'appui, liaison PSI-DP / appuis (v0.34)
+
+Contrôle sur la note « appuis et fondations » de l'ouvrage OA2 tablier T2 (pont-dalle précontraint, Sfax) : `test/bearings1337.test.js`.
+
+- **Appareils d'appui** (`src/supports/bearings1337.js`) : NF EN 1337-3 § 5.3.3 dans la présentation du guide Sétra de juillet 2007 (§ 3.3-3.4), application nationale γ_m = 1, K_L = 1.
+  - a′ = a − 2 × 5 mm, T_e = n t + 2e, T_q = n t si e ≤ 2,5 mm (guide § 3.3.2.2) ; S = A′/(2t(a′ + b′)) ; G = 0,9 MPa, G_dyn = 1,8 MPa (freinage).
+  - ε_q ≤ 1, ε_c + ε_q + ε_α ≤ 7, flambement, stabilité en rotation (K_r = 3, E_b = 2000 MPa), frettes (K_p = 1,3, f_y = 235 MPa, ≥ 2 mm), non-glissement (K_f = 0,6), σ_m,min ≥ 3 MPa.
+  - Valeurs de la note OA2 retrouvées à 0,3 % près (S, A_r, ε_c, σ_lim, Σv_z, t_s, μ_e). Écarts de la note : ε_q calculé avec T_e au lieu de T_q ; ε_α de P2-2 en combinaison 4 (0,314 au lieu de 0,809).
+  - Stabilité en rotation vérifiée aussi sous charge minimale (G + P seuls, concomitant) ; la combinaison « charge minimale + rotation maximale du trafic » est une enveloppe dont la concomitance n'est pas établie : signalée « à examiner », non bloquante.
+  - Combinaisons : BAEL (1,35 G + P + 1,605 Q, freinage × 1,605, retrait + fluage + 1,5 × 0,6 × température ; température dominante) ou guide 2007 (1,35 G + P + 1,35 gr1a/gr2 + 1,5 × 0,6 T).
+  - Rotations : dalle armée G (module différé) ; dalle précontrainte G + P (enveloppe de la mise en tension et du service, calcul PSI-DP).
+  - Appareil non conforme : plus petit appareil de la gamme standard vérifiant ces conditions sous les mêmes efforts (répartition horizontale non recalculée). Le prédimensionnement de l'onglet Projet reste celui du bulletin n° 4.
+  - Texte du guide 2007 consulté par extraits seulement (formules de § 3.3.2.3, 3.4.1.3 et 3.4.1.5 illisibles dans la version en ligne) : formules de la NF EN 1337-3, cohérentes avec la note OA2.
+- **Tête d'appui** (`src/supports/pierhead.js`) :
+  - pression localisée BAEL A.8.4,1 (K ≤ 3,3 ; K = 1 au-delà de α ou β = 3/4, domaine où la formule cesse d'être valable) ou EN 1992-1-1 § 6.7 ; contact sur le bossage (débord et béton saisis) et diffusion dans la section de l'appui ;
+  - frettage : annexe 4 du BPEL transposée (frettes de surface 0,04 R_u, éclatement 0,25 (1 − a/d) R_u, minimum 0,15 R_u, σ_s,lim = 2/3 f_e) ;
+  - voile plus court que la ligne d'appareils : console courte BAEL annexe E.6 (Perchat C 2 314 § 2.7.4), d plafonné à 4a (+ ℓ/2 pour une charge répartie, lecture à confirmer) ; console longue en flexion simple.
+  - Note OA2 : la console de P2-6 prend d = 1,5 m non plafonné (τ_u = 3,54 MPa) ; avec d plafonné, τ_u dépasse 4 MPa. Le bossage 0,60 × 0,70 donne K = 1 et σ = 14,40 > 14,17 MPa.
+- **Dalle précontrainte → appuis** : réactions hyperstatiques de précontrainte (enveloppe des phases MT, MS, ES et des valeurs probable, P1, P2) ajoutées aux réactions permanentes avec le coefficient 1 (BPEL) dans toutes les combinaisons des appuis ; raccourcissement ε = σ_m/E_ij + K_fl σ_m/E_i28 + ε_r [1 − r(j)] à la place de la valeur saisie (option « ap_epsPSIDP »).
+
 ## 2. Protocole de comparaison avec une note de référence
 
 ### 2.1 Référentiel Eurocodes — note CHAMOA-PSIDA (Cerema, guide technique, ch. 4)

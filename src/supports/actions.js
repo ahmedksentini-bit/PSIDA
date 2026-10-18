@@ -57,11 +57,11 @@ export function headCombinationsBAEL({ G, Q = [], RF = { H: 0 }, TLD = { H: 0 },
   if (envelope) return headCombinationsBAEL({ G, Q: Q.map(q => ({ ...q, H: Math.abs(q.H) })), RF: { H: Math.abs(RF.H) }, TLD: { H: Math.abs(TLD.H) }, TCD: { H: Math.abs(TCD.H) } });
   const out = [];
   for (const q of Q) {
-    out.push({ label: `ELU ${q.label}`, ls: 'ELU', Nsus: 1.35 * G.N, Ninst: q.gU * q.N, Hinst: q.gU * q.H, Hsus: 1.35 * RF.H + 0.78 * TLD.H });
-    out.push({ label: `ELS ${q.label}`, ls: 'ELS', Nsus: G.N, Ninst: q.gS * q.N, Hinst: q.gS * q.H, Hsus: RF.H + 0.6 * TLD.H });
+    out.push({ label: `ELU ${q.label}`, ls: 'ELU', Nsus: 1.35 * G.N + (G.P || 0), Ninst: q.gU * q.N, Hinst: q.gU * q.H, Hsus: 1.35 * RF.H + 0.78 * TLD.H });
+    out.push({ label: `ELS ${q.label}`, ls: 'ELS', Nsus: G.N + (G.P || 0), Ninst: q.gS * q.N, Hinst: q.gS * q.H, Hsus: RF.H + 0.6 * TLD.H });
   }
-  out.push({ label: 'ELU température', ls: 'ELU', Nsus: 1.35 * G.N, Ninst: 0, Hinst: 1.35 * TCD.H, Hsus: 1.35 * (RF.H + TLD.H) });
-  out.push({ label: 'ELS température', ls: 'ELS', Nsus: G.N, Ninst: 0, Hinst: TCD.H, Hsus: RF.H + TLD.H });
+  out.push({ label: 'ELU température', ls: 'ELU', Nsus: 1.35 * G.N + (G.P || 0), Ninst: 0, Hinst: 1.35 * TCD.H, Hsus: 1.35 * (RF.H + TLD.H) });
+  out.push({ label: 'ELS température', ls: 'ELS', Nsus: G.N + (G.P || 0), Ninst: 0, Hinst: TCD.H, Hsus: RF.H + TLD.H });
   for (const c of out) { c.N = c.Nsus + c.Ninst; c.H = c.Hsus + c.Hinst; }
   return out;
 }
@@ -74,12 +74,12 @@ export function headCombinationsEC({ G, Q = [], RF = { H: 0 }, T = { H: 0 }, psi
   if (envelope) { Q = Q.map(q => ({ ...q, H: Math.abs(q.H) })); RF = { H: Math.abs(RF.H) }; T = { H: Math.abs(T.H) }; }
   const out = [];
   for (const q of Q) {
-    out.push({ label: `ELU ${q.label}`, ls: 'ELU', Nsus: 1.35 * G.N, Ninst: 1.35 * q.N, Hinst: 1.35 * q.H, Hsus: 1.35 * RF.H + 1.5 * psi0T * T.H });
-    out.push({ label: `ELS car. ${q.label}`, ls: 'ELS', Nsus: G.N, Ninst: q.N, Hinst: q.H, Hsus: RF.H + psi0T * T.H });
+    out.push({ label: `ELU ${q.label}`, ls: 'ELU', Nsus: 1.35 * G.N + (G.P || 0), Ninst: 1.35 * q.N, Hinst: 1.35 * q.H, Hsus: 1.35 * RF.H + 1.5 * psi0T * T.H });
+    out.push({ label: `ELS car. ${q.label}`, ls: 'ELS', Nsus: G.N + (G.P || 0), Ninst: q.N, Hinst: q.H, Hsus: RF.H + psi0T * T.H });
   }
   const q0 = Q[0] || { N: 0, H: 0, psi0: 0.75 };
-  out.push({ label: 'ELU température', ls: 'ELU', Nsus: 1.35 * G.N, Ninst: 1.35 * (q0.psi0 ?? 0.4) * q0.N, Hinst: 0, Hsus: 1.35 * RF.H + 1.5 * T.H });
-  out.push({ label: 'ELS car. température', ls: 'ELS', Nsus: G.N, Ninst: (q0.psi0 ?? 0.4) * q0.N, Hinst: 0, Hsus: RF.H + T.H });
+  out.push({ label: 'ELU température', ls: 'ELU', Nsus: 1.35 * G.N + (G.P || 0), Ninst: 1.35 * (q0.psi0 ?? 0.4) * q0.N, Hinst: 0, Hsus: 1.35 * RF.H + 1.5 * T.H });
+  out.push({ label: 'ELS car. température', ls: 'ELS', Nsus: G.N + (G.P || 0), Ninst: (q0.psi0 ?? 0.4) * q0.N, Hinst: 0, Hsus: RF.H + T.H });
   for (const c of out) { c.N = c.Nsus + c.Ninst; c.H = c.Hsus + c.Hinst; }
   return out;
 }

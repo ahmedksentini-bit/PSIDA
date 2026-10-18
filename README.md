@@ -136,6 +136,13 @@ PSIDP-EL 84-1, règles BPEL 91 révisé 99 (classe II) ; charges du Fascicule 61
 - Calage : `test/psidp.test.js` reproduit la note modèle (13,50-17,61-17,61-13,50 m, 18 × 12T13) à 0,3 % près sur les
   tensions, au dixième de t·m sur les moments hyperstatiques, et M_lim ELU sur appui à 0,1 %.
 
+## Appareils d'appui et tête d'appui (`src/supports/bearings1337.js`, `src/supports/pierhead.js`)
+
+- Appareils en élastomère fretté vérifiés selon la NF EN 1337-3 (présentation du guide Sétra de juillet 2007) pour l'appareil le plus chargé de chaque ligne : distorsion, déformation totale, flambement, stabilité en rotation (y compris sous charge minimale), frettes, non-glissement, contrainte minimale ; appareil de la gamme standard proposé si la vérification échoue.
+- Tête d'appui : pression localisée sous les appareils (BAEL A.8.4 ou EN 1992-1-1 § 6.7), frettage, partie de voile en console (BAEL annexe E.6).
+- Dalle précontrainte : les réactions hyperstatiques de précontrainte et le raccourcissement (élastique, fluage, retrait) du calcul PSI-DP passent aux appuis.
+- Contrôle sur une note d'appuis réelle (ouvrage OA2, pont-dalle précontraint) : `test/bearings1337.test.js`.
+
 ## Calcul sismique — Pont EC8 intégré (`ec8/`, `web/ec8/`)
 
 L'application Pont EC8 (dépôt ouvpara) est intégrée en entier : sources dans `ec8/` (React + TypeScript, tests du moteur dans `ec8/tests`), version compilée servie par l'onglet « Calcul sismique » dans `web/ec8/` (site statique, aucune compilation au déploiement).

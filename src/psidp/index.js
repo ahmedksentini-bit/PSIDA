@@ -250,7 +250,13 @@ export function designPSIDP(ctx, bpIn = {}) {
     Vabout: shEnd.map(q => (q ? q.Vels : 0)), beta: shEnd.map(q => (q ? q.beta : Math.PI / 6)),
     Ru: bR ? [bR.ELUmax[0] + Math.max(0, Rh[0]), bR.ELUmax[spans.length] + Math.max(0, Rh[spans.length])] : [0, 0],
     sigPm: [res.r.ES.moy.sig[0], res.r.ES.moy.sig[nL]], fpeg: fpeg * MPa });
-  return { bp, unit: U, sec, sigma0, fcj, fc28, lim, steel, segs, geoChk, pre, n0, tried, auto: !bp.n, opt, anchors, xs, M, Q, G, O, ...res };
+  // raccourcissements du tablier transmis aux appuis : élastique à la mise en tension σ_m/E_ij, fluage K_fl σ_m/E_i28
+  // (BPEL 2.1,5), retrait postérieur à la mise en tension ε_r [1 − r(j)], r(t) = t/(t + 9 r_m), r_m en cm (BPEL 2.1,51)
+  const Fm = res.r.ES.moy.F.reduce((a, v) => a + v, 0) / res.r.ES.moy.F.length, sigm = Fm / sec.B / MPa;
+  const rjS = (bp.j ?? 7) / ((bp.j ?? 7) + 9 * rm * 100);
+  const shorten = { sigm, Fm, el: sigm / Ei(fcj), fl: (bp.Kfl ?? 2) * sigm / Ei(fc28), r: bp.epsR * (1 - rjS), rj: rjS, rm, Kfl: bp.Kfl ?? 2, epsR: bp.epsR, j: bp.j ?? 7 };
+  shorten.total = shorten.el + shorten.fl + shorten.r;
+  return { bp, unit: U, sec, sigma0, fcj, fc28, lim, steel, segs, geoChk, pre, n0, tried, auto: !bp.n, opt, anchors, shorten, xs, M, Q, G, O, ...res };
 }
 
 /**

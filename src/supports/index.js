@@ -13,7 +13,9 @@ import { requiredSteelNM } from './section_nm.js';
 import { winklerPile, pileGroup, headFlexibility, pileProfile, pileShear, pileCapFiles, blevot } from './psh.js';
 import { minorationSurface } from '../geotech/lateral.js';
 import { pierWater } from './water.js';
-import { bearingSpacing } from '../bearings.js';
+import { bearingSpacing, STANDARD_BEARINGS, designation } from '../bearings.js';
+import { verifyBearing1337 } from './bearings1337.js';
+import { localPressure, bearingSplitting, shortCorbel } from './pierhead.js';
 import { toPontEC8 } from '../ec8export.js';
 import * as EC8 from '../vendor/pont-ec8.js';
 
@@ -78,7 +80,7 @@ export function geometryWarnings(sp, end, width) {
 
 /** Valeurs par défaut du formulaire « Appuis et fondations ». */
 export const SUPPORT_DEFAULTS = {
-  pile: { type: 'voile', H: [6], b: 0.6, Lv: null, nCol: 3, D: 0.8, hc: 0, lc: 1.2 },
+  pile: { type: 'voile', H: [6], b: 0.6, Lv: null, hcons: 1.0, nCol: 3, D: 0.8, hc: 0, lc: 1.2 },
   // type : remblayee (mur de front), enterree (pile-culée noyée), apparente (pile-culée apparente, voile frontal hv sous le chevêtre) ;
   // dalle : dalle de transition appuyée sur le garde-grève
   culee: { type: 'remblayee', Hm: 3.0, em: 0.8, hGG: null, Lret: 4.0, nCol: 3, D: 0.8, hc: 1.0, lc: 1.6, hv: 1.0, dalle: true },
@@ -88,6 +90,9 @@ export const SUPPORT_DEFAULTS = {
   soil: { layers: null, classe: 'sable-B', ple: 1.0, EM: 10, alpha: 0.5, phi: 30, gamma: 20, q: 10, kSus: 0.5 },
   mat: { fck: 25, fyk: 400, c: 0.05 },
   eps: { TLD: 3e-4, TCD: 1e-4 },
+  // bossages sous les appareils (débord autour de l'appareil, béton) ; dalle précontrainte : actions PSI-DP transmises aux appuis
+  bossage: { debord: 0.05, fck: null },
+  epsPSIDP: true,
   ec8: { zone: 3, categorie: 'III', classeSol: 'B' },
   seisme: { actif: false, source: 'auto', externe: null, q: { long: 1, trans: 1 } },
   choc: { vehicule: 'aucun', hV: 1.25, bateau: 'aucun', hB: 2.0 },
@@ -108,6 +113,13 @@ export function computeSupports(st, input = {}) {
   const { deck, perm, f61, ec, bearings } = st;
   const width = 2 * deck.b, Ltot = deck.spans.reduce((a, v) => a + v, 0);
   const xs = [0]; deck.spans.forEach(L => xs.push(xs[xs.length - 1] + L));
+  // dalle précontrainte (PSI-DP) : réactions hyperstatiques de précontrainte (enveloppe des phases mise en tension, mise en
+  // service et en service, valeurs probable, P1 et P2), coefficient 1 dans toutes les combinaisons (BPEL), ajoutées aux
+  // réactions permanentes ; raccourcissements élastique, de fluage et de retrait de la dalle précontrainte
+  const dp = st.psidp && st.psidp.r && sp.epsPSIDP !== false ? st.psidp : null;
+  const HYP = dp ? ['MT', 'MS', 'ES'].flatMap(ph => ['moy', 'max', 'min'].map(k => dp.r[ph][k].hyp.R)) : null;
+  const hypMax = xs.map((_, i) => (HYP ? Math.max(...HYP.map(R => R[i] || 0)) : 0)), hypMin = xs.map((_, i) => (HYP ? Math.min(...HYP.map(R => R[i] || 0)) : 0));
+  const Gmax = i => perm.Rmax[i] + hypMax[i], Gmin = i => perm.Rmin[i] + hypMin[i];
   const nL = xs.length, isEnd = i => i === 0 || i === nL - 1;
   const { fck, fyk, c } = sp.mat;
   const Hpile = i => { const H = [].concat(sp.pile.H); return H[Math.min(H.length - 1, i - 1)] ?? H[0]; };
@@ -208,7 +220,8 @@ export function computeSupports(st, input = {}) {
   // --- actions en tête par ligne ---
   const chargeable = deck.g.roadway.y2 - deck.g.roadway.y1;
   const brk = brakingF61Deck({ Ltot, Lc: chargeable });
-  const RF = Math.max(0, st.p.concept.epsSlow ?? 2.5e-4), epsT = 1e-5 * (st.p.concept.dTu ?? 30);
+  const RFsaisi = Math.max(0, st.p.concept.epsSlow ?? 2.5e-4), epsT = 1e-5 * (st.p.concept.dTu ?? 30);
+  const RF = dp && dp.shorten ? dp.shorten.total : RFsaisi;
   const R = (res, i) => (res ? Math.max(0, res.Rmax[i]) : 0);
   let seisme = null;
   if (sp.seisme.actif) {
@@ -220,13 +233,13 @@ export function computeSupports(st, input = {}) {
     if (seisme && seisme.efforts) {
       // EN 1990 6.4.3.4 : G + ψ2,1 Q + A_Ed (ψ2,1 = 0 pour le trafic routier courant) ; Fz pris avec ± (G max + Fz, G min − Fz)
       for (const k of seisme.efforts.appuis[i].cas) for (const sgn of [1, -1]) {
-        out.push({ label: `ACC séisme ${k.nom} ${sgn > 0 ? '(+Z)' : '(−Z)'}`, ls: 'ACC', acc: true, N: (sgn > 0 ? perm.Rmax[i] : perm.Rmin[i]) + sgn * Math.abs(k.Fz), H: Math.abs(k.Fx), Hy: Math.abs(k.Fy), Nsus: perm.Rmax[i], Ninst: 0, Hsus: 0, Hinst: Math.abs(k.Fx) });
+        out.push({ label: `ACC séisme ${k.nom} ${sgn > 0 ? '(+Z)' : '(−Z)'}`, ls: 'ACC', acc: true, N: (sgn > 0 ? Gmax(i) : Gmin(i)) + sgn * Math.abs(k.Fz), H: Math.abs(k.Fx), Hy: Math.abs(k.Fy), Nsus: Gmax(i), Ninst: 0, Hsus: 0, Hinst: Math.abs(k.Fx) });
       }
     }
     if (!isEnd(i)) {
       // chocs : G + A_d + ψ1,1 Q (EN 1990 6.4.3.3, ψ1 TS 0,75 / UDL 0,4) ; F appliqué au fût (non transmis par le tablier)
       const veh = IMPACT_VEHICULE[sp.choc.vehicule], bat = IMPACT_BATEAU[sp.choc.bateau];
-      const add = (label, F, h) => out.push({ label, ls: 'ACC', acc: true, N: perm.Rmax[i] + Nfreq, H: 0, Hy: 0, imp: { F, h }, Nsus: perm.Rmax[i], Ninst: Nfreq, Hsus: 0, Hinst: 0 });
+      const add = (label, F, h) => out.push({ label, ls: 'ACC', acc: true, N: Gmax(i) + Nfreq, H: 0, Hy: 0, imp: { F, h }, Nsus: Gmax(i), Ninst: Nfreq, Hsus: 0, Hinst: 0 });
       if (veh) add(`ACC choc véhicule (${veh.label}) F = max(F_dx ; F_dy) = ${Math.max(veh.Fdx, veh.Fdy)} kN`, Math.max(veh.Fdx, veh.Fdy), sp.choc.hV);
       if (bat) add(`ACC choc de bateau (classe CEMT ${sp.choc.bateau}) F_dx = ${bat.Fdx} kN`, bat.Fdx, sp.choc.hB);
     }
@@ -242,14 +255,14 @@ export function computeSupports(st, input = {}) {
     // F_wa action variable de courte durée (γ_Q = 1,5) ; BAEL/F61 : comme le vent (annexe D), sans trafic ; EC : action
     // dominante, trafic d'accompagnement ψ₀ (TS 0,75, UDL 0,4) ; poussée d'Archimède au niveau des PHE (γ = 1, défavorable
     // en soulèvement, retenue dans toutes les combinaisons de crue)
-    const mk = (label, ls, gG, gW, NQ) => ({ label, ls, N: gG * perm.Rmax[i] + NQ, H: 0, Hy: 0, wat: { F: gW * w.F, M: gW * w.M, U: w.Ushaft, gG }, Nsus: gG * perm.Rmax[i], Ninst: NQ, Hsus: 0, Hinst: 0 });
+    const mk = (label, ls, gG, gW, NQ) => ({ label, ls, N: gG * perm.Rmax[i] + hypMax[i] + NQ, H: 0, Hy: 0, wat: { F: gW * w.F, M: gW * w.M, U: w.Ushaft, gG }, Nsus: gG * perm.Rmax[i] + hypMax[i], Ninst: NQ, Hsus: 0, Hinst: 0 });
     return {
       F61: [mk('ELU crue : 1,35 G + 1,5 F_eau', 'ELU', 1.35, 1.5, 0), mk('ELS crue : G + F_eau', 'ELS', 1, 1, 0)],
       EC: [mk('ELU crue : 1,35 G + 1,5 F_eau + 1,35 ψ₀ Q', 'ELU', 1.35, 1.5, 1.35 * Nfreq), mk('ELS car. crue : G + F_eau + ψ₀ Q', 'ELS', 1, 1, Nfreq)],
     };
   };
   const heads = xs.map((x, i) => {
-    const G = { N: perm.Rmax[i] };
+    const G = { N: perm.Rmax[i], P: hypMax[i] };
     const tr = R(f61.trottoir, i);
     const bB = distB.braking(1)[i];
     const QF = [
@@ -269,6 +282,106 @@ export function computeSupports(st, input = {}) {
     const acc = accidental(i, Nfreq), wc = waterCombos(i, Nfreq);
     return { x, F61: [...F61, ...wc.F61, ...acc], EC: [...EC, ...wc.EC, ...acc] };
   });
+
+  // --- appareils d'appui en élastomère fretté : NF EN 1337-3 (guide Sétra 2007), appareil le plus chargé de chaque ligne ---
+  const EIb = bearings.EI || null;
+  const rotOf = (res, i) => (res && res.Tmax && EIb ? Math.max(Math.abs(res.Tmax[i] || 0), Math.abs(res.Tmin[i] || 0)) / EIb : 0);
+  const bearing1337 = (i, code) => {
+    const row = bearings.rows[i], sel = row.sel;
+    if (!sel) return null;
+    const nb = row.nb, bd = { a: sel.bd.a / 1000, b: sel.bd.b / 1000, n: sel.n, t: sel.bd.t / 1000, ts: sel.bd.ts / 1000 };
+    // rotation permanente : dalle armée G (module différé) ; dalle précontrainte G + P (PSI-DP : enveloppe de la mise en
+    // tension, instantanée, et du service, fluage compris)
+    const a0 = bearings.alpha0 ?? 0.003;
+    let aG = bearings.rotPerm ? bearings.rotPerm[i] || 0 : 0;
+    if (dp && dp.defl && dp.defl.rot) {
+      const R0 = dp.defl.rot, mx = q => Math.max(Math.abs(q.g ?? 0), Math.abs(q.d ?? 0));
+      aG = Math.max(mx(R0.service[i]), mx({ g: (R0.cp[i].g ?? 0) + (R0.pI[i].g ?? 0), d: (R0.cp[i].d ?? 0) + (R0.pI[i].d ?? 0) }));
+    }
+    const dist = code === 'BAEL' ? distB : distE;
+    const vRF = Math.abs(dist.imposed(RF, 'diff').disp[i]);
+    // température : BAEL longue durée (module différé) + courte durée (instantané) ; EC variation uniforme T (guide 2007, G = 0,9 MPa)
+    const vT = code === 'BAEL' ? Math.abs(dist.imposed(sp.eps.TLD, 'diff').disp[i]) + Math.abs(dist.imposed(sp.eps.TCD, 'inst').disp[i]) : Math.abs(dist.imposed(epsT, 'diff').disp[i]);
+    const Gb = row.kCP * perm.Rmax[i] / nb, GbMin = perm.Rmin[i] / nb, Pmax = hypMax[i] / nb, Pmin = hypMin[i] / nb;
+    const tr = R(f61.trottoir, i);
+    const bB = distB.braking(1)[i], bE = distE.braking(1)[i];
+    const QQ = code === 'BAEL'
+      ? [{ label: 'A(l)', res: f61.A, add: tr, g: 1.605, H: brk.A * bB / nb }, { label: 'Bc', res: f61.Bc, add: tr, g: 1.605, H: brk.Bc * bB / nb },
+        ...(f61.Mc120 ? [{ label: 'Mc120', res: f61.Mc120, add: tr, g: 1.35, H: 0 }] : [])]
+      : [{ label: 'gr1a', res: ec.gr1a, add: 0, g: 1.35, H: 0 }, { label: 'gr2 (freinage)', res: ec.gr1a, frac: R(ec.gr1a, i) > 0 ? (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)) / R(ec.gr1a, i) : 0, add: 0, g: 1.35, H: bearings.H * bE / nb }];
+    const psi0T = 0.6, combos = [];
+    for (const q of QQ) {
+      const f = q.frac ?? 1, Qmax = f * (row.kQ * R(q.res, i) + q.add) / nb, Qmin = f * Math.min(0, q.res ? q.res.Rmin[i] : 0) / nb, aQ = f * rotOf(q.res, i);
+      combos.push({ label: `ELU ${q.label} (max)`, Fz: 1.35 * Gb + Pmax + q.g * Qmax, vSlow: vRF + 1.5 * psi0T * vT, Hx: q.g * q.H, alpha: 1.35 * aG + q.g * aQ + a0 });
+      if (Qmin < 0) combos.push({ label: `ELU ${q.label} (min, enveloppe)`, Fz: GbMin + Pmin + q.g * Qmin, vSlow: vRF + 1.5 * psi0T * vT, Hx: q.g * q.H, alpha: aG + q.g * aQ + a0, minimal: true, indicatif: true });
+    }
+    // température dominante (BAEL : comb. 8 de la pratique ; EC : 1,5 T + 1,35 ψ₀ trafic)
+    const q0 = QQ[0], psiQ = code === 'BAEL' ? 0 : (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)) / Math.max(1e-9, R(ec.gr1a, i));
+    combos.push({ label: 'ELU température', Fz: 1.35 * Gb + Pmax + 1.35 * psiQ * row.kQ * R(q0.res, i) / nb, vSlow: vRF + 1.5 * vT, Hx: 0, alpha: 1.35 * aG + 1.35 * psiQ * rotOf(q0.res, i) + a0 });
+    combos.push({ label: 'G + P (min)', Fz: GbMin + Pmin, vSlow: vRF + vT, Hx: 0, alpha: aG + a0, minimal: true });
+    // non-glissement : effort vertical minimal concomitant (permanent seul ; ou trafic minimal avec son freinage)
+    const slides = [{ FzMin: GbMin + Pmin, vSlow: vRF + vT, Hx: 0, FzGmin: GbMin + Pmin, vPerm: vRF, label: 'G + P (min)' },
+      ...QQ.filter(q => q.H > 0).map(q => ({ FzMin: GbMin + Pmin + Math.min(0, q.res ? q.res.Rmin[i] : 0) / nb, vSlow: vRF + vT, Hx: q.H, FzGmin: GbMin + Pmin, vPerm: vRF, label: `G + P + ${q.label} (min) + freinage` }))];
+    const res = verifyBearing1337(bd, combos, slides[0]);
+    const sl = slides.map(sl0 => ({ ...verifyBearing1337(bd, [], sl0).slide, label: sl0.label }));
+    res.slides = sl; res.slide = sl.reduce((m, x) => (!m || x.Fxy / Math.max(x.R, 1e-12) > m.Fxy / Math.max(m.R, 1e-12) ? x : m), null);
+    res.ok = res.rows.every(r => r.ok || r.indicatif) && res.slide.okGlissement && res.slide.okPerm;
+    // appareil non conforme : plus petit appareil de la gamme standard vérifiant la NF EN 1337-3 sous les mêmes efforts et
+    // déplacements (la répartition des efforts horizontaux n'est pas recalculée)
+    let proposal = null;
+    if (!res.ok) {
+      const cands = [];
+      for (const s0 of STANDARD_BEARINGS) for (const n of s0.ns) cands.push({ s0, n, area: s0.a * s0.b, T: n * s0.t });
+      cands.sort((p, q) => p.area - q.area || p.T - q.T);
+      for (const c of cands) {
+        const bdc = { a: c.s0.a / 1000, b: c.s0.b / 1000, n: c.n, t: c.s0.t / 1000, ts: c.s0.ts / 1000 };
+        const rc = verifyBearing1337(bdc, combos, null);
+        if (!rc.rows.every(r => r.ok || r.indicatif)) continue;
+        if (!slides.every(sl0 => { const x = verifyBearing1337(bdc, [], sl0).slide; return x.okGlissement && x.okPerm; })) continue;
+        proposal = { label: designation(c.s0, c.n), bd: bdc };
+        break;
+      }
+    }
+    return { proposal, ...res, label: sel.label || `${sel.bd.a}×${sel.bd.b}×${sel.n}(${sel.bd.t}+${sel.bd.ts})`, nb, vRF, vT, aG, a0, RF, Pmax: hypMax[i], Pmin: hypMin[i] };
+  };
+
+  // --- tête d'appui : bossages (pression localisée, frettage) et voile en console sous les appareils extrêmes ---
+  const pierHead = (i, code, brg) => {
+    if (!brg || brg.error) return null;
+    const end = isEnd(i), P = sp.pile, C = sp.culee, row = bearings.rows[i], nb = row.nb;
+    const Ru = Math.max(...brg.rows.filter(r => !r.minimal).map(r => r.Fz));
+    const a0 = brg.g.a, b0 = brg.g.b, deb = sp.bossage?.debord ?? 0.05, ab = a0 + 2 * deb, bb = b0 + 2 * deb;
+    const pitch = bearingSpacing({ width, psi: st.p.concept.psi, n: nb });
+    const dA = end ? (C.type === 'remblayee' ? C.em : C.lc) : (P.type === 'voile' ? P.b : P.lc);
+    // pression localisée : contact appareil / bossage (rectangle homothétique limité au bossage, béton du bossage) ;
+    // diffusion sous le bossage dans la section de l'appui (rectangle homothétique inscrit dans l'épaisseur d_A et l'entraxe)
+    const fckB = sp.bossage?.fck || fck;
+    const pr = (fc, A1, B1) => {
+      if (code === 'BAEL') return { ...localPressure({ R: Ru, a0, b0, a: A1, b: B1, fcj: fc }), rule: 'BAEL A.8.4,1' };
+      // EN 1992-1-1 § 6.7 : F_Rdu = A_c0 f_cd √(A_c1/A_c0) ≤ 3 f_cd A_c0 (f_cd = f_ck/1,5)
+      const fcd = fc / 1.5, k = Math.min(Math.sqrt(A1 * B1 / (a0 * b0)), 3), sig = Ru / 1000 / (a0 * b0);
+      return { K: k, fbu: fcd, lim: k * fcd, sig, ok: sig <= k * fcd + 1e-9, rule: 'EN 1992-1-1 § 6.7' };
+    };
+    const press = { ...pr(fckB, ab, bb), fck: fckB };
+    const sc = Math.min(dA / a0, Math.min(pitch, width) / b0), pressDiff = { ...pr(fck, a0 * sc, b0 * sc), a: a0 * sc, b: b0 * sc, fck };
+    const split = bearingSplitting({ R: Ru, a0, b0, dA: Math.max(dA, a0), dB: Math.max(Math.min(pitch, width), b0), fe: fyk });
+    let corbel = null;
+    if (!end && P.type === 'voile' && Lv < width - 1e-9) {
+      const ys = Array.from({ length: nb }, (_, k) => (k - (nb - 1) / 2) * pitch);
+      const out = ys.map(y => Math.abs(y) - Lv / 2).filter(av => av > 1e-9);
+      if (out.length) {
+        const side = Math.ceil(out.length / 2), aSide = out.slice(0, side);
+        const hc = P.hcons ?? 1.0, d = hc - c - 0.03, b0c = P.b, Lc = Math.max(...aSide) + b0 / 2;
+        const Hb = Math.max(0, ...heads[i][code === 'BAEL' ? 'F61' : 'EC'].filter(cb => cb.ls === 'ELU').map(cb => cb.H)) / nb;
+        const Vb = Ru * aSide.length, Wc = 1.35 * 25 * b0c * hc * Lc;
+        const Mu = Ru * aSide.reduce((s0, av) => s0 + av, 0) + Wc * Lc / 2, aRes = Mu / (Vb + Wc);
+        corbel = { n: aSide.length, a: aRes, aList: aSide, hc, d, b0: b0c, Vu: Vb + Wc, Hu: Hb * aSide.length, Lc, ...shortCorbel({ Vu: Vb + Wc, Hu: Hb * aSide.length, Mu, a: aRes, d, b0: b0c, fcj: fck, fe: fyk, l: b0 }) };
+        // console longue (d < a) : hors annexe E.6 — flexion simple de la console encastrée au nu du voile
+        if (!corbel.short) corbel.Along = (requiredSteelNM({ b: b0c, h: hc, c }, { code, fck, fyk }, 0, Mu).As ?? NaN) + Hb * aSide.length / (fyk * 1000 / 1.15);
+      }
+    }
+    return { Ru, a0, b0, ab, bb, deb, press, pressDiff, split, corbel, dA, pitch };
+  };
 
   // --- éléments d'appui ---
   const KA = Ka(sp.soil.phi);
@@ -296,7 +409,7 @@ export function computeSupports(st, input = {}) {
           const nb = bearings.nb, pitch = bearingSpacing({ width, psi: st.p.concept.psi, n: nb });
           const ys = Array.from({ length: nb }, (_, k) => width / 2 + (k - (nb - 1) / 2) * pitch);
           const row = bearings.rows[i], kQ = code === 'BAEL' ? 1.605 : 1.35;
-          const Pu = (1.35 * row.kCP * perm.Rmax[i] + kQ * row.kQ * Math.max(0, row.Rmax - perm.Rmax[i])) / nb;
+          const Pu = (1.35 * row.kCP * perm.Rmax[i] + hypMax[i] + kQ * row.kQ * Math.max(0, row.Rmax - perm.Rmax[i])) / nb;
           extra.cap = pierCap({ length: width, supports: Array.from({ length: P.nCol }, (_, j) => ({ x: width * (2 * j + 1) / (2 * P.nCol) })), loads: ys.map(y => ({ x: y, P: Pu })), q: 1.35 * 25 * P.hc * P.lc, b: P.lc, h: P.hc, c, fck, fyk, code });
           extra.cap.Pu = Pu;
         }
@@ -332,7 +445,7 @@ export function computeSupports(st, input = {}) {
           const nb = bearings.nb, pitch = bearingSpacing({ width, psi: st.p.concept.psi, n: nb });
           const ys = Array.from({ length: nb }, (_, k) => width / 2 + (k - (nb - 1) / 2) * pitch);
           const row = bearings.rows[i], kQ = code === 'BAEL' ? 1.605 : 1.35;
-          const Pu = (1.35 * row.kCP * perm.Rmax[i] + kQ * row.kQ * Math.max(0, row.Rmax - perm.Rmax[i])) / nb;
+          const Pu = (1.35 * row.kCP * perm.Rmax[i] + hypMax[i] + kQ * row.kQ * Math.max(0, row.Rmax - perm.Rmax[i])) / nb;
           // PP73 1.3.2 § 2.2.2 : garde-grève (poids propre), dalle de transition (15 + D) t/ml ou, sans dalle, 5,5 t/ml × 2 = 11 t/ml ;
           // murs en retour ou murettes : poids propre et charge verticale à l'extrémité (4 tf, murettes ≤ 2,5 m : 5 tf) ;
           // valeurs du 1er genre → ELU × 1,35
@@ -545,7 +658,11 @@ export function computeSupports(st, input = {}) {
         const plast = rows.reduce((a, r) => (r.psh.plast.nodes > a.nodes ? { ...r.psh.plast, label: r.label } : a), { nodes: 0 });
         found = { type: 'pieux', D, n: xsP.length, nF, nP, Lpile: F.Lpile, k: kHead, rows, psh, shear, capFiles, blev, negFr, settle, plast, hR, earth: hR > 0 ? { Ka: RB.Ka, bEff, h: hR } : null, NmaxU, NmaxS, NminU, As: Math.max(AsP, pileMinSteel({ D, code })), AsReq: AsP, Amin: pileMinSteel({ D, code }), cap, capRatio, NmaxA, group, scour, pileConc: pc, tie, capBeam, sigSels, hs: F.hs, hOk: F.hs >= Math.max(0.60, nF === 2 ? 1.4 * D : D) - 1e-9, hMin: Math.max(0.60, nF === 2 ? 1.4 * D : D), W: Wsem };
       }
-      per[code] = { base, shaft: shaftRes, ...extra, found };
+      let brg = null;
+      try { brg = bearing1337(i, code); } catch (e) { brg = { error: e.message }; }
+      let headChk = null;
+      try { headChk = pierHead(i, code, brg); } catch (e) { headChk = { error: e.message }; }
+      per[code] = { base, shaft: shaftRes, ...extra, found, brg, headChk };
     }
     out.BAEL = per.BAEL; out.EC = per.EC;
     out.warnings = geometryWarnings(sp, end, width);
@@ -555,5 +672,5 @@ export function computeSupports(st, input = {}) {
     return out;
   });
   const footRotAll = onPiles ? null : xs.map((x, i) => ({ BAEL: footRot(i, 'BAEL'), EC: footRot(i, 'EC') }));
-  return { sp, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hGG, Ka: KA, lines };
+  return { sp, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
 }
