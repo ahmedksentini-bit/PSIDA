@@ -8,18 +8,48 @@
 import { neopreneFlexibility, cantileverFlexibility, horizontalDistribution, brakingF61Deck, headCombinationsBAEL, headCombinationsEC } from './actions.js';
 import { designShaft, pierCap, buckling } from './pier.js';
 import { gardeGreve, murEnRetour, earthPressure, dalleTransition, Ka } from './abutment.js';
-import { shallowFooting, footingStrutTie, pileCapStrutTie, pileGroupForces, menardReaction, lateralPile, pileMinSteel, pileCapacity262 } from './foundation.js';
+import { shallowFooting, footingStrutTie, pileCapStrutTie, pileGroupForces, menardReaction, lateralPile, pileMinSteel, pileCapacity, PILE_TYPES, pileCapTwoRows, sigmaSBAEL, pileConcrete, efficaciteCoherentF62, efficaciteEC7, isCohesive } from './foundation.js';
 import { requiredSteelNM } from './section_nm.js';
 import { bearingSpacing } from '../bearings.js';
+import { toPontEC8 } from '../ec8export.js';
+import * as EC8 from '../vendor/pont-ec8.mjs';
+
+/**
+ * Chocs accidentels sur les piles (EN 1991-1-7, valeurs recommandées — à confronter à l'annexe nationale) :
+ * véhicules, tableau 4.1 (F_dx dans le sens de la circulation sous l'ouvrage, F_dy perpendiculaire, non simultanés,
+ * appliqués entre 0,5 et 1,5 m au-dessus de la chaussée) ; bateaux fluviaux, tableau C.3 (classes CEMT, frontal F_dx et
+ * latéral F_dy). Pratique SETRA (Fascicule 61) : 1000 kN // et 500 kN ⊥ à 1,50 m.
+ */
+export const IMPACT_VEHICULE = {
+  autoroute: { label: 'autoroutes, routes nationales et principales', Fdx: 1000, Fdy: 500 },
+  rurale: { label: 'routes de campagne', Fdx: 750, Fdy: 375 },
+  urbaine: { label: 'voies urbaines', Fdx: 500, Fdy: 250 },
+  parking: { label: 'cours et parkings (poids lourds)', Fdx: 150, Fdy: 75 },
+};
+export const IMPACT_BATEAU = {
+  I: { Fdx: 2000, Fdy: 1000 }, II: { Fdx: 3000, Fdy: 1500 }, III: { Fdx: 4000, Fdy: 2000 }, IV: { Fdx: 5000, Fdy: 2500 },
+  Va: { Fdx: 8000, Fdy: 3500 }, Vb: { Fdx: 10000, Fdy: 4000 }, VIa: { Fdx: 10000, Fdy: 4000 }, VIb: { Fdx: 14000, Fdy: 5000 }, VIc: { Fdx: 17000, Fdy: 8000 },
+};
+
+/** Séisme par le moteur de Pont EC8 (EN 1998-2, mode fondamental) sur le projet exporté ; efforts par appui en kN. */
+export function seismicActions(st, sp, hGG) {
+  const projet = EC8.lireProjet(JSON.parse(JSON.stringify(toPontEC8({ ...st, supports: { sp, hGG } }, { site: sp.ec8, q: sp.seisme.q }))));
+  const problemes = EC8.valider(projet);
+  const a = EC8.actionSismique(projet), m = EC8.modele(projet), r = EC8.analyse(projet, a, m);
+  return { projet, problemes, efforts: EC8.exporterEfforts(projet, a, r), T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T }, F: { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 }, M: r.M, conditions: r.conditions };
+}
 
 /** Valeurs par défaut du formulaire « Appuis et fondations ». */
 export const SUPPORT_DEFAULTS = {
   pile: { type: 'voile', H: [6], b: 0.6, Lv: null, nCol: 3, D: 0.8, hc: 0, lc: 1.2 },
   culee: { type: 'remblayee', Hm: 3.0, em: 0.8, hGG: null, Lret: 4.0, nCol: 3, D: 0.8, hc: 1.0, lc: 1.6 },
-  found: { type: 'superficielle', B: 3.0, hs: 1.0, De: 1.0, pileD: 0.8, nPile: 3, nFiles: 2, sPile: 2.4, Lpile: 15 },
-  soil: { cat: 'sables', ple: 1.0, EM: 10, alpha: 0.5, phi: 30, gamma: 20, q: 10 },
+  found: { type: 'superficielle', B: 3.0, hs: 1.0, De: 1.0, pileType: 'fore-boue', pileD: 0.8, nPile: 3, nFiles: 2, sPile: 2.4, Lpile: 15 },
+  soil: { classe: 'sable-B', ple: 1.0, EM: 10, alpha: 0.5, phi: 30, gamma: 20, q: 10 },
   mat: { fck: 25, fyk: 400, c: 0.05 },
   eps: { TLD: 3e-4, TCD: 1e-4 },
+  ec8: { zone: 3, categorie: 'III', classeSol: 'B' },
+  seisme: { actif: false, q: { long: 1, trans: 1 } },
+  choc: { vehicule: 'aucun', hV: 1.25, bateau: 'aucun', hB: 2.0 },
 };
 
 const merge = (a, b) => { const o = { ...a }; for (const k of Object.keys(b || {})) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) ? { ...a[k], ...b[k] } : b[k] ?? a[k]; return o; };
@@ -63,6 +93,26 @@ export function computeSupports(st, input = {}) {
   const brk = brakingF61Deck({ Ltot, Lc: chargeable });
   const RF = Math.max(0, st.p.concept.epsSlow ?? 2.5e-4), epsT = 1e-5 * (st.p.concept.dTu ?? 30);
   const R = (res, i) => (res ? Math.max(0, res.Rmax[i]) : 0);
+  let seisme = null;
+  if (sp.seisme.actif) { try { seisme = seismicActions(st, sp, hGG); } catch (e) { seisme = { error: e.message }; } }
+  const accidental = (i, Nfreq) => {
+    const out = [];
+    if (seisme && seisme.efforts) {
+      // EN 1990 6.4.3.4 : G + ψ2,1 Q + A_Ed (ψ2,1 = 0 pour le trafic routier courant) ; Fz pris avec ± (G max + Fz, G min − Fz)
+      for (const k of seisme.efforts.appuis[i].cas) for (const sgn of [1, -1]) {
+        out.push({ label: `ACC séisme ${k.nom} ${sgn > 0 ? '(+Z)' : '(−Z)'}`, ls: 'ACC', acc: true, N: (sgn > 0 ? perm.Rmax[i] : perm.Rmin[i]) + sgn * Math.abs(k.Fz), H: Math.abs(k.Fx), Hy: Math.abs(k.Fy), Nsus: perm.Rmax[i], Ninst: 0, Hsus: 0, Hinst: Math.abs(k.Fx) });
+      }
+    }
+    if (!isEnd(i)) {
+      // chocs : G + A_d + ψ1,1 Q (EN 1990 6.4.3.3, ψ1 TS 0,75 / UDL 0,4) ; F appliqué au fût (non transmis par le tablier)
+      const veh = IMPACT_VEHICULE[sp.choc.vehicule], bat = IMPACT_BATEAU[sp.choc.bateau];
+      const add = (label, F, h) => out.push({ label, ls: 'ACC', acc: true, N: perm.Rmax[i] + Nfreq, H: 0, Hy: 0, imp: { F, h }, Nsus: perm.Rmax[i], Ninst: Nfreq, Hsus: 0, Hinst: 0 });
+      if (veh) add(`ACC choc véhicule (${veh.label}) F = max(F_dx ; F_dy) = ${Math.max(veh.Fdx, veh.Fdy)} kN`, Math.max(veh.Fdx, veh.Fdy), sp.choc.hV);
+      if (bat) add(`ACC choc de bateau (classe CEMT ${sp.choc.bateau}) F_dx = ${bat.Fdx} kN`, bat.Fdx, sp.choc.hB);
+    }
+    for (const c of out) { c.N = c.N; }
+    return out;
+  };
   const heads = xs.map((x, i) => {
     const G = { N: perm.Rmax[i] };
     const tr = R(f61.trottoir, i);
@@ -80,7 +130,9 @@ export function computeSupports(st, input = {}) {
       { label: 'gr2 (freinage)', N: 0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i), H: bearings.H * distE.braking(1)[i], psi0: 0 },
     ];
     const EC = headCombinationsEC({ G, Q: QE, RF: { H: distE.imposed(RF).H[i] }, T: { H: distE.imposed(epsT).H[i] } });
-    return { x, F61, EC };
+    const Nfreq = 0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i);
+    const acc = accidental(i, Nfreq);
+    return { x, F61: [...F61, ...acc], EC: [...EC, ...acc] };
   });
 
   // --- éléments d'appui ---
@@ -97,9 +149,13 @@ export function computeSupports(st, input = {}) {
         const P = sp.pile, Hf = Hpile(i), col = P.type === 'colonnes';
         const Wchev = col && P.hc > 0 ? 25 * P.hc * P.lc * width : 0;
         const Wfut = col ? 25 * P.nCol * Math.PI * P.D ** 2 / 4 * Hf : 25 * Lv * P.b * Hf;
-        base = combos.map(cb => { const g = cb.ls === 'ELU' ? gU : 1; return { ...cb, Nb: cb.N + g * (Wchev + Wfut), Mb: cb.H * (Hf + (col ? P.hc : 0)), Hb: cb.H }; });
+        const arm = Hf + (col ? P.hc : 0);
+        base = combos.map(cb => {
+          const g = cb.ls === 'ELU' ? gU : 1, Mimp = cb.imp ? cb.imp.F * cb.imp.h : 0;
+          return { ...cb, Nb: cb.N + g * (Wchev + Wfut), Mb: cb.H * arm + Mimp, Mimp, Myb: (cb.Hy || 0) * arm, Hb: cb.H + (cb.imp ? cb.imp.F : 0) };
+        });
         const shape = col ? { D: P.D, c: c + 0.01, nBars: 12 } : { b: Lv, h: P.b, c: c + 0.01 };
-        shaftRes = designShaft({ shape, code, fck, fyk, Hf, combos: base.filter(b => b.ls === 'ELU').map(b => ({ label: b.label, N: b.Nb, M: b.Mb })), n: col ? P.nCol : 1 });
+        shaftRes = designShaft({ shape, code, fck, fyk, Hf, combos: base.filter(b => b.ls !== 'ELS').map(b => ({ label: b.label, N: b.Nb, M: b.Mb - b.Mimp, Mloc: b.Mimp, My: b.Myb, acc: !!b.acc })), n: col ? P.nCol : 1 });
         if (col && P.hc > 0) {
           const nb = bearings.nb, pitch = bearingSpacing({ width, psi: st.p.concept.psi, n: nb });
           const ys = Array.from({ length: nb }, (_, k) => width / 2 + (k - (nb - 1) / 2) * pitch);
@@ -117,13 +173,13 @@ export function computeSupports(st, input = {}) {
         const mr = murEnRetour({ L: C.Lret, h: Hm + hGG });
         const Wret = 2 * 25 * mr.e * C.Lret * (Hm + hGG) / 2;
         base = combos.map(cb => {
-          const elu = cb.ls === 'ELU', g = elu ? gU : 1, gq = code === 'BAEL' ? (elu ? 1.605 : 1.2) : (elu ? 1.35 : 1);
+          const elu = cb.ls === 'ELU', g = elu ? gU : 1, gq = cb.ls === 'ACC' ? 0 : code === 'BAEL' ? (elu ? 1.605 : 1.2) : (elu ? 1.35 : 1);
           const Hb = cb.H + g * ep.Pg + gq * ep.Pq;
           return { ...cb, Nb: cb.N + g * (Wtop + Wwall + Wret + dt.Rg * width) + gq * dt.Rq * width / 3, Mb: cb.H * (Hm + (rem ? 0 : C.hc)) + g * ep.Mg + gq * ep.Mq, Hb };
         });
         extra.earth = { ...ep, K: KA, Htot: Hm + hGG };
         const shape = rem ? { b: 1, h: C.em, c: c + 0.01 } : { D: C.D, c: c + 0.01, nBars: 12 };
-        shaftRes = designShaft({ shape, code, fck, fyk, Hf: Hm, combos: base.filter(b => b.ls === 'ELU').map(b => ({ label: b.label, N: b.Nb, M: b.Mb })), n: rem ? width : C.nCol });
+        shaftRes = designShaft({ shape, code, fck, fyk, Hf: Hm, combos: base.filter(b => b.ls !== 'ELS').map(b => ({ label: b.label, N: b.Nb, M: b.Mb, My: (b.Hy || 0) * Hm, acc: !!b.acc })), n: rem ? width : C.nCol });
         const gg = gardeGreve({ h: hGG, K: KA, gamma: soil.gamma });
         const ggAs = (requiredSteelNM({ b: 1, h: gg.e, c }, { code, fck, fyk }, 0, gg.ELU).As ?? NaN) / 2;
         extra.gg = { ...gg, h: hGG, As: Math.max(ggAs, 0.001 * gg.e) };
@@ -145,11 +201,13 @@ export function computeSupports(st, input = {}) {
       const fd = base.map(b => { const g = b.ls === 'ELU' ? gU : 1; return { label: b.label, ls: b.ls, V: b.Nb + g * Wsem, H: b.Hb, M: b.Mb + b.Hb * F.hs }; });
       let found;
       if (F.type === 'superficielle') {
-        const checks = fd.map(f => ({ ...f, ...shallowFooting({ code, B: F.B, L: Lf, D: F.De, De: F.De, V: f.V, H: f.H, M: f.M, ls: f.ls, soil: soil.cat, ple: soil.ple, phi: soil.phi }) }));
+        const checks = fd.map(f => ({ ...f, ...shallowFooting({ code, B: F.B, L: Lf, D: F.De, De: F.De, V: f.V, H: f.H, M: f.M, ls: f.ls, classe: soil.classe, ple: soil.ple, phi: soil.phi, gamma: soil.gamma }) }));
         const eluMax = fd.filter(f => f.ls === 'ELU').reduce((a, f) => (f.V * (1 + 3 * Math.abs(f.M) / f.V / F.B) > a.Nn ? { f, Nn: f.V * (1 + 3 * Math.abs(f.M) / f.V / F.B) } : a), { Nn: 0 });
         const d = F.hs - c - 0.01, fsu = fyk / 1.15;
+        const eMax = Math.max(...fd.map(f => Math.abs(f.M) / f.V));
         found = { type: 'superficielle', B: F.B, L: Lf, hs: F.hs, W: Wsem, checks, worstV: Math.max(...checks.map(k => k.ratioV)), worstH: Math.max(...checks.map(k => k.ratioH)), excOk: checks.every(k => k.excOk),
-          AsLong: footingStrutTie({ N: eluMax.Nn, B: F.B, b: bWall, d, fsu }) };
+          AsLong: Math.max(footingStrutTie({ N: eluMax.Nn, B: F.B, b: bWall, d, fsu }), 0.0012 * F.hs * Lf),
+          bielles: { dOk: d >= (F.B - bWall) / 4, eOk: eMax <= F.B / 6, eMax } };
         // sens transversal : semelle filante sous voile → aciers de répartition ≥ 1/4 des aciers principaux (par m) ;
         // sous colonnes → poutre renversée sur les colonnes chargée par la réaction du sol uniforme
         const nc = end ? (sp.culee.type === 'enterree' ? sp.culee.nCol : 0) : (sp.pile.type === 'colonnes' ? sp.pile.nCol : 0);
@@ -159,34 +217,70 @@ export function computeSupports(st, input = {}) {
           found.trans = { mode: 'poutre sur colonnes', Mneg: bm.Mneg, Mpos: bm.Mpos, AsTop: bm.AsTop, AsBot: bm.AsBot };
           found.AsTransPerM = Math.max(bm.AsTop, bm.AsBot) / F.B;
         } else found.AsTransPerM = found.AsLong / Lf / 4;
+        found.AsTransPerM = Math.max(found.AsTransPerM, 0.0012 * F.hs);
       } else {
         const nF = Math.max(1, F.nFiles), nP = Math.max(1, F.nPile), D = F.pileD;
         const xsP = []; for (let f = 0; f < nF; f++) for (let k = 0; k < nP; k++) xsP.push(nF === 1 ? 0 : (f - (nF - 1) / 2) * F.sPile);
-        const kR = menardReaction({ EM: soil.EM * 1000, alpha: soil.alpha, B: D }).k;
-        const Ep = code === 'BAEL' ? EiB(Math.min(fck, 25)) : Ecm(Math.min(fck, 30));
-        // pieu de Winkler-Ménard, tête encastrée : réponse linéaire calculée une fois pour H = 1 kN
-        const lat1 = lateralPile({ L: F.Lpile, D, E: Ep, k: kR, H: 1, fixedHead: true });
+        const mr = menardReaction({ EM: soil.EM * 1000, alpha: soil.alpha, B: D }), kR = mr.k;
+        const pc = pileConcrete({ fc28: fck, D, L: F.Lpile, type: F.pileType });
+        const Ep = code === 'BAEL' ? pc.Ei : Ecm(Math.min(fck, 30));
+        // pieu de Winkler-Ménard : réponses linéaires unitaires. Deux files : tête encastrée dans la semelle (H seul) ;
+        // file unique : la semelle ne bloque pas la rotation longitudinale, chaque pieu reprend H/n et M/n en tête.
+        // enveloppe des modules de courte (freinage, TCD) et de longue durée (permanentes, retrait, TLD) : réponse la plus défavorable
+        const env = (a, b) => ({ M: a.M.map((m, i) => (Math.abs(m) >= Math.abs(b.M[i]) ? m : b.M[i])), Mmax: Math.max(a.Mmax, b.Mmax), y0: Math.max(Math.abs(a.y0), Math.abs(b.y0)) });
+        const latFix = env(lateralPile({ L: F.Lpile, D, E: Ep, k: kR, H: 1, fixedHead: true }), lateralPile({ L: F.Lpile, D, E: Ep, k: mr.kLong, H: 1, fixedHead: true }));
+        const latH = env(lateralPile({ L: F.Lpile, D, E: Ep, k: kR, H: 1 }), lateralPile({ L: F.Lpile, D, E: Ep, k: mr.kLong, H: 1 }));
+        const latM = env(lateralPile({ L: F.Lpile, D, E: Ep, k: kR, H: 0, M0: 1 }), lateralPile({ L: F.Lpile, D, E: Ep, k: mr.kLong, H: 0, M0: 1 }));
         const rows = fd.map(f => {
-          const Hp = Math.abs(f.H) / xsP.length, Mhead = Math.abs(lat1.M[0]) * Hp;
-          const g = pileGroupForces({ N: f.V, M: Math.abs(f.M), xs: xsP, Mhead: nF > 1 ? Mhead : Math.abs(f.M) / xsP.length });
-          return { ...f, Nmax: Math.max(...g.N), Nmin: Math.min(...g.N), Hp, Mhead, Mmax: lat1.Mmax * Hp, y0: lat1.y0 * Hp };
+          const Hp = Math.abs(f.H) / xsP.length;
+          if (nF > 1) {
+            const Mhead = Math.abs(latFix.M[0]) * Hp;
+            const g = pileGroupForces({ N: f.V, M: Math.abs(f.M), xs: xsP, Mhead });
+            return { ...f, Nmax: Math.max(...g.N), Nmin: Math.min(...g.N), Hp, Mhead, Mmax: latFix.Mmax * Hp, y0: latFix.y0 * Hp };
+          }
+          const Mp = Math.abs(f.M) / xsP.length;
+          const Mz = latH.M.map((m, i) => Math.max(Math.abs(Hp * m + Mp * latM.M[i]), Math.abs(Hp * m - Mp * latM.M[i])));
+          return { ...f, Nmax: f.V / xsP.length, Nmin: f.V / xsP.length, Hp, Mhead: Mp, Mmax: Math.max(...Mz), y0: Math.abs(latH.y0 * Hp) + Math.abs(latM.y0 * Mp) };
         });
-        const elu = rows.filter(r => r.ls === 'ELU'), els = rows.filter(r => r.ls === 'ELS');
+        const elu = rows.filter(r => r.ls === 'ELU'), els = rows.filter(r => r.ls === 'ELS'), accR = rows.filter(r => r.ls === 'ACC');
         const shapeP = { D, c: 0.07, nBars: 12 };
         // béton de pieu foré : BAEL / F62-V f_c = min(f_c28 ; 25)/(k₁ k₂), k₁ = 1,2 (groupe B), k₂ = 1,05 ; EC2 § 2.4.2.5 : γ_c × k_f = 1,1
-        const pileMat = code === 'BAEL' ? { code, fck: Math.min(fck, 25) / (1.2 * 1.05), fyk } : { code, fck: Math.min(fck, 30), fyk, gammaC: 1.5 * 1.1 };
-        const AsP = Math.max(...elu.map(r => Math.max(requiredSteelNM(shapeP, pileMat, Math.max(0, r.Nmin), r.Mmax).As ?? Infinity, requiredSteelNM(shapeP, pileMat, r.Nmax, r.Mmax).As ?? Infinity)));
-        const cap = pileCapacity262({ D, layers: [{ soil: soil.cat, pl: soil.ple, h: F.Lpile }], pleTip: soil.ple });
-        const NmaxU = Math.max(...elu.map(r => r.Nmax)), NmaxS = Math.max(0, ...els.map(r => r.Nmax));
-        const capRatio = code === 'EC' ? { ELU: NmaxU / cap.Rcd, ELS: NmaxS / cap.Rcrd } : { ELU: NmaxU / ((cap.Rb + cap.Rs) / 1.4), ELS: NmaxS / ((0.5 * cap.Rb + 0.7 * cap.Rs) / 1.1) };
-        const Rfile = Math.max(...elu.map(r => r.Nmax)) * nP;
-        const tie = nF === 2 ? pileCapStrutTie({ R: Rfile, l: F.sPile, b: bWall, h: F.hs - 0.1, sigS: fyk / 1.15 }) : null;
-        found = { type: 'pieux', D, n: xsP.length, nF, nP, Lpile: F.Lpile, k: kR, rows, NmaxU, NmaxS, NminU: Math.min(...elu.map(r => r.Nmin)), As: Math.max(AsP, pileMinSteel({ D, code })), AsReq: AsP, Amin: pileMinSteel({ D, code }), cap, capRatio, tie, Rfile, hs: F.hs, W: Wsem };
+        const pileMat = code === 'BAEL' ? { code, fck: pc.fc, fyk } : { code, fck: Math.min(fck, 30), fyk, gammaC: 1.5 * 1.1 };
+        const pileMatAcc = { ...pileMat, gammaC: code === 'BAEL' ? 1.15 : 1.2, gammaS: 1.0 };
+        const AsOf = (r, mt) => Math.max(requiredSteelNM(shapeP, mt, Math.max(0, r.Nmin), r.Mmax).As ?? Infinity, requiredSteelNM(shapeP, mt, r.Nmax, r.Mmax).As ?? Infinity);
+        const AsP = Math.max(...elu.map(r => AsOf(r, pileMat)), ...accR.map(r => AsOf(r, pileMatAcc)));
+        const cap = pileCapacity({ code, type: F.pileType, D, Lpile: F.Lpile, classe: soil.classe, ple: soil.ple });
+        const NmaxU = Math.max(...elu.map(r => r.Nmax)), NmaxS = Math.max(0, ...els.map(r => r.Nmax)), NminU = Math.min(...elu.map(r => r.Nmin));
+        const NminS = Math.min(...els.map(r => r.Nmin));
+        const NmaxA = accR.length ? Math.max(...accR.map(r => r.Nmax)) : 0;
+        const capRatio = cap.applicable ? { ELU: NmaxU / cap.Rcd, ELS: NmaxS / cap.Rcrd, ACC: accR.length ? NmaxA / cap.RcdAcc : 0, traction: NminU < 0 ? -NminU / cap.Rtd : 0,
+          tractionELS: NminS < 0 ? (code === 'BAEL' ? -NminS / (0.7 * cap.Rs / 1.4) : -NminS / (cap.Rtd / 1.1)) : 0 } : { ELU: NaN, ELS: NaN, traction: NaN, tractionELS: NaN };
+        // effet de groupe (F62 C.4.1,2 et annexe G.1 ; NF P 94-262 annexe J) : Converse-Labarre / formule J.2
+        const dP = nF > 1 ? Math.min(F.sPile, Lf / nP) : Lf / nP;
+        // F62 annexe G.1 § 2.5 : sols cohérents Ce = ¼(1 + d/B) (1 au-delà de d = 3B), sols frottants Ce = 1 ; NF P 94-262 J.2
+        const Ce = code === 'BAEL' ? (isCohesive(soil.classe) ? efficaciteCoherentF62({ B: D, d: dP }) : 1) : efficaciteEC7({ B: D, d: dP, m: nF, n: nP });
+        const VmaxU = Math.max(...elu.map(r => r.V));
+        const group = cap.applicable ? { Ce: Math.min(1, Ce), d: dP, ratio: VmaxU / (Math.min(1, Ce) * xsP.length * cap.Rcd) } : null;
+        const sigSels = code === 'BAEL' ? sigmaSBAEL({ fe: fyk, fc28: fck, fiss: 'FTP' }) : 0.8 * fyk;
+        let tie = null, capBeam = null;
+        if (nF === 2) {
+          const t = pileCapTwoRows({ RU: NmaxU, RS: NmaxS, l: F.sPile, b: bWall, hs: F.hs, D, fsu: fyk / 1.15, sigSels });
+          tie = { ...t, perCouple: t.A1, total: t.A1 * nP };
+        } else if (nF === 1) {
+          // semelle filante sur une file de pieux (PP73 1.3.2 § 4.4) : poutre sur les pieux sous le voile (charge répartie) ou les colonnes
+          const nc = end ? (sp.culee.type === 'enterree' ? sp.culee.nCol : 0) : (sp.pile.type === 'colonnes' ? sp.pile.nCol : 0);
+          const Vu = Math.max(...elu.map(r => r.V)), off = (Lf - width) / 2;
+          const piles = Array.from({ length: nP }, (_, k2) => ({ x: Lf * (2 * k2 + 1) / (2 * nP) }));
+          const loads = nc > 0 ? Array.from({ length: nc }, (_, j) => ({ x: off + width * (2 * j + 1) / (2 * nc), P: (Vu - gU * Wsem) / nc })) : [];
+          const bm = pierCap({ length: Lf, supports: piles, loads, q: nc > 0 ? gU * Wsem / Lf : Vu / Lf, b: F.B, h: F.hs, c: 0.07, fck, fyk, code, rhoMin: 0.0012 });
+          capBeam = { Mneg: bm.Mneg, Mpos: bm.Mpos, V: bm.V, AsTop: bm.AsTop, AsBot: bm.AsBot };
+        }
+        found = { type: 'pieux', D, n: xsP.length, nF, nP, Lpile: F.Lpile, k: kR, rows, NmaxU, NmaxS, NminU, As: Math.max(AsP, pileMinSteel({ D, code })), AsReq: AsP, Amin: pileMinSteel({ D, code }), cap, capRatio, NmaxA, group, pileConc: pc, tie, capBeam, sigSels, hs: F.hs, hOk: F.hs >= 0.5, W: Wsem };
       }
       per[code] = { base, shaft: shaftRes, ...extra, found };
     }
     out.BAEL = per.BAEL; out.EC = per.EC;
     return out;
   });
-  return { sp, xs, Lv, width, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hGG, Ka: KA, lines };
+  return { sp, xs, Lv, width, seisme, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hGG, Ka: KA, lines };
 }

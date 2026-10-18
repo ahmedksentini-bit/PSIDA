@@ -68,6 +68,9 @@ src/rebar.js        plan de ferraillage : choix φ/e, épure décalée, filantes
 web/rebarplan.js    dessins du plan de ferraillage (coupe longitudinale, coupes transversales), nomenclature, A_s mis en place / requis
 src/supports/       appuis et fondations : section N-M (section_nm), efforts horizontaux et combinaisons (actions), fûts et
                     chevêtres (pier, beam1d), culées (abutment), semelles et pieux (foundation), chaîne complète (index)
+src/geotech/         modules géotechniques du dépôt « fondation » (F62-V, NF P 94-261/262)
+src/vendor/pont-ec8.mjs moteur sismique de Pont EC8 (dépôt « ouvpara », EN 1998-2)
+src/ec8export.js    projet Pont EC8 construit depuis PSIDA (export JSON et calcul intégré)
 web/supports_view.js tableaux « Appuis et fondations » (interface, rapport, note de calcul)
 src/conception.js   aide à la conception : règles du guide SETRA 1989, variantes de travure, recherche de l'épaisseur minimale vérifiée
 src/abaques1989.js  abaques d'épaisseur du guide SETRA 1989 numérisés (PSI.DA p. 65–67 ; plateaux PSI.DP p. 59–61)

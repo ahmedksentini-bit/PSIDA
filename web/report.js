@@ -54,7 +54,7 @@ export async function buildReport(st) {
 </style></head><body>
 <div class="noprint" style="margin-bottom:12px"><button onclick="window.print()" style="padding:8px 14px;font:inherit">Imprimer / enregistrer en PDF</button></div>
 <h1>Note de calcul — pont-dalle en béton armé (PSI-DA)</h1>
-<div class="meta">Calcul manuel assisté — moteur PSIDA v${esc(st.version || '0.13')} · ${date} · référentiels : Eurocodes (EN 1990/1991-2/1992) et Fascicule 61 titre II + BAEL 91</div>`;
+<div class="meta">Calcul manuel assisté — moteur PSIDA v${esc(st.version || '0.14')} · ${date} · référentiels : Eurocodes (EN 1990/1991-2/1992) et Fascicule 61 titre II + BAEL 91</div>`;
 
   // 1. Données
   h += `<h2>1. Données</h2><div class="box">

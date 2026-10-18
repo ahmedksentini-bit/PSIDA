@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { neopreneFlexibility, horizontalDistribution, brakingF61Deck, headCombinationsBAEL } from '../src/supports/actions.js';
 import { descendLoads, buckling, designShaft, minimumSteelPier } from '../src/supports/pier.js';
-import { pileGroupForces, menardReaction, pileCapStrutTie, pileMinSteel, kp261, KP_261, iDeltaCohesive, iDeltaFrictional, shallowFooting, lateralPile } from '../src/supports/foundation.js';
+import { pileCapTwoRows, sigmaSBAEL, pileGroupForces, menardReaction, pileCapStrutTie, pileMinSteel, kp261, KP_261, iDeltaCohesive, iDeltaFrictional, shallowFooting, lateralPile } from '../src/supports/foundation.js';
 import { gardeGreve, gardeGreveThickness, murEnRetour, Ka } from '../src/supports/abutment.js';
 import { requiredSteelNM } from '../src/supports/section_nm.js';
 
@@ -61,25 +61,29 @@ test('Noé — culée C1 : descente, pieux (2 files de 4), bielles', () => {
   rel(d.found.N, 601.55, 1e-4, 'N bas de semelle'); rel(d.found.M, 323.24, 1e-4, 'M bas de semelle');
   const pg = pileGroupForces({ N: 601.55, M: 323.24, xs: [-1.5, -1.5, -1.5, -1.5, 1.5, 1.5, 1.5, 1.5], Mhead: 3.14 });
   rel(pg.N[0], 50.35, 1e-3, 'N pieux file 1'); rel(pg.N[7], 100.04, 1e-3, 'N pieux file 2');
-  // bielles : R = 601,6 t, σ_s = 165 MPa (FTP) ; note 501,53 cm² (formule : 498,9)
-  rel(pileCapStrutTie({ R: 6016, l: 3.0, b: 0.8, h: 0.95, sigS: 165 }) * 1e4, 501.53, 6e-3, 'A1 bielles [cm²]');
+  // bielles (PP73 1.3.2 § 4.3.2) : R = réaction la plus élevée d'un pieu du couple (100,04 t), σ̄_s = 165 MPa → 82,97 cm²
+  // par couple (la note applique la charge totale 601,6 t → 501,5 cm²) ; bielles à 36° < 45° : hors du domaine de la méthode
+  rel(pileCapStrutTie({ R: 1000.4, l: 3.0, b: 0.8, h: 0.95, sigS: 165 }) * 1e4, 82.97, 1e-3, 'A1 par couple [cm²]');
+  const t = pileCapTwoRows({ RU: 1000.4, RS: 1000.4, l: 3.0, b: 0.8, hs: 1.05, D: 0.8, fsu: 165, sigSels: 165 });
+  assert.equal(t.thetaOk, false); rel(t.theta, 36.2, 3e-3, 'angle des bielles');
 });
 
 test('Noé — module de réaction de Ménard, minimum des pieux', () => {
   rel(menardReaction({ EM: 1800, alpha: 0.66, B: 1.2 }).k, 6756, 1e-3, 'k Ø 1,20');
   rel(menardReaction({ EM: 1800, alpha: 0.66, B: 0.8 }).k, 9120, 1e-3, 'k Ø 0,80');
+  rel(sigmaSBAEL({ fe: 400, fc28: 25, fiss: 'FP' }), 201.6, 1e-3, 'σ̄_s FP Noé'); rel(sigmaSBAEL({ fe: 400, fc28: 25 }), 161.3, 1e-3, 'σ̄_s FTP Noé');
   rel(pileMinSteel({ D: 1.2 }) * 1e4, 56.55, 1e-3, 'A_min Ø 1,20'); rel(pileMinSteel({ D: 0.8 }) * 1e4, 25.13, 1e-3, 'A_min Ø 0,80');
 });
 
 test('NF P 94-261 — k_p,max (D_e/B = 2) du tableau D.2.3 et i_δ', () => {
-  const kmax = { argiles: [1.022, 1.123], sables: [1.393, 1.580], craies: [1.517, 1.768], marnes: [1.399, 1.598] };
-  for (const s of Object.keys(KP_261)) {
+  const kmax = { argile: [1.022, 1.123], sable: [1.393, 1.580], craie: [1.517, 1.768], marne: [1.399, 1.598] };
+  for (const s of Object.keys(kmax)) {
     rel(kp261({ soil: s, De: 2, B: 1, L: 1e9 }), kmax[s][0], 1e-3, `${s} filante`);
     rel(kp261({ soil: s, De: 2, B: 1, L: 1 }), kmax[s][1], 1e-3, `${s} carrée`);
   }
   rel(iDeltaFrictional(Math.PI / 8, 0), (1 - 0.5) ** 2, 1e-9, 'i_δ frottant D_e = 0 : (1 − δ/45°)²');
   rel(iDeltaFrictional(Math.PI / 8, 50), iDeltaCohesive(Math.PI / 8), 1e-9, 'i_δ frottant D_e/B → ∞');
-  const f = shallowFooting({ code: 'EC', B: 3, L: 10, D: 1, V: 6000, H: 300, M: 1500, soil: 'sables', ple: 1.0 });
+  const f = shallowFooting({ code: 'EC', B: 3, L: 10, D: 1, V: 6000, H: 300, M: 1500, classe: 'sable-B', ple: 1.0 });
   rel(f.Bp, 2.5, 1e-9, 'B′ Meyerhof'); assert.ok(f.ratioV > 0 && f.ratioV < 2 && f.excOk);
 });
 
@@ -121,4 +125,34 @@ test('Chaîne complète : appuis calculés depuis le tablier, chapitre de la not
       assert.ok(note.blocks.some(b => b.t === 'h1' && /Appuis et fondations/.test(b.text)), `chapitre appuis ${ref}`);
     }
   }
+});
+
+test('Export Pont EC8 (ouvpara) : projet v1 complet et cohérent avec le tablier', async () => {
+  const { formDefaults } = await import('../tools/formdefaults.mjs');
+  const { parseData, compute } = await import('../src/pipeline.js');
+  const { toPontEC8 } = await import('../src/ec8export.js');
+  const st = compute(parseData({ ...formDefaults(), ap_pileType: 'colonnes', ap_culType: 'enterree', ap_zone: '4' }));
+  const j = toPontEC8(st, { site: st.p.supports.ec8 });
+  assert.equal(j.version, 1); assert.equal(j.site.zone, 4);
+  assert.deepEqual(j.tablier.travees, st.deck.spans);
+  assert.equal(j.appuis.length, st.deck.spans.length + 1);
+  assert.equal(j.appuis[1].futs.forme, 'circulaire'); assert.equal(j.appuis[0].type, 'culee');
+  rel(j.appuis[1].chargesPermanentes.Nmax, st.perm.Rmax[1] / 1000, 1e-12, 'N permanent pile (MN)');
+  for (const a of j.appuis) assert.ok(a.appareils.a > 0 && a.appareils.nbFeuillets > 0);
+});
+
+test('Séisme (moteur Pont EC8 intégré) et chocs : combinaisons accidentelles des appuis', async () => {
+  const { formDefaults } = await import('../tools/formdefaults.mjs');
+  const { parseData, compute } = await import('../src/pipeline.js');
+  const { supportsBlocks } = await import('../web/supports_view.js');
+  const st = compute(parseData({ ...formDefaults(), ap_seisme: 'on', ap_zone: '4', ap_choc: 'autoroute', ap_found: 'pieux' }));
+  const s = st.supports;
+  assert.ok(s.seisme && !s.seisme.error, 'séisme calculé');
+  // la somme des efforts longitudinaux par appui (cas X + 0,3 Y) restitue l'effort total
+  rel(s.seisme.efforts.appuis.reduce((a, p) => a + p.cas[0].Fx, 0), s.seisme.F.x, 1e-6, 'ΣF_x = F');
+  const pile = s.lines[1].BAEL;
+  assert.ok(pile.base.some(b => /choc véhicule/.test(b.label) && Math.abs(b.Hb - 1000) < 1e-9), 'choc 1000 kN');
+  assert.ok(pile.shaft.rows.some(r => r.acc), 'combinaisons accidentelles dans le ferraillage du fût');
+  assert.ok(Number.isFinite(pile.found.capRatio.ACC) && pile.found.capRatio.ACC > 0);
+  assert.ok(supportsBlocks(s, 'EC').some(b => b.t === 'h2' && /Séisme/.test(b.text)));
 });

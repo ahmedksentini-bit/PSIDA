@@ -9,62 +9,95 @@
  * Unités : m, kN, kPa (kN/m²), MPa.
  */
 
-/** Paramètres de k_p (NF P 94-261 tableau D.2.3 — guide Cerema 2015, tab. 11) : [a, b, c, kp0] pour B/L = 0 (filante) et 1. */
-export const KP_261 = {
-  argiles: { filante: [0.2, 0.02, 1.3, 0.8], carree: [0.3, 0.02, 1.5, 0.8] },
-  sables: { filante: [0.3, 0.05, 2, 1.0], carree: [0.22, 0.18, 5, 1.0] },
-  craies: { filante: [0.28, 0.22, 2.8, 0.8], carree: [0.35, 0.31, 3, 0.8] },
-  marnes: { filante: [0.2, 0.2, 3, 0.8], carree: [0.2, 0.3, 3, 0.8] },
-};
+import { kpF62, kpEC7, KP_EC7, idbF62, idEC7, diagramme, surfaceComprimeeF62, portanceF62, excentrementEC7, portanceEC7, glissementF62, glissementEC7 } from '../geotech/superficielles.js';
+import { pieuF62, valeursLimitesEC7, modeleTerrain } from '../geotech/pieux.js';
+import { CLASSES_F62 } from '../geotech/sols.js';
+import { converseLabarre, efficaciteCoherentF62, efficaciteEC7, verifGroupeF62, verifGroupeEC7 } from '../geotech/groupes.js';
+export { converseLabarre, efficaciteCoherentF62, efficaciteEC7, verifGroupeF62, verifGroupeEC7 };
 
-/** Facteur de portance pressiométrique k_p (NF P 94-261 D.2.3), interpolé linéairement en B/L. */
-export function kp261({ soil = 'sables', De, B, L }) {
-  const f = ([a, b, c, k0]) => k0 + (a + b * De / B) * (1 - Math.exp(-c * De / B));
-  const t = Math.min(1, B / L), p = KP_261[soil];
-  return f(p.filante) * (1 - t) + f(p.carree) * t;
+/** Famille F62 (« sable-B ») → catégorie NF P 94-261/262 (« sable »). */
+export const categoryOf = classe => String(classe || 'sable-B').split('-')[0];
+export const isCohesive = classe => (CLASSES_F62[classe] ? CLASSES_F62[classe].cohérent : false);
+
+/** k_p NF P 94-261 (tableau D.2.3, interpolation en B/L, D_e/B plafonné à 2) — module geotech du dépôt « fondation ». */
+export const KP_261 = KP_EC7;
+export function kp261({ soil = 'sable', De, B, L }) {
+  return kpEC7({ categorie: soil.replace(/s$/, ''), B, L, forme: B / L >= 1 - 1e-9 ? 'carree' : 'rectangulaire', De }).k;
 }
-
-/** Coefficient d'inclinaison des sols cohérents i_δ = (1 − 2δ/π)² (NF P 94-261 D.2.4 ; F62-V). */
-export const iDeltaCohesive = delta => (1 - 2 * delta / Math.PI) ** 2;
-/**
- * Sols frottants (F62-V annexe F.2 ; NF P 94-261 D.2.4.2, δ ≤ π/4) : i_δ = (1 − δ')² − δ'(2 − 3δ') e^(−D_e/B), δ' = 2δ/π —
- * (1 − δ/45°)² pour D_e = 0, forme cohérente pour D_e/B → ∞. Branche δ > π/4 (D.2.4.3) non codée : i_δ borné à 0. TODO_VERIF
- */
-export const iDeltaFrictional = (delta, DeB) => { const d = 2 * delta / Math.PI; return Math.max(0, (1 - d) ** 2 - d * (2 - 3 * d) * Math.exp(-DeB)); };
+/** i_δ NF P 94-261 (D.2.4.1 à D.2.4.3), δ en radians. */
+export const iDeltaCohesive = delta => idEC7({ sol: 'coherent', delta: delta * 180 / Math.PI, B: 1, De: 0 }).i;
+export const iDeltaFrictional = (delta, DeB) => idEC7({ sol: 'frottant', delta: delta * 180 / Math.PI, B: 1, De: DeB }).i;
 
 /**
- * Semelle superficielle rectangulaire B × L sous (V, H, M_B) — modèle de Meyerhof (surface effective B' = B − 2e).
- * EC (NF P 94-261) : R_v;d = A' q_net /(γ_R;v γ_R;d;v), γ_R;d;v = 1,2, γ_R;v = 1,4 (ELU) ; 2,3 (ELS) TODO_VERIF ;
- * glissement R_h;d = V tan φ'/(γ_R;h γ_R;d;h), γ_R;h = 1,1, γ_R;d;h = 0,9 TODO_VERIF ; excentrement 1 − 2e/B ≥ 1/15 (ELU), 1/2 (ELS car.).
- * BAEL (F62-V) : q'_ref = (3 q_max + q_min)/4 ≤ q'_0 + i_δ k_p p*_le/γ_q, γ_q = 2 (ELU), 3 (ELS) ; glissement V tan φ'/1,2 + c' A'/1,5.
+ * Semelle superficielle rectangulaire B × L sous (V, H, M_B) [kN, kN·m], excentrement selon B.
+ * EC (NF P 94-261, guide Cerema 2015) : k_p (D.2.3), i_δ (D.2.4), surface effective A' = A(1 − 2e/B), R_v;d = A' i_e q_net/(γ_R;v γ_R;d;v)
+ *   avec γ_R;v = 1,4 (ELU) / 2,3 (ELS), γ_R;d;v = 1,2, R₀ = A q₀ déduit ; excentrement 1 − 2e/B ≥ 1/15 (ELU), 1/2 (ELS car.) ;
+ *   glissement (ELU) R_h;d = V tan φ'/(γ_R;h γ_R;d;h), γ_R;h = 1,1, γ_R;d;h = 1,1.
+ * BAEL (Fascicule 62 titre V, annexes B.1, B.2, F.1) : k_p = k₀[1 + a(0,6 + 0,4 B/L) D_e/B] selon la classe de sol,
+ *   q'_ref = (3 q_max + q_min)/4 ≤ i_δβ k_p p*_le/γ_q + q'₀, γ_q = 2 (ELU) / 3 (ELS rares) ; surface comprimée ≥ 10 % (ELU),
+ *   75 % (ELS rares) ; glissement H ≤ V tan φ'/1,2 + c' A'/1,5.
+ * @param {object} p classe F62 du sol (« sable-B »…), ple p*_le [MPa], q0 contrainte effective au niveau de la base [kPa]
  */
-export function shallowFooting({ code = 'EC', B, L, D = 1, V, H = 0, M = 0, ls = 'ELU', soil = 'sables', ple, De = null, q0 = 0, phi = 30, c = 0, cohesive = false }) {
-  const e = V > 0 ? Math.abs(M) / V : 0, Bp = Math.max(0, B - 2 * e), Ap = Bp * L;
-  const DeV = De ?? D;
-  const kp = kp261({ soil, De: DeV, B: Math.max(Bp, 1e-3), L });
-  const delta = V > 0 ? Math.atan(Math.abs(H) / V) : 0;
-  const idelta = H === 0 ? 1 : cohesive ? iDeltaCohesive(delta) : iDeltaFrictional(delta, DeV / B);
-  const qnet = kp * ple * 1000 * idelta;                                  // p*_le en MPa → q_net en kPa
+export function shallowFooting({ code = 'EC', B, L, D = 1, V, H = 0, M = 0, ls = 'ELU', classe = 'sable-B', soil = null, ple, De = null, q0 = null, phi = 30, c = 0, gamma = 20 }) {
+  const cl = soil && !classe ? soil : classe;
+  const e = V > 0 ? Math.abs(M) / V : 0, DeV = De ?? D, q0v = q0 ?? gamma * D;
+  const delta = V > 0 ? Math.atan(Math.abs(H) / V) * 180 / Math.PI : 0;
+  const sol = isCohesive(cl) ? 'coherent' : 'frottant';
+  const forme = 'rectangulaire';
   if (code === 'EC') {
-    const gRv = ls === 'ELU' ? 1.4 : 2.3, Rvd = Ap * qnet / (gRv * 1.2);
-    const Rhd = V * Math.tan(phi * Math.PI / 180) / (1.1 * 0.9) + (cohesive ? Ap * c : 0);
-    const excOk = 1 - 2 * e / B >= (ls === 'ELU' ? 1 / 15 : 0.5);
-    return { e, Bp, Ap, kp, idelta, qnet, Rvd, ratioV: V / Rvd, Rhd, ratioH: Math.abs(H) / Rhd, excOk };
+    const kp = kpEC7({ categorie: categoryOf(cl), B, L, forme, De: DeV }).k;
+    const id = idEC7({ sol, delta, B, De: DeV }).i;
+    const qnet = kp * ple * 1000 * id;
+    const ex = excentrementEC7({ forme, B, L, eB: e });
+    const etat = ls === 'ELU' ? 'ELU' : ls === 'ACC' ? 'ELU_acc' : 'ELS_car';
+    const exEtat = ls === 'ACC' ? 'ELU' : etat;
+    if (!ex.applicable) return { e, kp, idelta: id, qnet, ratioV: Infinity, ratioH: Infinity, excOk: false, motif: ex.motif };
+    const pv = portanceEC7({ A: B * L, ie: ex.ie, qnet, q0: q0v, Vd: V, etat });
+    const gl = ls !== 'ELS' ? glissementEC7({ Vd: V, Hd: Math.abs(H), phiCrit: phi, etat: ls === 'ACC' ? 'ELU_acc' : 'ELU' }) : null;
+    return { e, Bp: ex.Bprime, Ap: ex.Aprime, kp, idelta: id, qnet, Rvd: pv.Rvd, R0: pv.R0, ratioV: pv.taux, Rhd: gl ? gl.Rhd : null, ratioH: gl ? gl.taux : 0, excOk: ex[exEtat].ok, crit: ex.critere };
   }
-  const qmax = e <= B / 6 ? V / (B * L) * (1 + 6 * e / B) : 2 * V / (3 * L * (B / 2 - e)), qmin = e <= B / 6 ? V / (B * L) * (1 - 6 * e / B) : 0;
-  const qref = (3 * qmax + qmin) / 4, gq = ls === 'ELU' ? 2 : 3;
-  const qadm = q0 + idelta * kp * ple * 1000 / gq;
-  const compressed = e <= B / 6 ? 1 : 3 * (B / 2 - e) / B;
-  return { e, Bp, Ap, kp, idelta, qmax, qmin, qref, qadm, ratioV: qref / qadm, Rhd: V * Math.tan(phi * Math.PI / 180) / 1.2 + c * Ap / 1.5, ratioH: Math.abs(H) / (V * Math.tan(phi * Math.PI / 180) / 1.2 + c * Ap / 1.5), compressed, excOk: compressed >= (ls === 'ELU' ? 0.10 : 0.75) };
+  const kp = kpF62({ classe: cl, B, L, forme, De: Math.min(DeV, 2.5 * B) }).k;   // F62 B.1 : D_e/B ≤ 2,5 (au-delà : semi-profonde)
+  const idb = idbF62({ sol, delta, B, De: DeV }).i;
+  const dg = diagramme({ forme, B, L, V, e });
+  if (!dg.applicable) return { e, kp, idelta: idb, ratioV: Infinity, ratioH: Infinity, excOk: false, compressed: 0, motif: dg.motif };
+  const etat = ls === 'ELU' ? 'ELU' : ls === 'ACC' ? 'ELU_acc' : 'ELS_rare';
+  const pf = portanceF62({ qnette: kp * ple * 1000, q0: q0v, idb, qref: dg.qrefTrapeze, etat });
+  const sc = surfaceComprimeeF62({ B, e, etat: ls === 'ACC' ? 'ELU' : etat });
+  const gl = ls !== 'ELS' ? glissementF62({ Vd: V, Hd: Math.abs(H), phi, c, Aprime: dg.Bc * L }) : null;   // glissement vérifié à l'ELU
+  return { e, kp, idelta: idb, qmax: dg.qmax, qmin: dg.qmin, qref: dg.qrefTrapeze, qadm: pf.qadm, ratioV: pf.taux, Rhd: gl ? gl.R : null, ratioH: gl ? gl.taux : 0, compressed: dg.fraction, excOk: sc.ok };
 }
 
 /**
- * Semelle sur pieux, méthode des bielles (FOND 72 / PP73) : tirant inférieur par paire de pieux de part et d'autre d'un fût
- * de largeur b, entraxe l, hauteur utile h : A = R/σ_s · (l/2 − b/4)/h (R réaction d'un pieu) — Noé : 498,9 cm² (note 501,5).
+ * Semelle sur deux files de pieux, méthode des bielles (PP73 pièce 1.3.2 § 4.3.2) : tirant inférieur PAR COUPLE de pieux
+ * situés de part et d'autre du fût de largeur b, entraxe l, hauteur utile h : A₁ = R/σ̄_a · (l/2 − b/4)/h, R = réaction la
+ * plus élevée des deux pieux du couple. (La note du Pont de Noé applique la charge totale de la semelle, 601,6 t, au lieu
+ * de la réaction d'un pieu, 100,04 t : 501,5 cm² au lieu de 82,97 cm² par couple.)
  */
 export function pileCapStrutTie({ R, l, b, h, sigS }) { return R / (sigS * 1000) * (l / 2 - b / 4) / h; }
 
-/** Semelle superficielle par bielles (BAEL / DTU 13.12) : A = N (B − b)/(8 d f_su) par direction (charge centrée). */
+/** Contrainte limite des aciers BAEL 91 A.4.5,33/34 : FP min(2/3 f_e ; max(0,5 f_e ; 110 √(η f_tj))), FTP 0,8 × FP [MPa]. */
+export function sigmaSBAEL({ fe = 400, fc28 = 25, eta = 1.6, fiss = 'FTP' }) {
+  const ft = 0.6 + 0.06 * fc28, fp = Math.min(2 / 3 * fe, Math.max(0.5 * fe, 110 * Math.sqrt(eta * ft)));
+  return fiss === 'FTP' ? 0.8 * fp : fp;
+}
+
+/**
+ * Semelle sur deux files de pieux (PP73 1.3.2 ch. 4) : tirant par couple à l'ELU (f_su) et à l'ELS (σ̄_s), domaine de la
+ * méthode (bielles inclinées à 45° au moins : h ≥ l/2 − b/4 ; sinon calcul en dalle, § 4.7.4), hauteur minimale
+ * max(0,60 m ; 1,4 Ø) (pratique), A₁ réparti sur une bande Ø + h_s au droit des pieux, armatures de répartition A'₁ et
+ * longitudinales A₂ ≥ 1/3 de la densité de A₁, ancrage aux pieux de rive ≥ 0,8 R/σ̄, poinçonnement du pieu d'angle
+ * R ≤ (2/3)(h + Ø) h σ₂₈ (σ₂₈ = 2 MPa).
+ */
+export function pileCapTwoRows({ RU, RS, l, b, hs, D, fsu, sigSels, cover = 0.10 }) {
+  const h = hs - cover, arm = l / 2 - b / 4;
+  const A1U = pileCapStrutTie({ R: RU, l, b, h, sigS: fsu }), A1S = pileCapStrutTie({ R: RS, l, b, h, sigS: sigSels });
+  const A1 = Math.max(A1U, A1S), band = D + hs, dens = A1 / band;
+  const theta = Math.atan2(h, arm) * 180 / Math.PI, hmin = Math.max(0.6, 1.4 * D);
+  const Rpunch = (2 / 3) * (h + D) * h * 2000;
+  return { h, A1U, A1S, A1, band, dens, A1prime: dens / 3, A2: dens / 3, Aanchor: 0.8 * RS / (sigSels * 1000), theta, thetaOk: theta >= 45 - 1e-9, hmin, hOk: hs >= hmin - 1e-9, Rpunch, punchOk: RS <= Rpunch };
+}
+
+/** Semelle superficielle par bielles (BAEL / DTU 13.12) : A = N (B − b)/(8 d f_su) par direction (charge centrée ; domaine d ≥ (B − b)/4, e ≤ B/6) ; minimum 0,12 % par nappe (PP73 1.1.1). */
 export function footingStrutTie({ N, B, b, d, fsu }) { return N * (B - b) / (8 * d * fsu * 1000); }
 
 /**
@@ -84,7 +117,22 @@ export function pileGroupForces({ N, M, H = 0, xs, Mhead = 0 }) {
  */
 export function menardReaction({ EM, alpha, B, B0 = 0.6 }) {
   const Es = B >= B0 ? 12 * EM / ((4 / 3) * (B0 / B) * (2.65 * B / B0) ** alpha + alpha) : 12 * EM / ((4 / 3) * 2.65 ** alpha + alpha);
-  return { Es, k: Es / B };
+  // Es ci-dessus = module de courte durée (2 × E_s du F62 C.5 : 18 E_M/[4(B₀/B)(2,65 B/B₀)^α + 3α]) ; longue durée : moitié
+  return { Es, k: Es / B, kLong: Es / (2 * B) };
+}
+
+/**
+ * Béton des pieux (Fascicule 62 titre V C.5.4 ; BAEL annexe) : f_c = min(f_cj ; f_c28 ; f_lim)/(k₁ k₂),
+ * k₁ = 1,20 foré simple ou boue, 1,10 foré tubé bétonné à sec, 1,15 préfabriqué battu (f_lim 30 MPa, 25 sinon) ;
+ * k₂ = 1,05 si D/L < 1/20, 1,30 − D/2 si D < 0,60 m, 1,35 − D/2 si les deux, 1,00 sinon ; E_i = 11 000 f_c^(1/3).
+ */
+export function pileConcrete({ fc28 = 25, D, L, type = 'fore-boue' }) {
+  const prefab = /battu|metal/.test(type), tube = /tube/.test(type);
+  const k1 = prefab ? 1.15 : tube ? 1.10 : 1.20, flim = prefab ? 30 : 25;
+  const slim = D / L < 1 / 20, small = D < 0.6;
+  const k2 = slim && small ? 1.35 - D / 2 : small ? 1.30 - D / 2 : slim ? 1.05 : 1.0;
+  const fc = Math.min(fc28, flim) / (k1 * k2);
+  return { k1, k2, fc, Ei: 11000 * fc ** (1 / 3) };
 }
 
 /**
@@ -127,16 +175,28 @@ export function pileMinSteel({ D, code = 'BAEL' }) {
   return A <= 0.5 ? 0.005 * A : A <= 1 ? 25e-4 : 0.0025 * A;
 }
 
+/** Types de pieux : Fascicule 62 (annexe C.3) ↔ catégorie NF P 94-262 (annexe A). */
+export const PILE_TYPES = {
+  'fore-simple': { cat: 1, label: 'foré simple' }, 'fore-boue': { cat: 2, label: 'foré boue' },
+  'fore-tube-perdu': { cat: 3, label: 'foré tubé (virole perdue)' }, 'fore-tube-recupere': { cat: 4, label: 'foré tubé (virole récupérée)' },
+  'battu-prefabrique': { cat: 9, label: 'battu béton préfabriqué' }, 'battu-moule': { cat: 11, label: 'battu moulé' }, 'metal-battu-ferme': { cat: 12, label: 'battu acier fermé' },
+};
+
 /**
- * Portance d'un pieu par la méthode pressiométrique (NF P 94-262, simplifiée) : R_b = k_p p*_le A, R_s = π D Σ q_s,i h_i,
- * q_s = α·f_sol(p*_l), f_sol = (a p*_l + b)(1 − e^(−c p*_l)) (p*_l en MPa → q_s en MPa) ; R_c;d = (R_b + R_s)/(1,15 × 1,1 × 1,1)
- * (ELU) ; ELS caractéristique R_c;cr = (0,5 R_b + 0,7 R_s)/(1,15 × 1,1 × 0,9). Paramètres TODO_VERIF.
+ * Portance axiale d'un pieu par la méthode pressiométrique (sol homogène p*_l sur toute la hauteur, ou couches) :
+ * Fascicule 62 titre V annexe C.3 (k_p, courbes Q1 à Q7, Q_c = 0,5 Q_pu + 0,7 Q_su — 0,7 pour les pieux refoulants ;
+ * Q ≤ Q_u/1,4 ELU, Q_c/1,1 ELS rares, traction Q_tu/1,4, Q_tc/1,4) ; NF P 94-262 (modèle de terrain : k_p(D_ef/B), α f_sol,
+ * γ_R;d1 γ_R;d2, puis γ_t = 1,1 à l'ELU et charge de fluage/0,9 à l'ELS caractéristique).
  */
-export const FSOL_262 = { argiles: [0.003, 0.04, 3.5], intermediaires: [0.01, 0.06, 1.2], sables: [0.007, 0.07, 1.3], craies: [0.008, 0.08, 3], marnes: [0.01, 0.08, 3] };
-export function pileCapacity262({ D, layers, kp = 1.15, alphaPile = 1.1, pleTip }) {
-  const A = Math.PI * D ** 2 / 4;
-  const Rb = kp * pleTip * 1000 * A;
-  let Rs = 0;
-  for (const ly of layers) { const [a, b, c] = FSOL_262[ly.soil] || FSOL_262.sables; const fs = (a * ly.pl + b) * (1 - Math.exp(-c * ly.pl)); Rs += Math.PI * D * ly.h * alphaPile * fs * 1000; }
-  return { Rb, Rs, Rcd: (Rb + Rs) / (1.15 * 1.1 * 1.1), Rcrd: (0.5 * Rb + 0.7 * Rs) / (1.15 * 1.1 * 0.9) };
+export function pileCapacity({ code = 'EC', type = 'fore-simple', D, Lpile, classe = 'sable-B', ple, layers = null }) {
+  const couches = layers ?? [{ z0: 0, z1: Lpile + 10, classe, sol: categoryOf(classe), pl: ple }];
+  if (code === 'EC') {
+    const lim = valeursLimitesEC7({ methode: 'pressio', cat: (PILE_TYPES[type] || PILE_TYPES['fore-simple']).cat, B: D, D: Lpile, couches });
+    if (!lim.applicable) return { applicable: false, motif: lim.motif };
+    const mt = modeleTerrain(lim);
+    return { applicable: true, Rb: lim.Rb, Rs: lim.Rs, Rcd: mt.calcul.ELU.Rcd, RcdAcc: mt.calcul.ELU_acc.Rcd, Rcrd: mt.calcul.ELS_car.Rccrd, Rtd: mt.calcul.ELU.Rtd, detail: mt };
+  }
+  const r = pieuF62({ methode: 'pressio', type, B: D, D: Lpile, couches });
+  if (!r.applicable) return { applicable: false, motif: r.motif };
+  return { applicable: true, Rb: r.Qpu, Rs: r.Qsu, Rcd: r.limites.ELU.Qmax, RcdAcc: r.limites.ELU_acc.Qmax, Rcrd: r.limites.ELS_rare.Qmax, Rtd: -r.limites.ELU.Qmin, detail: r };
 }

@@ -188,6 +188,22 @@ Choix retenus (justifiés dans les en-têtes des modules) :
 - **Écart signalé** : la note de Noé applique au tirant de la semelle de culée l'effort total (601,6 t) ; la formule des bielles
   à deux files porte sur la réaction d'une file — c'est ce que fait l'outil.
 
+## 1 septies. Relecture des textes et intégrations (v0.14)
+
+- **Fondations** : modules `src/geotech/` copiés du dépôt `fondation` (bureau de calcul fond.ksr-infra.org, 170 tests) —
+  Fascicule 62 titre V (k_p par classe, Φ₁/Φ₂, q'_ref, γ_q, pieux annexe C.3 et courbes Q1–Q7), NF P 94-261 (k_p, i_δ, γ_R;v,
+  γ_R;d;v, γ_R;h = γ_R;d;h = 1,1), NF P 94-262 (modèle de terrain), effet de groupe. Relus sur les textes du Drive
+  (rapports `ref/reports/f62v.md`, `nfp94261.md`, `fond72.md`).
+- **Semelles sur pieux** : PP73 pièce 1.3.2 ch. 4 — tirant par couple de pieux avec R = réaction d'un pieu (la note de Noé
+  applique la charge totale de la semelle : 501,5 cm² au lieu de 82,97 cm² par couple), bielles à 45° au moins, hauteur
+  minimale, répartition, ancrage, poinçonnement ; file unique : poutre sur pieux et moment M/n en tête des pieux.
+- **Ménard** : la formule reproduite sur Noé est le module de courte durée (2 E_s du F62) ; enveloppe courte/longue durée.
+- **Séisme** : moteur de Pont EC8 (dépôt `ouvpara`, EN 1998-2, guide Cerema 2015) intégré en module ES (`src/vendor/pont-ec8.mjs`) :
+  le projet est construit par `src/ec8export.js`, les efforts par appui (100/30/30, UBDP) entrent en combinaison sismique
+  G + A_Ed avec matériaux accidentels. Non compris : inertie propre des fûts, surpoussée dynamique des terres.
+- **Chocs** : EN 1991-1-7 tableau 4.1 (véhicules) et C.3 (bateaux fluviaux CEMT), valeurs recommandées à confronter à
+  l'annexe nationale ; force maximale dans le sens longitudinal, une seule colonne touchée.
+
 ## 2. Protocole de comparaison avec une note de référence
 
 ### 2.1 Référentiel Eurocodes — note CHAMOA-PSIDA (Cerema, guide technique, ch. 4)
@@ -220,7 +236,7 @@ Choix retenus (justifiés dans les en-têtes des modules) :
 
 Bibliographie : Bareš & Massonnet (1966) ; Pücher (1977) ; Homberg (1968) ; Calgaro & Virlogeux ; Hambly (1991) ; O'Brien, Keogh & O'Connor (2014) ; EN 1991-2, EN 1992-1-1, EN 1992-2 ; Fascicule 61 titre II ; BAEL 91.
 
-## 4. Vérifications internes déjà en place (`npm test`, 98 tests)
+## 4. Vérifications internes déjà en place (`npm test`, 100 tests)
 
 - Poutre : PL/4 ; −qL²/8 et 9/128·qL² (2 travées) ; −qL²/10, 0,08 qL², 0,025 qL² (3 travées) ; enveloppe une travée chargée 0,0957 qL² ; convoi glissant ; portées équivalentes 0,8L / 0,447L.
 - Guyon-Massonnet : conditions de bord libre exactes, saut de Y''' = 1 sous la charge, flèche moyenne = poutre (∫K = 2b à 10⁻⁵), réciprocité K(y,e) = K(e,y), symétrie, limite θ → 0 ⇒ K = 1, continuité en charge de bord, μ nul aux bords, ∫m_x dy = moment de poutre (séries de Fourier).

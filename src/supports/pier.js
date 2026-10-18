@@ -71,10 +71,15 @@ export function designShaft({ shape, code = 'BAEL', fck = 25, fyk = 400, Ev = nu
   const buck = buckling({ Lf: lf, h, Ev: Evv, D: shape.D || null });
   const I = shape.D ? Math.PI * shape.D ** 4 / 64 : shape.b * shape.h ** 3 / 12;
   const rows = combos.map(c => {
-    const N = c.N / n, M1 = Math.abs(c.M) / n, e1 = N > 0 ? M1 / N : 0;
+    // c.My : moment transversal global (séisme Y) partagé entre fûts circulaires (moment résultant) ;
+    // c.Mloc : moment local d'un seul fût (choc de véhicule ou de bateau sur une colonne), non partagé
+    const N = c.N / n, Mx = Math.abs(c.M) / n, My = shape.D ? Math.abs(c.My || 0) / n : 0;
+    const M1 = Math.hypot(Mx, My) + Math.abs(c.Mloc || 0), e1 = N > 0 ? M1 / N : 0;
     const so = secondOrder({ code, Lf: lf, h, d: h - (shape.c ?? 0.05), L: Hf, alpha: alphaGQ, fyk, fck, N, e1, Ev: Evv, I, Ac });
     const Mtot = Number.isFinite(so.etot) ? Math.max(M1, N * so.etot) : Infinity;
-    const r = Number.isFinite(Mtot) ? requiredSteelNM(shape, { code, fck, fyk }, N, Mtot) : { As: null };
+    // situations accidentelles (séisme, chocs) : γ_b = 1,15 (BAEL A.4.3,41) / γ_c = 1,2 (EC2 2.4.2.4), γ_s = 1,0
+    const mat = c.acc ? { code, fck, fyk, gammaC: code === 'BAEL' ? 1.15 : 1.2, gammaS: 1.0 } : { code, fck, fyk };
+    const r = Number.isFinite(Mtot) ? requiredSteelNM(shape, mat, N, Mtot) : { As: null };
     return { ...c, Nshaft: N, M1, Mtot, e1, secondOrder: so, As: r.As, sigma: N / Ac / 1000 };
   });
   const mins = minimumSteelPier({ code, Ac, perimeter: per, Ned: Math.max(0, ...rows.map(r => r.Nshaft)), fyk });

@@ -21,6 +21,7 @@ import { rebarPlan } from '../src/rebar.js';
 import { parseData, compute, computeConceptOnly, conceptInput, parseVehicle } from '../src/pipeline.js';
 import { longitudinalRebarSVG, crossRebarSVG, scheduleHTML, providedPlot } from './rebarplan.js';
 import { supportsBlocks, blocksToHTML } from './supports_view.js';
+import { toPontEC8 } from '../src/ec8export.js';
 
 const $ = s => document.querySelector(s);
 const nums = s => s.split(/[,;\s]+/).filter(Boolean).map(Number);
@@ -383,7 +384,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!state) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.13', hSearch: lastSearch });
+    const html = await buildReport({ ...state, version: '0.14', hSearch: lastSearch });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -403,7 +404,7 @@ async function noteFigures() {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.13' }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.14' }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!state || state.conceptOnly) { $('#error').textContent = 'Lancer d\'abord le calcul complet.'; return; }
@@ -426,6 +427,15 @@ $('#btn-note-docx').addEventListener('click', async () => {
 });
 $('#trans-span').addEventListener('change', () => state && renderTransverse(state));
 $('#supports-ref').addEventListener('change', () => state && renderSupports(state));
+$('#btn-ec8').addEventListener('click', () => {
+  if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul complet.'; return; }
+  try {
+    const j = toPontEC8(state, { site: state.p.supports.ec8 });
+    const aEl = document.createElement('a');
+    aEl.href = URL.createObjectURL(new Blob([JSON.stringify(j, null, 2)], { type: 'application/json' }));
+    aEl.download = `pont-ec8-${state.deck.spans.join('-')}.json`; aEl.click();
+  } catch (e) { $('#error').textContent = e.stack || String(e); }
+});
 $('#trans-ref').addEventListener('change', () => state && renderTransverse(state));
 $('#span-select').addEventListener('change', () => state && kPlot($('#plot-K'), state.deck, +$('#span-select').value));
 // Exemple de la note commentée PSIDA.EL (SETRA 1984, réimpr. 1990) : rectangle équivalent 7,913 × 0,52 m, I = 0,09272 m⁴,

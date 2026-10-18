@@ -190,14 +190,28 @@
         <label>Fondations<select name="ap_found"><option value="superficielle">semelles superficielles</option><option value="pieux">semelles sur pieux</option></select></label>
         <label>Semelle : B (longitudinal) / épaisseur / encastrement D_e [m]<div class="row"><input name="ap_B" value="3" type="number" step="any"><input name="ap_hs" value="1" type="number" step="any"><input name="ap_De" value="1" type="number" step="any"></div></label>
       </div>
+      <label>Type de pieu<select name="ap_pieu"><option value="fore-boue">foré boue</option><option value="fore-simple">foré simple</option><option value="fore-tube-recupere">foré tubé (virole récupérée)</option><option value="fore-tube-perdu">foré tubé (virole perdue)</option><option value="battu-prefabrique">battu béton préfabriqué</option><option value="battu-moule">battu moulé</option><option value="metal-battu-ferme">battu acier fermé</option></select></label>
       <label>Pieux : Ø [m] / par file / files / entraxe des files [m] / longueur [m]<div class="row"><input name="ap_pileD" value="0.8" type="number" step="any"><input name="ap_nPile" value="3" type="number"><input name="ap_nFiles" value="2" type="number"><input name="ap_sPile" value="2.4" type="number" step="any"><input name="ap_Lpile" value="15" type="number" step="any"></div></label>
       <div class="row">
-        <label>Sol<select name="ap_soil"><option value="sables">sables et graves</option><option value="argiles">argiles et limons</option><option value="craies">craies</option><option value="marnes">marnes, roches altérées</option></select></label>
+        <label>Sol (classe du Fascicule 62)<select name="ap_soil"><option value="argile-A">argiles et limons mous (A)</option><option value="argile-B">argiles et limons fermes (B)</option><option value="argile-C">argiles très fermes à dures (C)</option><option value="sable-A">sables et graves lâches (A)</option><option value="sable-B" selected>sables et graves moyennement compacts (B)</option><option value="sable-C">sables et graves compacts (C)</option><option value="craie-A">craies molles (A)</option><option value="craie-B">craies altérées (B)</option><option value="craie-C">craies compactes (C)</option><option value="marne-A">marnes tendres (A)</option><option value="marne-B">marnes compactes (B)</option><option value="roche-A">roches altérées (A)</option><option value="roche-B">roches fragmentées (B)</option></select></label>
         <label>p*_le [MPa] / E_M [MPa] / α Ménard<div class="row"><input name="ap_ple" value="1.0" type="number" step="any"><input name="ap_EM" value="10" type="number" step="any"><input name="ap_alpha" value="0.5" type="number" step="any"></div></label>
       </div>
       <div class="row">
         <label>Remblai : φ' [°] / γ [kN/m³] / surcharge q [kN/m²]<div class="row"><input name="ap_phi" value="30" type="number" step="any"><input name="ap_gamma" value="20" type="number" step="any"><input name="ap_q" value="10" type="number" step="any"></div></label>
         <label>Béton appuis f_ck / acier f_yk [MPa] / enrobage [m]<div class="row"><input name="ap_fck" value="25" type="number" step="any"><input name="ap_fyk" value="400" type="number" step="any"><input name="ap_c" value="0.05" type="number" step="any"></div></label>
+      </div>
+      <div class="row">
+        <label>Séisme (export Pont EC8) : zone / catégorie d'importance<div class="row"><select name="ap_zone"><option value="1">1</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option></select><select name="ap_catEC8"><option value="I">I</option><option value="II">II</option><option value="III" selected>III</option><option value="IV">IV</option></select></div></label>
+        <label>Classe de sol EC8<select name="ap_solEC8"><option value="A">A</option><option value="B" selected>B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option></select></label>
+      </div>
+      <label><input type="checkbox" name="ap_seisme">Séisme (EN 1998-2, mode fondamental — moteur de Pont EC8) : combinaison sismique des fûts et fondations</label>
+      <div class="row">
+        <label>Coefficient de comportement q longitudinal / transversal<div class="row"><input name="ap_qL" value="1" type="number" step="any"><input name="ap_qT" value="1" type="number" step="any"></div></label>
+        <label>Choc de véhicule sur les piles (EN 1991-1-7 tab. 4.1)<select name="ap_choc"><option value="aucun">aucun</option><option value="autoroute">autoroute, route nationale ou principale (1000 / 500 kN)</option><option value="rurale">route de campagne (750 / 375 kN)</option><option value="urbaine">voie urbaine (500 / 250 kN)</option><option value="parking">cour, parking poids lourds (150 / 75 kN)</option></select></label>
+      </div>
+      <div class="row">
+        <label>Hauteur du choc de véhicule au-dessus du dessus de semelle [m]<input name="ap_hV" value="1.25" type="number" step="any"></label>
+        <label>Choc de bateau (classe CEMT, EN 1991-1-7 C.3) / hauteur [m]<div class="row"><select name="ap_bateau"><option value="aucun">aucun</option><option>I</option><option>II</option><option>III</option><option>IV</option><option>Va</option><option>Vb</option><option>VIa</option><option>VIb</option><option>VIc</option></select><input name="ap_hB" value="2.0" type="number" step="any"></div></label>
       </div>
       <label>F61 : ε TLD / ε TCD (appuis)<div class="row"><input name="ap_TLD" value="0.0003" type="number" step="any"><input name="ap_TCD" value="0.0001" type="number" step="any"></div></label>
     </details>
@@ -270,7 +284,7 @@
       <h3>Nomenclature et métré</h3>
       <div id="rebar-schedule"></div>
     </div>
-    <div class="card full-only" id="card-supports"><div class="toolbar"><h2 style="margin:0;flex:1">Appuis et fondations</h2><select id="supports-ref" style="width:auto;margin:0;padding:7px"><option value="F61">Fascicule 61 / BAEL / F62-V</option><option value="EC">Eurocodes</option></select></div><div id="supports-tables"></div></div>
+    <div class="card full-only" id="card-supports"><div class="toolbar"><h2 style="margin:0;flex:1">Appuis et fondations</h2><select id="supports-ref" style="width:auto;margin:0;padding:7px"><option value="F61">Fascicule 61 / BAEL / F62-V</option><option value="EC">Eurocodes</option></select><button type="button" id="btn-ec8" style="width:auto;margin:0 0 0 6px;padding:8px 14px">Exporter vers Pont EC8 (séisme)</button></div><p class="small">Le calcul parasismique (EN 1998-2, méthode du mode fondamental) se fait dans l'outil Pont EC8 : le bouton télécharge le projet JSON à ouvrir par « Importer » dans Pont EC8.</p><div id="supports-tables"></div></div>
     <div class="card full-only"><h2>Zonage du ferraillage et dispositions constructives (guide SETRA 1989 § 3.4)</h2><div class="svgbox" id="zoning-plan"></div><div id="zoning-tables"></div></div>
     <div class="card full-only"><h2>Lignes d'influence</h2>
       <div class="toolbar"><label>Section <select id="section-select"></select></label></div>
