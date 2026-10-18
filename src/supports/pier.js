@@ -34,7 +34,7 @@ export function buckling({ Lf, h, Ev, b = null, D = null }) {
  *   sinon courbure nominale § 5.8.8 : e₂ = (1/r) l₀²/10, 1/r = K_r K_φ ε_yd/(0,45 d) (K_r = K_φ = 1, sécuritaire) ;
  *   imperfection e_i = θ_i l₀/2, θ_i = α_h/200, α_h = 2/√l (2/3 ≤ α_h ≤ 1) ; e₀ ≥ max(h/30 ; 20 mm) (§ 6.1(4)).
  */
-export function secondOrder({ code = 'BAEL', Lf, h, d = null, L = null, alpha = 0.5, phi = 2, fyk = 400, fck = 25, N, e1 = 0, Ev, I, Ac }) {
+export function secondOrder({ code = 'BAEL', Lf, h, d = null, L = null, alpha = 0.5, phi = 2, fyk = 400, fck = 25, N, e1 = 0, Ev, I, Ac, gammaC = 1.5, gammaS = 1.15 }) {
   const l = L ?? Lf / 2;
   if (code === 'BAEL') {
     const ea = Math.max(0.02, l / 250);
@@ -45,9 +45,9 @@ export function secondOrder({ code = 'BAEL', Lf, h, d = null, L = null, alpha = 
   }
   const ah = Math.min(1, Math.max(2 / 3, 2 / Math.sqrt(l))), ei = (ah / 200) * Lf / 2;
   const e0 = Math.max(e1 + ei, h / 30, 0.02);
-  const nrel = N / (Ac * fck / 1.5 * 1000), lam = Lf / Math.sqrt(I / Ac), lamLim = 20 * 0.7 * 1.1 * 0.7 / Math.sqrt(Math.max(nrel, 1e-6));
+  const nrel = N / (Ac * fck / gammaC * 1000), lam = Lf / Math.sqrt(I / Ac), lamLim = 20 * 0.7 * 1.1 * 0.7 / Math.sqrt(Math.max(nrel, 1e-6));
   if (lam <= lamLim) return { method: 'EC2 5.8.3.1 : λ ≤ λ_lim', ea: ei, lam, lamLim, etot: e0 };
-  const e2 = (fyk / 1.15 / 200000) / (0.45 * (d ?? 0.9 * h)) * Lf ** 2 / 10;
+  const e2 = (fyk / gammaS / 200000) / (0.45 * (d ?? 0.9 * h)) * Lf ** 2 / 10;
   return { method: 'EC2 5.8.8 courbure nominale', ea: ei, e2, lam, lamLim, etot: e0 + e2 };
 }
 
@@ -84,7 +84,8 @@ export function designShaft({ shape, code = 'BAEL', fck = 25, fyk = 400, Ev = nu
     // c.Mloc : moment local d'un seul fût (choc de véhicule ou de bateau sur une colonne), non partagé
     const N = c.N / n, Mx = Math.abs(c.M) / n, My = shape.D ? Math.abs(c.My || 0) / n : 0;
     const M1 = Math.hypot(Mx, My) + Math.abs(c.Mloc || 0), e1 = N > 0 ? M1 / N : 0;
-    const so = secondOrder({ code, Lf: lf, h: hB, d: h - (shape.c ?? 0.05), L: Hf, alpha: alphaGQ, fyk, fck, N, e1, Ev: Evv, I: shape.hBuck ? I * (hB / h) ** 3 : I, Ac });
+    // situations accidentelles : ε_yd = f_yk/(γ_s E_s) avec γ_s = 1,0 et n = N_Ed/(A_c f_cd), γ_c = 1,2 (EC2 2.4.2.4)
+    const so = secondOrder({ code, Lf: lf, h: hB, d: h - (shape.c ?? 0.05), L: Hf, alpha: alphaGQ, fyk, fck, N, e1, Ev: Evv, I: shape.hBuck ? I * (hB / h) ** 3 : I, Ac, ...(c.acc ? { gammaC: 1.2, gammaS: 1.0 } : {}) });
     const Mtot = Number.isFinite(so.etot) ? Math.max(M1, N * so.etot) : Infinity;
     // situations accidentelles (séisme, chocs) : γ_b = 1,15 (BAEL A.4.3,41) / γ_c = 1,2 (EC2 2.4.2.4), γ_s = 1,0
     const mat = c.acc ? { code, fck, fyk, gammaC: code === 'BAEL' ? 1.15 : 1.2, gammaS: 1.0 } : { code, fck, fyk };
