@@ -6,9 +6,9 @@
  * Unités : m, kN, kN·m, MPa (p*_l, E_M en MPa).
  */
 import { neopreneFlexibility, cantileverFlexibility, horizontalDistribution, brakingF61Deck, headCombinationsBAEL, headCombinationsEC } from './actions.js';
-import { designShaft, pierCap, buckling } from './pier.js';
-import { gardeGreve, murEnRetour, earthPressure, dalleTransition, Ka } from './abutment.js';
-import { shallowFooting, footingStrutTie, pileCapStrutTie, pileGroupForces, menardReaction, lateralPile, pileMinSteel, pileCapacity, PILE_TYPES, pileCapTwoRows, sigmaSBAEL, pileConcrete, efficaciteCoherentF62, efficaciteEC7, isCohesive, soilProfile } from './foundation.js';
+import { designShaft, pierCap, buckling, chevetreTorsion } from './pier.js';
+import { gardeGreve, murEnRetour, earthPressure, earthPressureUpper, videCombos, dalleTransition, Ka } from './abutment.js';
+import { shallowFooting, footingStrutTie, pileCapStrutTie, pileGroupForces, menardReaction, lateralPile, pileMinSteel, pileCapacity, PILE_TYPES, pileCapTwoRows, paroiFlechie, sigmaSBAEL, pileConcrete, efficaciteCoherentF62, efficaciteEC7, isCohesive, soilProfile } from './foundation.js';
 import { requiredSteelNM } from './section_nm.js';
 import { pierWater } from './water.js';
 import { bearingSpacing } from '../bearings.js';
@@ -58,7 +58,7 @@ export function externalSeismic(ext, nL, spans = null) {
  */
 export function geometryWarnings(sp, end, width) {
   const W = [], F = sp.found, P = sp.pile, C = sp.culee;
-  const col = end ? C.type === 'enterree' : P.type === 'colonnes';
+  const col = end ? C.type !== 'remblayee' : P.type === 'colonnes';
   const D = end ? C.D : P.D, hc = end ? C.hc : P.hc, lc = end ? C.lc : P.lc;
   if (col && D < 0.60 - 1e-9) W.push(`colonnes Ø ${D} m < 0,60 m (PP73 1.3.2 § 1.3 : diamètre minimal vis-à-vis du choc)`);
   if (col && hc > 0 && (hc < 0.60 - 1e-9 || lc < 0.70 - 1e-9)) W.push(`chevêtre ${hc} × ${lc} m : dimensions conseillées ≥ 0,60 m de hauteur × 0,70 m de largeur (PP73 1.1.3, 1.3.2 § 2.2.5.1)`);
@@ -77,7 +77,9 @@ export function geometryWarnings(sp, end, width) {
 /** Valeurs par défaut du formulaire « Appuis et fondations ». */
 export const SUPPORT_DEFAULTS = {
   pile: { type: 'voile', H: [6], b: 0.6, Lv: null, nCol: 3, D: 0.8, hc: 0, lc: 1.2 },
-  culee: { type: 'remblayee', Hm: 3.0, em: 0.8, hGG: null, Lret: 4.0, nCol: 3, D: 0.8, hc: 1.0, lc: 1.6 },
+  // type : remblayee (mur de front), enterree (pile-culée noyée), apparente (pile-culée apparente, voile frontal hv sous le chevêtre) ;
+  // dalle : dalle de transition appuyée sur le garde-grève
+  culee: { type: 'remblayee', Hm: 3.0, em: 0.8, hGG: null, Lret: 4.0, nCol: 3, D: 0.8, hc: 1.0, lc: 1.6, hv: 1.0, dalle: true },
   found: { type: 'superficielle', B: 3.0, hs: 1.0, De: 1.0, pileType: 'fore-boue', pileD: 0.8, nPile: 3, nFiles: 2, sPile: 2.4, Lpile: 15 },
   soil: { layers: null, classe: 'sable-B', ple: 1.0, EM: 10, alpha: 0.5, phi: 30, gamma: 20, q: 10 },
   mat: { fck: 25, fyk: 400, c: 0.05 },
@@ -228,8 +230,11 @@ export function computeSupports(st, input = {}) {
           extra.cap.Pu = Pu;
         }
       } else {
-        const C = sp.culee, Hm = C.Hm, rem = C.type === 'remblayee';
-        const ep = earthPressure({ H: Hm + hGG, B: rem ? width : C.nCol * Math.min(3 * C.D, width / C.nCol), K: KA, gamma: soil.gamma, q: soil.q });
+        const C = sp.culee, Hm = C.Hm, rem = C.type === 'remblayee', app = C.type === 'apparente';
+        // poussée : mur de front ; pile-culée noyée : colonnes de largeur fictive min(3D ; entraxe) (hypothèse PSIDA, pratique
+        // des guides de culées) ; pile-culée apparente : partie haute seulement (PP73 1.3.2 § 3.1.3.1, i = 1/3, p = 15 kPa)
+        const ep = app ? earthPressureUpper({ h1: hGG + C.hc + Math.max(0, C.hv), Htot: Hm + C.hc + hGG, L: width, gamma: soil.gamma })
+          : earthPressure({ H: Hm + hGG, B: rem ? width : C.nCol * Math.min(3 * C.D, width / C.nCol), K: KA, gamma: soil.gamma, q: soil.q });
         const dt = dalleTransition({ Hr: Hm + hGG });
         const Wtop = rem ? 25 * (0.3 * hGG + 1.0 * (C.em + 0.3)) * width : 25 * C.hc * C.lc * width + 25 * 0.3 * hGG * width;
         const Wwall = rem ? 25 * C.em * Hm * width : 25 * C.nCol * Math.PI * C.D ** 2 / 4 * Hm;
@@ -240,10 +245,12 @@ export function computeSupports(st, input = {}) {
           const Hb = cb.H + g * ep.Pg + gq * ep.Pq;
           return { ...cb, Nb: cb.N + g * (Wtop + Wwall + Wret + dt.Rg * width) + gq * dt.Rq * width / 3, Mb: cb.H * (Hm + (rem ? 0 : C.hc)) + g * ep.Mg + gq * ep.Mq, Hb };
         });
-        extra.earth = { ...ep, K: KA, Htot: Hm + hGG };
+        // culée sans tablier (remblai mis en place avant la pose du tablier, PP73 1.3.2 § 3.1.4.6)
+        base.push(...videCombos({ W: Wtop + Wwall + Wret, ep, code }));
+        extra.earth = { ...ep, K: app ? ep.i : KA, Htot: Hm + hGG, mode: app ? 'partie haute (PP73 § 3.1.3.1)' : rem ? 'mur de front' : 'colonnes, largeur fictive min(3D ; entraxe)' };
         const shape = rem ? { b: 1, h: C.em, c: c + 0.01 } : { D: C.D, c: c + 0.01, nBars: 12 };
-        shaftRes = designShaft({ shape, code, fck, fyk, Hf: Hm, combos: base.filter(b => b.ls !== 'ELS').map(b => ({ label: b.label, N: b.Nb, M: b.Mb, My: (b.Hy || 0) * Hm, acc: !!b.acc })), n: rem ? width : C.nCol });
-        const gg = gardeGreve({ h: hGG, K: KA, gamma: soil.gamma });
+        shaftRes = designShaft({ shape, code, fck, fyk, Hf: Hm, combos: base.filter(b => b.ls !== 'ELS').map(b => ({ label: b.label, N: b.Nb, M: b.Mb, My: (b.Hy || 0) * Hm, acc: !!b.acc })), n: rem ? width : C.nCol, pileCulee: !rem, strip: rem });
+        const gg = gardeGreve({ h: hGG, K: KA, gamma: soil.gamma, dalleSurGG: !!C.dalle });
         const ggAs = (requiredSteelNM({ b: 1, h: gg.e, c }, { code, fck, fyk }, 0, gg.ELU).As ?? NaN) / 2;
         // face avant : moment de sens opposé M' = −3,2 t·m/m (PP73 1.3.2 § 2.3.3, sollicitation du 1er genre → ELU × 1,6/1,2)
         const ggAv = (requiredSteelNM({ b: 1, h: gg.e, c }, { code, fck, fyk }, 0, gg.Mrev * 1.6 / 1.2).As ?? NaN) / 2;
@@ -255,8 +262,16 @@ export function computeSupports(st, input = {}) {
           const ys = Array.from({ length: nb }, (_, k) => width / 2 + (k - (nb - 1) / 2) * pitch);
           const row = bearings.rows[i], kQ = code === 'BAEL' ? 1.605 : 1.35;
           const Pu = (1.35 * row.kCP * perm.Rmax[i] + kQ * row.kQ * Math.max(0, row.Rmax - perm.Rmax[i])) / nb;
-          extra.cap = pierCap({ length: width, supports: Array.from({ length: C.nCol }, (_, j) => ({ x: width * (2 * j + 1) / (2 * C.nCol) })), loads: ys.map(y => ({ x: y, P: Pu })), q: 1.35 * 25 * C.hc * C.lc, b: C.lc, h: C.hc, c, fck, fyk, code });
-          extra.cap.Pu = Pu;
+          // PP73 1.3.2 § 2.2.2 : garde-grève (poids propre), dalle de transition (15 + D) t/ml ou, sans dalle, 5,5 t/ml × 2 = 11 t/ml ;
+          // murs en retour ou murettes : poids propre et charge verticale à l'extrémité (4 tf, murettes ≤ 2,5 m : 5 tf) ;
+          // valeurs du 1er genre → ELU × 1,35
+          const qGG = 25 * gg.e * hGG, qDalle = C.dalle ? 10 * (15 + dt.L) : 110;
+          const Pend = 1.35 * (Wret / 2 + (mr.murette ? 50 : 40));
+          extra.cap = pierCap({ length: width, supports: Array.from({ length: C.nCol }, (_, j) => ({ x: width * (2 * j + 1) / (2 * C.nCol) })), loads: [...ys.map(y => ({ x: y, P: Pu })), { x: 0, P: Pend }, { x: width, P: Pend }],
+            q: 1.35 * (25 * C.hc * C.lc + qGG + qDalle), b: C.lc, h: C.hc, c, fck, fyk, code });
+          extra.cap.Pu = Pu; extra.cap.qGG = qGG; extra.cap.qDalle = qDalle; extra.cap.Pend = Pend;
+          // torsion due au garde-grève (PP73 1.3.2 § 2.2.4), entraxe des colonnes
+          extra.torsion = chevetreTorsion({ hg: hGG, hc: C.hc, b: C.lc, e: width / C.nCol, V: extra.cap.V, code, fck, fyk, c });
         }
       }
       // --- fondation ---
@@ -266,8 +281,8 @@ export function computeSupports(st, input = {}) {
       const wl = water[i], dAff = wl ? wl.dAff : 0;
       // crue : Archimède sur la semelle (ρ g V), effort transversal combiné (glissement, effort par pieu), moment transversal
       const fd = base.map(b => {
-        const g = b.ls === 'ELU' ? gU : 1, Hy = b.Hyb || 0, wt = !!b.wat;
-        return { label: b.label, ls: b.ls, V: b.Nb + g * Wsem - (wt ? 10 * Wsem / 25 : 0), H: Math.hypot(b.Hb, wt ? Hy : 0), Hx: b.Hb, Hy, M: b.Mb + b.Hb * F.hs, My: (b.Myb || 0) + Hy * F.hs, crue: wt };
+        const g = b.ls === 'ELU' && !b.vide ? gU : 1, Hy = b.Hyb || 0, wt = !!b.wat;
+        return { label: b.label, ls: b.ls, V: b.Nb + g * Wsem - (wt ? 10 * Wsem / 25 : 0), H: Math.hypot(b.Hb, wt ? Hy : 0), Hx: b.Hb, Hy, M: b.Mb + b.Hb * F.hs, My: (b.Myb || 0) + Hy * F.hs, crue: wt, vide: !!b.vide };
       });
       let found;
       if (F.type === 'superficielle') {
@@ -285,7 +300,7 @@ export function computeSupports(st, input = {}) {
           bielles: { dOk: d >= (F.B - bWall) / 4, eOk: eMax <= F.B / 6, eMax } };
         // sens transversal : semelle filante sous voile → aciers de répartition ≥ 1/4 des aciers principaux (par m) ;
         // sous colonnes → poutre renversée sur les colonnes chargée par la réaction du sol uniforme
-        const nc = end ? (sp.culee.type === 'enterree' ? sp.culee.nCol : 0) : (sp.pile.type === 'colonnes' ? sp.pile.nCol : 0);
+        const nc = end ? (sp.culee.type !== 'remblayee' ? sp.culee.nCol : 0) : (sp.pile.type === 'colonnes' ? sp.pile.nCol : 0);
         if (nc > 0) {
           const off = (Lf - width) / 2, Vu = eluMax.f ? eluMax.f.V : 0;
           const bm = pierCap({ length: Lf, supports: Array.from({ length: nc }, (_, j) => ({ x: off + width * (2 * j + 1) / (2 * nc) })), loads: [], q: -Vu / Lf, b: F.B, h: F.hs, c, fck, fyk, code, rhoMin: 0.0012 });
@@ -363,12 +378,14 @@ export function computeSupports(st, input = {}) {
           tie = { ...t, perCouple: t.A1, total: t.A1 * nP };
         } else if (nF === 1) {
           // semelle filante sur une file de pieux (PP73 1.3.2 § 4.4) : poutre sur les pieux sous le voile (charge répartie) ou les colonnes
-          const nc = end ? (sp.culee.type === 'enterree' ? sp.culee.nCol : 0) : (sp.pile.type === 'colonnes' ? sp.pile.nCol : 0);
+          const nc = end ? (sp.culee.type !== 'remblayee' ? sp.culee.nCol : 0) : (sp.pile.type === 'colonnes' ? sp.pile.nCol : 0);
           const Vu = Math.max(...elu.map(r => r.V)), off = (Lf - width) / 2;
           const piles = Array.from({ length: nP }, (_, k2) => ({ x: Lf * (2 * k2 + 1) / (2 * nP) }));
           const loads = nc > 0 ? Array.from({ length: nc }, (_, j) => ({ x: off + width * (2 * j + 1) / (2 * nc), P: (Vu - gU * Wsem) / nc })) : [];
           const bm = pierCap({ length: Lf, supports: piles, loads, q: nc > 0 ? gU * Wsem / Lf : Vu / Lf, b: F.B, h: F.hs, c: 0.07, fck, fyk, code, rhoMin: 0.0012 });
           capBeam = { Mneg: bm.Mneg, Mpos: bm.Mpos, V: bm.V, AsTop: bm.AsTop, AsBot: bm.AsBot };
+          // voile unique sur une file : semelle + base du voile en paroi fléchie (PP73 1.3.2 § 4.4)
+          if (nc === 0) capBeam.paroi = paroiFlechie({ l: Lf / nP, hs: F.hs, Hwall: end ? (sp.culee.type === 'remblayee' ? sp.culee.Hm : 0) : Hpile(i), Mt: bm.Mpos, Ma: bm.Mneg, fsu: fyk / 1.15 });
         }
         found = { type: 'pieux', D, n: xsP.length, nF, nP, Lpile: F.Lpile, k: kHead, rows, NmaxU, NmaxS, NminU, As: Math.max(AsP, pileMinSteel({ D, code })), AsReq: AsP, Amin: pileMinSteel({ D, code }), cap, capRatio, NmaxA, group, scour, pileConc: pc, tie, capBeam, sigSels, hs: F.hs, hOk: F.hs >= Math.max(0.60, nF === 2 ? 1.4 * D : D) - 1e-9, hMin: Math.max(0.60, nF === 2 ? 1.4 * D : D), W: Wsem };
       }
@@ -376,6 +393,9 @@ export function computeSupports(st, input = {}) {
     }
     out.BAEL = per.BAEL; out.EC = per.EC;
     out.warnings = geometryWarnings(sp, end, width);
+    const hv = Math.max(0, ...(per.EC.found.rows || per.EC.found.checks || []).filter(r => r.ls === 'ELU' && !r.vide).map(r => Math.abs(r.H) / Math.max(1e-9, r.V)));
+    if (sp.found.type !== 'superficielle' && hv > 0.20) out.warnings.push(`H/V = ${hv.toFixed(2)} > 0,20 à l'ELU : envisager des pieux inclinés (PP73 1.1.3 § 2.2.2.7)`);
+    if (end && sp.found.type !== 'superficielle' && sp.found.nFiles === 1 && sp.found.pileD < 0.80 - 1e-9) out.warnings.push(`culée sur une file de pieux Ø ${sp.found.pileD} m : Ø 0,80 m minimal (PP73 1.2.3 § 1.2.3)`);
     return out;
   });
   return { sp, xs, Lv, width, seisme, water, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hGG, Ka: KA, lines };

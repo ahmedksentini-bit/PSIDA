@@ -227,3 +227,17 @@ export function pileCapacity({ code = 'EC', type = 'fore-simple', D, Lpile, clas
   if (!r.applicable) return { applicable: false, motif: r.motif };
   return { applicable: true, Rb: r.Qpu, Rs: r.Qsu, Rcd: r.limites.ELU.Qmax, RcdAcc: r.limites.ELU_acc.Qmax, Rcrd: r.limites.ELS_rare.Qmax, Rtd: -r.limites.ELU.Qmin, detail: r };
 }
+
+/**
+ * Semelle sur une file de pieux sous un voile unique, PP73 1.3.2 § 4.4 : la semelle et la base du voile travaillent en
+ * paroi fléchie (Fascicule 61 titre VI annexe A4 ; BAEL 91 annexe E.5). Hauteur de paroi h = h_s + H_voile ≤ portée l
+ * entre pieux ; bras de levier (poutre-cloison continue, Leonhardt) z = 0,2 (l + 1,5 h) pour 1/3 ≤ h/l ≤ 1, z = 0,5 l
+ * pour h > l ; tirant inférieur en travée A = M_t/(z f_su), aciers sur appuis A' = M_a/(z f_su) répartis dans la partie
+ * basse de la paroi. En deçà de h/l = 1/3, la poutre ordinaire de hauteur h_s s'applique.
+ */
+export function paroiFlechie({ l, hs, Hwall, Mt, Ma, fsu }) {
+  const h = hs + Math.max(0, Hwall), r = h / l;
+  if (r < 1 / 3) return { applicable: false, h, r };
+  const z = r > 1 ? 0.5 * l : 0.2 * (l + 1.5 * h);
+  return { applicable: true, h, r, z, Abot: Mt / (z * fsu * 1000), Atop: Ma / (z * fsu * 1000), hTie: Math.min(0.15 * h, 0.2 * l) };
+}

@@ -291,13 +291,16 @@ Rapport détaillé : vérification des règles d'appuis sur les pièces PP73 1.1
   - hauteur minimale des semelles sur pieux : max(0,60 ; 1,4 Ø) ;
   - poinçonnement vérifié seulement pour les pieux d'angle des semelles sur plus de deux pieux, avec θ ≥ 45° ;
   - avertissements géométriques : colonnes Ø ≥ 0,60 m, chevêtre ≥ 0,60 × 0,70 m, B ≥ 1,50 m, entraxe ≥ 3 Ø, B ≥ 4,5 Ø.
-- **Restent à traiter :**
-  - torsion du chevêtre (§ 2.2.4) ;
-  - charges de la dalle de transition (15 + D) t/ml et des murettes sur le chevêtre de culée ;
-  - poussée des piles-culées apparentes limitée à la partie haute (§ 3.1.3.1, i = 1/3, p = 1,5 t/m²) ;
-  - vérification à vide de la pile-culée remblayée ;
-  - semelle sur file unique en paroi fléchie.
-- **FOND 72 :** seuls les fascicules 2 et 3.1-3.2 sont lisibles dans le Drive. Les k_p, le frottement et le module de Ménard ne sont donc pas vérifiables sur ce texte. Le Fascicule 62 V codé reste cohérent avec la partie lue (coefficients 3 et 2, q'_ref aux 3/4 de la largeur comprimée).
+- **Ajoutés en v0.20 :**
+  - torsion du chevêtre de pile-culée (§ 2.2.4, BAEL A.5.4 / EC2 6.3.2) ;
+  - charges de la dalle de transition (15 + D) t/ml (11 t/ml sans dalle), du garde-grève et des murs en retour ou murettes en bout du chevêtre de culée ;
+  - pile-culée apparente : poussée sur la partie haute seulement (§ 3.1.3.1, i = 1/3, p = 15 kPa, à 0,6 h₁) ;
+  - vérification de la culée sans tablier (§ 3.1.4.6, G favorable) ;
+  - voile sur une file de pieux en paroi fléchie (§ 4.4, BAEL annexe E.5) ;
+  - colonnes de piles-culées armées à environ 2 % (1.1.3 § 2.3.2) ;
+  - garde-grève de 0,30 m si la dalle de transition s'y appuie ;
+  - avertissements H/V > 0,20 (pieux inclinés) et Ø ≥ 0,80 m pour une culée sur une file.
+- **FOND 72 :** remplacé par le Fascicule 62 V et l'Eurocode 7 (NF P 94-261/262), qui sont ceux codés ; seuls les fascicules 2 et 3.1-3.2 sont lisibles dans le Drive. Les k_p, le frottement et le module de Ménard ne sont donc pas vérifiables sur ce texte. Le Fascicule 62 V codé reste cohérent avec la partie lue (coefficients 3 et 2, q'_ref aux 3/4 de la largeur comprimée).
 
 ## 2. Protocole de comparaison avec une note de référence
 

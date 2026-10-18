@@ -200,3 +200,36 @@ test('Un profil pressiométrique par ligne d\'appui', async () => {
   const c = L[0].EC.found.checks[0], p = L[1].EC.found.checks[0];
   assert.equal(c.classe, 'argile-B'); assert.equal(p.classe, 'marne-A'); assert.ok(p.ple > c.ple);
 });
+
+test('PP73 : pile-culée apparente, culée à vide, chevêtre de culée (charges, torsion), paroi fléchie, 2 % des colonnes', async () => {
+  const { earthPressureUpper, videCombos, gardeGreveThickness } = await import('../src/supports/abutment.js');
+  const { chevetreTorsion } = await import('../src/supports/pier.js');
+  const { paroiFlechie } = await import('../src/supports/foundation.js');
+  // § 3.1.3.1 : Q = i h₁ (p + γ h₀ + 0,5 γ h₁) L, i = 1/3, p = 1,5 t/m², à 0,6 h₁ du haut
+  const e = earthPressureUpper({ h1: 3, Htot: 8, L: 10 });
+  rel(e.Pg + e.Pq, (1 / 3) * 3 * (15 + 0.5 * 20 * 3) * 10, 1e-12, 'Q pile-culée apparente');
+  rel(e.arm, 8 - 1.8, 1e-12, 'bras');
+  const v = videCombos({ W: 1000, ep: e, code: 'BAEL' });
+  assert.equal(v[0].Nb, 1000); rel(v[0].Mb, 1.35 * e.Mg + 1.605 * e.Mq, 1e-12, 'ELU à vide');
+  assert.equal(gardeGreveThickness(0.8, true), 0.30, 'dalle sur le garde-grève : 0,30 m');
+  // § 2.2.4 : M_gh = 2,5 (h_g + 0,5 h_c + 1) e [t·m], C = M/2
+  const t = chevetreTorsion({ hg: 1.5, hc: 1.0, b: 1.2, e: 3.5, code: 'BAEL' });
+  rel(t.Mgh, 10 * 2.5 * (1.5 + 0.5 + 1) * 3.5, 1e-12, 'M_gh'); rel(t.Tu, 1.35 * t.Mgh / 2, 1e-12, 'T_u');
+  rel(t.b0, 1.0 / 6, 1e-12, 'paroi b₀ = a/6');
+  const tE = chevetreTorsion({ hg: 1.5, hc: 1.0, b: 1.2, e: 3.5, code: 'EC', V: 300 });
+  assert.ok(tE.ratio > 0 && tE.Al > 0);
+  // paroi fléchie (BAEL E.5) : z = 0,2 (l + 1,5 h) pour 1/3 ≤ h/l ≤ 1 ; 0,5 l au-delà ; poutre si h/l < 1/3
+  rel(paroiFlechie({ l: 4, hs: 1, Hwall: 2, Mt: 100, Ma: 100, fsu: 348 }).z, 0.2 * (4 + 4.5), 1e-12, 'z');
+  rel(paroiFlechie({ l: 4, hs: 1, Hwall: 6, Mt: 100, Ma: 100, fsu: 348 }).z, 2, 1e-12, 'z = 0,5 l');
+  assert.equal(paroiFlechie({ l: 12, hs: 1, Hwall: 2, Mt: 1, Ma: 1, fsu: 348 }).applicable, false);
+  // intégration
+  const { formDefaults } = await import('../tools/formdefaults.mjs');
+  const { parseData, compute } = await import('../src/pipeline.js');
+  const S = compute(parseData({ ...formDefaults(), ap_culType: 'apparente', ap_found: 'pieux', ap_nFiles: '1', ap_pileD: '0.8' })).supports;
+  const C = S.lines[0].BAEL;
+  assert.match(C.earth.mode, /partie haute/);
+  assert.equal(C.base.filter(b => b.vide).length, 2);
+  assert.ok(C.torsion && C.cap.qDalle > 150);
+  rel(C.shaft.mins.min, 0.02 * Math.PI * 0.8 ** 2 / 4, 1e-9, '2 % par colonne de pile-culée');
+  assert.ok(S.lines[1].BAEL.found.capBeam.paroi.applicable, 'voile sur une file : paroi fléchie');
+});

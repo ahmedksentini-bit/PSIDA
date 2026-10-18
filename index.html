@@ -341,14 +341,15 @@
       </div>
       <label>Chevêtre de pile sur colonnes : hauteur / largeur [m] (hauteur 0 = sans)<div class="row"><input name="ap_hc" value="0" type="number" step="any"><input name="ap_lc" value="1.2" type="number" step="any"></div></label>
       <div class="row">
-        <label>Culées<select name="ap_culType"><option value="remblayee">remblayée (mur de front)</option><option value="enterree">enterrée (chevêtre sur colonnes)</option></select></label>
+        <label>Culées<select name="ap_culType"><option value="remblayee">remblayée (mur de front)</option><option value="enterree">pile-culée noyée (chevêtre sur colonnes dans le remblai)</option><option value="apparente">pile-culée apparente (colonnes devant le talus, voile frontal)</option></select></label>
         <label>Hauteur mur de front / colonnes [m]<input name="ap_Hm" value="3" type="number" step="any"></label>
       </div>
       <div class="row">
         <label>Mur de front : épaisseur [m] ; garde-grève h [m] (vide = auto)<div class="row"><input name="ap_em" value="0.8" type="number" step="any"><input name="ap_hGG" value="" type="number" step="any"></div></label>
         <label>Murs en retour : longueur [m]<input name="ap_Lret" value="4" type="number" step="any"></label>
+        <label>Dalle de transition appuyée sur le garde-grève / voile frontal d'une pile-culée apparente h_v [m]<div class="row"><select name="ap_dalleGG"><option value="oui">oui (garde-grève 0,30 m)</option><option value="non">non</option></select><input name="ap_culHv" value="1.0" type="number" step="any"></div></label>
       </div>
-      <label>Culée enterrée : colonnes nombre / Ø ; chevêtre h / largeur [m]<div class="row"><input name="ap_culNCol" value="3" type="number"><input name="ap_culD" value="0.8" type="number" step="any"><input name="ap_culHc" value="1.0" type="number" step="any"><input name="ap_culLc" value="1.6" type="number" step="any"></div></label>
+      <label>Pile-culée (noyée ou apparente) : colonnes nombre / Ø ; chevêtre h / largeur [m]<div class="row"><input name="ap_culNCol" value="3" type="number"><input name="ap_culD" value="0.8" type="number" step="any"><input name="ap_culHc" value="1.0" type="number" step="any"><input name="ap_culLc" value="1.6" type="number" step="any"></div></label>
       <div class="row">
         <label>Fondations<select name="ap_found"><option value="superficielle">semelles superficielles</option><option value="pieux">semelles sur pieux</option></select></label>
         <label>Semelle : B (longitudinal) / épaisseur / encastrement D_e [m]<div class="row"><input name="ap_B" value="3" type="number" step="any"><input name="ap_hs" value="1" type="number" step="any"><input name="ap_De" value="1" type="number" step="any"></div></label>
@@ -496,8 +497,8 @@ e 18 33 2.7 1.6
   </div>
 </section>
 </form>
-<script src="./web/tabs.js?v=0.19.1"></script>
-<script type="module">import('./web/app.js?v=0.19.1').catch(e => { const el = document.getElementById('error'); if (el) el.textContent = 'Le calcul n\'a pas pu se charger (' + e.message + '). Recharger la page sans cache (Ctrl+F5) ; si le problème persiste, le signaler.'; });</script>
+<script src="./web/tabs.js?v=0.20"></script>
+<script type="module">import('./web/app.js?v=0.20').catch(e => { const el = document.getElementById('error'); if (el) el.textContent = 'Le calcul n\'a pas pu se charger (' + e.message + '). Recharger la page sans cache (Ctrl+F5) ; si le problème persiste, le signaler.'; });</script>
 <noscript><p style="padding:16px">PSIDA nécessite JavaScript.</p></noscript>
 </body>
 </html>

@@ -56,10 +56,12 @@ export function secondOrder({ code = 'BAEL', Lf, h, d = null, L = null, alpha = 
  * Pourcentages minimaux et maximaux d'armatures longitudinales d'un fût ; PP73 1.3.2 § 1.1.2 : au moins 20 cm² par élément
  * pour les colonnes, poteaux et voiles de section inférieure à 1 m² (taux fréquemment porté à 2 % pour les colonnes, § 1.3).
  */
-export function minimumSteelPier({ code = 'BAEL', Ac, perimeter, Ned = 0, fyk = 400, element = false }) {
-  const pp73 = element || Ac < 1 ? 20e-4 : 0;
-  if (code === 'BAEL') return { min: Math.max(4e-4 * perimeter, 0.002 * Ac, pp73), max: 0.05 * Ac, rule: `BAEL A.8.1,21 : max(4 cm²/m de parement ; 0,2 % B), 5 % B au plus${pp73 ? ' ; PP73 1.3.2 § 1.1.2 : ≥ 20 cm² par colonne, poteau ou voile < 1 m²' : ''}` };
-  return { min: Math.max(0.1 * Ned / (fyk / 1.15 * 1000), 0.002 * Ac, pp73), max: 0.04 * Ac, rule: `EC2 § 9.5.2 / 9.6.2 : max(0,10 N_Ed/f_yd ; 0,002 A_c), 0,04 A_c au plus${pp73 ? ' ; PP73 1.3.2 § 1.1.2 : ≥ 20 cm² par élément' : ''}` };
+export function minimumSteelPier({ code = 'BAEL', Ac, perimeter, Ned = 0, fyk = 400, element = false, pileCulee = false, strip = false }) {
+  // PP73 1.1.3 § 2.3.2 et 1.3.2 § 2.1 : colonnes et poteaux de piles-culées noyées armés à un taux voisin de 2 % (aléas de
+  // remblaiement et de compactage), « même si cette valeur correspond à un surferraillage du seul point de vue mécanique »
+  const pp73 = strip ? 0 : pileCulee ? Math.max(20e-4, 0.02 * Ac) : element || Ac < 1 ? 20e-4 : 0;   // strip : bande de 1 m d'un mur
+  if (code === 'BAEL') return { min: Math.max(4e-4 * perimeter, 0.002 * Ac, pp73), max: 0.05 * Ac, rule: `BAEL A.8.1,21 : max(4 cm²/m de parement ; 0,2 % B), 5 % B au plus${pileCulee ? ' ; PP73 1.1.3 § 2.3.2 : ≈ 2 % pour les colonnes de pile-culée' : pp73 ? ' ; PP73 1.3.2 § 1.1.2 : ≥ 20 cm² par colonne, poteau ou voile < 1 m²' : ''}` };
+  return { min: Math.max(0.1 * Ned / (fyk / 1.15 * 1000), 0.002 * Ac, pp73), max: 0.04 * Ac, rule: `EC2 § 9.5.2 / 9.6.2 : max(0,10 N_Ed/f_yd ; 0,002 A_c), 0,04 A_c au plus${pileCulee ? ' ; PP73 1.1.3 § 2.3.2 : ≈ 2 % pour les colonnes de pile-culée' : pp73 ? ' ; PP73 1.3.2 § 1.1.2 : ≥ 20 cm² par élément' : ''}` };
 }
 
 /**
@@ -67,7 +69,7 @@ export function minimumSteelPier({ code = 'BAEL', Ac, perimeter, Ned = 0, fyk = 
  * @param {object} p  shape ({ b, h, c } longitudinal × transversal, ou { D, c, nBars }), code, fck, fyk, Ev (MPa), Hf (hauteur), Lf,
  *   combos : [{ label, N, M }] en pied (ELU) ; n : nombre de fûts identiques (colonnes) partageant N et M
  */
-export function designShaft({ shape, code = 'BAEL', fck = 25, fyk = 400, Ev = null, Hf, Lf = null, combos = [], n = 1, alphaGQ = 0.5 }) {
+export function designShaft({ shape, code = 'BAEL', fck = 25, fyk = 400, Ev = null, Hf, Lf = null, combos = [], n = 1, alphaGQ = 0.5, pileCulee = false, strip = false }) {
   const lf = Lf ?? 2 * Hf;
   const h = shape.D || shape.h;
   const Ac = shape.D ? Math.PI * shape.D ** 2 / 4 : shape.b * shape.h;
@@ -87,7 +89,7 @@ export function designShaft({ shape, code = 'BAEL', fck = 25, fyk = 400, Ev = nu
     const r = Number.isFinite(Mtot) ? requiredSteelNM(shape, mat, N, Mtot) : { As: null };
     return { ...c, Nshaft: N, M1, Mtot, e1, secondOrder: so, As: r.As, sigma: N / Ac / 1000 };
   });
-  const mins = minimumSteelPier({ code, Ac, perimeter: per, Ned: Math.max(0, ...rows.map(r => r.Nshaft)), fyk, element: !!shape.D });
+  const mins = minimumSteelPier({ code, Ac, perimeter: per, Ned: Math.max(0, ...rows.map(r => r.Nshaft)), fyk, element: !!shape.D, pileCulee, strip });
   const AsReq = Math.max(0, ...rows.map(r => (r.As === null ? Infinity : r.As)));
   return { Ac, I, perimeter: per, buckling: buck, Ev: Evv, rows, mins, As: Math.max(AsReq, mins.min), AsReq, ok: AsReq <= mins.max };
 }
@@ -107,4 +109,33 @@ export function pierCap({ length, supports, loads, q = 0, b, h, c = 0.05, fck = 
   const As = M => (M > 0 ? (requiredSteelNM({ b, h, c }, { code, fck, fyk }, 0, M).As ?? Infinity) / 2 : 0);
   const Amin = rhoMin * b * h;
   return { Mneg, Mpos, V: r.Vabs, R: r.R, AsTop: Math.max(As(Mneg), Amin), AsBot: Math.max(As(Mpos), Amin), Amin, AtMin: 0.002 * b, beam: r };
+}
+
+/**
+ * Torsion du chevêtre d'une pile-culée (PP73 1.3.2 § 2.2.4) : moment du garde-grève ramené à l'axe du chevêtre sur un
+ * entraxe e de colonnes, M_gh = 2,5 (h_g + 0,5 h_c + 1) e [t·m], sens opposé M'_gh = −3,5 e, couple de torsion au droit
+ * d'une colonne C = M/2 (sollicitations du 1er genre ; ELU × 1,35).
+ * Justification en section creuse équivalente :
+ *   BAEL 91 A.5.4 : paroi b₀ = a/6 (a diamètre du plus grand cercle inscrit), Ω aire du contour médian, τ_t = T_u/(2 Ω b₀),
+ *     (τ_v² + τ_t²) ≤ τ_lim² (section pleine), τ_lim = min(0,15 f_c28/γ_b ; 4 MPa) ; A_t/s_t = T_u/(2 Ω f_su),
+ *     ΣA_l = T_u u/(2 Ω f_su) ;
+ *   EN 1992-1-1 § 6.3.2 (θ = 45°) : t_ef = A/u, A_k, u_k ; T_Rd,max = 2 ν α_cw f_cd A_k t_ef sin θ cos θ,
+ *     T_Ed/T_Rd,max + V_Ed/V_Rd,max ≤ 1 ; A_sw/s = T_Ed/(2 A_k f_yd), ΣA_sl = T_Ed u_k/(2 A_k f_yd).
+ * Unités : m, kN, kN·m, MPa.
+ */
+export function chevetreTorsion({ hg, hc, b, e, V = 0, code = 'BAEL', fck = 25, fyk = 400, c = 0.05 }) {
+  const Mgh = 10 * 2.5 * (hg + 0.5 * hc + 1) * e, Mrev = 10 * 3.5 * e;
+  const Ts = Math.max(Mgh, Mrev) / 2, Tu = 1.35 * Ts;
+  const fsu = fyk / 1.15, d = hc - c;
+  if (code === 'BAEL') {
+    const a = Math.min(b, hc), b0 = a / 6, Om = (b - b0) * (hc - b0), u = 2 * ((b - b0) + (hc - b0));
+    const tauT = Tu / (2 * Om * b0) / 1000, tauV = V / (b * d) / 1000, tauLim = Math.min(0.15 * fck / 1.5, 4);
+    return { code, Mgh, Mrev, Ts, Tu, b0, Om, u, tauT, tauV, tauLim, ratio: Math.hypot(tauT, tauV) / tauLim,
+      AtS: Tu / (2 * Om * fsu * 1000), Al: Tu * u / (2 * Om * fsu * 1000) };
+  }
+  const A = b * hc, uu = 2 * (b + hc), tef = Math.max(A / uu, 2 * c), Ak = (b - tef) * (hc - tef), uk = 2 * ((b - tef) + (hc - tef));
+  const nu = 0.6 * (1 - fck / 250), fcd = fck / 1.5;
+  const TRdMax = 2 * nu * fcd * 1000 * Ak * tef * 0.5, VRdMax = b * 0.9 * d * nu * fcd * 1000 / 2;
+  return { code, Mgh, Mrev, Ts, Tu, tef, Ak, uk, TRdMax, VRdMax, ratio: Tu / TRdMax + V / VRdMax,
+    AtS: Tu / (2 * Ak * fsu * 1000), Al: Tu * uk / (2 * Ak * fsu * 1000) };
 }
