@@ -360,8 +360,22 @@ function renderScheme() {
     $('#scheme-elevation').innerHTML = guideElevationSVG(g, sp);
     $('#scheme-cross').innerHTML = guideCrossSectionSVG(g);
     $('#scheme-plan').innerHTML = planSVG(g);
+    { const k = hlKey; hlKey = null; highlightScheme(k); }
   } catch (e) { $('#scheme-summary').innerHTML = `<p class="small">Schéma indisponible : ${e.message}</p>`; }
 }
+// survol ou saisie d'un champ : l'élément correspondant des schémas clignote en bleu
+let hlKey = null;
+function highlightScheme(name) {
+  if (name === hlKey) return; hlKey = name;
+  document.querySelectorAll('#scheme-card g.hl').forEach(e => e.classList.remove('hl'));
+  if (!name) return;
+  document.querySelectorAll('#scheme-card g[data-k]').forEach(e => { if (e.dataset.k.split(' ').includes(name)) e.classList.add('hl'); });
+}
+const fieldName = t => { const el = t && t.closest ? t.closest('label') : null; const inp = el ? el.querySelector('input, select, textarea') : (t && t.name ? t : null); return inp ? inp.name : null; };
+$('#f').addEventListener('mouseover', ev => { const n = fieldName(ev.target); if (n) highlightScheme(n); });
+$('#f').addEventListener('mouseout', ev => { if (!ev.relatedTarget || !fieldName(ev.relatedTarget)) highlightScheme(document.activeElement && document.activeElement.name && $('#f').contains(document.activeElement) ? document.activeElement.name : null); });
+$('#f').addEventListener('focusin', ev => { if (ev.target.name) highlightScheme(ev.target.name); });
+$('#f').addEventListener('focusout', () => highlightScheme(null));
 let schemeTimer = null;
 const scheduleScheme = () => { clearTimeout(schemeTimer); schemeTimer = setTimeout(renderScheme, 150); };
 $('#f').addEventListener('input', scheduleScheme);
@@ -411,7 +425,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.24', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = await buildReport({ ...state, version: '0.24.1', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -448,7 +462,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.24', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.24.1', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -504,7 +518,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.24', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.24.1', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));
