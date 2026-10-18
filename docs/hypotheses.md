@@ -239,6 +239,17 @@ Choix retenus (justifiés dans les en-têtes des modules) :
 - Dimensionnement : poutre en T en BA (ELU) ; poutre précontrainte : vérification simplifiée des contraintes à mi-travée sur
   section composite avec P∞ et e₀, et précontrainte minimale de Guyon — ne remplace pas un calcul phasé (PONTYPE/BP).
 
+## 1 decies. Dispositifs de retenue — indice de danger (v0.17, `src/ddr/indice.js`)
+
+Guide méthodologique Cerema « Choix des performances d'un dispositif de retenue sur ouvrage d'art — Méthode de calcul de
+l'indice de danger » (novembre 2021, remplace le guide GC SETRA 2002) : ID = ID1 + max(ID2 ; ID3) arrondi à l'entier
+supérieur, tableaux 1 à 18 (trafic à 15 ans × 1,25, tracé, profil, conflit, longueur de franchissement, viabilité hivernale,
+hauteur de chute, hauteur d'eau, voie franchie, voie ferrée, habitations, zones sensibles, coefficient K des poids lourds),
+niveaux N / H2 / H3 / H4b, cas particuliers (voie ferrée, grande route franchie : H2 minimal), objectifs secondaires
+(véhicules légers, écran de chargement, piétons). Effort de choc sur le dispositif : EN 1991-2 § 4.7.3.3, classes A à D
+(valeurs recommandées, classe à confirmer selon le produit et l'annexe nationale). Le guide ne donne pas d'exemple chiffré :
+les tests vérifient les bornes des tableaux et un exemple calculé à la main.
+
 ## 2. Protocole de comparaison avec une note de référence
 
 ### 2.1 Référentiel Eurocodes — note CHAMOA-PSIDA (Cerema, guide technique, ch. 4)

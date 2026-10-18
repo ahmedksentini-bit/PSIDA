@@ -66,7 +66,7 @@
 <header>
   <div class="hrow"><h1>PSIDA</h1><span class="sub">calcul manuel assisté des ponts-dalles · Eurocodes et Fascicule 61 / BAEL · code ouvert</span>
     <span class="actions"><button type="submit" form="f" id="btn-calc">Calculer</button></span></div>
-  <nav class="tabs" role="tablist"><a href="#projet" role="tab" data-tab="projet">Projet</a><a href="#conception" role="tab" data-tab="conception">Conception</a><a href="#tablier" role="tab" data-tab="tablier">Tablier</a><a href="#ferraillage" role="tab" data-tab="ferraillage">Ferraillage</a><a href="#complements" role="tab" data-tab="complements">Compléments</a><a href="#poutres" role="tab" data-tab="poutres">Ponts à poutres</a><a href="#appuis" role="tab" data-tab="appuis">Appuis et fondations</a><a href="#notes" role="tab" data-tab="notes">Notes de calcul</a></nav>
+  <nav class="tabs" role="tablist"><a href="#projet" role="tab" data-tab="projet">Projet</a><a href="#conception" role="tab" data-tab="conception">Conception</a><a href="#tablier" role="tab" data-tab="tablier">Tablier</a><a href="#ferraillage" role="tab" data-tab="ferraillage">Ferraillage</a><a href="#complements" role="tab" data-tab="complements">Compléments</a><a href="#poutres" role="tab" data-tab="poutres">Ponts à poutres</a><a href="#appuis" role="tab" data-tab="appuis">Appuis et fondations</a><a href="#retenue" role="tab" data-tab="retenue">Dispositifs de retenue</a><a href="#notes" role="tab" data-tab="notes">Notes de calcul</a></nav>
   <pre id="error"></pre>
 </header>
 <form id="f" class="app" novalidate>
@@ -410,6 +410,59 @@
     </div>
   </div>
 </section>
+<section class="tab" id="tab-retenue">
+  <div class="cols">
+    <div class="card form-card"><h2>Indice de danger (Cerema 2021)</h2>
+      <p class="small">Choix du niveau de retenue d'un dispositif en bord libre d'ouvrage d'art. Trafics actuels (les trafics à 15 ans sont calculés : × 1,25).</p>
+      <div class="row">
+        <label>Trafic de la voie portée [véh/j, 2 sens]<input name="dr_T" value="8000" type="number"></label>
+        <label>Poids lourds [PL/j]<input name="dr_PL" value="960" type="number"></label>
+      </div>
+      <div class="row">
+        <label>Type de trafic PL<select name="dr_typePL"><option value="local">local (2 essieux)</option><option value="moyen" selected>moyenne distance</option><option value="long">longue distance (≥ 4 essieux)</option></select></label>
+        <label>Vitesse limite [km/h]<input name="dr_V" value="90" type="number"></label>
+      </div>
+      <label><input type="checkbox" name="dr_prov">Ouvrage provisoire (trafic actuel, pas de projection à 15 ans)</label>
+      <div class="row">
+        <label>Référentiel / configuration (R_m, R_dn)<select name="dr_ref"><option>ARP R60</option><option>ARP R80</option><option>ARP T80</option><option selected>ARP T100</option><option>ICTAAL L1</option><option>ICTAAL L2</option><option>ICTAAL relief difficile</option><option>VSA 70</option><option>VSA 90</option><option>VSA 90 dévers 5 %</option><option>VSA 110</option><option>VSA 110 dévers 5 %</option><option>Route 2×1 voie</option><option>Route 2×1 voie, créneau de dépassement</option><option>Branche ICTAAL 110 (2 voies)</option><option>Branche ICTAAL 90</option><option>Branche ICTAAL 70 (1 voie)</option><option>Branche VSA cat. A</option><option>Branche VSA cat. B</option><option>Bretelle VSA cat. C</option><option>Branche VSA 70</option></select></label>
+        <label>Rayon en plan R [m] (vide = alignement droit)<input name="dr_R" value="700"></label>
+      </div>
+      <div class="row">
+        <label>R_m / R_dn imposés [m] (vide = référentiel)<div class="row"><input name="dr_Rm" value=""><input name="dr_Rdn" value=""></div></label>
+        <label>Pente moyenne sur 300 m [%]<input name="dr_pente" value="5" type="number" step="any"></label>
+      </div>
+      <label><input type="checkbox" name="dr_exist">Ouvrage existant</label>
+      <label><input type="checkbox" name="dr_conflit">Point de conflit (carrefour, bretelle) dans la distance d'arrêt</label>
+      <div class="row">
+        <label>Longueur de franchissement L_F [m]<input name="dr_LF" value="45" type="number" step="any"></label>
+        <label>Viabilité hivernale<select name="dr_vh"><option value="prioritaire">réseau prioritaire / sans risque</option><option value="secondaire">réseau secondaire</option><option value="non traite">non traité</option></select></label>
+      </div>
+      <div class="row">
+        <label>Hauteur de chute h_c [m]<input name="dr_hc" value="7" type="number" step="any"></label>
+        <label>Hauteur d'eau P (niveau moyen annuel) [m]<input name="dr_P" value="0" type="number" step="any"></label>
+      </div>
+      <div class="row">
+        <label>Trafic de la voie franchie [véh/j]<input name="dr_Tf" value="40000" type="number"></label>
+        <label>Trains réguliers par jour<input name="dr_trains" value="0" type="number"></label>
+      </div>
+      <div class="row">
+        <label>Habitations dans la zone de chute<select name="dr_hab"><option value="aucune">aucune</option><option value="faible">faible densité (1 à 10 habitants)</option><option value="forte">forte densité (&gt; 10 habitants)</option></select></label>
+        <label>Zones sensibles<select name="dr_zone"><option value="aucune">aucune</option><option value="sensible">sensible (zone d'activité, voie verte, parking…)</option><option value="tres sensible">très sensible (école, hôpital, Seveso, captage…)</option></select></label>
+      </div>
+      <label><input type="checkbox" name="dr_rimp" checked>Franchissement d'une autoroute, RN ou RD de 1re catégorie (ouvrage neuf, PL &gt; 13 t, cars, engins agricoles)</label>
+      <label>Piétons et cycles par jour<input name="dr_piet" value="0" type="number"></label>
+      <h3>Effort sur le tablier (dispositif choisi)</h3>
+      <div class="row">
+        <label>Classe d'effort de choc (EN 1991-2)<select name="dr_classe"><option value="A">A — 100 kN</option><option value="B">B — 200 kN</option><option value="C" selected>C — 400 kN</option><option value="D">D — 600 kN</option></select></label>
+        <label>Hauteur du dispositif [m]<input name="dr_hDR" value="1.0" type="number" step="any"></label>
+      </div>
+      <label>Épaisseur de dalle / distance à l'encastrement de l'encorbellement [m]<div class="row"><input name="dr_e" value="0.25" type="number" step="any"><input name="dr_dEnc" value="1.0" type="number" step="any"></div></label>
+    </div>
+    <div>
+      <div class="card" id="card-ddr"><h2>Niveau de retenue</h2><div id="ddr-out"></div></div>
+    </div>
+  </div>
+</section>
 <section class="tab" id="tab-notes">
   <div class="card"><h2>Notes de calcul</h2>
     <p class="small">Note au format des notes SETRA (PSIDA.EL pour le Fascicule 61, CHAMOA-PSIDA pour les Eurocodes), en HTML imprimable ou en Word ; rapport de synthèse avec toutes les vérifications. La note « appuis et fondations » seule est dans l'onglet Appuis.</p>
@@ -417,8 +470,8 @@
   </div>
 </section>
 </form>
-<script src="./web/tabs.js?v=0.16"></script>
-<script type="module">import('./web/app.js?v=0.16').catch(e => { const el = document.getElementById('error'); if (el) el.textContent = 'Le calcul n\'a pas pu se charger (' + e.message + '). Recharger la page sans cache (Ctrl+F5) ; si le problème persiste, le signaler.'; });</script>
+<script src="./web/tabs.js?v=0.17"></script>
+<script type="module">import('./web/app.js?v=0.17').catch(e => { const el = document.getElementById('error'); if (el) el.textContent = 'Le calcul n\'a pas pu se charger (' + e.message + '). Recharger la page sans cache (Ctrl+F5) ; si le problème persiste, le signaler.'; });</script>
 <noscript><p style="padding:16px">PSIDA nécessite JavaScript.</p></noscript>
 </body>
 </html>

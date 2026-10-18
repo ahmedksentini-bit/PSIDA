@@ -3,7 +3,7 @@
  * Adresse : #onglet ou #onglet/d=<données du formulaire>.
  */
 (function () {
-  var TABS = ['projet', 'conception', 'tablier', 'ferraillage', 'complements', 'poutres', 'appuis', 'notes'];
+  var TABS = ['projet', 'conception', 'tablier', 'ferraillage', 'complements', 'poutres', 'appuis', 'retenue', 'notes'];
   var current = 'projet';
   function hashTab() { return location.hash.slice(1).split('/')[0]; }
   function hashData() { var m = location.hash.match(/(?:^#|\/)d=(.+)$/); return m ? m[1] : null; }
