@@ -46,6 +46,19 @@ export function supportsBlocks(sup, ref = 'F61') {
     comment(`Chocs sur les piles (EN 1991-1-7, valeurs recommandées à confronter à l'annexe nationale et au cahier des charges) : combinaison accidentelle G + A_d + ψ₁,₁ Q (TS 0,75, UDL 0,4) ; force max(F_dx ; F_dy) appliquée dans le sens longitudinal de l'ouvrage (le plus défavorable pour un voile), à ${F2(ch.hV)} m au-dessus de la semelle pour les véhicules${ch.bateau !== 'aucun' ? `, choc de bateau frontal F_dx à ${F2(ch.hB)} m` : ''} ; pour une pile à colonnes, le choc est repris par une seule colonne.`);
   }
 
+  const wat = (sup.water || []).map((w, i) => (w ? { w, L: Ls[i] } : null)).filter(Boolean);
+  if (wat.length) {
+    const e = sup.sp.eau;
+    h2('Piles en rivière — courant, embâcles, affouillement');
+    table(['Ligne', 'Hauteur mouillée [m] ; b ⊥ courant [m]', 'F_wa [kN] (k_wa)', 'F_deb [kN]', 'M pied de fût [kN·m]', 'Archimède fût [kN]', 'Fr ; K₁ K₂ K₃', 'y_s local [m]', 'Affouillement total [m]', 'Fondation'], wat.map(({ w, L }) => {
+      const f = L[code].found;
+      const fo = f.type === 'superficielle' ? (f.scour ? `base à ${F2(f.scour.De)} m : ${f.scour.ok ? 'OK' : 'NON (affouillable)'}` : '—')
+        : (f.scour ? `pieu dégagé ${F2(f.scour.expo)} m ; portance crue ELU ${F2(f.scour.ratioELU)} ${ok(f.scour.ratioELU)} / ELS ${F2(f.scour.ratioELS)} ${ok(f.scour.ratioELS)}` : '—');
+      return [lineName(L, n), `${F2(w.hw)} ; ${F2(w.bProj)}`, `${F0(w.cur.F)} (${F2(w.nez === 'cylindre' || w.nez === 'groupe' ? 0.7 : 1.44)})`, F0(w.deb.F), F0(w.M), F0(w.Ushaft), `${F2(w.scour.Fr)} ; ${F2(w.scour.K1)} ${F2(w.scour.K2)} ${F2(w.scour.K3)}`, `${F2(w.scour.ys)}${w.scour.capped ? ' (plafond)' : ''}`, F2(w.dAff), fo];
+    }), { small: true });
+    comment(`Crue de projet : h = ${F2(e.h)} m (PHE − lit), v = ${F2(e.v)} m/s, biais ${F1(e.theta)}°. Courant EN 1991-1-6 § 4.9 (4.1) : F_wa = ½ k_wa ρ_w h b v², k_wa = 1,44 (section rectangulaire) ou 0,70 (circulaire), b largeur perpendiculaire au courant (voile : a cos θ + L sin θ ; colonnes : n Ø, sans effet de masque) ; hypothèse PSIDA : pression triangulaire maximale en surface, résultante à 2h/3 au-dessus du lit. Embâcles (4.2) : F_deb = k_deb A_deb v², k_deb = 666 kg/m³, radeau sous la surface libre. Efforts appliqués au fût dans le sens du courant (transversal à l'ouvrage) ; combinaisons de crue ${isF ? 'ELU 1,35 G + 1,5 F_eau, ELS G + F_eau (comme le vent, BAEL annexe D, sans trafic)' : 'ELU 1,35 G + 1,5 F_eau + 1,35 ψ₀ Q, ELS car. G + F_eau + ψ₀ Q (ψ₀ TS 0,75, UDL 0,4)'} — coefficients à confirmer selon le CCTP ; poussée d'Archimède ρ g V au niveau des PHE sur le fût et la semelle. Affouillement local FHWA HEC-18 (équation CSU) : y_s = 2,0 K₁ K₂ K₃ a^0,65 y₁^0,35 Fr^0,43, K₁ avant-bec (carré 1,1 ; arrondi, cylindre 1,0 ; pointu 0,9 ; 1,0 si θ > 5°), K₂ = (cos θ + L/a sin θ)^0,65 (L/a ≤ 12), K₃ état du lit, y_s ≤ 2,4 a (Fr ≤ 0,8) ou 3,0 a ; affouillement général et de contraction saisi (${F2(e.hGen)} m), à établir par l'étude hydraulique. Conséquences : semelle superficielle — base sous le fond affouillé, encastrement D_e et surcharge q₀ comptés sous ce fond ; pieux — longueur dégagée sans réaction latérale (Winkler) ni frottement, portance recalculée à pointe inchangée. Protection (enrochements) et affouillement autour des groupes de pieux ou des semelles débordantes (piles complexes, HEC-18 § 7.4) : non traités.`);
+  }
+
   h2('Efforts en tête et en pied des fûts (combinaisons les plus défavorables)');
   const rows = [];
   for (const L of Ls) {

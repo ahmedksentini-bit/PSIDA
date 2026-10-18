@@ -84,6 +84,8 @@ export function parseSupports(d) {
     ec8: { zone: v('ap_zone', 3), categorie: d.ap_catEC8 || 'III', classeSol: d.ap_solEC8 || 'B' },
     seisme: { actif: !!d.ap_seisme, q: { long: v('ap_qL', 1), trans: v('ap_qT', 1) } },
     choc: { vehicule: d.ap_choc || 'aucun', hV: v('ap_hV', 1.25), bateau: d.ap_bateau || 'aucun', hB: v('ap_hB', 2.0) },
+    eau: { actif: !!d.ap_eau, h: v('ap_hEau', 3), v: v('ap_vEau', 2), theta: v('ap_thEau', 0), nez: d.ap_nez || 'rond', K3: v('ap_K3', 1.1), hGen: v('ap_hGen', 0), hDeb: v('ap_hDeb', 0), bDeb: v('ap_bDeb', 0),
+      appuis: String(d.ap_eauLignes || '').split(/[,;\s]+/).filter(Boolean).map(Number).filter(Number.isFinite) },
   };
 }
 

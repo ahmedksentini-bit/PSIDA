@@ -250,6 +250,27 @@ niveaux N / H2 / H3 / H4b, cas particuliers (voie ferrée, grande route franchie
 (valeurs recommandées, classe à confirmer selon le produit et l'annexe nationale). Le guide ne donne pas d'exemple chiffré :
 les tests vérifient les bornes des tableaux et un exemple calculé à la main.
 
+## 1 undecies. Piles en rivière (v0.18, `src/supports/water.js`)
+
+- Courant : EN 1991-1-6 § 4.9, expression (4.1) F_wa = ½ k_wa ρ_w h b v², k_wa = 1,44 (section carrée ou rectangulaire) ou 0,70 (circulaire). La valeur k_wa est confirmée par la fiche NBN EN 1991-1-6 (Buildwise). La répartition est supposée triangulaire (maximum en surface), avec une résultante à 2h/3 au-dessus du lit (hypothèse PSIDA).
+- Embâcles : expression (4.2) F_deb = k_deb A_deb v², k_deb = 666 kg/m³ (valeur recommandée). Le radeau (hauteur, largeur) est saisi.
+- Combinaisons de crue :
+  - BAEL : 1,35 G + 1,5 F_eau à l'ELU, G + F_eau à l'ELS, sans trafic (comme le vent, annexe D) ;
+  - EC : 1,35 G + 1,5 F_eau + 1,35 ψ₀ Q à l'ELU (ψ₀ TS 0,75, UDL 0,4), G + F_eau + ψ₀ Q à l'ELS caractéristique.
+  - À confirmer selon le CCTP.
+- Poussée d'Archimède : ρ g V au niveau des PHE, sur le fût et la semelle.
+- Affouillement local : FHWA HEC-18 (équation CSU), y_s = 2,0 K₁ K₂ K₃ a^0,65 y₁^0,35 Fr^0,43.
+  - K₁ : avant-bec carré 1,1, arrondi ou cylindre 1,0, pointu 0,9, et 1,0 si θ > 5°.
+  - K₂ = (cos θ + L/a sin θ)^0,65 avec L/a ≤ 12 ; contrôlé contre le tableau K₂ à 10 % près.
+  - K₃ : état du lit.
+  - Plafond : 2,4 a si Fr ≤ 0,8, 3,0 a au-delà.
+  - Affouillement général et de contraction : saisi (étude hydraulique).
+- Conséquences sur la fondation :
+  - semelle : base exigée sous le fond affouillé ; D_e et q₀ sont comptés sous ce fond ;
+  - pieux : la longueur dégagée n'a ni réaction latérale ni frottement ; la portance est recalculée à pointe inchangée ;
+  - moment transversal réparti sur les pieux de la file.
+- Non traités : protections, piles complexes (HEC-18 § 7.4), affouillement autour des groupes de pieux, flambement du fût avec la longueur libre accrue.
+
 ## 2. Protocole de comparaison avec une note de référence
 
 ### 2.1 Référentiel Eurocodes — note CHAMOA-PSIDA (Cerema, guide technique, ch. 4)

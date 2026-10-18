@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { formDefaults, PSIDAEL_EXAMPLE } from '../tools/formdefaults.mjs';
 import { parseData, compute } from '../src/pipeline.js';
 import { buildNote, noteToHTML, noteToDocx } from '../web/note.js';
-import * as docx from '../web/vendor/docx.mjs';
+import * as docx from '../web/vendor/docx.js';
 
 const num = s => Number(String(s).replace(/\s| /g, '').replace(',', '.'));
 const rel = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol * Math.abs(b), `${msg} : PSIDA ${b}, note ${a}`);

@@ -10,6 +10,7 @@ import { designShaft, pierCap, buckling } from './pier.js';
 import { gardeGreve, murEnRetour, earthPressure, dalleTransition, Ka } from './abutment.js';
 import { shallowFooting, footingStrutTie, pileCapStrutTie, pileGroupForces, menardReaction, lateralPile, pileMinSteel, pileCapacity, PILE_TYPES, pileCapTwoRows, sigmaSBAEL, pileConcrete, efficaciteCoherentF62, efficaciteEC7, isCohesive, soilProfile } from './foundation.js';
 import { requiredSteelNM } from './section_nm.js';
+import { pierWater } from './water.js';
 import { bearingSpacing } from '../bearings.js';
 import { toPontEC8 } from '../ec8export.js';
 import * as EC8 from '../vendor/pont-ec8.js';
@@ -50,6 +51,10 @@ export const SUPPORT_DEFAULTS = {
   ec8: { zone: 3, categorie: 'III', classeSol: 'B' },
   seisme: { actif: false, q: { long: 1, trans: 1 } },
   choc: { vehicule: 'aucun', hV: 1.25, bateau: 'aucun', hB: 2.0 },
+  // cours d'eau (crue de projet) : h hauteur d'eau PHE − lit, v vitesse moyenne, theta biais du courant sur l'axe des piles,
+  // nez forme de l'avant-bec, K3 état du lit, hGen affouillement général + de contraction, hDeb/bDeb radeau d'embâcles,
+  // appuis numéros des lignes en eau (null : toutes les piles)
+  eau: { actif: false, h: 3, v: 2, theta: 0, nez: 'rond', K3: 1.1, hGen: 0, hDeb: 0, bDeb: 0, appuis: null },
 };
 
 const merge = (a, b) => { const o = { ...a }; for (const k of Object.keys(b || {})) o[k] = b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) ? { ...a[k], ...b[k] } : b[k] ?? a[k]; return o; };
@@ -113,6 +118,21 @@ export function computeSupports(st, input = {}) {
     for (const c of out) { c.N = c.N; }
     return out;
   };
+  // --- cours d'eau : courant, embâcles, poussée d'Archimède, affouillement (piles en rivière) ---
+  const inWater = i => sp.eau.actif && !isEnd(i) && (!sp.eau.appuis || !sp.eau.appuis.length || sp.eau.appuis.includes(i + 1));
+  const water = xs.map((x, i) => (inWater(i) ? pierWater(sp.eau, { type: sp.pile.type, b: sp.pile.b, Lv, D: sp.pile.D, nCol: sp.pile.nCol, s: sp.pile.nCol > 1 ? width / sp.pile.nCol : 0,
+    Hf: Hpile(i), dBed: Math.max(0, sp.found.De - sp.found.hs) }) : null));
+  const waterCombos = (i, Nfreq) => {
+    const w = water[i]; if (!w) return { F61: [], EC: [] };
+    // F_wa action variable de courte durée (γ_Q = 1,5) ; BAEL/F61 : comme le vent (annexe D), sans trafic ; EC : action
+    // dominante, trafic d'accompagnement ψ₀ (TS 0,75, UDL 0,4) ; poussée d'Archimède au niveau des PHE (γ = 1, défavorable
+    // en soulèvement, retenue dans toutes les combinaisons de crue)
+    const mk = (label, ls, gG, gW, NQ) => ({ label, ls, N: gG * perm.Rmax[i] + NQ, H: 0, Hy: 0, wat: { F: gW * w.F, M: gW * w.M, U: w.Ushaft, gG }, Nsus: gG * perm.Rmax[i], Ninst: NQ, Hsus: 0, Hinst: 0 });
+    return {
+      F61: [mk('ELU crue : 1,35 G + 1,5 F_eau', 'ELU', 1.35, 1.5, 0), mk('ELS crue : G + F_eau', 'ELS', 1, 1, 0)],
+      EC: [mk('ELU crue : 1,35 G + 1,5 F_eau + 1,35 ψ₀ Q', 'ELU', 1.35, 1.5, 1.35 * Nfreq), mk('ELS car. crue : G + F_eau + ψ₀ Q', 'ELS', 1, 1, Nfreq)],
+    };
+  };
   const heads = xs.map((x, i) => {
     const G = { N: perm.Rmax[i] };
     const tr = R(f61.trottoir, i);
@@ -131,8 +151,8 @@ export function computeSupports(st, input = {}) {
     ];
     const EC = headCombinationsEC({ G, Q: QE, RF: { H: distE.imposed(RF).H[i] }, T: { H: distE.imposed(epsT).H[i] } });
     const Nfreq = 0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i);
-    const acc = accidental(i, Nfreq);
-    return { x, F61: [...F61, ...acc], EC: [...EC, ...acc] };
+    const acc = accidental(i, Nfreq), wc = waterCombos(i, Nfreq);
+    return { x, F61: [...F61, ...wc.F61, ...acc], EC: [...EC, ...wc.EC, ...acc] };
   });
 
   // --- éléments d'appui ---
@@ -157,7 +177,8 @@ export function computeSupports(st, input = {}) {
         const arm = Hf + (col ? P.hc : 0);
         base = combos.map(cb => {
           const g = cb.ls === 'ELU' ? gU : 1, Mimp = cb.imp ? cb.imp.F * cb.imp.h : 0;
-          return { ...cb, Nb: cb.N + g * (Wchev + Wfut), Mb: cb.H * arm + Mimp, Mimp, Myb: (cb.Hy || 0) * arm, Hb: cb.H + (cb.imp ? cb.imp.F : 0) };
+          const wt = cb.wat;   // crue : courant + embâcles appliqués au fût (sens du courant, transversal), Archimède sur le fût
+          return { ...cb, Nb: cb.N + g * (Wchev + Wfut) - (wt ? wt.U : 0), Mb: cb.H * arm + Mimp, Mimp, Myb: (cb.Hy || 0) * arm + (wt ? wt.M : 0), Hb: cb.H + (cb.imp ? cb.imp.F : 0), Hyb: (cb.Hy || 0) + (wt ? wt.F : 0) };
         });
         const shape = col ? { D: P.D, c: c + 0.01, nBars: 12 } : { b: Lv, h: P.b, c: c + 0.01 };
         shaftRes = designShaft({ shape, code, fck, fyk, Hf, combos: base.filter(b => b.ls !== 'ELS').map(b => ({ label: b.label, N: b.Nb, M: b.Mb - b.Mimp, Mloc: b.Mimp, My: b.Myb, acc: !!b.acc })), n: col ? P.nCol : 1 });
@@ -203,14 +224,24 @@ export function computeSupports(st, input = {}) {
       const F = sp.found, bWall = end ? (sp.culee.type === 'remblayee' ? sp.culee.em : sp.culee.D) : (sp.pile.type === 'voile' ? sp.pile.b : sp.pile.D);
       const Lf = (end ? width : (sp.pile.type === 'voile' ? Lv : width)) + 1.0;
       const Wsem = 25 * F.B * Lf * F.hs;
-      const fd = base.map(b => { const g = b.ls === 'ELU' ? gU : 1; return { label: b.label, ls: b.ls, V: b.Nb + g * Wsem, H: b.Hb, M: b.Mb + b.Hb * F.hs }; });
+      const wl = water[i], dAff = wl ? wl.dAff : 0;
+      // crue : Archimède sur la semelle (ρ g V), effort transversal combiné (glissement, effort par pieu), moment transversal
+      const fd = base.map(b => {
+        const g = b.ls === 'ELU' ? gU : 1, Hy = b.Hyb || 0, wt = !!b.wat;
+        return { label: b.label, ls: b.ls, V: b.Nb + g * Wsem - (wt ? 10 * Wsem / 25 : 0), H: Math.hypot(b.Hb, wt ? Hy : 0), Hx: b.Hb, Hy, M: b.Mb + b.Hb * F.hs, My: (b.Myb || 0) + Hy * F.hs, crue: wt };
+      });
       let found;
       if (F.type === 'superficielle') {
-        const checks = fd.map(f => ({ ...f, ...shallowFooting({ code, B: F.B, L: Lf, D: F.De, De: F.De, V: f.V, H: f.H, M: f.M, ls: f.ls, profile, phi: soil.phi, gamma: soil.gamma }) }));
+        const checks = fd.map(f => {
+          const r = { ...f, ...shallowFooting({ code, B: F.B, L: Lf, D: F.De, De: F.De, V: f.V, H: f.H, M: f.M, ls: f.ls, profile, phi: soil.phi, gamma: soil.gamma, dAff: f.crue ? dAff : 0 }) };
+          // excentricité transversale (sens L) sous la crue : noyau central L/6 (contrôle simple, non intégré à la portance)
+          if (f.crue) { r.eY = Math.abs(f.My) / f.V; r.eYok = r.eY <= Lf / 6; r.excOk = r.excOk && r.eYok; }
+          return r;
+        });
         const eluMax = fd.filter(f => f.ls === 'ELU').reduce((a, f) => (f.V * (1 + 3 * Math.abs(f.M) / f.V / F.B) > a.Nn ? { f, Nn: f.V * (1 + 3 * Math.abs(f.M) / f.V / F.B) } : a), { Nn: 0 });
         const d = F.hs - c - 0.01, fsu = fyk / 1.15;
         const eMax = Math.max(...fd.map(f => Math.abs(f.M) / f.V));
-        found = { type: 'superficielle', B: F.B, L: Lf, hs: F.hs, W: Wsem, checks, worstV: Math.max(...checks.map(k => k.ratioV)), worstH: Math.max(...checks.map(k => k.ratioH)), excOk: checks.every(k => k.excOk),
+        found = { type: 'superficielle', B: F.B, L: Lf, hs: F.hs, W: Wsem, checks, scour: wl ? { dAff, De: F.De, ok: F.De > dAff } : null, worstV: Math.max(...checks.map(k => k.ratioV)), worstH: Math.max(...checks.map(k => k.ratioH)), excOk: checks.every(k => k.excOk),
           AsLong: Math.max(footingStrutTie({ N: eluMax.Nn, B: F.B, b: bWall, d, fsu }), 0.0012 * F.hs * Lf),
           bielles: { dOk: d >= (F.B - bWall) / 4, eOk: eMax <= F.B / 6, eMax } };
         // sens transversal : semelle filante sous voile → aciers de répartition ≥ 1/4 des aciers principaux (par m) ;
@@ -236,28 +267,45 @@ export function computeSupports(st, input = {}) {
         // file unique : la semelle ne bloque pas la rotation longitudinale, chaque pieu reprend H/n et M/n en tête.
         // enveloppe des modules de courte (freinage, TCD) et de longue durée (permanentes, retrait, TLD) : réponse la plus défavorable
         const env = (a, b) => ({ M: a.M.map((m, i) => (Math.abs(m) >= Math.abs(b.M[i]) ? m : b.M[i])), Mmax: Math.max(a.Mmax, b.Mmax), y0: Math.max(Math.abs(a.y0), Math.abs(b.y0)) });
-        const latFix = env(lateralPile({ L: F.Lpile, D, E: Ep, k: kR, H: 1, fixedHead: true }), lateralPile({ L: F.Lpile, D, E: Ep, k: mr.kLong, H: 1, fixedHead: true }));
-        const latH = env(lateralPile({ L: F.Lpile, D, E: Ep, k: kR, H: 1 }), lateralPile({ L: F.Lpile, D, E: Ep, k: mr.kLong, H: 1 }));
-        const latM = env(lateralPile({ L: F.Lpile, D, E: Ep, k: kR, H: 0, M0: 1 }), lateralPile({ L: F.Lpile, D, E: Ep, k: mr.kLong, H: 0, M0: 1 }));
+        // crue : longueur de pieu dégagée sous la semelle par l'affouillement (sol sans réaction latérale ni frottement)
+        const expo = wl ? Math.min(Math.max(0, dAff - F.De), 0.9 * F.Lpile) : 0;
+        const lats = ex => {
+          const kS = ex > 0 ? z => (z < ex ? 0 : kR(z)) : kR, kL = ex > 0 ? z => (z < ex ? 0 : mr.kLong(z)) : mr.kLong;
+          return {
+            latFix: env(lateralPile({ L: F.Lpile, D, E: Ep, k: kS, H: 1, fixedHead: true }), lateralPile({ L: F.Lpile, D, E: Ep, k: kL, H: 1, fixedHead: true })),
+            latH: env(lateralPile({ L: F.Lpile, D, E: Ep, k: kS, H: 1 }), lateralPile({ L: F.Lpile, D, E: Ep, k: kL, H: 1 })),
+            latM: env(lateralPile({ L: F.Lpile, D, E: Ep, k: kS, H: 0, M0: 1 }), lateralPile({ L: F.Lpile, D, E: Ep, k: kL, H: 0, M0: 1 })),
+          };
+        };
+        const L0 = lats(0), LW = expo > 0 ? lats(expo) : L0;
+        // pieux d'une file répartis sur la longueur de semelle (sens transversal) : effet du moment transversal de crue
+        const ysP = Array.from({ length: nP }, (_, k2) => Lf * (2 * k2 + 1) / (2 * nP) - Lf / 2), sy2 = nF * ysP.reduce((a, y) => a + y * y, 0), yMax = Math.max(0, ...ysP);
         const rows = fd.map(f => {
+          const { latFix, latH, latM } = f.crue ? LW : L0;
+          const dNy = f.crue && sy2 > 0 ? Math.abs(f.My) * yMax / sy2 : 0;
           const Hp = Math.abs(f.H) / xsP.length;
           if (nF > 1) {
             const Mhead = Math.abs(latFix.M[0]) * Hp;
             const g = pileGroupForces({ N: f.V, M: Math.abs(f.M), xs: xsP, Mhead });
-            return { ...f, Nmax: Math.max(...g.N), Nmin: Math.min(...g.N), Hp, Mhead, Mmax: latFix.Mmax * Hp, y0: latFix.y0 * Hp };
+            return { ...f, Nmax: Math.max(...g.N) + dNy, Nmin: Math.min(...g.N) - dNy, Hp, Mhead, Mmax: latFix.Mmax * Hp, y0: latFix.y0 * Hp };
           }
           const Mp = Math.abs(f.M) / xsP.length;
           const Mz = latH.M.map((m, i) => Math.max(Math.abs(Hp * m + Mp * latM.M[i]), Math.abs(Hp * m - Mp * latM.M[i])));
-          return { ...f, Nmax: f.V / xsP.length, Nmin: f.V / xsP.length, Hp, Mhead: Mp, Mmax: Math.max(...Mz), y0: Math.abs(latH.y0 * Hp) + Math.abs(latM.y0 * Mp) };
+          return { ...f, Nmax: f.V / xsP.length + dNy, Nmin: f.V / xsP.length - dNy, Hp, Mhead: Mp, Mmax: Math.max(...Mz), y0: Math.abs(latH.y0 * Hp) + Math.abs(latM.y0 * Mp) };
         });
-        const elu = rows.filter(r => r.ls === 'ELU'), els = rows.filter(r => r.ls === 'ELS'), accR = rows.filter(r => r.ls === 'ACC');
+        const elu = rows.filter(r => r.ls === 'ELU' && !r.crue), els = rows.filter(r => r.ls === 'ELS' && !r.crue), eluAll = rows.filter(r => r.ls === 'ELU'), accR = rows.filter(r => r.ls === 'ACC');
         const shapeP = { D, c: 0.07, nBars: 12 };
         // béton de pieu foré : BAEL / F62-V f_c = min(f_c28 ; 25)/(k₁ k₂), k₁ = 1,2 (groupe B), k₂ = 1,05 ; EC2 § 2.4.2.5 : γ_c × k_f = 1,1
         const pileMat = code === 'BAEL' ? { code, fck: pc.fc, fyk } : { code, fck: Math.min(fck, 30), fyk, gammaC: 1.5 * 1.1 };
         const pileMatAcc = { ...pileMat, gammaC: code === 'BAEL' ? 1.15 : 1.2, gammaS: 1.0 };
         const AsOf = (r, mt) => Math.max(requiredSteelNM(shapeP, mt, Math.max(0, r.Nmin), r.Mmax).As ?? Infinity, requiredSteelNM(shapeP, mt, r.Nmax, r.Mmax).As ?? Infinity);
-        const AsP = Math.max(...elu.map(r => AsOf(r, pileMat)), ...accR.map(r => AsOf(r, pileMatAcc)));
+        const AsP = Math.max(...eluAll.map(r => AsOf(r, pileMat)), ...accR.map(r => AsOf(r, pileMatAcc)));
         const cap = pileCapacity({ code, type: F.pileType, D, Lpile: F.Lpile, profile, Dhead: F.De });
+        // portance en crue : frottement compté sous le fond affouillé (même pointe)
+        const capW = expo > 0 ? pileCapacity({ code, type: F.pileType, D, Lpile: F.Lpile - expo, profile, Dhead: F.De + expo }) : cap;
+        const crueR = rows.filter(r => r.crue);
+        const scour = wl ? { dAff, expo, capW, ratioELU: capW.applicable && crueR.some(r => r.ls === 'ELU') ? Math.max(...crueR.filter(r => r.ls === 'ELU').map(r => r.Nmax)) / capW.Rcd : NaN,
+          ratioELS: capW.applicable && crueR.some(r => r.ls === 'ELS') ? Math.max(...crueR.filter(r => r.ls === 'ELS').map(r => r.Nmax)) / capW.Rcrd : NaN } : null;
         const NmaxU = Math.max(...elu.map(r => r.Nmax)), NmaxS = Math.max(0, ...els.map(r => r.Nmax)), NminU = Math.min(...elu.map(r => r.Nmin));
         const NminS = Math.min(...els.map(r => r.Nmin));
         const NmaxA = accR.length ? Math.max(...accR.map(r => r.Nmax)) : 0;
@@ -283,12 +331,12 @@ export function computeSupports(st, input = {}) {
           const bm = pierCap({ length: Lf, supports: piles, loads, q: nc > 0 ? gU * Wsem / Lf : Vu / Lf, b: F.B, h: F.hs, c: 0.07, fck, fyk, code, rhoMin: 0.0012 });
           capBeam = { Mneg: bm.Mneg, Mpos: bm.Mpos, V: bm.V, AsTop: bm.AsTop, AsBot: bm.AsBot };
         }
-        found = { type: 'pieux', D, n: xsP.length, nF, nP, Lpile: F.Lpile, k: kHead, rows, NmaxU, NmaxS, NminU, As: Math.max(AsP, pileMinSteel({ D, code })), AsReq: AsP, Amin: pileMinSteel({ D, code }), cap, capRatio, NmaxA, group, pileConc: pc, tie, capBeam, sigSels, hs: F.hs, hOk: F.hs >= 0.5, W: Wsem };
+        found = { type: 'pieux', D, n: xsP.length, nF, nP, Lpile: F.Lpile, k: kHead, rows, NmaxU, NmaxS, NminU, As: Math.max(AsP, pileMinSteel({ D, code })), AsReq: AsP, Amin: pileMinSteel({ D, code }), cap, capRatio, NmaxA, group, scour, pileConc: pc, tie, capBeam, sigSels, hs: F.hs, hOk: F.hs >= 0.5, W: Wsem };
       }
       per[code] = { base, shaft: shaftRes, ...extra, found };
     }
     out.BAEL = per.BAEL; out.EC = per.EC;
     return out;
   });
-  return { sp, xs, Lv, width, seisme, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hGG, Ka: KA, lines };
+  return { sp, xs, Lv, width, seisme, water, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hGG, Ka: KA, lines };
 }

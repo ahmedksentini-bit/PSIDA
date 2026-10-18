@@ -49,15 +49,16 @@ export const iDeltaFrictional = (delta, DeB) => idEC7({ sol: 'frottant', delta: 
  *   75 % (ELS rares) ; glissement H ≤ V tan φ'/1,2 + c' A'/1,5.
  * @param {object} p classe F62 du sol (« sable-B »…), ple p*_le [MPa], q0 contrainte effective au niveau de la base [kPa]
  */
-export function shallowFooting({ code = 'EC', B, L, D = 1, V, H = 0, M = 0, ls = 'ELU', classe = 'sable-B', soil = null, ple, De = null, q0 = null, phi = 30, c = 0, gamma = 20, profile = null }) {
-  const e = V > 0 ? Math.abs(M) / V : 0, q0v = q0 ?? gamma * D;
+export function shallowFooting({ code = 'EC', B, L, D = 1, V, H = 0, M = 0, ls = 'ELU', classe = 'sable-B', soil = null, ple, De = null, q0 = null, phi = 30, c = 0, gamma = 20, profile = null, dAff = 0 }) {
+  // dAff : profondeur affouillée sous le terrain naturel (crue) — encastrement et surcharge des terres comptés sous ce niveau
+  const dA = Math.min(Math.max(0, dAff), D), e = V > 0 ? Math.abs(M) / V : 0, q0v = q0 ?? gamma * (D - dA);
   // profil pressiométrique : p*_le moyenne géométrique sur [D ; D + 1,5 B] (F62 E.2) ou [D ; D + h_r] (NF P 94-261 D.2.2,
   // h_r selon l'excentrement), D_e = (1/p*_le) ∫₀ᴰ p*_l dz, classe de la couche d'assise
-  let cl = soil && !classe ? soil : classe, DeV = De ?? D;
+  let cl = soil && !classe ? soil : classe, DeV = Math.max(0, (De ?? D) - dA);
   if (profile) {
     const hr = code === 'EC' ? hrEC7({ forme: 'rectangulaire', B, L, eB: e, etat: ls === 'ELS' ? 'ELS' : 'ELU' }) : 1.5 * B;
     ple = code === 'EC' ? pleEC7({ profil: profile, D, hr }).ple : pleF62({ profil: profile, D, B }).ple;
-    DeV = DeProfil({ profil: profile, d: 0, D, reference: ple });
+    DeV = dA < D ? DeProfil({ profil: profile, d: dA, D, reference: ple }) : 0;
     cl = profile.at(D + 1e-6).classe;
   }
   const delta = V > 0 ? Math.atan(Math.abs(H) / V) * 180 / Math.PI : 0;
