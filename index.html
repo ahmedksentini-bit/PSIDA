@@ -70,7 +70,7 @@
   <pre id="error"></pre>
 </header>
 <form id="f" class="app" novalidate>
-<section class="tab" id="tab-projet">
+<section class="tab active" id="tab-projet">
   <div class="cols">
     <div class="card form-card"><h2>Tablier</h2>
     <details id="help-box"><summary>Aide sur les données (survoler un champ affiche aussi son explication)</summary><div id="help-list" class="small"></div></details>
@@ -375,6 +375,8 @@
   </div>
 </section>
 </form>
-<script type="module" src="./web/app.js"></script>
+<script src="./web/tabs.js?v=0.15"></script>
+<script type="module">import('./web/app.js?v=0.15').catch(e => { const el = document.getElementById('error'); if (el) el.textContent = 'Le calcul n\'a pas pu se charger (' + e.message + '). Recharger la page sans cache (Ctrl+F5) ; si le problème persiste, le signaler.'; });</script>
+<noscript><p style="padding:16px">PSIDA nécessite JavaScript.</p></noscript>
 </body>
 </html>

@@ -12,7 +12,7 @@ import { shallowFooting, footingStrutTie, pileCapStrutTie, pileGroupForces, mena
 import { requiredSteelNM } from './section_nm.js';
 import { bearingSpacing } from '../bearings.js';
 import { toPontEC8 } from '../ec8export.js';
-import * as EC8 from '../vendor/pont-ec8.mjs';
+import * as EC8 from '../vendor/pont-ec8.js';
 
 /**
  * Chocs accidentels sur les piles (EN 1991-1-7, valeurs recommandées — à confronter à l'annexe nationale) :

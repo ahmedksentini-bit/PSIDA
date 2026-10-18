@@ -28,24 +28,12 @@ import { toPontEC8 } from '../src/ec8export.js';
 const $ = s => document.querySelector(s);
 
 // --- onglets (adresse #projet, #tablier… comme Pont EC8) ---------------------------------------------------------------
-const TABS = ['projet', 'conception', 'tablier', 'ferraillage', 'complements', 'appuis', 'notes'];
-// adresse : #onglet ou #onglet/d=<données du formulaire> (lien partageable)
-const hashTab = () => location.hash.slice(1).split('/')[0];
-const hashData = () => { const m = location.hash.match(/(?:^#|\/)d=(.+)$/); return m ? m[1] : null; };
-let currentTab = 'projet';
-function goTab(id, push = true) {
-  if (!TABS.includes(id)) id = 'projet';
-  currentTab = id;
-  document.querySelectorAll('section.tab').forEach(sec => sec.classList.toggle('active', sec.id === `tab-${id}`));
-  document.querySelectorAll('nav.tabs a').forEach(a => a.setAttribute('aria-selected', String(a.dataset.tab === id)));
-  if (push) { const d = hashData(); history.replaceState(null, '', `#${id}${d ? `/d=${d}` : ''}`); }
-  // les graphiques Plotly tracés dans un onglet masqué sont redimensionnés à l'affichage
-  requestAnimationFrame(() => document.querySelectorAll(`#tab-${id} .plot`).forEach(d => { if (d.data && window.Plotly) Plotly.Plots.resize(d); }));
-}
+// onglets : web/tabs.js (script classique chargé avant ce module)
+const T = window.psidaTabs;
+const goTab = (id, push) => T.goTab(id, push);
+const hashData = () => T.hashData();
 function setMode(mode) { document.body.dataset.mode = mode; }
-document.querySelectorAll('nav.tabs a').forEach(a => a.addEventListener('click', ev => { ev.preventDefault(); goTab(a.dataset.tab); }));
-window.addEventListener('hashchange', () => { const h = hashTab(); if (TABS.includes(h) && h !== currentTab) goTab(h, false); });
-goTab(hashTab(), false);
+
 const nums = s => s.split(/[,;\s]+/).filter(Boolean).map(Number);
 const pairs = s => s.split(';').map(t => t.trim()).filter(Boolean).map(t => nums(t));
 const fmt = v => (Math.abs(v) < 0.05 ? '0' : v.toFixed(1));
@@ -344,7 +332,7 @@ function renderSection(st) {
 function formToHash(form) {
   const d = Object.fromEntries(new FormData(form).entries());
   d.chamoaSign = form.chamoaSign.checked ? 1 : 0; d.withTherm = form.withTherm.checked ? 1 : 0;
-  try { history.replaceState(null, '', `#${currentTab}/d=` + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(d)))))); } catch (e) { /* ignore */ }
+  try { history.replaceState(null, '', `#${T.current()}/d=` + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(d)))))); } catch (e) { /* ignore */ }
 }
 function hashToForm(form) {
   const h = hashData();
@@ -376,8 +364,8 @@ renderScheme();
 $('#f').addEventListener('submit', ev => {
   ev.preventDefault();
   setMode('full');
-  if (currentTab === 'projet' || currentTab === 'conception') goTab('tablier');
-  try { state = compute(parseForm(ev.target)); renderStatic(state); $('#error').textContent = ''; formToHash(ev.target); goTab(currentTab); }
+  if (T.current() === 'projet' || T.current() === 'conception') goTab('tablier');
+  try { state = compute(parseForm(ev.target)); renderStatic(state); $('#error').textContent = ''; formToHash(ev.target); goTab(T.current()); }
   catch (e) { $('#error').textContent = e.stack || String(e); }
 });
 $('#btn-concept').addEventListener('click', () => {

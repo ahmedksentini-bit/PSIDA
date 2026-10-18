@@ -95,7 +95,12 @@ export class SlabDeck {
     if (this._Kcache.has(key)) return this._Kcache.get(key);
     const opt = { b: this.b, L, nu: this.nu, alpha: this.alphaTorsion };
     let vals;
-    if (Math.abs(e2 - e1) < 1e-9) { const f = coefKFunction({ ...opt, e: e1 }); vals = this.ys.map(y => f(y)); }
+    if (Math.abs(e2 - e1) < 1e-9 && Math.abs(e1) > this.b + 1e-9) {
+      // charge-ligne hors de la largeur active (corniche, superstructures de rive d'un tablier à poutres) : extrapolation
+      // linéaire de la ligne d'influence de K depuis le bord (pratique PONTYPE/PAP, pas de 0,125 m)
+      const s = Math.sign(e1), fb = coefKFunction({ ...opt, e: s * this.b }), fi = coefKFunction({ ...opt, e: s * (this.b - 0.125) });
+      vals = this.ys.map(y => fb(y) + (fb(y) - fi(y)) / 0.125 * (Math.abs(e1) - this.b));
+    } else if (Math.abs(e2 - e1) < 1e-9) { const f = coefKFunction({ ...opt, e: e1 }); vals = this.ys.map(y => f(y)); }
     else vals = this.ys.map(y => coefKBand({ ...opt, e1, e2, y }));
     this._Kcache.set(key, vals);
     return vals;
