@@ -52,6 +52,7 @@ export function transmettreEfforts(p: Projet): void {
       type: "efforts",
       nom: p.nom,
       travees: p.tablier.travees,
+      projet: structuredClone(p),
       efforts: exporterEfforts(p, a, r),
       T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T },
       F: { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 },

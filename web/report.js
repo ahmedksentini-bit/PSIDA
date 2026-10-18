@@ -6,7 +6,10 @@ import { elevationSVG, crossSectionSVG } from './svg.js';
 import { tableK } from '../src/guyon.js';
 import { planSVG, zoningPlanSVG } from './schema.js';
 import { longitudinalRebarSVG, crossRebarSVG, scheduleHTML } from './rebarplan.js';
-import { supportsBlocks, blocksToHTML } from './supports_view.js';
+import { supportsBlocks, waterBlocks, blocksToHTML } from './supports_view.js';
+import { seismicBlocks } from './seismic_note.js';
+import { ddrBlocks } from './ddr_view.js';
+import { katexHead } from './note.js';
 
 const cm = v => (v * 1e4).toFixed(1);
 const f0 = v => v.toFixed(0), f1 = v => v.toFixed(1), f3 = v => v.toFixed(3);
@@ -51,7 +54,7 @@ export async function buildReport(st) {
  td.sub{color:#5b6478;padding-left:16px} .small{font-size:11px;color:#5b6478} figure{margin:10px 0;page-break-inside:avoid} figure img{width:100%;border:1px solid #e3e6eb} figcaption{font-size:11px;color:#5b6478;text-align:center}
  .svg svg{width:100%;height:auto} .meta{color:#5b6478;font-size:12px;margin-bottom:14px} .box{border:1px solid #cfd4dc;border-radius:6px;padding:8px 12px;margin:8px 0;background:#fafbfc}
  @media print{ body{padding:0} h2{page-break-before:auto} .noprint{display:none} }
-</style></head><body>
+</style>${katexHead(typeof location !== 'undefined' && /^https?:/.test(location.origin) ? location.origin + location.pathname.replace(/\/[^/]*$/, '') : '')}</head><body>
 <div class="noprint" style="margin-bottom:12px"><button onclick="window.print()" style="padding:8px 14px;font:inherit">Imprimer / enregistrer en PDF</button></div>
 <h1>Note de calcul — pont-dalle en béton armé (PSI-DA)</h1>
 <div class="meta">Calcul manuel assisté — moteur PSIDA v${esc(st.version || '0.14')} · ${date} · référentiels : Eurocodes (EN 1990/1991-2/1992) et Fascicule 61 titre II + BAEL 91</div>`;
@@ -167,8 +170,12 @@ export async function buildReport(st) {
 
   // 12. Références
   if (st.supports) {
-    h += `<h2>11 bis. Appuis et fondations</h2><h3>Eurocodes</h3>${blocksToHTML(supportsBlocks(st.supports, 'EC'))}<h3>Fascicule 61 / BAEL / Fascicule 62 titre V</h3>${blocksToHTML(supportsBlocks(st.supports, 'F61'))}`;
+    h += `<h2>11 bis. Appuis et fondations</h2><h3>Eurocodes</h3>${blocksToHTML(supportsBlocks(st.supports, 'EC', { noWater: true }))}<h3>Fascicule 61 / BAEL / Fascicule 62 titre V</h3>${blocksToHTML(supportsBlocks(st.supports, 'F61', { noWater: true }))}`;
+    const wE = waterBlocks(st.supports, 'EC');
+    if (wE.length) h += `<h2>11 ter. Piles en rivière — courant, embâcles, affouillement</h2><h3>Eurocodes</h3>${blocksToHTML(wE)}<h3>Fascicule 61 / BAEL / Fascicule 62 titre V</h3>${blocksToHTML(waterBlocks(st.supports, 'F61'))}`;
+    h += `<h2>11 quater. Calcul sismique — EN 1998-2 (Pont EC8)</h2>${blocksToHTML(seismicBlocks(st.supports.sp.seisme.actif ? st.supports.seisme : null))}`;
   }
+  if (st.ddr) h += `<h2>11 quinquies. Dispositifs de retenue — indice de danger</h2>${blocksToHTML(ddrBlocks(st.ddr))}`;
   h += `<h2>12. Hypothèses et références</h2><p class="small">H1 dalle isotrope de largeur totale, ν = ${deck.nu} ; H2 poutre continue à EI constant ; H3 premier harmonique, L_eq de la travée seule chargée (« méthode des moments ») ; H4 arrangement transversal le plus défavorable par fibre, files indépendantes longitudinalement ; H5 poids propre K = 1, charges excentrées K(e, y) ; H6 calcul longitudinal suivant les portées biaises sans correction (biais mécanique et annexe 12A dans le module biais) ; H7 flexion transversale sur dalle isostatique équivalente. Vérifications : 51 tests unitaires dont la note CHAMOA-PSIDA (Cerema, ch. 4) : moments permanents, travée équivalente, gradient thermique et tassements à 10⁻³, moment de calcul LM1 à 1 %, aciers de flexion à 1 %, biais mécanique et moments de l'annexe 12A à 10⁻⁴.</p>
 <p class="small">Références : EN 1990 (A2), EN 1991-1-5, EN 1991-2, EN 1992-1-1, EN 1992-2 et annexes nationales ; Fascicule 61 titre II ; BAEL 91 ; SETRA, Ponts-dalles – guide de conception (1989) ; Cerema, CHAMOA-P PSIDA – guide technique ; Bareš & Massonnet (1966) ; Pücher (1977) ; Hambly (1991) ; Calgaro & Virlogeux.</p>
 </body></html>`;

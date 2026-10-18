@@ -127,9 +127,10 @@ L'application Pont EC8 (dépôt ouvpara) est intégrée en entier : sources dans
 
 - **PSIDA → Pont EC8 :** « Envoyer le projet PSIDA » charge le projet issu du dernier calcul (`src/ec8export.js`).
 - **Pont EC8 → PSIDA :** à chaque modification, l'onglet renvoie les efforts par appui (`ec8/src/ui/psida.ts`, postMessage). « Appuis et fondations » les retient quand la source « onglet Calcul sismique » est choisie. Le nombre de lignes d'appui et les travées sont contrôlés.
+- **Note de calcul globale :** elle contient les chapitres Appuis et fondations, Piles en rivière, Calcul sismique (note complète de Pont EC8 : formules en LaTeX, références au paragraphe près, synthèse des vérifications ; `web/seismic_note.js`) et Dispositifs de retenue. Les formules sont rendues par KaTeX (`web/vendor/katex`) en HTML, et en texte dans la note Word.
 - **Recompiler après une modification de `ec8/src` :**
   - application : `cd ec8 && npm install && npm run build:psida` ;
-  - moteur utilisé pour le calcul automatique (`src/vendor/pont-ec8.js`) : `npx esbuild <entrée exportant lireProjet, valider, actionSismique, modele, analyse, verifierAppuis, exporterEfforts> --bundle --format=esm --outfile=src/vendor/pont-ec8.js`.
+  - moteur utilisé pour le calcul automatique et la note (`src/vendor/pont-ec8.js`) : `cd ec8 && npm run build:engine` (entrée `ec8/psida/moteur.ts`), puis rétablir l'en-tête de provenance.
 
 ## Déploiement (GitHub → Cloudflare Pages)
 

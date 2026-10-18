@@ -39,3 +39,23 @@ export function ddrHTML(inp) {
   <p class="small">Méthode : guide méthodologique Cerema « Choix des performances d'un dispositif de retenue sur ouvrage d'art — Méthode de calcul de l'indice de danger » (novembre 2021), tableaux 1 à 18, § 2.2.2 à 2.3 ; il remplace le guide technique SETRA de 2002. Trafics à 15 ans T15 = 1,25 × trafic actuel (ouvrage définitif). Niveaux de retenue de la NF EN 1317-2 (N, H2, H3, H4b ; L = mêmes niveaux avec classe de sévérité améliorée). La classe de l'effort de choc (A 100, B 200, C 400, D 600 kN, valeurs recommandées de l'EN 1991-2 tableau 4.9(n)) dépend du dispositif choisi et de l'annexe nationale : à confirmer avec la fiche du produit.</p>
 </div>`;
 }
+
+/** Blocs de la note de calcul globale (chapitre « Dispositifs de retenue »). */
+export function ddrBlocks(inp) {
+  const r = indiceDanger(inp), choc = chocSurDispositif(inp.choc), B = [];
+  const lab = { 'ID1.1': 'trafic T15', 'ID1.2': 'tracé en plan', 'ID1.3': 'profil en long', 'ID1.4': 'point de conflit', 'ID1.5': 'longueur de franchissement', 'ID1.6': 'viabilité hivernale',
+    'ID2.1': 'hauteur de chute', 'ID2.2': 'hauteur d\'eau', 'ID3.1': 'voie franchie', 'ID3.2': 'voie ferrée', 'ID3.3': 'habitations', 'ID3.4': 'zones sensibles' };
+  B.push({ t: 'p', text: `Trafic actuel ${F(inp.T, 0)} véh/j dont ${F(inp.PL, 0)} PL/j (trafic à 15 ans T15 = ${F(r.T15, 0)} véh/j, ${F(r.PL15, 0)} PL/j), vitesse ${F(inp.vitesse, 0)} km/h.` });
+  B.push({ t: 'table', head: ['Sous-indice', 'Valeur'], rows: [...Object.entries(r.s).map(([k, v]) => [`${k} — ${lab[k]}`, F(v, 0)]),
+    ['ID1 = somme ID1.1 à ID1.6', F(r.ID1, 0)], ['ID2 = max(ID2.1 ; ID2.2)', F(r.ID2, 0)], [`ID3 = K × max(ID3.1 … ID3.4), K = ${F(r.K, 1)}`, F(r.ID3, 1)], ['ID = ID1 + max(ID2 ; ID3), arrondi à l\'entier supérieur', String(r.ID)]] });
+  B.push({ t: 'p', text: `Indice de danger ID = ${r.ID} → niveau de retenue minimal ${r.niveau}${r.niveau !== r.niveauIndice ? ` (indice seul : ${r.niveauIndice}, relevé par un cas particulier)` : ''}.` });
+  const notes = [...r.special, ...r.secondaire, ...r.alerts];
+  if (r.proche) notes.unshift('ID au voisinage d\'une borne (18, 26 ou 38) : envisager le niveau supérieur après revue de l\'ensemble des facteurs (§ 2.2.2.8).');
+  if (notes.length) B.push({ t: 'comment', text: notes.join(' ; ') });
+  B.push({ t: 'table', head: ['Effort transmis au tablier (EN 1991-2 § 4.7.3.3)', 'Valeur'], rows: [
+    ['Classe de l\'effort de choc', `${inp.choc.classe} : F = ${F(choc.F, 0)} kN`], ['Bras de levier jusqu\'au feuillet moyen de la dalle', `${F(choc.h, 2)} m`],
+    [`Largeur de diffusion à l'encastrement (0,5 m + 2 × ${F(inp.choc.dEnc, 2)} m)`, `${F(choc.larg, 2)} m`],
+    ['Moment d\'encastrement accidentel de l\'encorbellement', `${F(choc.mHorizontal, 1)} kN·m/m (+ vertical concomitant ${F(choc.Fv, 0)} kN → ${F(choc.mVertical, 1)} kN·m/m)`]] });
+  B.push({ t: 'p', text: 'Méthode : guide Cerema « Choix des performances d\'un dispositif de retenue sur ouvrage d\'art — Méthode de calcul de l\'indice de danger » (novembre 2021), tableaux 1 à 18 ; niveaux de retenue NF EN 1317-2 ; classes d\'effort de choc A à D de l\'EN 1991-2 tableau 4.9(n), à confirmer avec la fiche du produit.' });
+  return B;
+}

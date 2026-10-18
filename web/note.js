@@ -12,7 +12,9 @@
  */
 import { BC, BT, MC120, maxAxleLoadOnLength, maxStripTrainLoad, COMBI_BAEL } from '../src/loads_f61.js';
 import { mechanicalSkew } from '../src/skew.js';
-import { supportsBlocks } from './supports_view.js';
+import { supportsBlocks, waterBlocks } from './supports_view.js';
+import { seismicBlocks, texToText } from './seismic_note.js';
+import { ddrBlocks } from './ddr_view.js';
 
 const F = (v, n = 1) => (v === null || v === undefined || !isFinite(v) ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: n, maximumFractionDigits: n }));
 const F0 = v => F(v, 0), F1 = v => F(v, 1), F2 = v => F(v, 2), F3 = v => F(v, 3);
@@ -273,9 +275,19 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
   }
 
   // ---------------------------------------------------------------------------------------------------------- 14
+  let chap = isF ? 14 : 13;
   if (st.supports) {
-    h1('Appuis et fondations', isF ? 14 : 13);
-    for (const b of supportsBlocks(st.supports, ref)) B.push(b);
+    h1('Appuis et fondations', chap++);
+    for (const b of supportsBlocks(st.supports, ref, { noWater: true })) B.push(b);
+    const wb = waterBlocks(st.supports, ref);
+    if (wb.length) { h1('Piles en rivière — courant, embâcles, affouillement', chap++); for (const b of wb) if (!(b.t === 'h2' && /^Piles en rivière/.test(b.text))) B.push(b); }
+    h1('Calcul sismique — EN 1998-2 (Pont EC8)', chap++);
+    for (const b of seismicBlocks(st.supports.sp.seisme.actif ? st.supports.seisme : null)) B.push(b);
+  }
+  // ------------------------------------------------------------------------------------------------- dispositifs de retenue
+  if (st.ddr) {
+    h1('Dispositifs de retenue — indice de danger (Cerema 2021)', chap++);
+    for (const b of ddrBlocks(st.ddr)) B.push(b);
   }
 
   h1('Références');
@@ -296,7 +308,11 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
 // ============================================================================================================ HTML
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-export function noteToHTML(note) {
+/** KaTeX (web/vendor/katex) pour les formules de la note sismique ; base = origine du site (la note s'ouvre en blob:). */
+export const katexHead = (base = '') => (base ? `<link rel="stylesheet" href="${base}/web/vendor/katex/katex.min.css"><script defer src="${base}/web/vendor/katex/katex.min.js"></script>
+<script>addEventListener('DOMContentLoaded',()=>{if(!window.katex)return;for(const el of document.querySelectorAll('.math[data-tex]'))try{katex.render(el.dataset.tex,el,{displayMode:true,throwOnError:false})}catch(e){}})</script>` : '');
+
+export function noteToHTML(note, { base = (typeof location !== 'undefined' && /^https?:/.test(location.origin) ? location.origin + location.pathname.replace(/\/[^/]*$/, '') : '') } = {}) {
   let h = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(note.title)}</title><style>
  body{font:11.5px/1.45 "Courier New",ui-monospace,monospace;color:#111;margin:0;padding:24px 32px;max-width:1150px}
  .hdr{font-family:system-ui,sans-serif;border:2px solid #111;padding:10px 14px;margin-bottom:16px}
@@ -309,13 +325,17 @@ export function noteToHTML(note) {
  .comment{font:italic 11.5px/1.45 Georgia,serif;border:1px solid #888;border-left:4px solid #888;background:#fbfbf8;padding:6px 10px;margin:6px 0 12px}
  .comment:before{content:"Commentaire — ";font-weight:bold;font-style:normal}
  p{font-family:system-ui,sans-serif;margin:6px 0} figure{margin:8px 0;page-break-inside:avoid} figure img{width:100%;border:1px solid #ccc} figcaption{font:10.5px system-ui;text-align:center;color:#444}
+ h4{font:bold 11.5px system-ui,sans-serif;margin:10px 0 3px} .ref{font-size:10px;color:#555} .math{margin:3px 0 3px 12px;font-family:"Times New Roman",serif;font-size:13px;overflow-x:auto}
  @media print{body{padding:0} .noprint{display:none} h2{page-break-before:auto}}
-</style></head><body><div class="noprint" style="margin-bottom:10px"><button onclick="window.print()">Imprimer / PDF</button></div>
+</style>${katexHead(base)}</head><body><div class="noprint" style="margin-bottom:10px"><button onclick="window.print()">Imprimer / PDF</button></div>
 <div class="hdr"><h1>${esc(note.title)}</h1><div class="m">${esc(note.meta)}</div></div>`;
   for (const b of note.blocks) {
     if (b.t === 'h1') h += `<h2>${esc(b.text)}</h2>`;
     else if (b.t === 'h2') h += `<h3>${esc(b.text)}</h3>`;
     else if (b.t === 'p') h += `<p>${esc(b.text)}</p>`;
+    else if (b.t === 'h3') h += `<h4>${esc(b.text)}</h4>`;
+    else if (b.t === 'ref') h += `<p class="ref">${esc(b.text)}</p>`;
+    else if (b.t === 'math') h += `<div class="math" data-tex="${esc(b.tex).replace(/"/g, '&quot;')}">${esc(texToText(b.tex))}</div>`;
     else if (b.t === 'comment') h += `<div class="comment">${esc(b.text)}</div>`;
     else if (b.t === 'img') h += `<figure><img src="${b.dataUrl}" alt=""><figcaption>${esc(b.caption || '')}</figcaption></figure>`;
     else if (b.t === 'svg') h += `<figure style="max-width:760px">${b.svg}<figcaption>${esc(b.caption || '')}</figcaption></figure>`;
@@ -345,6 +365,9 @@ export async function noteToDocx(note, docx, { asBuffer = false } = {}) {
     if (b.t === 'h1') kids.push(new Paragraph({ heading: HeadingLevel.HEADING_1, children: [run(b.text, { bold: true, size: 24 })], spacing: { before: 240, after: 120 } }));
     else if (b.t === 'h2') kids.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [run(b.text, { bold: true, size: 20 })], spacing: { before: 160, after: 80 } }));
     else if (b.t === 'p') kids.push(new Paragraph({ children: [run(b.text)], spacing: { after: 80 } }));
+    else if (b.t === 'h3') kids.push(new Paragraph({ heading: HeadingLevel.HEADING_3, children: [run(b.text, { bold: true, size: 18 })], spacing: { before: 120, after: 40 } }));
+    else if (b.t === 'ref') kids.push(new Paragraph({ children: [run(b.text, { size: 15, color: '555555' })], spacing: { after: 60 } }));
+    else if (b.t === 'math') kids.push(new Paragraph({ children: [run(texToText(b.tex), { font: 'Cambria Math', size: 19, italics: true })], indent: { left: 360 }, spacing: { after: 40 } }));
     else if (b.t === 'comment') kids.push(new Paragraph({ children: [run('Commentaire — ', { bold: true, size: 17 }), run(b.text, { italics: true, size: 17 })], border: { left: { style: BorderStyle.SINGLE, size: 18, color: '888888', space: 6 } }, shading: { type: ShadingType.CLEAR, fill: 'F7F7F2', color: 'auto' }, spacing: { before: 60, after: 160 }, indent: { left: 120 } }));
     else if (b.t === 'img' && b.dataUrl) {
       const bin = b.dataUrl.split(',')[1];

@@ -4,6 +4,7 @@
  * descente en pied → fûts → chevêtres → garde-grève et murs en retour → fondations.
  */
 import { profilPressio } from '../src/vendor/fond-figures.js';
+import { seismicBlocks } from './seismic_note.js';
 
 /** Figure du sondage (bureau de calcul fond.ksr-infra.org) : essais, ou à défaut valeurs de couche en escalier. */
 export function profileFigure(pr, bandes = []) {
@@ -25,7 +26,10 @@ const ok = r => (r <= 1 + 1e-9 ? 'OK' : 'NON');
 const L0s = (Ls, code) => Ls[0][code].found;
 
 /** @param {object} sup résultat de computeSupports ; ref 'F61' (BAEL / F62-V) ou 'EC' */
-export function supportsBlocks(sup, ref = 'F61') {
+/**
+ * @param {object} opts { noWater : sans la section « piles en rivière » (chapitre séparé de la note globale), onlyWater }
+ */
+export function supportsBlocks(sup, ref = 'F61', opts = {}) {
   const B = [], code = ref === 'F61' ? 'BAEL' : 'EC', isF = code === 'BAEL';
   const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), comment = text => B.push({ t: 'comment', text });
   const table = (head, rows, opt = {}) => B.push({ t: 'table', head, rows, ...opt });
@@ -59,6 +63,7 @@ export function supportsBlocks(sup, ref = 'F61') {
     comment(`Chocs sur les piles (EN 1991-1-7, valeurs recommandées à confronter à l'annexe nationale et au cahier des charges) : combinaison accidentelle G + A_d + ψ₁,₁ Q (TS 0,75, UDL 0,4) ; force max(F_dx ; F_dy) appliquée dans le sens longitudinal de l'ouvrage (le plus défavorable pour un voile), à ${F2(ch.hV)} m au-dessus de la semelle pour les véhicules${ch.bateau !== 'aucun' ? `, choc de bateau frontal F_dx à ${F2(ch.hB)} m` : ''} ; pour une pile à colonnes, le choc est repris par une seule colonne.`);
   }
 
+  const iWat0 = B.length;
   const wat = (sup.water || []).map((w, i) => (w ? { w, L: Ls[i] } : null)).filter(Boolean);
   if (wat.length) {
     const e = sup.sp.eau;
@@ -72,6 +77,9 @@ export function supportsBlocks(sup, ref = 'F61') {
     comment(`Crue de projet : h = ${F2(e.h)} m (PHE − lit), v = ${F2(e.v)} m/s, biais ${F1(e.theta)}°. Courant EN 1991-1-6 § 4.9 (4.1) : F_wa = ½ k_wa ρ_w h b v², k_wa = 1,44 (section rectangulaire) ou 0,70 (circulaire), b largeur perpendiculaire au courant (voile : a cos θ + L sin θ ; colonnes : n Ø, sans effet de masque) ; hypothèse PSIDA : pression triangulaire maximale en surface, résultante à 2h/3 au-dessus du lit. Embâcles (4.2) : F_deb = k_deb A_deb v², k_deb = 666 kg/m³, radeau sous la surface libre. Efforts appliqués au fût dans le sens du courant (transversal à l'ouvrage) ; combinaisons de crue ${isF ? 'ELU 1,35 G + 1,5 F_eau, ELS G + F_eau (comme le vent, BAEL annexe D, sans trafic)' : 'ELU 1,35 G + 1,5 F_eau + 1,35 ψ₀ Q, ELS car. G + F_eau + ψ₀ Q (ψ₀ TS 0,75, UDL 0,4)'} — coefficients à confirmer selon le CCTP ; poussée d'Archimède ρ g V au niveau des PHE sur le fût et la semelle. Affouillement local FHWA HEC-18 (équation CSU) : y_s = 2,0 K₁ K₂ K₃ a^0,65 y₁^0,35 Fr^0,43, K₁ avant-bec (carré 1,1 ; arrondi, cylindre 1,0 ; pointu 0,9 ; 1,0 si θ > 5°), K₂ = (cos θ + L/a sin θ)^0,65 (L/a ≤ 12), K₃ état du lit, y_s ≤ 2,4 a (Fr ≤ 0,8) ou 3,0 a ; affouillement général et de contraction saisi (${F2(e.hGen)} m), à établir par l'étude hydraulique. Conséquences : semelle superficielle — base sous le fond affouillé, encastrement D_e et surcharge q₀ comptés sous ce fond ; pieux — longueur dégagée sans réaction latérale (Winkler) ni frottement, portance recalculée à pointe inchangée. Protection (enrochements) et affouillement autour des groupes de pieux ou des semelles débordantes (piles complexes, HEC-18 § 7.4) : non traités.`);
   }
 
+  const iWat1 = B.length;
+  if (opts.onlyWater) return B.slice(iWat0, iWat1);
+  if (opts.noWater) B.splice(iWat0, iWat1 - iWat0);
   const warn = Ls.filter(L => L.warnings && L.warnings.length);
   if (warn.length) {
     h2('Dispositions minimales (PP73) — avertissements');
@@ -179,7 +187,11 @@ export function supportsNote(sup, { ref = 'F61', version = '', standalone = fals
   const today = new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
   const title = `Note de calcul — appuis et fondations — ${ref === 'F61' ? 'Fascicule 61 / BAEL 91 / Fascicule 62 titre V' : 'Eurocodes (EN 1990, 1991, 1992, 1997, 1998-2)'}`;
   const blocks = [{ t: 'h1', text: '1. Données' }, { t: 'p', text: `Ouvrage de ${spans.length} travée(s) : ${spans.join(' – ')} m. ${standalone ? 'Réactions d\'appui par ligne saisies (tablier quelconque, valeurs caractéristiques, majorations dynamiques incluses).' : 'Réactions d\'appui issues du calcul du tablier (pont-dalle).'}` },
-    { t: 'h1', text: '2. Appuis et fondations' }, ...supportsBlocks(sup, ref)];
+    { t: 'h1', text: '2. Appuis et fondations' }, ...supportsBlocks(sup, ref, { noWater: true })];
+  let k = 3;
+  const wb = waterBlocks(sup, ref);
+  if (wb.length) blocks.push({ t: 'h1', text: `${k++}. Piles en rivière — courant, embâcles, affouillement` }, ...wb.filter(b => !(b.t === 'h2' && /^Piles en rivière/.test(b.text))));
+  if (sup.sp.seisme.actif) blocks.push({ t: 'h1', text: `${k++}. Calcul sismique — EN 1998-2 (Pont EC8)` }, ...seismicBlocks(sup.seisme));
   return { title, meta: `${today} · calcul PSIDA v${version}`, blocks };
 }
 
@@ -189,9 +201,16 @@ export function blocksToHTML(blocks) {
   return blocks.map(b => {
     if (b.t === 'h2') return `<h3>${esc(b.text)}</h3>`;
     if (b.t === 'p') return `<p class="small">${esc(b.text)}</p>`;
+    if (b.t === 'h1') return `<h3>${esc(b.text)}</h3>`;
+    if (b.t === 'h3') return `<h5>${esc(b.text)}</h5>`;
+    if (b.t === 'ref') return `<p class="small ref">${esc(b.text)}</p>`;
+    if (b.t === 'math') return `<div class="math" data-tex="${esc(b.tex).replace(/"/g, '&quot;')}">${esc(b.tex)}</div>`;
     if (b.t === 'svg') return `<figure class="fig-sondage" style="max-width:760px;margin:8px 0">${b.svg}<figcaption class="small">${esc(b.caption || '')}</figcaption></figure>`;
     if (b.t === 'comment') return `<p class="small" style="font-style:italic">${esc(b.text)}</p>`;
     if (b.t === 'table') return `<table><thead><tr>${b.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.rows.map(r => `<tr>${r.map(c => `<td>${esc(c).replace(/\bNON\b/g, '<span class="badge warn">NON</span>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
     return '';
   }).join('');
 }
+
+/** Section « piles en rivière » seule (chapitre de la note globale). */
+export const waterBlocks = (sup, ref = 'F61') => supportsBlocks(sup, ref, { onlyWater: true });
