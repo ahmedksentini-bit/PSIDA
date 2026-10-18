@@ -49,24 +49,58 @@ export function parseData(d) {
 }
 
 /**
- * Profils pressiométriques (sondages) : une couche par ligne « z0 z1 classe p*_l E_M α » (m, m, classe F62, MPa, MPa, –) ;
- * une ligne « [SP1] » ouvre un nouveau profil nommé (sans en-tête : profil unique « SP1 »).
- * @returns {{name:string, layers:object[]}[]}
+ * Profils pressiométriques (sondages). Une ligne « [SP1] » ouvre un profil nommé (sans en-tête : profil unique « SP1 »).
+ * Couche : « z0 z1 classe p*_l E_M α » (m, m, classe F62, MPa, MPa, –) ; p*_l, E_M ou α peuvent valoir « - » : ils sont
+ * alors tirés des essais de la couche (p*_l moyenne géométrique, E_M moyenne harmonique — pratique du bureau de calcul
+ * fond.ksr-infra.org) et α du rapport E_M/p*_l (Ménard). Essai : « e z E_M p*_l [p*_f] » (m, MPa).
+ * @returns {{name:string, layers:object[], tests:object[]}[]}
  */
 export function parseProfiles(text) {
   const out = [];
   let cur = null;
+  const num = w => (w === undefined || w === '-' || w === '' ? NaN : +String(w).replace(',', '.'));
   for (const raw of String(text || '').split('\n')) {
     const t = raw.trim();
     if (!t || t.startsWith('#')) continue;
     const h = t.match(/^\[(.+)\]$/);
-    if (h) { cur = { name: h[1].trim(), layers: [] }; out.push(cur); continue; }
-    if (!cur) { cur = { name: 'SP1', layers: [] }; out.push(cur); }
+    if (h) { cur = { name: h[1].trim(), layers: [], tests: [] }; out.push(cur); continue; }
+    if (!cur) { cur = { name: 'SP1', layers: [], tests: [] }; out.push(cur); }
     const w = t.split(/[;\s]+/).filter(Boolean);
-    const l = { z0: +w[0], z1: +w[1], classe: w[2], pl: +w[3], EM: +w[4], alpha: w[5] !== undefined ? +w[5] : 0.5 };
-    if (Number.isFinite(l.z0) && Number.isFinite(l.z1) && l.z1 > l.z0 && l.classe && l.pl > 0 && l.EM > 0) cur.layers.push(l);
+    if (/^e(ssai)?$/i.test(w[0])) {
+      const e = { z: num(w[1]), EM: num(w[2]), plNette: num(w[3]), pfNette: num(w[4]) };
+      if (Number.isFinite(e.z) && e.EM > 0 && e.plNette > 0) cur.tests.push(e);
+      continue;
+    }
+    cur.layers.push({ z0: num(w[0]), z1: num(w[1]), classe: w[2], pl: num(w[3]), EM: num(w[4]), alpha: num(w[5]) });
+  }
+  for (const p of out) {
+    p.layers = p.layers.filter(l => Number.isFinite(l.z0) && Number.isFinite(l.z1) && l.z1 > l.z0 && l.classe).map(l => {
+      const v = valides => valides.filter(e => e.z >= l.z0 && e.z < l.z1);
+      let ins = v(p.tests), estimee = false;
+      if (!ins.length && p.tests.length && !(l.pl > 0 && l.EM > 0)) { const zm = (l.z0 + l.z1) / 2; ins = [p.tests.reduce((a, b) => (Math.abs(b.z - zm) < Math.abs(a.z - zm) ? b : a))]; estimee = true; }
+      const pl = l.pl > 0 ? l.pl : ins.length ? Math.exp(ins.reduce((a, e) => a + Math.log(e.plNette), 0) / ins.length) : NaN;
+      const EM = l.EM > 0 ? l.EM : ins.length ? ins.length / ins.reduce((a, e) => a + 1 / e.EM, 0) : NaN;
+      const alpha = Number.isFinite(l.alpha) ? l.alpha : alphaMenard(l.classe, EM / pl);
+      return { ...l, pl, EM, alpha, nEssais: ins.length, estimee, derive: !(l.pl > 0 && l.EM > 0) };
+    }).filter(l => l.pl > 0 && l.EM > 0);
   }
   return out.filter(p => p.layers.length);
+}
+
+/**
+ * Coefficient rhéologique α de Ménard (Fascicule 62 V annexe C.5, tableau ; NF P 94-262 annexe I) selon la nature du sol
+ * et le rapport E_M/p*_l : argile > 16 → 1, 9–16 → 2/3, < 9 → 1/2 ; limon > 14 → 2/3, 8–14 → 1/2 ; sable > 12 → 1/2,
+ * 7–12 → 1/3 ; grave > 10 → 1/3, 6–10 → 1/4 ; marne, craie, roche : 2/3, 1/2 (pratique : roche peu fracturée).
+ */
+export function alphaMenard(classe, r) {
+  const k = String(classe || '').split('-')[0];
+  if (!Number.isFinite(r)) return 0.5;
+  if (k === 'argile') return r > 16 ? 1 : r >= 9 ? 2 / 3 : 0.5;
+  if (k === 'limon') return r > 14 ? 2 / 3 : 0.5;
+  if (k === 'sable') return r > 12 ? 0.5 : 1 / 3;
+  if (k === 'grave') return r > 10 ? 1 / 3 : 0.25;
+  if (k === 'marne') return 2 / 3;
+  return 0.5;
 }
 export const parseProfile = text => (parseProfiles(text)[0] || { layers: [] }).layers;
 

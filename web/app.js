@@ -406,7 +406,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.18', hSearch: lastSearch });
+    const html = await buildReport({ ...state, version: '0.18.1', hSearch: lastSearch });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -424,9 +424,26 @@ async function noteFigures() {
   }
   return out;
 }
+// Figures SVG (sondages) → PNG pour la note Word
+async function svgToImg(note) {
+  const out = [];
+  for (const b of note.blocks) {
+    if (b.t !== 'svg') { out.push(b); continue; }
+    try {
+      const vb = (b.svg.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/) || [0, 640, 480]).slice(1).map(Number);
+      const img = new Image(); const url = URL.createObjectURL(new Blob([b.svg], { type: 'image/svg+xml' }));
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+      const c = document.createElement('canvas'); c.width = vb[0] * 2; c.height = vb[1] * 2;
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      out.push({ t: 'img', dataUrl: c.toDataURL('image/png'), w: vb[0], h: vb[1], caption: b.caption });
+    } catch (e) { out.push({ t: 'p', text: `(figure « ${b.caption || ''} » non disponible)` }); }
+  }
+  return { ...note, blocks: out };
+}
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.18' }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.18.1' }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -443,7 +460,7 @@ $('#btn-note-docx').addEventListener('click', async () => {
   const btn = $('#btn-note-docx'); btn.disabled = true; btn.textContent = 'Préparation…';
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await makeNote(), docx);
+    const blob = await noteToDocx(await svgToImg(await makeNote()), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = `note-de-calcul-${$('#note-ref').value}.docx`; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); } finally { btn.disabled = false; btn.textContent = 'Note de calcul (Word)'; }
 });
@@ -482,7 +499,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.18', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.18.1', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));
@@ -493,7 +510,7 @@ $('#btn-sup-docx').addEventListener('click', async () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(supNote(), docx);
+    const blob = await noteToDocx(await svgToImg(supNote()), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = `note-appuis-${$('#supports-ref').value}.docx`; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });

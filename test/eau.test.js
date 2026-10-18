@@ -74,3 +74,16 @@ test('Intégration : combinaisons de crue, semelle affouillable, pieux dégagés
   const rw = f.rows.find(r => r.crue && r.ls === 'ELU'), rn = f.rows.find(r => !r.crue && r.ls === 'ELU');
   assert.ok(rw.Mmax / rw.Hp > rn.Mmax / rn.Hp, 'moment par unité d\'effort plus grand avec la longueur libre');
 });
+
+test('Profils pressiométriques : essais, couches déduites (moyennes géométrique / harmonique, α de Ménard), figure', async () => {
+  const { parseProfiles, alphaMenard } = await import('../src/pipeline.js');
+  const { profileFigure } = await import('../web/supports_view.js');
+  const [p] = parseProfiles('[SPX]\n0 2 argile-B - - -\n2 12 sable-B 1.2 12 0.33\ne 1 6 0.8\ne 1.5 4 0.5 0.3\ne 5 14 1.3');
+  assert.equal(p.tests.length, 3);
+  rel(p.layers[0].pl, Math.sqrt(0.8 * 0.5), 1e-12, 'p*_l moyenne géométrique');
+  rel(p.layers[0].EM, 2 / (1 / 6 + 1 / 4), 1e-12, 'E_M moyenne harmonique');
+  assert.equal(p.layers[0].alpha, 0.5); assert.equal(p.layers[1].alpha, 0.33);
+  assert.equal(alphaMenard('argile-B', 12), 2 / 3); assert.equal(alphaMenard('sable-B', 14), 0.5); assert.equal(alphaMenard('sable-A', 9), 1 / 3);
+  const svg = profileFigure({ ...p, layers: p.layers.map(l => ({ ...l })) }, [{ z0: 1, z1: 5.5, libelle: 'semelle' }]);
+  assert.ok(svg.startsWith('<svg') && svg.includes('Sondage SPX') && svg.includes('<circle'));
+});

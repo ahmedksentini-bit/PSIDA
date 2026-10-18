@@ -318,6 +318,7 @@ export function noteToHTML(note) {
     else if (b.t === 'p') h += `<p>${esc(b.text)}</p>`;
     else if (b.t === 'comment') h += `<div class="comment">${esc(b.text)}</div>`;
     else if (b.t === 'img') h += `<figure><img src="${b.dataUrl}" alt=""><figcaption>${esc(b.caption || '')}</figcaption></figure>`;
+    else if (b.t === 'svg') h += `<figure style="max-width:760px">${b.svg}<figcaption>${esc(b.caption || '')}</figcaption></figure>`;
     else if (b.t === 'table') {
       h += `<table class="${b.small ? 'small' : ''}"><thead><tr>${b.head.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>`;
       b.rows.forEach((r, i) => { h += `<tr class="${b.pairs ? (i % 2 ? 'pair2' : 'pair1') : ''}">${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`; });

@@ -3,6 +3,19 @@
  * la note de calcul (HTML / Word), sur le plan de la note des appuis du Pont de Noé : souplesses → efforts en tête →
  * descente en pied → fûts → chevêtres → garde-grève et murs en retour → fondations.
  */
+import { profilPressio } from '../src/vendor/fond-figures.js';
+
+/** Figure du sondage (bureau de calcul fond.ksr-infra.org) : essais, ou à défaut valeurs de couche en escalier. */
+export function profileFigure(pr, bandes = []) {
+  const couches = pr.layers.map(l => ({ z0: l.z0, z1: l.z1, sol: l.classe, nom: l.classe }));
+  const essais = pr.tests && pr.tests.length ? pr.tests
+    : pr.layers.flatMap(l => [{ z: l.z0, EM: l.EM, plNette: l.pl }, { z: l.z1 - 1e-3, EM: l.EM, plNette: l.pl }]);
+  const nat = c => String(c).split('-')[0];
+  const seuils = pr.layers.map(l => ({ z0: l.z0, z1: l.z1, valeurs: nat(l.classe) === 'argile' ? [9, 16] : nat(l.classe) === 'limon' ? [8, 14] : nat(l.classe) === 'grave' ? [6, 10] : [7, 12] }));
+  const zMax = Math.max(...pr.layers.map(l => l.z1), ...bandes.map(b => b.z1), ...essais.map(e => e.z)) + 0.5;
+  return profilPressio({ couches, essais, seuils, bandes, zMax: Math.ceil(Math.min(zMax, Math.max(...bandes.map(b => b.z1 + 2), ...essais.map(e => e.z + 1), 10))), largeur: 640, hauteur: 480, titre: `Sondage ${pr.name}` });
+}
+
 const F = (v, n = 1) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: n, maximumFractionDigits: n }));
 const F0 = v => F(v, 0), F1 = v => F(v, 1), F2 = v => F(v, 2), F3 = v => F(v, 3);
 const CM = v => (v === null || !Number.isFinite(v) ? 'impossible' : F(v * 1e4, 1));
@@ -103,11 +116,20 @@ export function supportsBlocks(sup, ref = 'F61') {
   h2('Fondations');
   const fType = Ls[0][code].found.type;
   if (sup.profiles) {
+    const F = sup.sp.found;
     for (const pr of sup.profiles) {
-      const used = Ls.filter(L => L.profile === pr.name).map(L => lineName(L, n));
-      B.push({ t: 'p', text: `Profil pressiométrique ${pr.name}${used.length ? ` — ${used.join(', ')}` : ' (non utilisé)'}` });
-      table(['Couche', 'Profondeur [m]', 'Classe (F62)', 'Catégorie NF P 94-261/262', 'p*_l [MPa]', 'E_M [MPa]', 'α'], pr.layers.map((l, k) => [String(k + 1), `${F2(l.z0)} – ${F2(l.z1)}`, l.classe, l.sol, F2(l.pl), F1(l.EM), F2(l.alpha)]));
+      const used = Ls.filter(L => L.profile === pr.name);
+      B.push({ t: 'p', text: `Profil pressiométrique ${pr.name}${used.length ? ` — ${used.map(L => lineName(L, n)).join(', ')}` : ' (non utilisé)'}${pr.tests.length ? ` ; ${pr.tests.length} essai(s)` : ''}` });
+      // zones sollicitées : semelle [D ; D + 1,5 B] (F62 E.2) ; pointe de pieu [D − a ; D + 3a], a = max(B/2 ; 0,5 m) (F62 C.3)
+      const bandes = [];
+      if (used.length) {
+        if (fType === 'superficielle') bandes.push({ z0: F.De, z1: F.De + 1.5 * F.B, libelle: `semelles (${used.map(L => lineName(L, n)).join(', ')})` });
+        else { const a = Math.max(F.pileD / 2, 0.5), tip = F.De + F.Lpile; bandes.push({ z0: tip - a, z1: tip + 3 * a, libelle: `pointe des pieux (${used.map(L => lineName(L, n)).join(', ')})` }); }
+      }
+      B.push({ t: 'svg', svg: profileFigure(pr, bandes), caption: `Sondage ${pr.name} — coupe, E_M, p*_l et p*_f, E_M/p*_l (figure du bureau de calcul fond.ksr-infra.org)` });
+      table(['Couche', 'Profondeur [m]', 'Classe (F62)', 'Catégorie NF P 94-261/262', 'p*_l [MPa]', 'E_M [MPa]', 'E_M/p*_l', 'α', 'Origine'], pr.layers.map((l, k) => [String(k + 1), `${F2(l.z0)} – ${F2(l.z1)}`, l.classe, l.sol, F2(l.pl), F1(l.EM), F1(l.EM / l.pl), F2(l.alpha), l.derive ? `${l.nEssais} essai(s)${l.estimee ? ' (essai le plus proche)' : ''}` : 'saisie']));
     }
+    comment('Valeurs de couche tirées des essais (« - » dans la saisie) : p*_l moyenne géométrique, E_M moyenne harmonique des essais de la couche (à défaut, essai le plus proche du milieu de couche) ; α de Ménard selon la nature et E_M/p*_l (F62 V annexe C.5). Repères pointillés du rapport E_M/p*_l par nature (argile 9 et 16, limon 8 et 14, grave 6 et 10, autres 7 et 12). Zones bleues : sol sollicité par les fondations des lignes rattachées au sondage.');
   }
   if (fType === 'superficielle') {
     table(['Ligne', 'p*_le [MPa] ; D_e [m] ; k_p (assise)', 'Semelle B × L × h [m]', 'V/R_v max', 'H/R_h max (ELU)', 'Excentrement', 'Bielles d ≥ (B − b)/4 ; e ≤ B/6', 'A_s // B [cm²]', 'A_s ⊥ B [cm²/m]'], Ls.map(L => { const f = L[code].found; const w = f.checks.reduce((a, k) => (k.ratioV > a.ratioV ? k : a), f.checks[0]); return [lineName(L, n), `${F2(w.ple)} ; ${F2(w.De)} ; ${F2(w.kp)} (${w.classe})`, `${F2(f.B)} × ${F2(f.L)} × ${F2(f.hs)}`, `${F2(f.worstV)} ${ok(f.worstV)}`, `${F2(f.worstH)} ${ok(f.worstH)}`, f.excOk ? 'OK' : 'NON', `${f.bielles.dOk ? 'OK' : 'NON'} ; ${f.bielles.eOk ? 'OK' : 'NON (calcul en console)'}`, CM(f.AsLong), CM(f.AsTransPerM)]; }));
@@ -153,6 +175,7 @@ export function blocksToHTML(blocks) {
   return blocks.map(b => {
     if (b.t === 'h2') return `<h3>${esc(b.text)}</h3>`;
     if (b.t === 'p') return `<p class="small">${esc(b.text)}</p>`;
+    if (b.t === 'svg') return `<figure class="fig-sondage" style="max-width:760px;margin:8px 0">${b.svg}<figcaption class="small">${esc(b.caption || '')}</figcaption></figure>`;
     if (b.t === 'comment') return `<p class="small" style="font-style:italic">${esc(b.text)}</p>`;
     if (b.t === 'table') return `<table><thead><tr>${b.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.rows.map(r => `<tr>${r.map(c => `<td>${esc(c).replace(/\bNON\b/g, '<span class="badge warn">NON</span>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
     return '';

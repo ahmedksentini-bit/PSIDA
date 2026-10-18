@@ -160,7 +160,7 @@ export function computeSupports(st, input = {}) {
   // profils pressiométriques (sondages, couches depuis le terrain naturel), un profil associé à chaque ligne d'appui
   // (liste « assign » : nom du profil par ligne ; à défaut le premier) ; sans profil : couche unique homogène
   const profs = (soil.profiles && soil.profiles.length ? soil.profiles : [{ name: 'SP1', layers: soil.layers && soil.layers.length ? soil.layers : [{ z0: 0, z1: 100, classe: soil.classe, pl: soil.ple, EM: soil.EM, alpha: soil.alpha }] }])
-    .map(p => ({ name: p.name, ...soilProfile(p.layers) }));
+    .map(p => ({ name: p.name, tests: p.tests || [], ...soilProfile(p.layers) }));
   const profileOf = i => profs.find(p => p.name === (soil.assign || [])[i]) || profs[0];
   const lines = xs.map((x, i) => {
     const end = isEnd(i), profile = profileOf(i), out = { i, x, kind: end ? 'culee' : 'pile', type: end ? sp.culee.type : sp.pile.type, head: heads[i], profile: profile.name };
