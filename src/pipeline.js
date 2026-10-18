@@ -9,7 +9,7 @@ import { EC_ALPHA } from './loads_ec.js';
 import { designEC, designBAEL, designTransverseEC, designTransverseBAEL, designSingleActionEC } from './design.js';
 import { TransverseModel } from './transverse.js';
 import { aideConception } from './conception.js';
-import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations } from './bearings.js';
+import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations, parseDesignation } from './bearings.js';
 import { chevetresEC } from './chevetre.js';
 import { parseAxles, vehicleEnvelope, provisionalProfile, ANNEX_A_VEHICLES, dynLM3 } from './vehicles.js';
 import { zonage } from './zonage.js';
@@ -46,7 +46,8 @@ export function parseData(d) {
     supports: parseSupports(d),
     bp: parseBP(d),
     concept: { psi: +(d.psi || 100), tirantAir: (d.tirantAir || '').trim() ? +d.tirantAir : null, type: d.typeDalle || 'auto', D: +(d.Dabout || 25) / 1000, rhoMax: +(d.rhoMax || 1) / 100,
-      transversePerpendicular: d.transDir === 'perp', nBearings: (d.nBearings || '').trim() ? +d.nBearings : null, xFixed: (d.xFixed || '').trim() ? +d.xFixed : null, epsSlow: +(d.epsSlow || 2.5e-4), dTu: +(d.dTu || 30) },
+      transversePerpendicular: d.transDir === 'perp', nBearings: (d.nBearings || '').trim() ? +d.nBearings : null, xFixed: (d.xFixed || '').trim() ? +d.xFixed : null, epsSlow: +(d.epsSlow || 2.5e-4), dTu: +(d.dTu || 30),
+      bearingEnd: parseDesignation(d.brgCul), bearingPier: parseDesignation(d.brgPile) },
   };
 }
 
@@ -252,7 +253,8 @@ export function compute(p) {
     return th;
   });
   const rotQ = ec.gr1a.Tmax ? ec.gr1a.Tmax.map((v, i) => Math.max(Math.abs(v), Math.abs(ec.gr1a.Tmin[i])) / EI) : null;
-  const bearings = designBearings({ deck, beamComb: design.EC.beam, EI, nPerLine: p.concept.nBearings, xFixed: p.concept.xFixed, epsSlow: p.concept.epsSlow, dT: p.concept.dTu, alphaQ1: ec.alpha.aQ[0], alphaq1: ec.alpha.aq1, ineq, rot: rotQ ? { perm: rotPerm, traffic: rotQ } : null });
+  const bearings = designBearings({ deck, beamComb: design.EC.beam, EI, nPerLine: p.concept.nBearings, xFixed: p.concept.xFixed, epsSlow: p.concept.epsSlow, dT: p.concept.dTu, alphaQ1: ec.alpha.aQ[0], alphaq1: ec.alpha.aq1, ineq, rot: rotQ ? { perm: rotPerm, traffic: rotQ } : null,
+    impose: p.concept.bearingEnd || p.concept.bearingPier ? { end: p.concept.bearingEnd, pier: p.concept.bearingPier } : null });
   bearings.rotPerm = rotPerm; bearings.EI = EI;
   const cases = [
     { id: 'TS', label: 'LM1 – TS', res: ec.TS, ref: 'EC' }, { id: 'UDL', label: 'LM1 – UDL', res: ec.UDL, ref: 'EC' },

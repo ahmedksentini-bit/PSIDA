@@ -126,7 +126,7 @@ export function supportSchema(sup, L, code = 'EC') {
   const sc = Math.min(300 / (2 * xHalf), (Hpx - m.t - m.b) / (zBot - zTop)), W = Math.max(330, Math.ceil(m.l + m.r + 2 * xHalf * sc));
   const X = x => m.l + (x + xHalf) * sc, Y = z => m.t + (z - zTop) * sc;
   const conc = '#cbd5e1', st = COULEURS.trait;
-  return svg({ largeur: W, hauteur: Hpx, titre: `Schéma ${L.kind === 'culee' ? 'de la culée' : 'de la pile'} ${L.i + 1}`, contenu: () => {
+  return svg({ largeur: W, hauteur: Hpx, titre: `Schéma ${L.kind === 'culee' ? 'de la culée C' : 'de la pile P'}${L.i}`, contenu: () => {
     let s = '';
     // terrain, remblai, eau
     s += `<rect x="${X(-xHalf)}" y="${Y(0)}" width="${2 * xHalf * sc}" height="${(zBot - 0) * sc}" fill="#e8dcc3" opacity=".55"/>`;
@@ -175,7 +175,7 @@ export function supportSchema(sup, L, code = 'EC') {
 /** Répartition des efforts horizontaux entre les lignes d'appui : raideurs et parts du freinage. */
 export function distributionChart(sup, code = 'EC') {
   const dist = code === 'BAEL' ? sup.distB : sup.distE;
-  const cats = sup.lines.map(L => `${L.kind === 'culee' ? 'C' : 'P'}${L.i + 1}`);
+  const cats = sup.lines.map(L => `${L.kind === 'culee' ? 'C' : 'P'}${L.i}`);
   return barChart({ cats, ylabel: 'K [MN/m] ; freinage [%]', series: [
     { libelle: 'K instantanée [MN/m]', values: dist.K.inst.map(v => v / 1000), couleur: PAL[0] },
     { libelle: 'K différée [MN/m]', values: dist.K.diff.map(v => v / 1000), couleur: PAL[6] },
@@ -203,7 +203,7 @@ export function pileProfileCharts(L, code = 'EC') {
     series: [{ points: pr.map(q => [q.M, q.z]), libelle: 'M longitudinal', couleur: PAL[1] }, ...(transv ? [{ points: pr.map(q => [q.Mt, q.z]), libelle: 'M transversal', couleur: PAL[4], tirets: '5 3' }] : [])] });
   const yC = lineChart({ xlabel: 'y [mm] ; p [kPa]/10', ylabel: 'z sous la tête [m]', invertY: true, largeur: 340, hauteur: 380, includeZero: false,
     series: [{ points: pr.map(q => [q.y * 1000, q.z]), libelle: 'déplacement y', couleur: PAL[0] }, { points: pr.map(q => [q.p / 10, q.z]), libelle: 'pression p/10', couleur: PAL[3], tirets: '4 3' }] });
-  return [svgBlock(sideBySide(mC, yC), `${L.kind === 'culee' ? 'Culée' : 'Pile'} ${L.i + 1} — pieu le plus sollicité (file ${fl.file + 1}, ${r.label}) : moments, déplacements et pression sur le sol`)];
+  return [svgBlock(sideBySide(mC, yC), `${L.kind === 'culee' ? 'Culée C' : 'Pile P'}${L.i} — pieu le plus sollicité (file ${fl.file + 1}, ${r.label}) : moments, déplacements et pression sur le sol`)];
 }
 
 /** Diagramme des contraintes sous la semelle superficielle (cas ELU le plus défavorable). */
@@ -215,6 +215,6 @@ export function footingPressureChart(L, code = 'EC') {
   const qmax = w.qmax ?? (Vm / Math.max(1e-6, B - 2 * e)), qmin = w.qmin ?? 0, Bc = (w.compressed ?? 1) * B;
   try {
     return svgBlock(figureContraintes({ B, V: Vm, e, qmax, qmin, Bc, qref: w.qref ?? null, meyerhof: Vm / Math.max(1e-6, B - 2 * e), uniteV: 'kN/m' }),
-      `${L.kind === 'culee' ? 'Culée' : 'Pile'} ${L.i + 1} — contraintes sous la semelle (${w.label})`);
+      `${L.kind === 'culee' ? 'Culée C' : 'Pile P'}${L.i} — contraintes sous la semelle (${w.label})`);
   } catch (err) { return null; }
 }

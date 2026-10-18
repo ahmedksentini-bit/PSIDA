@@ -171,6 +171,9 @@ valeur (`web/fields.js`) — nombre de travées et une case par portée, une cas
 trottoirs et les charges de superstructure, sondage par ligne d'appui, cases à cocher des piles en eau — et les champs sans
 objet sont masqués (pieux si fondations superficielles, voile ou colonnes selon le type de pile…). Les noms et formats des
 données (`spans = "14, 18, 14"`…) sont inchangés : liens partagés, notes et tests restent compatibles.
+Depuis la v0.38 : appareils d'appui imposés sur les culées et sur les piles (onglet Conception, désignation a×b×n(t+ts)),
+vérifiés par le prédimensionnement puis par la NF EN 1337-3 et conservés même s'ils ne passent pas ; lignes d'appui
+désignées partout C0, P1…, Cn ; virgule décimale acceptée dans les éditeurs de valeurs.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

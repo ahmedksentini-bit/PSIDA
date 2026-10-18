@@ -76,10 +76,15 @@ export function crossSectionSVG({ deck, loads = [], title = 'Coupe transversale'
   // dalle
   s += `<rect x="${sy(-b)}" y="${yTop}" width="${sy(b) - sy(-b)}" height="${hPx}" fill="var(--slab, #9aa5b8)" stroke="currentColor" stroke-width="1.2"/>`;
   // charges permanentes linéiques (flèches)
-  for (const l of deck.g.lines || []) {
-    const X = sy(l.e);
-    s += `<line x1="${X}" y1="${yTop - 48}" x2="${X}" y2="${yTop - 14}" stroke="var(--warn, #9a5b00)" stroke-width="1.6" marker-end="url(#arr)"/>`;
-    s += `<text x="${X}" y="${yTop - 52}" text-anchor="middle" fill="var(--warn, #9a5b00)">${esc(l.label || '')} ${f2(l.g)} kN/m</text>`;
+  // libellés étagés quand des charges voisines se chevaucheraient (≈ 6,5 px par caractère en corps 12)
+  const lastEnd = [];
+  for (const l of [...(deck.g.lines || [])].sort((p, q) => p.e - q.e)) {
+    const X = sy(l.e), txt = `${l.label ? l.label + ' ' : ''}${f2(l.g)} kN/m`, w = 6.5 * txt.length;
+    let lev = 0; while (lev < 3 && lastEnd[lev] !== undefined && X - w / 2 < lastEnd[lev] + 6) lev++;
+    lastEnd[lev] = X + w / 2;
+    const yl = yTop - 52 - 14 * lev;
+    s += `<line x1="${X}" y1="${yl + 4}" x2="${X}" y2="${yTop - 14}" stroke="var(--warn, #9a5b00)" stroke-width="1.6" marker-end="url(#arr)"/>`;
+    s += `<text x="${X}" y="${yl}" text-anchor="middle" fill="var(--warn, #9a5b00)">${esc(txt)}</text>`;
   }
   // charges du cas (roues, bandes)
   for (const ld of loads) {

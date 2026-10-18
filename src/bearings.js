@@ -26,6 +26,14 @@ export const STANDARD_BEARINGS = [
 /** Désignation « a×b×n(t+ts) » et hauteur totale avec frettes [mm]. */
 export function designation(bd, n) { return `${bd.a}×${bd.b}×${n}(${bd.t}+${bd.ts})`; }
 export function totalHeight(bd, n) { return n * bd.t + (n - 1) * bd.ts; }
+/** Lecture d'une désignation « a×b×n(t+ts) » [mm] (x ou ×) ; null si vide, « auto » ou illisible. */
+export function parseDesignation(txt) {
+  const m = String(txt ?? '').match(/(\d+)\s*[x×]\s*(\d+)\s*[x×]\s*(\d+)\s*\(\s*(\d+(?:\.\d+)?)\s*\+\s*(\d+(?:\.\d+)?)\s*\)/);
+  if (!m) return null;
+  const a = +m[1], b = +m[2], n = +m[3], t = +m[4], ts = +m[5];
+  const std = STANDARD_BEARINGS.find(x => x.a === a && x.b === b);
+  return { bd: { ...(std || {}), a, b, t, ts, ns: std ? std.ns : [n] }, n };
+}
 
 /**
  * Effort de freinage EN 1991-2 § 4.4.1 : Q_lk = 0,6 α_Q1 (2 Q_1k) + 0,10 α_q1 q_1k w_1 L, 180 α_Q1 ≤ Q_lk ≤ 900 kN.
@@ -151,7 +159,7 @@ export function endRotations(xi, M, L, EI) {
  * @param {{coef:object, Rperm:number[], RA:number[], RB:number[]}} [p.ineq] coefficients d'inégalité de répartition et réactions par cas
  * @param {{perm:number[], traffic:number[]}} [p.rot] rotations d'appui [rad] : permanent (module différé) et trafic (lignes d'influence)
  */
-export function designBearings({ deck, beamComb, EI, nPerLine = null, xFixed = null, epsSlow = 2.5e-4, dT = 30, alphaT = 1e-5, Htot = null, alpha0 = 0.003, alphaQ1 = 1, alphaq1 = 1, G1 = 0.8, G2 = 1.6, sigMax = 15, ineq = null, rot = null }) {
+export function designBearings({ deck, beamComb, EI, nPerLine = null, xFixed = null, epsSlow = 2.5e-4, dT = 30, alphaT = 1e-5, Htot = null, alpha0 = 0.003, alphaQ1 = 1, alphaq1 = 1, G1 = 0.8, G2 = 1.6, sigMax = 15, ineq = null, rot = null, impose = null }) {
   const width = 2 * deck.b, Ltot = deck.spans.reduce((s, L) => s + L, 0);
   const nb = nPerLine || Math.max(2, Math.round(width / 3));
   const xf = xFixed === null || xFixed === undefined ? Ltot / 2 : xFixed;
@@ -183,7 +191,11 @@ export function designBearings({ deck, beamComb, EI, nPerLine = null, xFixed = n
     }
     const alpha = alpha0 + alphaExp;
     const loads = { Pmax, Pmin: Math.max(Pmin, 0), H: Hb, ug, alpha };
-    const sel = selectBearing(loads, { G1, G2, sigMax });
+    // appareil imposé par l'utilisateur (culées / piles) : vérifié avec les mêmes règles, retenu même s'il ne passe pas
+    const imp = impose ? (i === 0 || i === nLines - 1 ? impose.end : impose.pier) : null;
+    let sel;
+    if (imp) { const r = checkBearing(imp.bd, imp.n, { ...loads, G1, G2, sigMax }); sel = { bd: imp.bd, n: imp.n, area: imp.bd.a * imp.bd.b, T: imp.n * imp.bd.t, ...r, label: designation(imp.bd, imp.n), hTot: totalHeight(imp.bd, imp.n), imposed: true }; }
+    else sel = selectBearing(loads, { G1, G2, sigMax });
     return { i, x, Rmax, Rmin, nb, Pmax, Pmin, kCP, kQ, ug, Hb, alpha, alphaExp, sel, uplift: Rmin < 0 };
   });
   return { rows, nb, H, Hb, xf, nLines, epsSlow, dT, alphaT, alpha0, G1, G2, sigMax, ineq: ineq ? ineq.coef : null };

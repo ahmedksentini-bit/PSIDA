@@ -28,7 +28,7 @@ export function beamsBlocks(r) {
     }
   }
   h2('Réactions caractéristiques par ligne d\'appui (pour l\'onglet Appuis et fondations)');
-  table(['Ligne', 'G', 'A(l)', 'Bc (δ appui)', 'Mc120 (δ appui)', 'Trottoirs', 'TS', 'UDL'], r.lines.map((l, i) => [i === 0 || i === r.lines.length - 1 ? `Culée ${i + 1}` : `Pile ${i + 1}`, F0(l.G), F0(l.A), F0(l.Bc), F0(l.Mc120), F0(l.trott), F0(l.TS), F0(l.UDL)]));
+  table(['Ligne', 'G', 'A(l)', 'Bc (δ appui)', 'Mc120 (δ appui)', 'Trottoirs', 'TS', 'UDL'], r.lines.map((l, i) => [i === 0 || i === r.lines.length - 1 ? `Culée C${i}` : `Pile P${i}`, F0(l.G), F0(l.A), F0(l.Bc), F0(l.Mc120), F0(l.trott), F0(l.TS), F0(l.UDL)]));
   comment('Travées indépendantes : permanentes et charges réparties = somme des réactions des travées adjacentes ; convois = maximum sur la ligne d\'influence des deux travées (deux sens de circulation), δ d\'appui ½[δ + max(δ ; 1,5)] (B) et ½[δ + max(δ ; 1,2)] (Mc120).');
   return B;
 }

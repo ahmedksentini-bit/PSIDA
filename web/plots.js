@@ -110,10 +110,11 @@ export function influencePlot(div, deck, secIdx, supIdx) {
     { x: xs, y: Array.from(bm.ILM[secIdx]), name: `M à x = ${sec.x.toFixed(2)} m [kN·m/kN]`, mode: 'lines', line: { color: PALETTE[0], width: 2 } },
     { x: xs, y: Array.from(bm.ILVm[secIdx]), name: 'V⁻ (gauche)', mode: 'lines', line: { color: PALETTE[1], width: 1.2 }, yaxis: 'y2' },
     { x: xs, y: Array.from(bm.ILVp[secIdx]), name: 'V⁺ (droite)', mode: 'lines', line: { color: PALETTE[1], width: 1.2, dash: 'dot' }, yaxis: 'y2' },
-    { x: xs, y: Array.from(bm.ILR[supIdx]), name: `R appui ${supIdx} [kN/kN]`, mode: 'lines', line: { color: PALETTE[2], width: 1.5 }, yaxis: 'y2' },
+    { x: xs, y: Array.from(bm.ILR[supIdx]), name: `R appui ${supIdx === 0 || supIdx === bm.n ? 'C' : 'P'}${supIdx} [kN/kN]`, mode: 'lines', line: { color: PALETTE[2], width: 1.5 }, yaxis: 'y2' },
   ];
   const layout = baseLayout('Lignes d\'influence (charge unité se déplaçant sur l\'ouvrage)', 'position de la charge x [m]', 'M [kN·m/kN]');
   layout.yaxis2 = { title: { text: 'V, R [kN/kN]' }, overlaying: 'y', side: 'right', gridcolor: 'rgba(0,0,0,0)' };
+  layout.margin = { ...layout.margin, r: 70 };
   layout.shapes = [{ type: 'line', x0: sec.x, x1: sec.x, y0: 0, y1: 1, yref: 'paper', line: { color: PALETTE[0], width: 1, dash: 'dash' } },
     ...bm.x0.map(x => ({ type: 'line', x0: x, x1: x, y0: 0, y1: 1, yref: 'paper', line: { color: theme().grid, width: 1, dash: 'dot' } }))];
   Plotly.newPlot(div, data, layout, CONFIG);

@@ -57,7 +57,9 @@ function renderList(h, ed) {
   s += `<div class="${h.dataset.compact ? 'ed-grid' : ''}">` + vals.map((v, i) => row(`${item}${i + 1}`, inp(v, i))).join('') + '</div>';
   ed.innerHTML = s;
 }
-function readList(ed) { return [...ed.querySelectorAll('.ed-in')].map(e => e.value.trim()); }
+// virgule décimale acceptée (14,5 → 14.5) : la virgule sépare les valeurs dans le champ caché
+const dec = v => String(v ?? '').trim().replace(/\s+/g, '').replace(',', '.');
+function readList(ed) { return [...ed.querySelectorAll('.ed-in')].map(e => (e.tagName === 'SELECT' ? e.value : dec(e.value))); }
 
 function renderPer(h, ed, form) {
   const n = COUNT[h.dataset.per](form), vals = NUM(VAL.get.call(h)), ph = h.dataset.ph || '';
@@ -98,7 +100,7 @@ function renderTable(h, ed) {
 }
 function serTable(h, ed) {
   const f = FMT[h.dataset.fmt];
-  return [...ed.querySelectorAll('.ed-tr')].map(tr => [...tr.querySelectorAll('.ed-in')].map(e => e.value.trim()))
+  return [...ed.querySelectorAll('.ed-tr')].map(tr => [...tr.querySelectorAll('.ed-in')].map(e => dec(e.value)))
     .filter(r => r.slice(0, 2).every(Boolean)).map(f.ser).join(' ; ');
 }
 
