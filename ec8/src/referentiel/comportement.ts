@@ -225,7 +225,7 @@ export const PLANCHER_BETA_DEPLACEMENTS: Regle = {
   libelle: "Structures très souples touchées par le plancher β·ag",
   enonce: "Tirer les déplacements du spectre élastique ou du spectre en déplacement, et non du spectre de calcul écrêté.",
   references: [
-    { source: "NF_EN_1998_1", localisation: "4.3.4", etat: "citee_par_guide" },
+    { source: "NF_EN_1998_1", localisation: "4.3.4(1)P, expression (4.23)", page: "54-55" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 4 §2.5", page: "82" },
   ],
   statut: "via_guide",

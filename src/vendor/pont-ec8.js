@@ -4529,8 +4529,8 @@ const APPUIS = [
 		enonce: "Les déplacements déduits d'un calcul avec q > 1 restent bornés par ceux du calcul élastique (q = 1).",
 		references: [{
 			source: "NF_EN_1998_1",
-			localisation: "4.3.4",
-			etat: "citee_par_guide"
+			localisation: "4.3.4(1)P, expression (4.23)",
+			page: "54-55"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 5 §1 et §5.1",
@@ -5429,8 +5429,8 @@ const COMPORTEMENT = [
 		enonce: "Tirer les déplacements du spectre élastique ou du spectre en déplacement, et non du spectre de calcul écrêté.",
 		references: [{
 			source: "NF_EN_1998_1",
-			localisation: "4.3.4",
-			etat: "citee_par_guide"
+			localisation: "4.3.4(1)P, expression (4.23)",
+			page: "54-55"
 		}, {
 			source: "GUIDE_CEREMA_2015",
 			localisation: "ch. 4 §2.5",
