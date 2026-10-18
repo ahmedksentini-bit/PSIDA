@@ -221,11 +221,11 @@ export function pileCapacity({ code = 'EC', type = 'fore-simple', D, Lpile, clas
     const lim = valeursLimitesEC7({ methode: 'pressio', cat: (PILE_TYPES[type] || PILE_TYPES['fore-simple']).cat, B: D, D: Dtip, couches, zf });
     if (!lim.applicable) return { applicable: false, motif: lim.motif };
     const mt = modeleTerrain(lim);
-    return { applicable: true, Rb: lim.Rb, Rs: lim.Rs, Rcd: mt.calcul.ELU.Rcd, RcdAcc: mt.calcul.ELU_acc.Rcd, Rcrd: mt.calcul.ELS_car.Rccrd, Rtd: mt.calcul.ELU.Rtd, detail: mt };
+    return { applicable: true, Rb: lim.Rb, Rs: lim.Rs, Rcd: mt.calcul.ELU.Rcd, RcdAcc: mt.calcul.ELU_acc.Rcd, Rcrd: mt.calcul.ELS_car.Rccrd, Rqp: mt.calcul.ELS_QP ? mt.calcul.ELS_QP.Rccrd : NaN, Rtd: mt.calcul.ELU.Rtd, detail: mt };
   }
   const r = pieuF62({ methode: 'pressio', type, B: D, D: Dtip, couches, zf });
   if (!r.applicable) return { applicable: false, motif: r.motif };
-  return { applicable: true, Rb: r.Qpu, Rs: r.Qsu, Rcd: r.limites.ELU.Qmax, RcdAcc: r.limites.ELU_acc.Qmax, Rcrd: r.limites.ELS_rare.Qmax, Rtd: -r.limites.ELU.Qmin, detail: r };
+  return { applicable: true, Rb: r.Qpu, Rs: r.Qsu, Rcd: r.limites.ELU.Qmax, RcdAcc: r.limites.ELU_acc.Qmax, Rcrd: r.limites.ELS_rare.Qmax, Rqp: r.limites.ELS_QP ? r.limites.ELS_QP.Qmax : NaN, Rtd: -r.limites.ELU.Qmin, detail: r };
 }
 
 /**
@@ -317,4 +317,25 @@ export function footingRotationStiffness({ profile, B, L, D, code = 'EC' }) {
   const r = moduleReaction({ forme: 'rectangulaire', B: Math.min(B, L), L: Math.max(B, L), alpha: profile.at(D + 1e-6).alpha, Ec: tr.E1, Ed });
   const I = L * B ** 3 / 12;
   return { kv: r.kv, ki: r.ki, Ktheta: { diff: r.kv * I, inst: r.ki * I }, Ed, Ec: tr.E1 };
+}
+
+/**
+ * Fiche minimale d'un pieu pour chaque état limite (pratique des notes géotechniques : ELS quasi permanent Q_c/1,4, ELS rare
+ * Q_c/1,1, ELU fondamental Q_u/1,4 au F62 ; NF P 94-262 au code EC) : plus petite longueur, par pas de `step`, dont la
+ * portance couvre la charge en tête de pieu de l'état considéré (charges en tête supposées indépendantes de la fiche).
+ * @param {{ELU:number, ELS:number, QP:number, ACC?:number}} loads charges par pieu [kN]
+ */
+export function minPileLength({ code, type, D, profile, Dhead = 0, loads, Lmax = 80, step = 0.5, Lmin = null }) {
+  const out = {}, key = { ELU: 'Rcd', ELS: 'Rcrd', QP: 'Rqp', ACC: 'RcdAcc' };
+  const L0 = Lmin ?? Math.max(2 * D, 3);
+  const cache = new Map();
+  const cap = L => { const k = L.toFixed(2); if (!cache.has(k)) cache.set(k, pileCapacity({ code, type, D, Lpile: L, profile, Dhead })); return cache.get(k); };
+  for (const [st, N] of Object.entries(loads)) {
+    if (!(N > 0)) { out[st] = null; continue; }
+    let found = null;
+    for (let L = L0; L <= Lmax + 1e-9; L += step) { const c = cap(L); if (c.applicable && Number.isFinite(c[key[st]]) && c[key[st]] >= N) { found = L; break; } }
+    out[st] = found;
+  }
+  const vals = Object.values(out).filter(v => v != null);
+  return { ...out, governing: vals.length === Object.values(loads).filter(N => N > 0).length ? Math.max(...vals) : null, Lmax, step };
 }

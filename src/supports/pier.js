@@ -75,14 +75,16 @@ export function designShaft({ shape, code = 'BAEL', fck = 25, fyk = 400, Ev = nu
   const Ac = shape.D ? Math.PI * shape.D ** 2 / 4 : shape.b * shape.h;
   const per = shape.D ? Math.PI * shape.D : 2 * (shape.b + shape.h);
   const Evv = Ev ?? (code === 'BAEL' ? 3700 * fck ** (1 / 3) : 22000 * ((fck + 8) / 10) ** 0.3 / 3);
-  const buck = buckling({ Lf: lf, h, Ev: Evv, D: shape.D || null });
+  // voile d'épaisseur variable : élancement et second ordre avec la plus faible épaisseur (shape.hBuck), résistance en pied
+  const hB = shape.hBuck ?? h;
+  const buck = buckling({ Lf: lf, h: hB, Ev: Evv, D: shape.D || null });
   const I = shape.D ? Math.PI * shape.D ** 4 / 64 : shape.b * shape.h ** 3 / 12;
   const rows = combos.map(c => {
     // c.My : moment transversal global (séisme Y) partagé entre fûts circulaires (moment résultant) ;
     // c.Mloc : moment local d'un seul fût (choc de véhicule ou de bateau sur une colonne), non partagé
     const N = c.N / n, Mx = Math.abs(c.M) / n, My = shape.D ? Math.abs(c.My || 0) / n : 0;
     const M1 = Math.hypot(Mx, My) + Math.abs(c.Mloc || 0), e1 = N > 0 ? M1 / N : 0;
-    const so = secondOrder({ code, Lf: lf, h, d: h - (shape.c ?? 0.05), L: Hf, alpha: alphaGQ, fyk, fck, N, e1, Ev: Evv, I, Ac });
+    const so = secondOrder({ code, Lf: lf, h: hB, d: h - (shape.c ?? 0.05), L: Hf, alpha: alphaGQ, fyk, fck, N, e1, Ev: Evv, I: shape.hBuck ? I * (hB / h) ** 3 : I, Ac });
     const Mtot = Number.isFinite(so.etot) ? Math.max(M1, N * so.etot) : Infinity;
     // situations accidentelles (séisme, chocs) : γ_b = 1,15 (BAEL A.4.3,41) / γ_c = 1,2 (EC2 2.4.2.4), γ_s = 1,0
     const mat = c.acc ? { code, fck, fyk, gammaC: code === 'BAEL' ? 1.15 : 1.2, gammaS: 1.0 } : { code, fck, fyk };

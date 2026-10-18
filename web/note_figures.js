@@ -156,8 +156,10 @@ export function supportSchema(sup, L, code = 'EC') {
     s += texte(X(B / 2) + 6, Y(De - hs / 2) + 4, `semelle ${f2(B)} × ${f2(hs)} m`, 'class="pt"');
     // fût, chevêtre, garde-grève
     const zf0 = De - hs, zf1 = zf0 - Hf;
-    s += `<rect x="${X(-bF / 2)}" y="${Y(zf1)}" width="${bF * sc}" height="${Hf * sc}" fill="${conc}" stroke="${st}" stroke-width="1.2"/>`;
-    s += texte(X(bF / 2) + 6, Y(zf1) + 14, `${col ? (end ? `${sp.culee.nCol} col.` : `${sp.pile.nCol} col.`) + ` Ø ${f2(bF)}` : (end ? 'mur' : 'voile') + ` ${f2(bF)}`} ; H = ${f2(Hf)} m`, 'class="pt"');
+    const bT = !end && !col && sp.pile.bTop && Math.abs(sp.pile.bTop - bF) > 1e-6 ? sp.pile.bTop : null;
+    if (bT) s += `<polygon points="${X(-bT / 2)},${Y(zf1)} ${X(bT / 2)},${Y(zf1)} ${X(bF / 2)},${Y(zf1) + Hf * sc} ${X(-bF / 2)},${Y(zf1) + Hf * sc}" fill="${conc}" stroke="${st}" stroke-width="1.2"/>`;
+    else s += `<rect x="${X(-bF / 2)}" y="${Y(zf1)}" width="${bF * sc}" height="${Hf * sc}" fill="${conc}" stroke="${st}" stroke-width="1.2"/>`;
+    s += texte(X(bF / 2) + 6, Y(zf1) + 14, `${col ? (end ? `${sp.culee.nCol} col.` : `${sp.pile.nCol} col.`) + ` Ø ${f2(bF)}` : (end ? 'mur' : 'voile') + ` ${bT ? `${f2(bT)} (tête) – ${f2(bF)} (pied)` : f2(bF)}`} ; H = ${f2(Hf)} m`, 'class="pt"');
     if (hc > 0) { s += `<rect x="${X(-lc / 2)}" y="${Y(zf1 - hc)}" width="${lc * sc}" height="${hc * sc}" fill="${conc}" stroke="${st}" stroke-width="1.2"/>`; s += texte(X(lc / 2) + 6, Y(zf1 - hc / 2) + 4, `chevêtre ${f2(lc)} × ${f2(hc)}`, 'class="pt"'); }
     if (end && hGG > 0) { const e = r.gg ? r.gg.e : 0.3; s += `<rect x="${X(bF / 2 - e)}" y="${Y(zf1 - hc - hGG)}" width="${e * sc}" height="${hGG * sc}" fill="${conc}" stroke="${st}" stroke-width="1.2"/>`; s += texte(X(bF / 2) + 6, Y(zf1 - hc - hGG / 2), `garde-grève ${f2(hGG)} m`, 'class="pt"'); }
     // appareil d'appui

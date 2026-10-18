@@ -142,6 +142,7 @@ PSIDP-EL 84-1, règles BPEL 91 révisé 99 (classe II) ; charges du Fascicule 61
 - Tête d'appui : pression localisée sous les appareils (BAEL A.8.4 ou EN 1992-1-1 § 6.7), frettage, partie de voile en console (BAEL annexe E.6).
 - Dalle précontrainte : les réactions hyperstatiques de précontrainte et le raccourcissement (élastique, fluage, retrait) du calcul PSI-DP passent aux appuis.
 - Contrôle sur une note d'appuis réelle (pont-dalle précontraint) : `test/bearings1337.test.js`.
+- Compléments : gradient thermique dans les réactions des appareils, fiche minimale des pieux par état limite, voile d'épaisseur variable, pile de joint (pile double), excentricités du second ordre dans les pieux (option).
 
 ## Calcul sismique — Pont EC8 intégré (`ec8/`, `web/ec8/`)
 

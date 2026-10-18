@@ -447,6 +447,14 @@ Contrôle sur la note « appuis et fondations » de d'un pont-dalle précontrain
   - Note de référence : la console de P2-6 prend d = 1,5 m non plafonné (τ_u = 3,54 MPa) ; avec d plafonné, τ_u dépasse 4 MPa. Le bossage 0,60 × 0,70 donne K = 1 et σ = 14,40 > 14,17 MPa.
 - **Dalle précontrainte → appuis** : réactions hyperstatiques de précontrainte (enveloppe des phases MT, MS, ES et des valeurs probable, P1, P2) ajoutées aux réactions permanentes avec le coefficient 1 (BPEL) dans toutes les combinaisons des appuis ; raccourcissement ε = σ_m/E_ij + K_fl σ_m/E_i28 + ε_r [1 − r(j)] à la place de la valeur saisie (option « ap_epsPSIDP »).
 
+## 1 septdecies. Compléments des appuis (v0.35, `test/supports_ext.test.js`)
+
+- **Gradient thermique sur les appareils** : réactions hyperstatiques du gradient N_θ (modèle du tablier) réparties sur les n appareils de la ligne ; × 0,78 (BAEL, 1,3 ψ₀) ou × 0,9 (EC, 1,5 ψ₀) avec le trafic dominant, × 1,35 / 1,5 en action dominante, × 1 dans les combinaisons minimales et le non-glissement (la note de référence combine N + 0,5 N_θ et N + N_θ).
+- **Fiche minimale des pieux** (`minPileLength`) : plus petite longueur, par pas de 0,5 m, dont la portance couvre la charge par pieu de chaque état — ELS quasi permanent (Q_c/1,4 au F62 ; R_c;cr/1,1 NF P 94-262, part soutenue des combinaisons ELS), ELS rare ou caractéristique, ELU, accidentel ; charges en tête de la fiche retenue (influence de la fiche sur la répartition négligée), poids propre du pieu non ajouté.
+- **Voile d'épaisseur variable** : épaisseur en pied (saisie existante) et en tête ; souplesse du fût intégrée sur 6 tronçons (PSH et semelles superficielles), poids avec l'épaisseur moyenne, ferraillage en pied, élancement et second ordre avec la plus faible épaisseur, tête d'appui avec l'épaisseur en tête ; schéma trapézoïdal.
+- **Excentricités dans les pieux (option)** : e_a = max(2 cm ; l_f/250) et e₂ = 3 l_f²/(10⁴ D)(2 + α φ) (BAEL A.4.4,3, φ = 2, α part permanente de N), l_f = 2 l₀ avec la longueur de transfert l₀ = (4 E I/k)^¼ (module de réaction en tête), ajoutées au moment ELU. Pratique de certaines notes (l_f non justifiée dans la note de référence) ; désactivée par défaut, le pieu étant tenu par le sol.
+- **Pile de joint (pile double)** : extrémité commune avec un tablier adjacent, calculée comme une pile (géométrie des piles) ; réactions permanentes, trafic et efforts horizontaux du tablier étudié multipliés par 1 + r_G, 1 + r_Q, 1 + r_H (r = 1 : tablier adjacent symétrique), efforts horizontaux cumulés dans le même sens ; appareils et tête d'appui vérifiés pour la ligne du tablier étudié. Non traité : la seconde ligne d'appareils, le séisme (le moteur Pont EC8 garde une culée à cette extrémité, avertissement affiché).
+
 ## 2. Protocole de comparaison avec une note de référence
 
 ### 2.1 Référentiel Eurocodes — note CHAMOA-PSIDA (Cerema, guide technique, ch. 4)

@@ -123,10 +123,10 @@ export function parseSupports(d) {
   const v = (k, def) => (String(d[k] ?? '').trim() === '' ? def : +d[k]);
   const H = nums(d.ap_pileH || '');
   return {
-    pile: { type: d.ap_pileType || 'voile', H: H.length ? H : [6], b: v('ap_pileB', 0.6), Lv: v('ap_pileLv', null), hcons: v('ap_hcons', 1.0), nCol: v('ap_nCol', 3), D: v('ap_D', 0.8), hc: v('ap_hc', 0), lc: v('ap_lc', 1.2) },
+    pile: { type: d.ap_pileType || 'voile', H: H.length ? H : [6], b: v('ap_pileB', 0.6), bTop: v('ap_pileBtop', null), Lv: v('ap_pileLv', null), hcons: v('ap_hcons', 1.0), nCol: v('ap_nCol', 3), D: v('ap_D', 0.8), hc: v('ap_hc', 0), lc: v('ap_lc', 1.2) },
     culee: { type: d.ap_culType || 'remblayee', Hm: v('ap_Hm', 3), em: v('ap_em', 0.8), hGG: v('ap_hGG', null), Lret: v('ap_Lret', 4), nCol: v('ap_culNCol', 3), D: v('ap_culD', 0.8), hc: v('ap_culHc', 1.0), lc: v('ap_culLc', 1.6), hv: v('ap_culHv', 1.0), dalle: (d.ap_dalleGG || 'oui') === 'oui' },
     found: { type: d.ap_found || 'superficielle', pileType: d.ap_pieu || 'fore-boue', B: v('ap_B', 3), hs: v('ap_hs', 1), De: v('ap_De', 1), pileD: v('ap_pileD', 0.8), nPile: v('ap_nPile', 3), nFiles: v('ap_nFiles', 2), sPile: v('ap_sPile', 2.4), Lpile: v('ap_Lpile', 15),
-      incl: nums(d.ap_incl || ''), tete: d.ap_tete || 'encastre', pied: d.ap_pied || 'libre',
+      incl: nums(d.ap_incl || ''), tete: d.ap_tete || 'encastre', pied: d.ap_pied || 'libre', secondOrdre: !!d.ap_pieuSO,
       remblai: { h: v('ap_remH', 0), gamma: v('ap_gamma', 20), Ka: v('ap_remKa', 0.33), EM: v('ap_remEM', 5), alpha: 0.5, pf: v('ap_remPf', 0.3) },
       fn: { actif: !!d.ap_fn, h: v('ap_fnH', null), h2: v('ap_fnH2', null) } },
     soil: { profiles: parseProfiles(d.ap_profil), assign: String(d.ap_profAssign || '').split(/[,;\s]+/).filter(Boolean), classe: d.ap_soil || 'sable-B', ple: v('ap_ple', 1), EM: v('ap_EM', 10), alpha: v('ap_alpha', 0.5), phi: v('ap_phi', 30), gamma: v('ap_gamma', 20), q: v('ap_q', 10), kSus: v('ap_kSus', 0.5) },
@@ -134,6 +134,7 @@ export function parseSupports(d) {
     eps: { TLD: v('ap_TLD', 3e-4), TCD: v('ap_TCD', 1e-4) },
     bossage: { debord: v('ap_bosDeb', 0.05), fck: v('ap_bosFck', null) ?? undefined },
     epsPSIDP: (d.ap_epsPSIDP ?? 'oui') !== 'non',
+    joint: { debut: ['debut', 'deux'].includes(d.ap_joint), fin: ['fin', 'deux'].includes(d.ap_joint), rG: v('ap_jointG', 1), rQ: v('ap_jointQ', 1), rH: v('ap_jointH', 1) },
     ec8: { zone: v('ap_zone', 3), categorie: d.ap_catEC8 || 'III', classeSol: d.ap_solEC8 || 'B' },
     seisme: { actif: !!d.ap_seisme, source: d.ap_seismeSrc || 'auto', q: { long: v('ap_qL', 1), trans: v('ap_qT', 1) } },
     choc: { vehicule: d.ap_choc || 'aucun', hV: v('ap_hV', 1.25), bateau: d.ap_bateau || 'aucun', hB: v('ap_hB', 2.0) },
@@ -291,7 +292,7 @@ export function compute(p) {
     } catch (e) { psidpError = e.message; }
   }
   let supports = null, supportsError = null;
-  try { supports = computeSupports({ p, deck, perm, f61, ec, bearings, psidp }, p.supports); } catch (e) { supportsError = e.message; }
+  try { supports = computeSupports({ p, deck, perm, f61, ec, bearings, psidp, thermal }, p.supports); } catch (e) { supportsError = e.message; }
   return { psidp, psidpError, supports, supportsError, rebar, rebarError, p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transF, transELU, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
 }
 
