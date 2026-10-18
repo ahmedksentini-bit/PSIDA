@@ -1,7 +1,7 @@
 /**
  * Culées : mur garde-grève, murs en retour suspendus, poussée des terres sur le mur de front ou les colonnes d'une culée
- * enterrée, descente de charges. Règles de pratique du dossier pilote SETRA PP73 (pièce 1.3.2) et du Fascicule 61 —
- * formules usuelles reproduites de la littérature de pratique (TODO_VERIF : à relire sur le texte de PP73).
+ * enterrée, descente de charges. Règles du dossier pilote SETRA PP73 pièce 1.3.2 (« Calculs complémentaires —
+ * ferraillages types »), relues sur le texte (§ 2.3 garde-grève, § 3.4 murs en retour, § 2.2.2.4 murettes).
  * Unités : m, kN, kN·m.
  */
 
@@ -9,8 +9,11 @@
 export const Ka = phiDeg => Math.tan(Math.PI / 4 - (phiDeg * Math.PI / 180) / 2) ** 2;
 export const K0 = phiDeg => 1 - Math.sin(phiDeg * Math.PI / 180);
 
-/** Épaisseur conseillée du garde-grève (PP73) : 0,30 m (h ≤ 1 m), h/8 + 0,175 (1 < h ≤ 2 m), 0,40 m au-delà. TODO_VERIF */
-export function gardeGreveThickness(h) { return h <= 1 ? 0.30 : h <= 2 ? h / 8 + 0.175 : 0.40; }
+/**
+ * Épaisseur du garde-grève, ferraillages types PP73 1.3.2 § 2.3.1 (h < 3 m, dalle de transition indépendante, joint non
+ * poussant) : 0,20 m (h ≤ 1 m), 0,10 + 0,10 h (1 < h ≤ 2 m), 0,30 m (2 < h ≤ 3 m) ; au-delà de 3 m : hors domaine (calcul).
+ */
+export function gardeGreveThickness(h) { return h <= 1 ? 0.20 : h <= 2 ? 0.10 + 0.10 * h : 0.30; }
 
 /**
  * Moments d'encastrement du garde-grève par mètre (PP73 1.3.2, Fascicule 61) [kN·m/m] :
@@ -18,26 +21,35 @@ export function gardeGreveThickness(h) { return h <= 1 ? 0.30 : h <= 2 ? h / 8 +
  *   poussée d'une charge locale (essieu Bc derrière le mur, roues de 60 kN, diffusion à 45°) :
  *     M_p = 12 K'/(0,75 + 2h) ∫₀ʰ (h − x)/(0,25 + x) dx [t·m/m], K' = K·bc·δ ;
  *   freinage d'une roue de 60 kN au contact : M_f = 6 h/(0,25 + 2h) [t·m/m].
- * Pondérations : ELS 1,0 M_t + 1,2 (M_p + M_f) ; ELU 1,35 M_t + 1,6 (M_p + M_f). TODO_VERIF
+ * PP73 1.3.2 § 2.3.2.2 inclut γ = 1,2 dans K (K = i γ δ b_c = 0,396) : ici γ est appliqué dans la combinaison, ce qui
+ * redonne le tableau du § 2.3.3 (total 3,8 à 9,9 t·m/m pour h = 0,5 à 3 m). Pondérations : ELS 1,0 M_t + 1,2 (M_p + M_f)
+ * (sollicitations du 1er genre de PP73) ; ELU 1,35 M_t + 1,6 (M_p + M_f) (transposition BAEL).
+ * Moment de sens opposé (face avant, freinage minoré de la poussée) : M' = −3,2 t·m/m quelle que soit h (§ 2.3.3).
+ * Domaine des ferraillages types : h ≤ 3 m.
  */
 export function gardeGreve({ h, K = 0.33, gamma = 20, bc = 1.1, delta = 1 }) {
   const Mt = K * gamma * h ** 3 / 6;
   const integ = (h + 0.25) * Math.log((0.25 + h) / 0.25) - h;            // ∫₀ʰ (h − x)/(0,25 + x) dx
   const Mp = 10 * 12 * K * bc * delta / (0.75 + 2 * h) * integ;
   const Mf = 10 * 6 * h / (0.25 + 2 * h);
-  return { Mt, Mp, Mf, ELS: Mt + 1.2 * (Mp + Mf), ELU: 1.35 * Mt + 1.6 * (Mp + Mf), e: gardeGreveThickness(h) };
+  return { Mt, Mp, Mf, ELS: Mt + 1.2 * (Mp + Mf), ELU: 1.35 * Mt + 1.6 * (Mp + Mf), Mrev: 32, Mapprox: 25 * (h + 1), e: gardeGreveThickness(h), horsDomaine: h > 3 };
 }
 
 /**
- * Mur en retour suspendu (PP73) de longueur L et de hauteur h à l'encastrement, épaisseur e : charges conventionnelles
- * (poids propre, superstructures 3 kN/m, 40 kN verticaux et 20 kN horizontaux à l'extrémité, poussée uniforme
- * (h/3 + 0,5) t/m² sur la surface L·h/2). TODO_VERIF
+ * Mur en retour suspendu, PP73 1.3.2 § 3.4 : longueur ℓ, hauteur h à l'encastrement, épaisseur e ; poids propre (surface
+ * triangulaire ℓh/2), superstructures 0,3 t/m, charges concentrées à 1 m de l'extrémité théorique : 4 tf verticale et
+ * 2 tf horizontale ; poussée uniforme (h/3 + 0,5) t/m² sur ℓh/2 (γ = 2 t/m³, p = 1 t/m², K₀ = 0,5) ;
+ *   T = 2,5 (ℓh/2) e + 0,3 ℓ + 4, M_V = 2,5 (ℓ²h/6) e + 0,3 ℓ²/2 + 4 (ℓ − 1) ;
+ *   H = (h/3 + 0,5) ℓh/2 + 2, M_H = (h/3 + 0,5) ℓ²h/6 + 2 (ℓ − 1) — M_V et M_H non concomitants.
+ * Épaisseur approchée e = (ℓ + 2)/20 pour 2 ≤ ℓ ≤ 6 m, minimum 0,20 m ; aciers ≥ 2 cm²/ml par face et par direction.
+ * Murettes de piles-culées noyées (ℓ ≤ 2,5 m, § 2.2.2.4) : 5 tf verticale ou 3 tf horizontale à 1 m de l'extrémité.
  */
 export function murEnRetour({ L, h, e = null }) {
-  const ee = e ?? Math.max(0.30, (L + 2) / 20);
-  const Tv = 25 * ee * L * h / 2 + 3 * L + 40, Mv = 25 * ee * L ** 2 * h / 6 + 3 * L ** 2 / 2 + 40 * L;
-  const p = 10 * (h / 3 + 0.5), Th = p * L * h / 2 + 20, Mh = p * L ** 2 * h / 6 + 20 * L;
-  return { e: ee, Tv, Mv, Th, Mh };
+  const ee = e ?? Math.max(0.20, (L + 2) / 20);
+  const murette = L <= 2.5, PV = murette ? 50 : 40, PH = murette ? 30 : 20, arm = Math.max(0, L - 1);
+  const Tv = 25 * ee * L * h / 2 + 3 * L + PV, Mv = 25 * ee * L ** 2 * h / 6 + 3 * L ** 2 / 2 + PV * arm;
+  const p = 10 * (h / 3 + 0.5), Th = p * L * h / 2 + PH, Mh = p * L ** 2 * h / 6 + PH * arm;
+  return { e: ee, Tv, Mv, Th, Mh, murette, Amin: 2e-4, horsDomaine: L > 6 };
 }
 
 /**

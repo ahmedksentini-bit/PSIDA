@@ -271,6 +271,34 @@ les tests vérifient les bornes des tableaux et un exemple calculé à la main.
   - moment transversal réparti sur les pieux de la file.
 - Non traités : protections, piles complexes (HEC-18 § 7.4), affouillement autour des groupes de pieux, flambement du fût avec la longueur libre accrue.
 
+## 1 duodecies. Relecture PP73 (v0.19.1)
+
+Rapport détaillé : vérification des règles d'appuis sur les pièces PP73 1.1.2, 1.1.3, 1.2.3, 1.3.1 et 1.3.2 (Drive de l'auteur).
+
+- **Conformes :**
+  - moments du garde-grève : la combinaison redonne le tableau du § 2.3.3 ;
+  - méthode des bielles des semelles sur deux files (ch. 4) ;
+  - poussée (h/3 + 0,5) t/m² des murs en retour ;
+  - 0,2 % des fûts ;
+  - 0,12 % par nappe des semelles.
+- **Corrigés :**
+  - épaisseur du garde-grève : 0,20 / 0,10 + 0,10 h / 0,30 m ;
+  - face avant du garde-grève : M' = −3,2 t·m/m ;
+  - charges des murs en retour à 1 m de l'extrémité, et murettes (ℓ ≤ 2,5 m) à 5 tf / 3 tf ;
+  - épaisseur minimale des murs en retour 0,20 m et 2 cm²/ml ;
+  - minimum des chevêtres : 0,5 % pour l'ensemble des nappes, au lieu de 0,5 % par face ;
+  - 20 cm² minimum par colonne, poteau ou voile de moins de 1 m² ;
+  - hauteur minimale des semelles sur pieux : max(0,60 ; 1,4 Ø) ;
+  - poinçonnement vérifié seulement pour les pieux d'angle des semelles sur plus de deux pieux, avec θ ≥ 45° ;
+  - avertissements géométriques : colonnes Ø ≥ 0,60 m, chevêtre ≥ 0,60 × 0,70 m, B ≥ 1,50 m, entraxe ≥ 3 Ø, B ≥ 4,5 Ø.
+- **Restent à traiter :**
+  - torsion du chevêtre (§ 2.2.4) ;
+  - charges de la dalle de transition (15 + D) t/ml et des murettes sur le chevêtre de culée ;
+  - poussée des piles-culées apparentes limitée à la partie haute (§ 3.1.3.1, i = 1/3, p = 1,5 t/m²) ;
+  - vérification à vide de la pile-culée remblayée ;
+  - semelle sur file unique en paroi fléchie.
+- **FOND 72 :** seuls les fascicules 2 et 3.1-3.2 sont lisibles dans le Drive. Les k_p, le frottement et le module de Ménard ne sont donc pas vérifiables sur ce texte. Le Fascicule 62 V codé reste cohérent avec la partie lue (coefficients 3 et 2, q'_ref aux 3/4 de la largeur comprimée).
+
 ## 2. Protocole de comparaison avec une note de référence
 
 ### 2.1 Référentiel Eurocodes — note CHAMOA-PSIDA (Cerema, guide technique, ch. 4)

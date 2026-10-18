@@ -108,13 +108,15 @@ export function sigmaSBAEL({ fe = 400, fc28 = 25, eta = 1.6, fiss = 'FTP' }) {
  * longitudinales A₂ ≥ 1/3 de la densité de A₁, ancrage aux pieux de rive ≥ 0,8 R/σ̄, poinçonnement du pieu d'angle
  * R ≤ (2/3)(h + Ø) h σ₂₈ (σ₂₈ = 2 MPa).
  */
-export function pileCapTwoRows({ RU, RS, l, b, hs, D, fsu, sigSels, cover = 0.10 }) {
+export function pileCapTwoRows({ RU, RS, l, b, hs, D, fsu, sigSels, cover = 0.10, nPiles = 4 }) {
   const h = hs - cover, arm = l / 2 - b / 4;
   const A1U = pileCapStrutTie({ R: RU, l, b, h, sigS: fsu }), A1S = pileCapStrutTie({ R: RS, l, b, h, sigS: sigSels });
   const A1 = Math.max(A1U, A1S), band = D + hs, dens = A1 / band;
   const theta = Math.atan2(h, arm) * 180 / Math.PI, hmin = Math.max(0.6, 1.4 * D);
   const Rpunch = (2 / 3) * (h + D) * h * 2000;
-  return { h, A1U, A1S, A1, band, dens, A1prime: dens / 3, A2: dens / 3, Aanchor: 0.8 * RS / (sigSels * 1000), theta, thetaOk: theta >= 45 - 1e-9, hmin, hOk: hs >= hmin - 1e-9, Rpunch, punchOk: RS <= Rpunch };
+  return { h, A1U, A1S, A1, band, dens, A1prime: dens / 3, A2: dens / 3, Aanchor: 0.8 * RS / (sigSels * 1000), theta, thetaOk: theta >= 45 - 1e-9, hmin, hOk: hs >= hmin - 1e-9, Rpunch,
+    // PP73 1.3.2 § 4.6.2 : poinçonnement des pieux d'angle des semelles sur plus de deux pieux, vérification valable si θ ≥ 45°
+    punchOk: nPiles > 2 && theta >= 45 - 1e-9 ? RS <= Rpunch : null };
 }
 
 /** Semelle superficielle par bielles (BAEL / DTU 13.12) : A = N (B − b)/(8 d f_su) par direction (charge centrée ; domaine d ≥ (B − b)/4, e ≤ B/6) ; minimum 0,12 % par nappe (PP73 1.1.1). */

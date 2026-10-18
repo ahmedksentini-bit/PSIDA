@@ -72,6 +72,12 @@ export function supportsBlocks(sup, ref = 'F61') {
     comment(`Crue de projet : h = ${F2(e.h)} m (PHE − lit), v = ${F2(e.v)} m/s, biais ${F1(e.theta)}°. Courant EN 1991-1-6 § 4.9 (4.1) : F_wa = ½ k_wa ρ_w h b v², k_wa = 1,44 (section rectangulaire) ou 0,70 (circulaire), b largeur perpendiculaire au courant (voile : a cos θ + L sin θ ; colonnes : n Ø, sans effet de masque) ; hypothèse PSIDA : pression triangulaire maximale en surface, résultante à 2h/3 au-dessus du lit. Embâcles (4.2) : F_deb = k_deb A_deb v², k_deb = 666 kg/m³, radeau sous la surface libre. Efforts appliqués au fût dans le sens du courant (transversal à l'ouvrage) ; combinaisons de crue ${isF ? 'ELU 1,35 G + 1,5 F_eau, ELS G + F_eau (comme le vent, BAEL annexe D, sans trafic)' : 'ELU 1,35 G + 1,5 F_eau + 1,35 ψ₀ Q, ELS car. G + F_eau + ψ₀ Q (ψ₀ TS 0,75, UDL 0,4)'} — coefficients à confirmer selon le CCTP ; poussée d'Archimède ρ g V au niveau des PHE sur le fût et la semelle. Affouillement local FHWA HEC-18 (équation CSU) : y_s = 2,0 K₁ K₂ K₃ a^0,65 y₁^0,35 Fr^0,43, K₁ avant-bec (carré 1,1 ; arrondi, cylindre 1,0 ; pointu 0,9 ; 1,0 si θ > 5°), K₂ = (cos θ + L/a sin θ)^0,65 (L/a ≤ 12), K₃ état du lit, y_s ≤ 2,4 a (Fr ≤ 0,8) ou 3,0 a ; affouillement général et de contraction saisi (${F2(e.hGen)} m), à établir par l'étude hydraulique. Conséquences : semelle superficielle — base sous le fond affouillé, encastrement D_e et surcharge q₀ comptés sous ce fond ; pieux — longueur dégagée sans réaction latérale (Winkler) ni frottement, portance recalculée à pointe inchangée. Protection (enrochements) et affouillement autour des groupes de pieux ou des semelles débordantes (piles complexes, HEC-18 § 7.4) : non traités.`);
   }
 
+  const warn = Ls.filter(L => L.warnings && L.warnings.length);
+  if (warn.length) {
+    h2('Dispositions minimales (PP73) — avertissements');
+    table(['Ligne', 'Avertissement'], warn.flatMap(L => L.warnings.map(w => [lineName(L, n), w])));
+  }
+
   h2('Efforts en tête et en pied des fûts (combinaisons les plus défavorables)');
   const rows = [];
   for (const L of Ls) {
@@ -107,10 +113,10 @@ export function supportsBlocks(sup, ref = 'F61') {
     h2('Culées — mur garde-grève, murs en retour');
     const L0 = cul[0], r = L0[code];
     table(['Élément', 'Dimensions', 'Moments [kN·m/m ou kN·m]', 'A_s [cm²]'], [
-      ['Garde-grève', `h = ${F2(r.gg.h)} m, e = ${F2(r.gg.e)} m`, `M_t ${F1(r.gg.Mt)} ; M_p ${F1(r.gg.Mp)} ; M_f ${F1(r.gg.Mf)} → ELU ${F1(r.gg.ELU)} / ELS ${F1(r.gg.ELS)}`, `${CM(r.gg.As)} /m (face arrière)`],
+      ['Garde-grève', `h = ${F2(r.gg.h)} m, e = ${F2(r.gg.e)} m`, `M_t ${F1(r.gg.Mt)} ; M_p ${F1(r.gg.Mp)} ; M_f ${F1(r.gg.Mf)} → ELU ${F1(r.gg.ELU)} / ELS ${F1(r.gg.ELS)}`, `${CM(r.gg.As)} /m face arrière ; ${CM(r.gg.AsAvant)} /m face avant (M' = −32 kN·m/m)`],
       ['Mur en retour', `L = ${F2(r.retour.L)} m, h = ${F2(r.retour.h)} m, e = ${F2(r.retour.e)} m`, `M_h ${F0(r.retour.Mh)} ; M_v ${F0(r.retour.Mv)} (T_h ${F0(r.retour.Th)}, T_v ${F0(r.retour.Tv)} kN)`, `horiz. ${CM(r.retour.AsH)} ; sup. ${CM(r.retour.AsV)}`],
     ]);
-    comment(`Garde-grève (PP73 1.3.2) : poussée des terres K γ h³/6, poussée d'un essieu Bc derrière le mur 12K'/(0,75 + 2h)∫(h − x)/(0,25 + x)dx et freinage d'une roue 6h/(0,25 + 2h) [t·m/m], K = K_a = ${F3(sup.Ka)} ; ELU 1,35 / 1,6. Murs en retour suspendus : poids propre, 3 kN/m, 40 kN vertical et 20 kN horizontal en bout, poussée conventionnelle (h/3 + 0,5) t/m² sur L·h/2 ; épaisseur ≥ max(0,30 ; (L + 2)/20). Règles de pratique à confronter au texte de PP73 (formules reprises de la littérature).`);
+    comment(`Garde-grève, PP73 1.3.2 § 2.3 : épaisseur des ferraillages types 0,20 m (h ≤ 1 m), 0,10 + 0,10 h (1 à 2 m), 0,30 m (2 à 3 m) ; moments à l'encastrement : poussée des terres K γ h³/6, roues arrière de deux camions Bc (12 t sur 0,25 × 0,75 m, diffusion à 45°) 12K'/(0,75 + 2h)∫(h − x)/(0,25 + x)dx, freinage d'une roue de 6 t 6h/(0,25 + 2h) [t·m/m], K = K_a = ${F3(sup.Ka)}, b_c = 1,1, δ = 1 ; ELS 1,0 M_t + 1,2 (M_p + M_f) (redonne le tableau du § 2.3.3), ELU 1,35 / 1,6 ; face avant : M' = −3,2 t·m/m (§ 2.3.3). Murs en retour, PP73 1.3.2 § 3.4 : poids propre, 0,3 t/m, 4 tf verticale et 2 tf horizontale à 1 m de l'extrémité (murettes ℓ ≤ 2,5 m : 5 tf et 3 tf, § 2.2.2.4), poussée (h/3 + 0,5) t/m² sur ℓh/2 ; M_V et M_H non concomitants, M_H repris sur une hauteur h/2 ; épaisseur (ℓ + 2)/20 (2 ≤ ℓ ≤ 6 m), minimum 0,20 m ; aciers ≥ 2 cm²/ml par face et par direction.`);
   }
 
   h2('Fondations');
@@ -146,7 +152,7 @@ export function supportsBlocks(sup, ref = 'F61') {
       h2('Semelles sur deux files de pieux — méthode des bielles (PP73 1.3.2 ch. 4)');
       table(['Ligne', 'h utile [m]', 'Angle des bielles', 'h_s ≥ max(0,60 ; 1,4 Ø)', 'A₁ par couple ELU / ELS [cm²]', 'A₁ total [cm²]', 'Bande Ø + h_s [m]', "A'₁ et A₂ [cm²/m]", 'Ancrage ≥ 0,8 R/σ̄ [cm²]', 'Poinçonnement pieu'], Ls.map(L => {
         const t = L[code].found.tie;
-        return [lineName(L, n), F2(t.h), `${F1(t.theta)}° ${t.thetaOk ? 'OK' : 'NON (< 45° : calcul en dalle)'}`, t.hOk ? 'OK' : `NON (${F2(t.hmin)} m)`, `${CM(t.A1U)} / ${CM(t.A1S)}`, CM(t.total), F2(t.band), CM(t.A2), CM(t.Aanchor), `${F0(L[code].found.NmaxS)} / ${F0(t.Rpunch)} kN ${t.punchOk ? 'OK' : 'NON'}`];
+        return [lineName(L, n), F2(t.h), `${F1(t.theta)}° ${t.thetaOk ? 'OK' : 'NON (< 45° : calcul en dalle)'}`, t.hOk ? 'OK' : `NON (${F2(t.hmin)} m)`, `${CM(t.A1U)} / ${CM(t.A1S)}`, CM(t.total), F2(t.band), CM(t.A2), CM(t.Aanchor), t.punchOk === null ? 'sans objet (PP73 § 4.6.2 : pieux d\'angle, > 2 pieux, θ ≥ 45°)' : `${F0(L[code].found.NmaxS)} / ${F0(t.Rpunch)} kN ${t.punchOk ? 'OK' : 'NON'}`];
       }), { small: true });
       comment(`PP73 pièce 1.3.2 § 4.3 : tirant par couple de pieux A₁ = R (l/2 − b/4)/(h σ̄), R = réaction la plus élevée d'un pieu du couple, à l'ELU (f_su) et à l'ELS (σ̄_s = ${F1(L0s(Ls, code).sigSels)} MPa${isF ? ', fissuration très préjudiciable' : ', 0,8 f_yk'}) ; domaine : bielles inclinées à 45° au moins (h ≥ l/2 − b/4) ; A₁ réparti sur Ø + h_s au droit des pieux ; armatures de répartition A'₁ et longitudinales A₂ ≥ 1/3 de la densité de A₁ ; poinçonnement du pieu d'angle R ≤ (2/3)(h + Ø) h σ₂₈ (σ₂₈ = 2 MPa). La note du Pont de Noé applique au tirant la charge totale de la semelle au lieu de la réaction d'un pieu.`);
     } else if (f0.nF === 1) {

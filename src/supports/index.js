@@ -53,6 +53,27 @@ export function externalSeismic(ext, nL, spans = null) {
   return { ...ext, problemes: ext.problemes || [], source: 'onglet' };
 }
 
+/**
+ * Dispositions géométriques minimales du dossier pilote PP73 (pièces 1.1.2, 1.1.3, 1.2.3, 1.3.2) : avertissements.
+ */
+export function geometryWarnings(sp, end, width) {
+  const W = [], F = sp.found, P = sp.pile, C = sp.culee;
+  const col = end ? C.type === 'enterree' : P.type === 'colonnes';
+  const D = end ? C.D : P.D, hc = end ? C.hc : P.hc, lc = end ? C.lc : P.lc;
+  if (col && D < 0.60 - 1e-9) W.push(`colonnes Ø ${D} m < 0,60 m (PP73 1.3.2 § 1.3 : diamètre minimal vis-à-vis du choc)`);
+  if (col && hc > 0 && (hc < 0.60 - 1e-9 || lc < 0.70 - 1e-9)) W.push(`chevêtre ${hc} × ${lc} m : dimensions conseillées ≥ 0,60 m de hauteur × 0,70 m de largeur (PP73 1.1.3, 1.3.2 § 2.2.5.1)`);
+  if (F.type === 'superficielle' && F.B < 1.5 - 1e-9) W.push(`semelle B = ${F.B} m < 1,50 m (PP73 1.1.2)`);
+  if (F.type !== 'superficielle') {
+    if (F.nFiles === 1 && F.pileD < 0.60 - 1e-9) W.push(`file unique de pieux Ø ${F.pileD} m < 0,60 m (PP73 : 0,80 m conseillé)`);
+    const s = F.nFiles > 1 ? Math.min(F.sPile, (width + 1) / Math.max(1, F.nPile)) : (width + 1) / Math.max(1, F.nPile);
+    if (s < 3 * F.pileD - 1e-9) W.push(`entraxe des pieux ${s.toFixed(2)} m < 3 Ø (PP73 1.2.3, effet de groupe)`);
+    if (F.nFiles > 1 && F.B < 4.5 * F.pileD - 1e-9) W.push(`semelle sur pieux B = ${F.B} m < 4,5 Ø (PP73 1.2.3)`);
+  }
+  if (end && sp.culee.hGG && sp.culee.hGG > 3) W.push('garde-grève de plus de 3 m : hors domaine des ferraillages types PP73 (calcul nécessaire)');
+  if (end && C.Lret > 6) W.push(`mur en retour de ${C.Lret} m : épaisseur (ℓ + 2)/20 hors domaine (2 à 6 m, PP73 1.3.2 § 3.4)`);
+  return W;
+}
+
 /** Valeurs par défaut du formulaire « Appuis et fondations ». */
 export const SUPPORT_DEFAULTS = {
   pile: { type: 'voile', H: [6], b: 0.6, Lv: null, nCol: 3, D: 0.8, hc: 0, lc: 1.2 },
@@ -224,9 +245,11 @@ export function computeSupports(st, input = {}) {
         shaftRes = designShaft({ shape, code, fck, fyk, Hf: Hm, combos: base.filter(b => b.ls !== 'ELS').map(b => ({ label: b.label, N: b.Nb, M: b.Mb, My: (b.Hy || 0) * Hm, acc: !!b.acc })), n: rem ? width : C.nCol });
         const gg = gardeGreve({ h: hGG, K: KA, gamma: soil.gamma });
         const ggAs = (requiredSteelNM({ b: 1, h: gg.e, c }, { code, fck, fyk }, 0, gg.ELU).As ?? NaN) / 2;
-        extra.gg = { ...gg, h: hGG, As: Math.max(ggAs, 0.001 * gg.e) };
+        // face avant : moment de sens opposé M' = −3,2 t·m/m (PP73 1.3.2 § 2.3.3, sollicitation du 1er genre → ELU × 1,6/1,2)
+        const ggAv = (requiredSteelNM({ b: 1, h: gg.e, c }, { code, fck, fyk }, 0, gg.Mrev * 1.6 / 1.2).As ?? NaN) / 2;
+        extra.gg = { ...gg, h: hGG, As: Math.max(ggAs, 0.001 * gg.e), AsAvant: Math.max(ggAv, 0.001 * gg.e) };
         const hh = Hm + hGG;
-        extra.retour = { ...mr, L: C.Lret, h: hh, AsH: (requiredSteelNM({ b: hh / 2, h: mr.e, c }, { code, fck, fyk }, 0, 1.35 * mr.Mh).As ?? NaN) / 2, AsV: (requiredSteelNM({ b: mr.e, h: Math.max(0.5, hh / 2), c }, { code, fck, fyk }, 0, 1.35 * mr.Mv).As ?? NaN) / 2 };
+        extra.retour = { ...mr, L: C.Lret, h: hh, AsH: Math.max((requiredSteelNM({ b: hh / 2, h: mr.e, c }, { code, fck, fyk }, 0, 1.35 * mr.Mh).As ?? NaN) / 2, mr.Amin * hh / 2), AsV: (requiredSteelNM({ b: mr.e, h: Math.max(0.5, hh / 2), c }, { code, fck, fyk }, 0, 1.35 * mr.Mv).As ?? NaN) / 2 };
         if (!rem && C.hc > 0) {
           const nb = bearings.nb, pitch = bearingSpacing({ width, psi: st.p.concept.psi, n: nb });
           const ys = Array.from({ length: nb }, (_, k) => width / 2 + (k - (nb - 1) / 2) * pitch);
@@ -265,7 +288,7 @@ export function computeSupports(st, input = {}) {
         const nc = end ? (sp.culee.type === 'enterree' ? sp.culee.nCol : 0) : (sp.pile.type === 'colonnes' ? sp.pile.nCol : 0);
         if (nc > 0) {
           const off = (Lf - width) / 2, Vu = eluMax.f ? eluMax.f.V : 0;
-          const bm = pierCap({ length: Lf, supports: Array.from({ length: nc }, (_, j) => ({ x: off + width * (2 * j + 1) / (2 * nc) })), loads: [], q: -Vu / Lf, b: F.B, h: F.hs, c, fck, fyk, code, rhoMin: 0.001 });
+          const bm = pierCap({ length: Lf, supports: Array.from({ length: nc }, (_, j) => ({ x: off + width * (2 * j + 1) / (2 * nc) })), loads: [], q: -Vu / Lf, b: F.B, h: F.hs, c, fck, fyk, code, rhoMin: 0.0012 });
           found.trans = { mode: 'poutre sur colonnes', Mneg: bm.Mneg, Mpos: bm.Mpos, AsTop: bm.AsTop, AsBot: bm.AsBot };
           found.AsTransPerM = Math.max(bm.AsTop, bm.AsBot) / F.B;
         } else found.AsTransPerM = found.AsLong / Lf / 4;
@@ -336,7 +359,7 @@ export function computeSupports(st, input = {}) {
         const sigSels = code === 'BAEL' ? sigmaSBAEL({ fe: fyk, fc28: fck, fiss: 'FTP' }) : 0.8 * fyk;
         let tie = null, capBeam = null;
         if (nF === 2) {
-          const t = pileCapTwoRows({ RU: NmaxU, RS: NmaxS, l: F.sPile, b: bWall, hs: F.hs, D, fsu: fyk / 1.15, sigSels });
+          const t = pileCapTwoRows({ RU: NmaxU, RS: NmaxS, l: F.sPile, b: bWall, hs: F.hs, D, fsu: fyk / 1.15, sigSels, nPiles: xsP.length });
           tie = { ...t, perCouple: t.A1, total: t.A1 * nP };
         } else if (nF === 1) {
           // semelle filante sur une file de pieux (PP73 1.3.2 § 4.4) : poutre sur les pieux sous le voile (charge répartie) ou les colonnes
@@ -347,11 +370,12 @@ export function computeSupports(st, input = {}) {
           const bm = pierCap({ length: Lf, supports: piles, loads, q: nc > 0 ? gU * Wsem / Lf : Vu / Lf, b: F.B, h: F.hs, c: 0.07, fck, fyk, code, rhoMin: 0.0012 });
           capBeam = { Mneg: bm.Mneg, Mpos: bm.Mpos, V: bm.V, AsTop: bm.AsTop, AsBot: bm.AsBot };
         }
-        found = { type: 'pieux', D, n: xsP.length, nF, nP, Lpile: F.Lpile, k: kHead, rows, NmaxU, NmaxS, NminU, As: Math.max(AsP, pileMinSteel({ D, code })), AsReq: AsP, Amin: pileMinSteel({ D, code }), cap, capRatio, NmaxA, group, scour, pileConc: pc, tie, capBeam, sigSels, hs: F.hs, hOk: F.hs >= 0.5, W: Wsem };
+        found = { type: 'pieux', D, n: xsP.length, nF, nP, Lpile: F.Lpile, k: kHead, rows, NmaxU, NmaxS, NminU, As: Math.max(AsP, pileMinSteel({ D, code })), AsReq: AsP, Amin: pileMinSteel({ D, code }), cap, capRatio, NmaxA, group, scour, pileConc: pc, tie, capBeam, sigSels, hs: F.hs, hOk: F.hs >= Math.max(0.60, nF === 2 ? 1.4 * D : D) - 1e-9, hMin: Math.max(0.60, nF === 2 ? 1.4 * D : D), W: Wsem };
       }
       per[code] = { base, shaft: shaftRes, ...extra, found };
     }
     out.BAEL = per.BAEL; out.EC = per.EC;
+    out.warnings = geometryWarnings(sp, end, width);
     return out;
   });
   return { sp, xs, Lv, width, seisme, water, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hGG, Ka: KA, lines };

@@ -96,10 +96,14 @@ test('Section N-M, pieu latéral, culée (cohérence)', () => {
   const lp = lateralPile({ L: 30, D, E, k, H });
   rel(lp.y0, 2 * H * lam / (k * D), 2e-2, 'y₀ pieu long (Hetényi)');
   rel(lp.Mmax, 0.3224 * H / lam, 3e-2, 'M_max pieu long (0,3224 H/λ)');
-  assert.equal(gardeGreveThickness(1.5), 1.5 / 8 + 0.175);
+  // PP73 1.3.2 § 2.3.1 : 0,20 m (h ≤ 1), 0,10 + 0,10 h (1 à 2 m), 0,30 m (2 à 3 m)
+  assert.equal(gardeGreveThickness(0.8), 0.20); assert.equal(gardeGreveThickness(1.5), 0.10 + 0.15); assert.equal(gardeGreveThickness(2.5), 0.30);
   const gg = gardeGreve({ h: 1.5, K: Ka(30) });
   assert.ok(gg.ELU > gg.ELS && gg.Mp > 0 && gg.Mf > 0);
-  const mr = murEnRetour({ L: 4, h: 5 }); assert.ok(mr.e === 0.30 && mr.Mh > mr.Th);
+  // PP73 1.3.2 § 3.4 (ℓ = 4 m) : e = (ℓ + 2)/20 = 0,30 m ; charges à 1 m de l'extrémité : M_H = (h/3 + 0,5) ℓ²h/6 + 2 (ℓ − 1) [t·m]
+  const mr = murEnRetour({ L: 4, h: 5 }); assert.ok(Math.abs(mr.e - 0.30) < 1e-12 && mr.Mh > mr.Th);
+  rel(mr.Mh, 10 * ((5 / 3 + 0.5) * 16 * 5 / 6 + 2 * 3), 1e-12, 'M_H PP73');
+  assert.equal(murEnRetour({ L: 2, h: 2 }).e, 0.20); assert.ok(murEnRetour({ L: 2, h: 2 }).murette);
   assert.ok(minimumSteelPier({ code: 'EC', Ac: 1, perimeter: 4, Ned: 10000 }).min > 0.002);
 });
 

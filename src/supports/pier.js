@@ -52,9 +52,14 @@ export function secondOrder({ code = 'BAEL', Lf, h, d = null, L = null, alpha = 
 }
 
 /** Pourcentages minimaux et maximaux d'armatures longitudinales d'un fût. */
-export function minimumSteelPier({ code = 'BAEL', Ac, perimeter, Ned = 0, fyk = 400 }) {
-  if (code === 'BAEL') return { min: Math.max(4e-4 * perimeter, 0.002 * Ac), max: 0.05 * Ac, rule: 'BAEL A.8.1,21 : max(4 cm²/m de parement ; 0,2 % B), 5 % B au plus' };
-  return { min: Math.max(0.1 * Ned / (fyk / 1.15 * 1000), 0.002 * Ac), max: 0.04 * Ac, rule: 'EC2 § 9.5.2 / 9.6.2 : max(0,10 N_Ed/f_yd ; 0,002 A_c), 0,04 A_c au plus' };
+/**
+ * Pourcentages minimaux et maximaux d'armatures longitudinales d'un fût ; PP73 1.3.2 § 1.1.2 : au moins 20 cm² par élément
+ * pour les colonnes, poteaux et voiles de section inférieure à 1 m² (taux fréquemment porté à 2 % pour les colonnes, § 1.3).
+ */
+export function minimumSteelPier({ code = 'BAEL', Ac, perimeter, Ned = 0, fyk = 400, element = false }) {
+  const pp73 = element || Ac < 1 ? 20e-4 : 0;
+  if (code === 'BAEL') return { min: Math.max(4e-4 * perimeter, 0.002 * Ac, pp73), max: 0.05 * Ac, rule: `BAEL A.8.1,21 : max(4 cm²/m de parement ; 0,2 % B), 5 % B au plus${pp73 ? ' ; PP73 1.3.2 § 1.1.2 : ≥ 20 cm² par colonne, poteau ou voile < 1 m²' : ''}` };
+  return { min: Math.max(0.1 * Ned / (fyk / 1.15 * 1000), 0.002 * Ac, pp73), max: 0.04 * Ac, rule: `EC2 § 9.5.2 / 9.6.2 : max(0,10 N_Ed/f_yd ; 0,002 A_c), 0,04 A_c au plus${pp73 ? ' ; PP73 1.3.2 § 1.1.2 : ≥ 20 cm² par élément' : ''}` };
 }
 
 /**
@@ -82,7 +87,7 @@ export function designShaft({ shape, code = 'BAEL', fck = 25, fyk = 400, Ev = nu
     const r = Number.isFinite(Mtot) ? requiredSteelNM(shape, mat, N, Mtot) : { As: null };
     return { ...c, Nshaft: N, M1, Mtot, e1, secondOrder: so, As: r.As, sigma: N / Ac / 1000 };
   });
-  const mins = minimumSteelPier({ code, Ac, perimeter: per, Ned: Math.max(0, ...rows.map(r => r.Nshaft)), fyk });
+  const mins = minimumSteelPier({ code, Ac, perimeter: per, Ned: Math.max(0, ...rows.map(r => r.Nshaft)), fyk, element: !!shape.D });
   const AsReq = Math.max(0, ...rows.map(r => (r.As === null ? Infinity : r.As)));
   return { Ac, I, perimeter: per, buckling: buck, Ev: Evv, rows, mins, As: Math.max(AsReq, mins.min), AsReq, ok: AsReq <= mins.max };
 }
@@ -90,14 +95,16 @@ export function designShaft({ shape, code = 'BAEL', fck = 25, fyk = 400, Ev = nu
 /**
  * Chevêtre de pile sur n fûts (console sur un fût unique) ou semelle filante sur pieux (appuis élastiques k = E S/L) :
  * poutre continue sous les réactions d'appareils et le poids propre ; aciers par nappe (flexion simple, section N-M
- * symétrique / 2) et minimum 0,5 % de la section par face (pratique Noé, PP73).
- * @param {object} p length, supports [{ x, k? }], loads [{ x, P }], q (kN/m), b, h, c, fck, fyk, code, EI
+ * symétrique / 2) et minimum par face rhoMin : chevêtre 0,5 % pour l'ensemble des nappes (PP73 1.3.2 § 2.2.5.1, soit
+ * 0,25 % par face ; armatures transversales ≥ 0,2 %, t < 20 cm ; section conseillée ≥ 0,60 × 0,70 m) ; semelles 0,12 % par
+ * nappe (§ 1.1.1).
+ * @param {object} p length, supports [{ x, k? }], loads [{ x, P }], q (kN/m), b, h, c, fck, fyk, code, EI, rhoMin (par face)
  */
-export function pierCap({ length, supports, loads, q = 0, b, h, c = 0.05, fck = 25, fyk = 400, code = 'BAEL', EI = null, rhoMin = 0.005 }) {
+export function pierCap({ length, supports, loads, q = 0, b, h, c = 0.05, fck = 25, fyk = 400, code = 'BAEL', EI = null, rhoMin = 0.0025 }) {
   const E = code === 'BAEL' ? 11000 * fck ** (1 / 3) : 22000 * ((fck + 8) / 10) ** 0.3;
   const r = beamOnSupports({ length, EI: EI ?? E * 1000 * b * h ** 3 / 12, supports: supports.map(s => (typeof s === 'number' ? { x: s } : s)), loads, q });
   const Mneg = -r.Mmin, Mpos = r.Mmax;
   const As = M => (M > 0 ? (requiredSteelNM({ b, h, c }, { code, fck, fyk }, 0, M).As ?? Infinity) / 2 : 0);
   const Amin = rhoMin * b * h;
-  return { Mneg, Mpos, V: r.Vabs, R: r.R, AsTop: Math.max(As(Mneg), Amin), AsBot: Math.max(As(Mpos), Amin), Amin, beam: r };
+  return { Mneg, Mpos, V: r.Vabs, R: r.R, AsTop: Math.max(As(Mneg), Amin), AsBot: Math.max(As(Mpos), Amin), Amin, AtMin: 0.002 * b, beam: r };
 }
