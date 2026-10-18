@@ -5,7 +5,7 @@
  */
 import { profilPressio } from '../src/vendor/fond-figures.js';
 import { seismicBlocks } from './seismic_note.js';
-import { svgBlock, supportSchema, distributionChart, sideBySide, pileProfileCharts, footingPressureChart } from './note_figures.js';
+import { svgBlock, supportSchema, distributionChart, sideBySide, pileProfileCharts, footingPressureChart, barChart } from './note_figures.js';
 
 /** Figure du sondage (bureau de calcul fond.ksr-infra.org) : essais, ou à défaut valeurs de couche en escalier. */
 export function profileFigure(pr, bandes = []) {
@@ -77,6 +77,12 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
       return [lineName(L, n), `${F2(w.hw)} ; ${F2(w.bProj)}`, `${F0(w.cur.F)} (${F2(w.nez === 'cylindre' || w.nez === 'groupe' ? 0.7 : 1.44)})`, F0(w.deb.F), F0(w.M), F0(w.Ushaft), `${F2(w.scour.Fr)} ; ${F2(w.scour.K1)} ${F2(w.scour.K2)} ${F2(w.scour.K3)}`, `${F2(w.scour.ys)}${w.scour.capped ? ' (plafond)' : ''}`, F2(w.dAff), fo];
     }), { small: true });
     comment(`Crue de projet : h = ${F2(e.h)} m (PHE − lit), v = ${F2(e.v)} m/s, biais ${F1(e.theta)}°. Courant EN 1991-1-6 § 4.9 (4.1) : F_wa = ½ k_wa ρ_w h b v², k_wa = 1,44 (section rectangulaire) ou 0,70 (circulaire), b largeur perpendiculaire au courant (voile : a cos θ + L sin θ ; colonnes : n Ø, sans effet de masque) ; hypothèse PSIDA : pression triangulaire maximale en surface, résultante à 2h/3 au-dessus du lit. Embâcles (4.2) : F_deb = k_deb A_deb v², k_deb = 666 kg/m³, radeau sous la surface libre. Efforts appliqués au fût dans le sens du courant (transversal à l'ouvrage) ; combinaisons de crue ${isF ? 'ELU 1,35 G + 1,5 F_eau, ELS G + F_eau (comme le vent, BAEL annexe D, sans trafic)' : 'ELU 1,35 G + 1,5 F_eau + 1,35 ψ₀ Q, ELS car. G + F_eau + ψ₀ Q (ψ₀ TS 0,75, UDL 0,4)'} — coefficients à confirmer selon le CCTP ; poussée d'Archimède ρ g V au niveau des PHE sur le fût et la semelle. Affouillement local FHWA HEC-18 (équation CSU) : y_s = 2,0 K₁ K₂ K₃ a^0,65 y₁^0,35 Fr^0,43, K₁ avant-bec (carré 1,1 ; arrondi, cylindre 1,0 ; pointu 0,9 ; 1,0 si θ > 5°), K₂ = (cos θ + L/a sin θ)^0,65 (L/a ≤ 12), K₃ état du lit, y_s ≤ 2,4 a (Fr ≤ 0,8) ou 3,0 a ; affouillement général et de contraction saisi (${F2(e.hGen)} m), à établir par l'étude hydraulique. Conséquences : semelle superficielle — base sous le fond affouillé, encastrement D_e et surcharge q₀ comptés sous ce fond ; pieux — longueur dégagée sans réaction latérale (Winkler) ni frottement, portance recalculée à pointe inchangée. Protection (enrochements) et affouillement autour des groupes de pieux ou des semelles débordantes (piles complexes, HEC-18 § 7.4) : non traités.`);
+    if (!opts.noFigures) {
+      // schémas des piles en rivière (PHE, fond affouillé, semelle, pieux dégagés) et efforts hydrodynamiques
+      const sch = []; for (const { L } of wat) { try { sch.push({ L, svg: supportSchema(sup, L, code) }); } catch (er) { /* schéma indisponible */ } }
+      for (let q = 0; q < sch.length; q += 2) { const a1 = sch[q], a2 = sch[q + 1]; B.push(svgBlock(sideBySide(a2 ? [a1.svg, a2.svg] : [a1.svg], 10, 760), `${lineName(a1.L, n)}${a2 ? ` et ${lineName(a2.L, n)}` : ''} en crue : plus hautes eaux, affouillement total, fondation`)); }
+      try { B.push(svgBlock(barChart({ cats: wat.map(({ L }) => lineName(L, n)), ylabel: 'F [kN] ; y_s [m]×100', series: [{ libelle: 'courant F_wa [kN]', values: wat.map(({ w }) => w.cur.F), couleur: '#0369a1' }, { libelle: 'embâcles F_deb [kN]', values: wat.map(({ w }) => w.deb.F), couleur: '#b45309' }, { libelle: 'affouillement total ×100 [m]', values: wat.map(({ w }) => 100 * w.dAff), couleur: '#b91c1c' }] }), 'Piles en rivière : poussée du courant, embâcles et profondeur d\'affouillement')); } catch (er) { /* figure indisponible */ }
+    }
   }
 
   const iWat1 = B.length;
