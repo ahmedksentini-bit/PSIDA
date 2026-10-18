@@ -302,6 +302,43 @@ Rapport détaillé : vérification des règles d'appuis sur les pièces PP73 1.1
   - avertissements H/V > 0,20 (pieux inclinés) et Ø ≥ 0,80 m pour une culée sur une file.
 - **FOND 72 :** remplacé par le Fascicule 62 V et l'Eurocode 7 (NF P 94-261/262), qui sont ceux codés ; seuls les fascicules 2 et 3.1-3.2 sont lisibles dans le Drive. Les k_p, le frottement et le module de Ménard ne sont donc pas vérifiables sur ce texte. Le Fascicule 62 V codé reste cohérent avec la partie lue (coefficients 3 et 2, q'_ref aux 3/4 de la largeur comprimée).
 
+## 1 terdecies. Fondations sur pieux — modèle PSH (v0.22, `src/supports/psh.js`)
+
+Le modèle reprend les principes du programme SETRA/CETE de l'Ouest PSH (« Calcul des appuis d'ouvrages d'art », v. 1.11, 1993).
+
+- **Semelle :** rigide.
+- **Pieux :**
+  - verticaux ou inclinés, file par file ;
+  - tête encastrée ou articulée, pied libre ou encastré ;
+  - rigidité axiale E A/L : pieu en colonne, pointe fixe (convention PSH) ;
+  - rigidité transversale : poutre de Winkler en différences finies, avec le module de Ménard couche par couche ;
+  - matrice 2 × 2 de tête obtenue par l'énergie.
+- **Groupe :**
+  - matrice de rigidité 3 × 3 (V, M, H), assemblée par les matrices de passage de chaque pieu ;
+  - plan longitudinal, plus un plan transversal pour le séisme Y et la crue ;
+  - les efforts et les profils des deux plans sont cumulés (résultante pour la section circulaire).
+- **Charges instantanées et soutenues :**
+  - charges soutenues : modules différés du béton (E_v, ou E_cm/3), sol k × kSus ;
+  - kSus = ½ par défaut (F62 C.5) ; PSH laisse ce choix à l'utilisateur, et la note du Pont de Noé prend 1 ;
+  - les deux parts sont calculées séparément puis superposées.
+- **Matrices de souplesse de la tête d'appui :**
+  - fût et chevêtre en consoles, semelle rigide, groupe de pieux ;
+  - u/T entre dans la répartition des efforts horizontaux entre lignes d'appui : la fondation sur pieux n'est plus supposée rigide ;
+  - une fondation superficielle reste supposée rigide (rotation de la semelle non prise en compte).
+- **Contrôle sur la pile P3 du Pont de Noé (sortie PSH) :**
+  - souplesses : w/N et θ/M à 0,3 % près ; θ/T à 0,6 % (instantané) et 1,6 % (soutenu) ; u/T à 3,8 % ;
+  - efforts en tête de pieu et profil M, T, y, p le long du pieu à 3 % près (test/psh.test.js).
+- **Effort tranchant des pieux :** section circulaire avec b_w = D et d = D/2 + 2 r_s/π ; BAEL A.5.1 ou EC2 § 6.2.
+- **Semelles sur plusieurs files :**
+  - bielles généralisées, tirant R (|x| − b/4)/h par pieu (identique à PP73 pour deux files) ;
+  - angle de bielle ≥ 45° ;
+  - contrôle en flexion au nu du fût.
+- **Non traités :**
+  - plastification du sol (réaction bornée à la pression de fluage) ;
+  - méthode de Blévot pour 3 ou 4 pieux ;
+  - frottement négatif et tassement du groupe (hors PSH) ;
+  - poussée des remblais sur les pieux.
+
 ## 2. Protocole de comparaison avec une note de référence
 
 ### 2.1 Référentiel Eurocodes — note CHAMOA-PSIDA (Cerema, guide technique, ch. 4)

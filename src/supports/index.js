@@ -10,6 +10,7 @@ import { designShaft, pierCap, buckling, chevetreTorsion } from './pier.js';
 import { gardeGreve, murEnRetour, earthPressure, earthPressureUpper, videCombos, dalleTransition, Ka } from './abutment.js';
 import { shallowFooting, footingStrutTie, pileCapStrutTie, pileGroupForces, menardReaction, lateralPile, pileMinSteel, pileCapacity, PILE_TYPES, pileCapTwoRows, paroiFlechie, sigmaSBAEL, pileConcrete, efficaciteCoherentF62, efficaciteEC7, isCohesive, soilProfile } from './foundation.js';
 import { requiredSteelNM } from './section_nm.js';
+import { winklerPile, pileGroup, headFlexibility, pileProfile, pileShear, pileCapFiles } from './psh.js';
 import { pierWater } from './water.js';
 import { bearingSpacing } from '../bearings.js';
 import { toPontEC8 } from '../ec8export.js';
@@ -80,8 +81,10 @@ export const SUPPORT_DEFAULTS = {
   // type : remblayee (mur de front), enterree (pile-culée noyée), apparente (pile-culée apparente, voile frontal hv sous le chevêtre) ;
   // dalle : dalle de transition appuyée sur le garde-grève
   culee: { type: 'remblayee', Hm: 3.0, em: 0.8, hGG: null, Lret: 4.0, nCol: 3, D: 0.8, hc: 1.0, lc: 1.6, hv: 1.0, dalle: true },
-  found: { type: 'superficielle', B: 3.0, hs: 1.0, De: 1.0, pileType: 'fore-boue', pileD: 0.8, nPile: 3, nFiles: 2, sPile: 2.4, Lpile: 15 },
-  soil: { layers: null, classe: 'sable-B', ple: 1.0, EM: 10, alpha: 0.5, phi: 30, gamma: 20, q: 10 },
+  // pieux : incl inclinaison de chaque file [°] (vers l'extérieur positive), tete encastre | articule, pied libre | encastre
+  found: { type: 'superficielle', B: 3.0, hs: 1.0, De: 1.0, pileType: 'fore-boue', pileD: 0.8, nPile: 3, nFiles: 2, sPile: 2.4, Lpile: 15, incl: [], tete: 'encastre', pied: 'libre' },
+  // kSus : module de réaction sous charges soutenues / module instantané (F62 C.5 : ½ ; PSH : au choix de l'utilisateur)
+  soil: { layers: null, classe: 'sable-B', ple: 1.0, EM: 10, alpha: 0.5, phi: 30, gamma: 20, q: 10, kSus: 0.5 },
   mat: { fck: 25, fyk: 400, c: 0.05 },
   eps: { TLD: 3e-4, TCD: 1e-4 },
   ec8: { zone: 3, categorie: 'III', classeSol: 'B' },
@@ -110,7 +113,52 @@ export function computeSupports(st, input = {}) {
   const Lv = sp.pile.Lv ?? width;
   const hGG = sp.culee.hGG ?? deck.h + 0.15 + Math.max(...bearings.rows.map(r => (r.sel ? r.sel.hTot : 60))) / 1000;
 
-  // --- rigidités horizontales (néoprène + fût console encastré ; fondation supposée rigide) ---
+  const soil = sp.soil;
+  // profils pressiométriques (sondages, couches depuis le terrain naturel), un profil associé à chaque ligne d'appui
+  // (liste « assign » : nom du profil par ligne ; à défaut le premier) ; sans profil : couche unique homogène
+  const profs = (soil.profiles && soil.profiles.length ? soil.profiles : [{ name: 'SP1', layers: soil.layers && soil.layers.length ? soil.layers : [{ z0: 0, z1: 100, classe: soil.classe, pl: soil.ple, EM: soil.EM, alpha: soil.alpha }] }])
+    .map(p => ({ name: p.name, tests: p.tests || [], ...soilProfile(p.layers) }));
+  const profileOf = i => profs.find(p => p.name === (soil.assign || [])[i]) || profs[0];
+
+  // --- fondations sur pieux : modèle PSH (semelle rigide, pieux de Winkler, matrice de rigidité du groupe) ---
+  const F0 = sp.found, onPiles = F0.type !== 'superficielle';
+  const nF0 = Math.max(1, F0.nFiles), nP0 = Math.max(1, F0.nPile), Dp = F0.pileD;
+  const Lfoot = i => (isEnd(i) ? width : (sp.pile.type === 'voile' ? Lv : width)) + 1.0;
+  const fileX = f => (nF0 === 1 ? 0 : (f - (nF0 - 1) / 2) * F0.sPile);
+  const fileOmega = f => { const a = (F0.incl || [])[f] ?? 0; return (fileX(f) < 0 ? -1 : 1) * a * Math.PI / 180; };
+  const pilesLong = Array.from({ length: nF0 }, (_, f) => Array.from({ length: nP0 }, () => ({ x: fileX(f), omega: fileOmega(f), file: f }))).flat();
+  const pilesTrans = i => Array.from({ length: nF0 }, () => Array.from({ length: nP0 }, (_, k2) => ({ x: Lfoot(i) * (2 * k2 + 1) / (2 * nP0) - Lfoot(i) / 2, omega: 0 }))).flat();
+  const pileE = code => { const pc = pileConcrete({ fc28: fck, D: Dp, L: F0.Lpile, type: F0.pileType }); const Ei = code === 'BAEL' ? pc.Ei : Ecm(Math.min(fck, 30)); return { pc, inst: Ei * 1000, sus: Ei * 1000 * (code === 'BAEL' ? 3700 / 11000 : 1 / 3) }; };
+  const kProf = (i, expo = 0) => { const prof = profileOf(i); return z => (z < expo ? 0 : menardReaction({ EM: prof.at(F0.De + z).EM * 1000, alpha: prof.at(F0.De + z).alpha, B: Dp }).k); };
+  const groupCache = new Map();
+  /** Groupes de pieux (longitudinal et transversal) pour la ligne i, le référentiel et la durée d'application. */
+  const groupsOf = (i, code, dur, expo = 0) => {
+    const key = `${profileOf(i).name}|${code}|${dur}|${expo.toFixed(3)}|${isEnd(i)}`;
+    if (groupCache.has(key)) return groupCache.get(key);
+    const E = pileE(code)[dur], k0 = kProf(i, expo), fk = dur === 'sus' ? (soil.kSus ?? 0.5) : 1;
+    const wp = winklerPile({ L: F0.Lpile, D: Dp, E, k: z => fk * k0(z), tip: F0.pied || 'libre' });
+    const opt = { head: F0.tete || 'encastre' };
+    const g = { wp, long: pileGroup(pilesLong, wp, opt), trans: pileGroup(pilesTrans(i), wp, opt), E };
+    groupCache.set(key, g); return g;
+  };
+  /** Tronçons de l'appui au-dessus de la semelle (fût, chevêtre) pour la souplesse de tête (sens longitudinal). */
+  const segmentsOf = (i, E) => {
+    if (isEnd(i)) {
+      const C = sp.culee;
+      if (C.type === 'remblayee') return [{ h: C.Hm, E, A: C.em * width, I: Infinity }];
+      return [{ h: C.Hm, E, A: C.nCol * Math.PI * C.D ** 2 / 4, I: C.nCol * Math.PI * C.D ** 4 / 64 }, ...(C.hc > 0 ? [{ h: C.hc, E, A: C.lc * width, I: width * C.lc ** 3 / 12 }] : [])];
+    }
+    const P = sp.pile, col = P.type === 'colonnes';
+    return [col ? { h: Hpile(i), E, A: P.nCol * Math.PI * P.D ** 2 / 4, I: P.nCol * Math.PI * P.D ** 4 / 64 } : { h: Hpile(i), E, A: Lv * P.b, I: Lv * P.b ** 3 / 12 },
+      ...(col && P.hc > 0 ? [{ h: P.hc, E, A: P.lc * width, I: width * P.lc ** 3 / 12 }] : [])];
+  };
+  /** Matrice de souplesse de la tête d'appui (N, M, T) — PSH. */
+  const headFlex = (i, code, dur) => {
+    const Eapp = (code === 'BAEL' ? (dur === 'inst' ? EiB(fck) : EvB(fck)) : (dur === 'inst' ? Ecm(fck) : Ecm(fck) / 3)) * 1000;
+    return headFlexibility({ group: groupsOf(i, code, dur).long, segments: segmentsOf(i, Eapp), hs: F0.hs });
+  };
+  // --- rigidités horizontales (néoprène + fût console encastré ; fondation sur pieux : souplesse de tête PSH, fondation
+  //     superficielle supposée rigide) ---
   const shaftI = i => {
     if (isEnd(i)) return sp.culee.type === 'remblayee' ? Infinity : sp.culee.nCol * Math.PI * sp.culee.D ** 4 / 64;
     return sp.pile.type === 'voile' ? Lv * sp.pile.b ** 3 / 12 : sp.pile.nCol * Math.PI * sp.pile.D ** 4 / 64;
@@ -124,7 +172,8 @@ export function computeSupports(st, input = {}) {
     return {
       x, bearing: { a, b, Te, n: r.nb },
       sNeo: { inst: neopreneFlexibility({ n: r.nb, a, b, Te, G: 1.8 }), diff: neopreneFlexibility({ n: r.nb, a, b, Te, G: 0.9 }) },
-      sApp: { inst: Number.isFinite(I) ? cantileverFlexibility({ H, E: Ei, I }) : 0, diff: Number.isFinite(I) ? cantileverFlexibility({ H, E: Ev, I }) : 0 },
+      sApp: onPiles ? { inst: headFlex(i, code, 'inst')[2][2], diff: headFlex(i, code, 'sus')[2][2] }
+        : { inst: Number.isFinite(I) ? cantileverFlexibility({ H, E: Ei, I }) : 0, diff: Number.isFinite(I) ? cantileverFlexibility({ H, E: Ev, I }) : 0 },
     };
   });
   const distB = horizontalDistribution(lineData('BAEL')), distE = horizontalDistribution(lineData('EC'));
@@ -195,12 +244,7 @@ export function computeSupports(st, input = {}) {
   });
 
   // --- éléments d'appui ---
-  const soil = sp.soil, KA = Ka(soil.phi);
-  // profils pressiométriques (sondages, couches depuis le terrain naturel), un profil associé à chaque ligne d'appui
-  // (liste « assign » : nom du profil par ligne ; à défaut le premier) ; sans profil : couche unique homogène
-  const profs = (soil.profiles && soil.profiles.length ? soil.profiles : [{ name: 'SP1', layers: soil.layers && soil.layers.length ? soil.layers : [{ z0: 0, z1: 100, classe: soil.classe, pl: soil.ple, EM: soil.EM, alpha: soil.alpha }] }])
-    .map(p => ({ name: p.name, tests: p.tests || [], ...soilProfile(p.layers) }));
-  const profileOf = i => profs.find(p => p.name === (soil.assign || [])[i]) || profs[0];
+  const KA = Ka(sp.soil.phi);
   const lines = xs.map((x, i) => {
     const end = isEnd(i), profile = profileOf(i), out = { i, x, kind: end ? 'culee' : 'pile', type: end ? sp.culee.type : sp.pile.type, head: heads[i], profile: profile.name };
     out.K = { BAEL: { inst: distB.K.inst[i], diff: distB.K.diff[i] }, EC: { inst: distE.K.inst[i], diff: distE.K.diff[i] } };
@@ -280,9 +324,13 @@ export function computeSupports(st, input = {}) {
       const Wsem = 25 * F.B * Lf * F.hs;
       const wl = water[i], dAff = wl ? wl.dAff : 0;
       // crue : Archimède sur la semelle (ρ g V), effort transversal combiné (glissement, effort par pieu), moment transversal
+      const armHead = end ? sp.culee.Hm + (sp.culee.type === 'remblayee' ? 0 : sp.culee.hc) : Hpile(i) + (sp.pile.type === 'colonnes' ? sp.pile.hc : 0);
       const fd = base.map(b => {
         const g = b.ls === 'ELU' && !b.vide ? gU : 1, Hy = b.Hyb || 0, wt = !!b.wat;
-        return { label: b.label, ls: b.ls, V: b.Nb + g * Wsem - (wt ? 10 * Wsem / 25 : 0), H: Math.hypot(b.Hb, wt ? Hy : 0), Hx: b.Hb, Hy, M: b.Mb + b.Hb * F.hs, My: (b.Myb || 0) + Hy * F.hs, crue: wt, vide: !!b.vide };
+        // part instantanée (trafic, freinage, TCD, séisme, chocs) des efforts au niveau des têtes de pieux (modèle PSH)
+        const Hi = (b.Hinst || 0) + (b.imp ? b.imp.F : 0), Vi = b.Nsus !== undefined && b.N !== undefined ? b.N - b.Nsus : 0;
+        const Mi = (b.Hinst || 0) * (armHead + F.hs) + (b.imp ? b.imp.F * (b.imp.h + F.hs) : 0);
+        return { label: b.label, ls: b.ls, V: b.Nb + g * Wsem - (wt ? 10 * Wsem / 25 : 0), H: Math.hypot(b.Hb, wt ? Hy : 0), Hx: b.Hb, Hy, M: b.Mb + b.Hb * F.hs, My: (b.Myb || 0) + Hy * F.hs, crue: wt, vide: !!b.vide, acc: !!b.acc, inst: { V: Vi, H: Hi, M: Mi } };
       });
       let found;
       if (F.type === 'superficielle') {
@@ -309,43 +357,47 @@ export function computeSupports(st, input = {}) {
         } else found.AsTransPerM = found.AsLong / Lf / 4;
         found.AsTransPerM = Math.max(found.AsTransPerM, 0.0012 * F.hs);
       } else {
-        const nF = Math.max(1, F.nFiles), nP = Math.max(1, F.nPile), D = F.pileD;
-        const xsP = []; for (let f = 0; f < nF; f++) for (let k = 0; k < nP; k++) xsP.push(nF === 1 ? 0 : (f - (nF - 1) / 2) * F.sPile);
-        // module de Ménard couche par couche le long du pieu (tête à la profondeur D_e de la base de semelle)
-        const kAt = z => { const l = profile.at(F.De + z); return menardReaction({ EM: l.EM * 1000, alpha: l.alpha, B: D }); };
-        const mr = { k: z => kAt(z).k, kLong: z => kAt(z).kLong }, kR = mr.k;
-        const kHead = kAt(0).k;
-        const pc = pileConcrete({ fc28: fck, D, L: F.Lpile, type: F.pileType });
-        const Ep = code === 'BAEL' ? pc.Ei : Ecm(Math.min(fck, 30));
-        // pieu de Winkler-Ménard : réponses linéaires unitaires. Deux files : tête encastrée dans la semelle (H seul) ;
-        // file unique : la semelle ne bloque pas la rotation longitudinale, chaque pieu reprend H/n et M/n en tête.
-        // enveloppe des modules de courte (freinage, TCD) et de longue durée (permanentes, retrait, TLD) : réponse la plus défavorable
-        const env = (a, b) => ({ M: a.M.map((m, i) => (Math.abs(m) >= Math.abs(b.M[i]) ? m : b.M[i])), Mmax: Math.max(a.Mmax, b.Mmax), y0: Math.max(Math.abs(a.y0), Math.abs(b.y0)) });
+        const nF = nF0, nP = nP0, D = Dp;
+        const xsP = pilesLong.map(p => p.x);
+        const kHead = kProf(i)(0);
+        const pc = pileE(code).pc;
         // crue : longueur de pieu dégagée sous la semelle par l'affouillement (sol sans réaction latérale ni frottement)
         const expo = wl ? Math.min(Math.max(0, dAff - F.De), 0.9 * F.Lpile) : 0;
-        const lats = ex => {
-          const kS = ex > 0 ? z => (z < ex ? 0 : kR(z)) : kR, kL = ex > 0 ? z => (z < ex ? 0 : mr.kLong(z)) : mr.kLong;
-          return {
-            latFix: env(lateralPile({ L: F.Lpile, D, E: Ep, k: kS, H: 1, fixedHead: true }), lateralPile({ L: F.Lpile, D, E: Ep, k: kL, H: 1, fixedHead: true })),
-            latH: env(lateralPile({ L: F.Lpile, D, E: Ep, k: kS, H: 1 }), lateralPile({ L: F.Lpile, D, E: Ep, k: kL, H: 1 })),
-            latM: env(lateralPile({ L: F.Lpile, D, E: Ep, k: kS, H: 0, M0: 1 }), lateralPile({ L: F.Lpile, D, E: Ep, k: kL, H: 0, M0: 1 })),
-          };
+        const G = { inst: groupsOf(i, code, 'inst'), sus: groupsOf(i, code, 'sus') };
+        const GW = expo > 0 ? { inst: groupsOf(i, code, 'inst', expo), sus: groupsOf(i, code, 'sus', expo) } : G;
+        const head = F0.tete || 'encastre';
+        /**
+         * Modèle PSH : efforts au niveau des têtes de pieux décomposés en part soutenue (modules différés du béton, k × kSus)
+         * et part instantanée ; plan longitudinal (V, M, H) ; plan transversal (H_y, M_y, part instantanée) ; superposition
+         * des déplacements, des efforts en tête et des profils le long des pieux (résultante des deux plans).
+         */
+        const analyse = f => {
+          const g = f.crue ? GW : G;
+          const sus = { V: f.V - f.inst.V, M: f.M - f.inst.M, H: f.Hx - f.inst.H };
+          const rI = g.inst.long.respond(f.inst.V, f.inst.M, f.inst.H), rS = g.sus.long.respond(sus.V, sus.M, sus.H);
+          const rT = (f.Hy || f.My) ? g.inst.trans.respond(0, f.My || 0, f.Hy || 0) : null;
+          const piles = rI.piles.map((pI, k) => {
+            const pS = rS.piles[k], pT = rT ? rT.piles[k] : null;
+            return { x: pI.x, omega: pI.omega, file: pilesLong[k].file, N: pI.N + pS.N + (pT ? pT.N : 0), Tlong: pI.T + pS.T, t: pI.t + pS.t, phi: pI.phi + pS.phi, a: pI.a + pS.a, pI, pS, pT };
+          });
+          // profils par file (pieux d'une file : mêmes déplacements dans le plan longitudinal) et profil transversal commun
+          const files = [...new Set(piles.map(p => p.file))].map(fi => {
+            const pk = piles.find(p => p.file === fi);
+            const prI = pileProfile(g.inst.wp, pk.pI.t, pk.pI.phi, head), prS = pileProfile(g.sus.wp, pk.pS.t, pk.pS.phi, head);
+            const prT = pk.pT ? pileProfile(g.inst.wp, pk.pT.t, pk.pT.phi, head) : null;
+            const prof = prI.map((q, j) => ({ z: q.z, M: q.M + prS[j].M, T: q.T + prS[j].T, y: q.y + prS[j].y, p: q.p + prS[j].p, Mt: prT ? prT[j].M : 0, Tt: prT ? prT[j].T : 0, yt: prT ? prT[j].y : 0 }));
+            const Ms = prof.map(q => Math.hypot(q.M, q.Mt)), Ts = prof.map(q => Math.hypot(q.T, q.Tt));
+            const jM = Ms.indexOf(Math.max(...Ms));
+            const Nf = piles.filter(p => p.file === fi).map(p => p.N);
+            return { file: fi, x: pk.x, omega: pk.omega, Nmax: Math.max(...Nf), Nmin: Math.min(...Nf), Mhead: Ms[0], Mmax: Ms[jM], zMmax: prof[jM].z, Tmax: Math.max(...Ts), y0: Math.hypot(prof[0].y, prof[0].yt), pmax: Math.max(...prof.map(q => Math.abs(q.p))), prof };
+          });
+          const cap = { u: rI.q[2] + rS.q[2], w: rI.q[0] + rS.q[0], theta: rI.q[1] + rS.q[1] };
+          return { files, piles, cap };
         };
-        const L0 = lats(0), LW = expo > 0 ? lats(expo) : L0;
-        // pieux d'une file répartis sur la longueur de semelle (sens transversal) : effet du moment transversal de crue
-        const ysP = Array.from({ length: nP }, (_, k2) => Lf * (2 * k2 + 1) / (2 * nP) - Lf / 2), sy2 = nF * ysP.reduce((a, y) => a + y * y, 0), yMax = Math.max(0, ...ysP);
         const rows = fd.map(f => {
-          const { latFix, latH, latM } = f.crue ? LW : L0;
-          const dNy = f.crue && sy2 > 0 ? Math.abs(f.My) * yMax / sy2 : 0;
-          const Hp = Math.abs(f.H) / xsP.length;
-          if (nF > 1) {
-            const Mhead = Math.abs(latFix.M[0]) * Hp;
-            const g = pileGroupForces({ N: f.V, M: Math.abs(f.M), xs: xsP, Mhead });
-            return { ...f, Nmax: Math.max(...g.N) + dNy, Nmin: Math.min(...g.N) - dNy, Hp, Mhead, Mmax: latFix.Mmax * Hp, y0: latFix.y0 * Hp };
-          }
-          const Mp = Math.abs(f.M) / xsP.length;
-          const Mz = latH.M.map((m, i) => Math.max(Math.abs(Hp * m + Mp * latM.M[i]), Math.abs(Hp * m - Mp * latM.M[i])));
-          return { ...f, Nmax: f.V / xsP.length + dNy, Nmin: f.V / xsP.length - dNy, Hp, Mhead: Mp, Mmax: Math.max(...Mz), y0: Math.abs(latH.y0 * Hp) + Math.abs(latM.y0 * Mp) };
+          const a = analyse(f);
+          return { ...f, psh: a, Nmax: Math.max(...a.files.map(x => x.Nmax)), Nmin: Math.min(...a.files.map(x => x.Nmin)), Hp: Math.abs(f.H) / xsP.length, Mhead: Math.max(...a.files.map(x => x.Mhead)),
+            Mmax: Math.max(...a.files.map(x => x.Mmax)), Tmax: Math.max(...a.files.map(x => x.Tmax)), y0: Math.max(...a.files.map(x => x.y0)), pmax: Math.max(...a.files.map(x => x.pmax)) };
         });
         const elu = rows.filter(r => r.ls === 'ELU' && !r.crue), els = rows.filter(r => r.ls === 'ELS' && !r.crue), eluAll = rows.filter(r => r.ls === 'ELU'), accR = rows.filter(r => r.ls === 'ACC');
         const shapeP = { D, c: 0.07, nBars: 12 };
@@ -372,7 +424,14 @@ export function computeSupports(st, input = {}) {
         const VmaxU = Math.max(...elu.map(r => r.V));
         const group = cap.applicable ? { Ce: Math.min(1, Ce), d: dP, ratio: VmaxU / (Math.min(1, Ce) * xsP.length * cap.Rcd) } : null;
         const sigSels = code === 'BAEL' ? sigmaSBAEL({ fe: fyk, fc28: fck, fiss: 'FTP' }) : 0.8 * fyk;
-        let tie = null, capBeam = null;
+        let tie = null, capBeam = null, capFiles = null;
+        // semelle sur n files : bielles généralisées (réaction par pieu de chaque file) et flexion au nu du fût ; ELU et ELS
+        if (nF >= 2) {
+          const filesOf = r => r.psh.files.map(fl => ({ x: fl.x, R: fl.Nmax }));
+          const env = (rs, fs) => rs.reduce((acc, r) => { const c = pileCapFiles({ files: filesOf(r), b: bWall, hs: F.hs, fsu: fs }); return !acc || c.A > acc.A || c.Abend > acc.Abend ? { ...c, A: Math.max(c.A, acc ? acc.A : 0), Abend: Math.max(c.Abend, acc ? acc.Abend : 0), label: r.label } : acc; }, null);
+          const cu = env(elu, fyk / 1.15), cs = env(els, sigSels);
+          capFiles = { ELU: cu, ELS: cs, A: Math.max(cu ? cu.A : 0, cs ? cs.A : 0), Abend: Math.max(cu ? cu.Abend : 0, cs ? cs.Abend : 0), perPileRow: nP };
+        }
         if (nF === 2) {
           const t = pileCapTwoRows({ RU: NmaxU, RS: NmaxS, l: F.sPile, b: bWall, hs: F.hs, D, fsu: fyk / 1.15, sigSels, nPiles: xsP.length });
           tie = { ...t, perCouple: t.A1, total: t.A1 * nP };
@@ -387,7 +446,15 @@ export function computeSupports(st, input = {}) {
           // voile unique sur une file : semelle + base du voile en paroi fléchie (PP73 1.3.2 § 4.4)
           if (nc === 0) capBeam.paroi = paroiFlechie({ l: Lf / nP, lNu: Lf / nP - D, travees: nP - 1, hs: F.hs, Hwall: end ? (sp.culee.type === 'remblayee' ? sp.culee.Hm : 0) : Hpile(i), Mt: bm.Mpos, Ma: bm.Mneg, fsu: fyk / 1.15 });
         }
-        found = { type: 'pieux', D, n: xsP.length, nF, nP, Lpile: F.Lpile, k: kHead, rows, NmaxU, NmaxS, NminU, As: Math.max(AsP, pileMinSteel({ D, code })), AsReq: AsP, Amin: pileMinSteel({ D, code }), cap, capRatio, NmaxA, group, scour, pileConc: pc, tie, capBeam, sigSels, hs: F.hs, hOk: F.hs >= Math.max(0.60, nF === 2 ? 1.4 * D : D) - 1e-9, hMin: Math.max(0.60, nF === 2 ? 1.4 * D : D), W: Wsem };
+        // effort tranchant des pieux (T max le long du pieu, résultante des deux plans)
+        const TmaxU = Math.max(0, ...eluAll.map(r => r.Tmax)), TmaxA = accR.length ? Math.max(...accR.map(r => r.Tmax)) : 0;
+        const shear = { ELU: pileShear({ V: TmaxU, D, As: Math.max(AsP, pileMinSteel({ D, code })), fck: code === 'BAEL' ? pc.fc : Math.min(fck, 30), fyk, code, gammaC: 1.65 }),
+          ACC: accR.length ? pileShear({ V: TmaxA, D, As: Math.max(AsP, pileMinSteel({ D, code })), fck: code === 'BAEL' ? pc.fc : Math.min(fck, 30), fyk, code, gammaC: 1.2 }) : null, TmaxU, TmaxA };
+        // sorties PSH : matrices de souplesse de la tête d'appui, cas dimensionnants (N max ELU, M max ELU, ELS)
+        const pick = (rs, key) => rs.reduce((a, r) => (!a || r[key] > a[key] ? r : a), null);
+        const psh = { flex: { inst: headFlex(i, code, 'inst'), sus: headFlex(i, code, 'sus') }, K: { inst: G.inst.long.K, sus: G.sus.long.K }, kSus: soil.kSus ?? 0.5, head, tip: F0.pied || 'libre',
+          gov: [['ELU — N max', pick(eluAll, 'Nmax')], ['ELU — M max', pick(eluAll, 'Mmax')], ['ELS — N max', pick(els, 'Nmax')], ...(accR.length ? [['ACC — M max', pick(accR, 'Mmax')]] : [])].filter(([, r]) => r) };
+        found = { type: 'pieux', D, n: xsP.length, nF, nP, Lpile: F.Lpile, k: kHead, rows, psh, shear, capFiles, NmaxU, NmaxS, NminU, As: Math.max(AsP, pileMinSteel({ D, code })), AsReq: AsP, Amin: pileMinSteel({ D, code }), cap, capRatio, NmaxA, group, scour, pileConc: pc, tie, capBeam, sigSels, hs: F.hs, hOk: F.hs >= Math.max(0.60, nF === 2 ? 1.4 * D : D) - 1e-9, hMin: Math.max(0.60, nF === 2 ? 1.4 * D : D), W: Wsem };
       }
       per[code] = { base, shaft: shaftRes, ...extra, found };
     }

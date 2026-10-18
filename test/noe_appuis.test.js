@@ -111,7 +111,8 @@ test('Chaîne complète : appuis calculés depuis le tablier, chapitre de la not
   const { formDefaults } = await import('../tools/formdefaults.mjs');
   const { parseData, compute } = await import('../src/pipeline.js');
   const { buildNote } = await import('../web/note.js');
-  for (const v of [{}, { ap_pileType: 'colonnes', ap_hc: '0.9', ap_culType: 'enterree', ap_found: 'pieux' }]) {
+  // profils symétriques pour la variante sur pieux (la souplesse PSH des fondations dépend du sondage)
+  for (const v of [{}, { ap_pileType: 'colonnes', ap_hc: '0.9', ap_culType: 'enterree', ap_found: 'pieux', ap_profAssign: 'SP1, SP2, SP2, SP1' }]) {
     const st = compute(parseData({ ...formDefaults(), ...v }));
     assert.equal(st.supportsError, null);
     const s = st.supports;
@@ -169,8 +170,11 @@ test('Appuis seuls (tablier quelconque) : réactions saisies, séisme, note', as
     ss_lines: ['1275;1275;710;650;900;50;900;600', ...Array(3).fill('2550;2550;1100;900;1300;80;1300;1000'), '1275;1275;710;650;900;50;900;600'].join('\n'),
     ap_pileH: '18.5', ap_pileB: '1.5', ap_pileLv: '8.5', ap_found: 'pieux', ap_nFiles: '1', ap_nPile: '3', ap_pileD: '1.2', ap_Lpile: '30', ap_seisme: 'on' };
   const st = computeStandalone(parseStandalone(d), parseSupports(d));
-  // appareils 4 × 400 × 400 × 4(12 + 3) sur culée rigide : K = 1/s_néoprène = 2173 t/m (note Noé : souplesse 0,4601·10⁻³ m/t)
-  rel(st.supports.distB.K.inst[0], 21735, 1e-3, 'K culée = K néoprène');
+  // appareils 4 × 400 × 400 × 4(12 + 3) : souplesse 0,4601·10⁻³ m/t (note Noé) ; culée sur pieux : + souplesse PSH de la
+  // fondation (mur rigide), K = 1/(s_néoprène + s_appui)
+  const sup = st.supports, f0 = sup.lines[0].BAEL.found.psh.flex.inst[2][2];
+  assert.ok(f0 > 0);
+  rel(sup.distB.K.inst[0], 1 / (1 / 21735 + f0), 1e-3, 'K culée = 1/(s néoprène + s fondation PSH)');
   assert.ok(st.supports.seisme && !st.supports.seisme.error);
   const note = supportsNote(st.supports, { ref: 'F61', standalone: true, spans: st.deck.spans });
   assert.ok(note.blocks.length > 10 && blocksToHTML(note.blocks).includes('Fondations'));
