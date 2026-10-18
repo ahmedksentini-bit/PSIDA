@@ -66,7 +66,7 @@
 <header>
   <div class="hrow"><h1>PSIDA</h1><span class="sub">calcul manuel assisté des ponts-dalles · Eurocodes et Fascicule 61 / BAEL · code ouvert</span>
     <span class="actions"><button type="submit" form="f" id="btn-calc">Calculer</button></span></div>
-  <nav class="tabs" role="tablist"><a href="#projet" role="tab" data-tab="projet">Projet</a><a href="#conception" role="tab" data-tab="conception">Conception</a><a href="#tablier" role="tab" data-tab="tablier">Tablier</a><a href="#ferraillage" role="tab" data-tab="ferraillage">Ferraillage</a><a href="#complements" role="tab" data-tab="complements">Compléments</a><a href="#poutres" role="tab" data-tab="poutres">Ponts à poutres</a><a href="#appuis" role="tab" data-tab="appuis">Appuis et fondations</a><a href="#retenue" role="tab" data-tab="retenue">Dispositifs de retenue</a><a href="#notes" role="tab" data-tab="notes">Notes de calcul</a></nav>
+  <nav class="tabs" role="tablist"><a href="#projet" role="tab" data-tab="projet">Projet</a><a href="#conception" role="tab" data-tab="conception">Conception</a><a href="#tablier" role="tab" data-tab="tablier">Tablier</a><a href="#ferraillage" role="tab" data-tab="ferraillage">Ferraillage</a><a href="#complements" role="tab" data-tab="complements">Compléments</a><a href="#poutres" role="tab" data-tab="poutres">Ponts à poutres</a><a href="#appuis" role="tab" data-tab="appuis">Appuis et fondations</a><a href="#seisme" role="tab" data-tab="seisme">Calcul sismique</a><a href="#retenue" role="tab" data-tab="retenue">Dispositifs de retenue</a><a href="#notes" role="tab" data-tab="notes">Notes de calcul</a></nav>
   <pre id="error"></pre>
 </header>
 <form id="f" class="app" novalidate>
@@ -381,6 +381,7 @@ e 18 33 2.7 1.6
         <label>Classe de sol EC8<select name="ap_solEC8"><option value="A">A</option><option value="B" selected>B</option><option value="C">C</option><option value="D">D</option><option value="E">E</option></select></label>
       </div>
       <label><input type="checkbox" name="ap_seisme">Séisme (EN 1998-2, mode fondamental — moteur de Pont EC8) : combinaison sismique des fûts et fondations</label>
+      <label>Efforts sismiques retenus<select name="ap_seismeSrc"><option value="auto">calculés ici sur le projet PSIDA (zone, classe de sol et q ci-dessous)</option><option value="onglet">reçus de l'onglet « Calcul sismique » (projet Pont EC8, modifiable)</option></select></label>
       <div class="row">
         <label>Coefficient de comportement q longitudinal / transversal<div class="row"><input name="ap_qL" value="1" type="number" step="any"><input name="ap_qT" value="1" type="number" step="any"></div></label>
         <label>Choc de véhicule sur les piles (EN 1991-1-7 tab. 4.1)<select name="ap_choc"><option value="aucun">aucun</option><option value="autoroute">autoroute, route nationale ou principale (1000 / 500 kN)</option><option value="rurale">route de campagne (750 / 375 kN)</option><option value="urbaine">voie urbaine (500 / 250 kN)</option><option value="parking">cour, parking poids lourds (150 / 75 kN)</option></select></label>
@@ -427,6 +428,13 @@ e 18 33 2.7 1.6
     <div class="card full-only" id="card-supports"><div class="toolbar"><h2 style="margin:0;flex:1">Appuis et fondations</h2><select id="supports-ref" style="width:auto;margin:0;padding:7px"><option value="F61">Fascicule 61 / BAEL / F62-V</option><option value="EC">Eurocodes</option></select><button type="button" id="btn-sup-note" style="width:auto;margin:0 0 0 6px;padding:8px 14px">Note appuis (HTML)</button><button type="button" id="btn-sup-docx" style="width:auto;margin:0 0 0 6px;padding:8px 14px">Note appuis (Word)</button><button type="button" id="btn-ec8" style="width:auto;margin:0 0 0 6px;padding:8px 14px">Exporter vers Pont EC8</button></div><p class="small">Séisme (case à cocher dans les données) : calculé ici par le moteur de Pont EC8 (EN 1998-2, mode fondamental). « Exporter vers Pont EC8 » ouvre le même projet dans Pont EC8 pour la note sismique complète (appareils, repos d'appui, joints).</p><div id="supports-tables"></div></div>
     </div>
   </div>
+</section>
+<section class="tab" id="tab-seisme">
+  <div class="card"><h2>Calcul sismique — Pont EC8 (EN 1998-2, arrêté du 26 octobre 2011)</h2>
+    <p class="small">Application Pont EC8 complète : projet, action sismique, modèle, analyse, vérifications des appareils d'appui et des appuis, référentiel et note. « Envoyer le projet PSIDA » y charge le tablier, les appuis et les appareils d'appui du dernier calcul (pont-dalle, ponts à poutres ou appuis seuls) avec la zone, la catégorie, la classe de sol et q de l'onglet Appuis. Les efforts par appui calculés ici sont transmis à « Appuis et fondations » quand la source « onglet Calcul sismique » y est choisie (relancer alors le calcul). Le projet de cet onglet est conservé dans le navigateur.</p>
+    <div class="toolbar"><button type="button" id="btn-ec8-send" style="width:auto;margin:0;padding:8px 14px">Envoyer le projet PSIDA</button><button type="button" id="btn-ec8-apply" style="width:auto;margin:0 0 0 6px;padding:8px 14px">Utiliser ces efforts dans Appuis et fondations</button><span id="ec8-status" class="small" style="margin-left:10px"></span></div>
+  </div>
+  <iframe id="ec8-frame" title="Pont EC8" data-src="web/ec8/index.html" style="width:100%;height:calc(100vh - 150px);min-height:640px;border:1px solid var(--line, #d7dce3);border-radius:8px;background:#fff"></iframe>
 </section>
 <section class="tab" id="tab-retenue">
   <div class="cols">
@@ -488,8 +496,8 @@ e 18 33 2.7 1.6
   </div>
 </section>
 </form>
-<script src="./web/tabs.js?v=0.18.1"></script>
-<script type="module">import('./web/app.js?v=0.18.1').catch(e => { const el = document.getElementById('error'); if (el) el.textContent = 'Le calcul n\'a pas pu se charger (' + e.message + '). Recharger la page sans cache (Ctrl+F5) ; si le problème persiste, le signaler.'; });</script>
+<script src="./web/tabs.js?v=0.19"></script>
+<script type="module">import('./web/app.js?v=0.19').catch(e => { const el = document.getElementById('error'); if (el) el.textContent = 'Le calcul n\'a pas pu se charger (' + e.message + '). Recharger la page sans cache (Ctrl+F5) ; si le problème persiste, le signaler.'; });</script>
 <noscript><p style="padding:16px">PSIDA nécessite JavaScript.</p></noscript>
 </body>
 </html>

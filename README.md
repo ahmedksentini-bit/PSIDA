@@ -121,6 +121,16 @@ Chaque résultat de cas de charge contient, par section de calcul (tous les L/20
 Les hypothèses détaillées et les points à confronter aux notes CHAMOA / PSIDA sont dans
 [docs/hypotheses.md](docs/hypotheses.md) ; la méthode complète, avec les formules à refaire à la main, est dans [docs/methode.md](docs/methode.md).
 
+## Calcul sismique — Pont EC8 intégré (`ec8/`, `web/ec8/`)
+
+L'application Pont EC8 (dépôt ouvpara) est intégrée en entier : sources dans `ec8/` (React + TypeScript, tests du moteur dans `ec8/tests`), version compilée servie par l'onglet « Calcul sismique » dans `web/ec8/` (site statique, aucune compilation au déploiement).
+
+- **PSIDA → Pont EC8 :** « Envoyer le projet PSIDA » charge le projet issu du dernier calcul (`src/ec8export.js`).
+- **Pont EC8 → PSIDA :** à chaque modification, l'onglet renvoie les efforts par appui (`ec8/src/ui/psida.ts`, postMessage). « Appuis et fondations » les retient quand la source « onglet Calcul sismique » est choisie. Le nombre de lignes d'appui et les travées sont contrôlés.
+- **Recompiler après une modification de `ec8/src` :**
+  - application : `cd ec8 && npm install && npm run build:psida` ;
+  - moteur utilisé pour le calcul automatique (`src/vendor/pont-ec8.js`) : `npx esbuild <entrée exportant lireProjet, valider, actionSismique, modele, analyse, verifierAppuis, exporterEfforts> --bundle --format=esm --outfile=src/vendor/pont-ec8.js`.
+
 ## Déploiement (GitHub → Cloudflare Pages)
 
 1. Pousser le dépôt sur GitHub.

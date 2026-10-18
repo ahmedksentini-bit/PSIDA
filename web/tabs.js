@@ -3,7 +3,7 @@
  * Adresse : #onglet ou #onglet/d=<données du formulaire>.
  */
 (function () {
-  var TABS = ['projet', 'conception', 'tablier', 'ferraillage', 'complements', 'poutres', 'appuis', 'retenue', 'notes'];
+  var TABS = ['projet', 'conception', 'tablier', 'ferraillage', 'complements', 'poutres', 'appuis', 'seisme', 'retenue', 'notes'];
   var current = 'projet';
   function hashTab() { return location.hash.slice(1).split('/')[0]; }
   function hashData() { var m = location.hash.match(/(?:^#|\/)d=(.+)$/); return m ? m[1] : null; }
@@ -14,6 +14,7 @@
     for (var i = 0; i < secs.length; i++) secs[i].classList.toggle('active', secs[i].id === 'tab-' + id);
     var as = document.querySelectorAll('nav.tabs a');
     for (var j = 0; j < as.length; j++) as[j].setAttribute('aria-selected', String(as[j].getAttribute('data-tab') === id));
+    if (id === 'seisme') { var fr = document.getElementById('ec8-frame'); if (fr && !fr.getAttribute('src')) fr.setAttribute('src', fr.getAttribute('data-src') + '?v=' + '0.19'); }
     if (push !== false) { var d = hashData(); history.replaceState(null, '', '#' + id + (d ? '/d=' + d : '')); }
     requestAnimationFrame(function () {
       var plots = document.querySelectorAll('#tab-' + id + ' .plot');

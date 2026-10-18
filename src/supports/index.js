@@ -40,6 +40,19 @@ export function seismicActions(st, sp, hGG) {
   return { projet, problemes, efforts: EC8.exporterEfforts(projet, a, r), T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T }, F: { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 }, M: r.M, conditions: r.conditions };
 }
 
+/**
+ * Efforts reçus de l'onglet « Calcul sismique » (Pont EC8 complet, projet éventuellement modifié par l'utilisateur) :
+ * même format que seismicActions ; contrôle du nombre de lignes d'appui.
+ */
+export function externalSeismic(ext, nL, spans = null) {
+  if (!ext || !ext.efforts) return { error: 'aucun effort reçu de l\'onglet « Calcul sismique » : y envoyer le projet (ou l\'ouvrir), puis relancer le calcul.' };
+  const n = ext.efforts.appuis.length;
+  if (n !== nL) return { error: `le projet de l'onglet « Calcul sismique » a ${n} lignes d'appui, l'ouvrage PSIDA en a ${nL} : renvoyer le projet PSIDA vers l'onglet.` };
+  if (spans && ext.travees && (ext.travees.length !== spans.length || ext.travees.some((L, k) => Math.abs(L - spans[k]) > 0.05)))
+    return { error: `les travées du projet de l'onglet « Calcul sismique » (${ext.travees.join(' + ')} m) ne sont pas celles de l'ouvrage PSIDA (${spans.join(' + ')} m) : renvoyer le projet PSIDA vers l'onglet.` };
+  return { ...ext, problemes: ext.problemes || [], source: 'onglet' };
+}
+
 /** Valeurs par défaut du formulaire « Appuis et fondations ». */
 export const SUPPORT_DEFAULTS = {
   pile: { type: 'voile', H: [6], b: 0.6, Lv: null, nCol: 3, D: 0.8, hc: 0, lc: 1.2 },
@@ -49,7 +62,7 @@ export const SUPPORT_DEFAULTS = {
   mat: { fck: 25, fyk: 400, c: 0.05 },
   eps: { TLD: 3e-4, TCD: 1e-4 },
   ec8: { zone: 3, categorie: 'III', classeSol: 'B' },
-  seisme: { actif: false, q: { long: 1, trans: 1 } },
+  seisme: { actif: false, source: 'auto', externe: null, q: { long: 1, trans: 1 } },
   choc: { vehicule: 'aucun', hV: 1.25, bateau: 'aucun', hB: 2.0 },
   // cours d'eau (crue de projet) : h hauteur d'eau PHE − lit, v vitesse moyenne, theta biais du courant sur l'axe des piles,
   // nez forme de l'avant-bec, K3 état du lit, hGen affouillement général + de contraction, hDeb/bDeb radeau d'embâcles,
@@ -99,7 +112,10 @@ export function computeSupports(st, input = {}) {
   const RF = Math.max(0, st.p.concept.epsSlow ?? 2.5e-4), epsT = 1e-5 * (st.p.concept.dTu ?? 30);
   const R = (res, i) => (res ? Math.max(0, res.Rmax[i]) : 0);
   let seisme = null;
-  if (sp.seisme.actif) { try { seisme = seismicActions(st, sp, hGG); } catch (e) { seisme = { error: e.message }; } }
+  if (sp.seisme.actif) {
+    if (sp.seisme.source === 'onglet') seisme = externalSeismic(sp.seisme.externe, nL, deck.spans);
+    else { try { seisme = seismicActions(st, sp, hGG); } catch (e) { seisme = { error: e.message }; } }
+  }
   const accidental = (i, Nfreq) => {
     const out = [];
     if (seisme && seisme.efforts) {

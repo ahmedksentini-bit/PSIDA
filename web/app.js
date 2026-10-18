@@ -45,7 +45,10 @@ const cell = v => `<td class="${v < -0.05 ? 'neg' : ''}">${fmt(v)}</td>`;
 let state = null, lastSearch = null;
 
 // « 10 @ -5.85 k 0.8/1.2 » → { g, e, kmin, kmax } ; « 1.92 sur -5,5 k 0.8/1.4 » → { q, y1, y2, kmin, kmax }
-function parseForm(form) { return parseData(Object.fromEntries(new FormData(form).entries())); }
+function parseForm(form) { const p = parseData(Object.fromEntries(new FormData(form).entries())); withEC8(p.supports); return p; }
+// --- onglet « Calcul sismique » (Pont EC8 en iframe) : efforts reçus, envoi du projet ---
+let ec8Data = null, ec8Pending = null;
+function withEC8(sup) { if (sup && sup.seisme) sup.seisme.externe = ec8Data; return sup; }
 
 const badge = lv => `<span class="badge ${lv}">${lv === 'ok' ? 'OK' : lv === 'warn' ? 'ATTENTION' : 'INFO'}</span>`;
 
@@ -406,7 +409,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.18.1', hSearch: lastSearch });
+    const html = await buildReport({ ...state, version: '0.19', hSearch: lastSearch });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -443,7 +446,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.18.1' }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.19' }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -494,12 +497,12 @@ $('#btn-standalone').addEventListener('click', () => {
   setMode('supports'); goTab('appuis');
   try {
     const d = Object.fromEntries(new FormData($('#f')).entries());
-    state = computeStandalone(parseStandalone(d), parseSupports(d));
+    state = computeStandalone(parseStandalone(d), withEC8(parseSupports(d)));
     renderSupports(state); $('#error').textContent = '';
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.18.1', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.19', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));
@@ -517,7 +520,7 @@ $('#btn-sup-docx').addEventListener('click', async () => {
 $('#btn-ec8').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul complet.'; return; }
   try {
-    const j = toPontEC8(state, { site: state.p.supports.ec8 });
+    const sp = state.supports.sp, j = toPontEC8(state, { site: sp.ec8, q: sp.seisme.q });
     const aEl = document.createElement('a');
     aEl.href = URL.createObjectURL(new Blob([JSON.stringify(j, null, 2)], { type: 'application/json' }));
     aEl.download = `pont-ec8-${state.deck.spans.join('-')}.json`; aEl.click();
@@ -552,3 +555,38 @@ $('#btn-chamoa').addEventListener('click', () => {
   $('#hs-min').value = ''; $('#hs-max').value = '';
   renderScheme();
 });
+
+// Onglet « Calcul sismique » : Pont EC8 complet dans une iframe (même origine), échanges par postMessage.
+const ec8Frame = () => $('#ec8-frame');
+function ec8Post(projet) {
+  const fr = ec8Frame();
+  if (!fr.getAttribute('src') || !fr.contentWindow) { ec8Pending = projet; goTab('seisme'); return; }
+  fr.contentWindow.postMessage({ source: 'psida', type: 'projet', projet }, location.origin);
+}
+function ec8Status() {
+  const el = $('#ec8-status'); if (!el) return;
+  if (!ec8Data) { el.textContent = 'Aucun effort reçu.'; return; }
+  const a = ec8Data.efforts.appuis.length;
+  el.textContent = `Efforts reçus (${new Date(ec8Data.date).toLocaleTimeString('fr-FR')}) : « ${ec8Data.nom} », ${a} lignes d'appui, T = ${ec8Data.T.x.toFixed(2)} / ${ec8Data.T.y.toFixed(2)} s, F = ${Math.round(ec8Data.F.x)} / ${Math.round(ec8Data.F.y)} kN${ec8Data.problemes.length ? ` — ${ec8Data.problemes.length} alerte(s)` : ''}.`;
+}
+window.addEventListener('message', ev => {
+  if (ev.origin !== location.origin || !ev.data || ev.data.source !== 'pont-ec8') return;
+  if (ev.data.type === 'pret' && ec8Pending) { const p = ec8Pending; ec8Pending = null; ec8Post(p); }
+  else if (ev.data.type === 'efforts') { ec8Data = ev.data; ec8Status(); }
+  else if (ev.data.type === 'erreur') { $('#ec8-status').textContent = 'Pont EC8 : ' + ev.data.message; }
+});
+$('#btn-ec8-send').addEventListener('click', () => {
+  if (!state || !state.supports || !state.supports.sp) { $('#ec8-status').textContent = 'Lancer d\'abord un calcul avec appuis (Calculer, appuis seuls ou ponts à poutres → appuis).'; return; }
+  try {
+    const sp = state.supports.sp;
+    ec8Post(toPontEC8(state, { nom: `PSIDA — ${state.deck.spans.join(' + ')} m`, site: sp.ec8, q: sp.seisme.q }));
+    $('#ec8-status').textContent = 'Projet PSIDA envoyé.';
+  } catch (e) { $('#ec8-status').textContent = 'Envoi impossible : ' + e.message; }
+});
+$('#btn-ec8-apply').addEventListener('click', () => {
+  if (!ec8Data) { $('#ec8-status').textContent = 'Aucun effort reçu : envoyer le projet ou modifier le projet de l\'onglet.'; return; }
+  const f = $('#f'); f.ap_seisme.checked = true; f.ap_seismeSrc.value = 'onglet';
+  if (state && state.standalone) $('#btn-standalone').click(); else f.requestSubmit();
+  goTab('appuis');
+});
+ec8Status();

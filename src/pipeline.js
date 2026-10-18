@@ -116,7 +116,7 @@ export function parseSupports(d) {
     mat: { fck: v('ap_fck', +d.fck || 25), fyk: v('ap_fyk', +d.fyk || 400), c: v('ap_c', 0.05) },
     eps: { TLD: v('ap_TLD', 3e-4), TCD: v('ap_TCD', 1e-4) },
     ec8: { zone: v('ap_zone', 3), categorie: d.ap_catEC8 || 'III', classeSol: d.ap_solEC8 || 'B' },
-    seisme: { actif: !!d.ap_seisme, q: { long: v('ap_qL', 1), trans: v('ap_qT', 1) } },
+    seisme: { actif: !!d.ap_seisme, source: d.ap_seismeSrc || 'auto', q: { long: v('ap_qL', 1), trans: v('ap_qT', 1) } },
     choc: { vehicule: d.ap_choc || 'aucun', hV: v('ap_hV', 1.25), bateau: d.ap_bateau || 'aucun', hB: v('ap_hB', 2.0) },
     eau: { actif: !!d.ap_eau, h: v('ap_hEau', 3), v: v('ap_vEau', 2), theta: v('ap_thEau', 0), nez: d.ap_nez || 'rond', K3: v('ap_K3', 1.1), hGen: v('ap_hGen', 0), hDeb: v('ap_hDeb', 0), bDeb: v('ap_bDeb', 0),
       appuis: String(d.ap_eauLignes || '').split(/[,;\s]+/).filter(Boolean).map(Number).filter(Number.isFinite) },

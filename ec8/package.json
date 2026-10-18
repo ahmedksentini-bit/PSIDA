@@ -1,0 +1,35 @@
+{
+  "name": "pont-ec8",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Calcul parasismique des ponts selon l'Eurocode 8 et l'arrêté du 26 octobre 2011, avec note de calcul détaillée et références au paragraphe près.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:psida": "tsc --noEmit && vite build --outDir ../web/ec8 --emptyOutDir",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"tests/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@react-three/drei": "10.7.9",
+    "@react-three/fiber": "9.8.1",
+    "katex": "0.19.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/three": "0.186.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "typescript": "6.0.3",
+    "vite": "8.3.2"
+  }
+}

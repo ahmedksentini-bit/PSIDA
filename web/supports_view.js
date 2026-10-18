@@ -41,14 +41,14 @@ export function supportsBlocks(sup, ref = 'F61') {
   comment(`Souplesse d'une ligne = souplesse des appareils en élastomère fretté T_e/(n G a b) (G = 1,8 MPa instantané, 0,9 MPa différé ; T_e enrobages compris) + souplesse du fût console H³/(3EI) (${isF ? 'E_i = 11 000 f_c28^(1/3), E_v = 3 700 f_c28^(1/3)' : 'E_cm, E_cm/3 en différé'}) ; fondation supposée rigide, culée remblayée rigide. Freinage réparti au prorata des rigidités instantanées ; déformations imposées ε : H_i = K_i ε (x₀ − x_i), centre de déformation x₀ = ${F2(dist.x0.diff)} m (différé) / ${F2(dist.x0.inst)} m (instantané) ; ε retrait + fluage = ${F(sup.eps.RF * 1e4, 2)}·10⁻⁴${isF ? `, TLD ${F(sup.eps.TLD * 1e4, 1)}·10⁻⁴ (K différé), TCD ${F(sup.eps.TCD * 1e4, 1)}·10⁻⁴ (K instantané)` : `, température α ΔT_N = ${F(sup.eps.T * 1e4, 1)}·10⁻⁴`}. ${isF ? `Freinage Fascicule 61 : A(l) H = A·S/(20 + 0,0035 S) = ${F0(sup.braking.F61.A)} kN (S = ${F0(sup.braking.F61.S)} m²) ; Bc un camion de 300 kN.` : `Freinage EN 1991-2 § 4.4.1 : Q_lk = ${F0(sup.braking.EC)} kN (groupe gr2).`}`);
 
   if (sup.seisme) {
-    h2('Séisme — EN 1998-2, méthode du mode fondamental (moteur de Pont EC8)');
+    h2(`Séisme — EN 1998-2, méthode du mode fondamental (${sup.seisme.source === 'onglet' ? 'onglet « Calcul sismique » : Pont EC8 complet' : 'moteur de Pont EC8, projet PSIDA'})`);
     if (sup.seisme.error) para(`Calcul sismique impossible : ${sup.seisme.error}`);
     else {
-      const sz = sup.sp.ec8;
+      const sz = sup.seisme.site || sup.sp.ec8, qq = sup.seisme.q || sup.sp.seisme.q;
       table(['Grandeur', 'Longitudinal (X)', 'Transversal (Y)'], [
         ['Période T (propriétés inférieures des élastomères) [s]', F3(sup.seisme.T.x), F3(sup.seisme.T.y)],
         ['Effort sismique total (propriétés supérieures) [kN]', F0(sup.seisme.F.x), F0(sup.seisme.F.y)],
-        ['Coefficient de comportement q', F2(sup.sp.seisme.q.long), F2(sup.sp.seisme.q.trans)],
+        ['Coefficient de comportement q', F2(qq.long), F2(qq.trans)],
       ]);
       table(['Ligne', 'X + 0,3 Y + 0,3 Z : F_x / F_y / F_z [kN]', '0,3 X + Y + 0,3 Z', '0,3 X + 0,3 Y + Z', 'Déplacement tête / appareils X [cm]'], sup.seisme.efforts.appuis.map((a, i) => [lineName(Ls[i], n), ...a.cas.map(k => `${F0(k.Fx)} / ${F0(k.Fy)} / ${F0(k.Fz)}`), `${F2(a.dTete.x * 100)} / ${F2(a.dAppareils.x * 100)}`]), { small: true });
       comment(`Zone ${sz.zone}, catégorie d'importance ${sz.categorie}, sol de classe ${sz.classeSol} (arrêté du 26 octobre 2011, NF EN 1998-1/NA et 1998-2/NA) ; masse ${F0(sup.seisme.M)} t ; tablier rigide, efforts répartis selon les raideurs (appareils et fûts), propriétés limites des élastomères, combinaison des directions 100/30/30, réactions verticales forfaitaires (guide Cerema « Ponts en zone sismique », 2015). Combinaison sismique G + ψ₂,₁ Q + A_Ed (ψ₂,₁ = 0), matériaux en situation accidentelle (γ_b = 1,15 BAEL / γ_c = 1,2 EC2, γ_s = 1,0), portance des fondations ELU accidentel. Non pris en compte : inertie propre des fûts, surpoussée dynamique des terres sur les culées (Mononobe-Okabe), dispositions de ductilité ; la note sismique complète (appareils, repos d'appui, joints) s'obtient dans Pont EC8 par l'export du projet.${sup.seisme.problemes.length ? ' Alertes de Pont EC8 : ' + sup.seisme.problemes.map(p => `${p.cible} : ${p.message}`).join(' ; ') : ''}`);
