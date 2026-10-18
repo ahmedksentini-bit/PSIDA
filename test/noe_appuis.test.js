@@ -111,8 +111,8 @@ test('Chaîne complète : appuis calculés depuis le tablier, chapitre de la not
   const { formDefaults } = await import('../tools/formdefaults.mjs');
   const { parseData, compute } = await import('../src/pipeline.js');
   const { buildNote } = await import('../web/note.js');
-  // profils symétriques pour la variante sur pieux (la souplesse PSH des fondations dépend du sondage)
-  for (const v of [{}, { ap_pileType: 'colonnes', ap_hc: '0.9', ap_culType: 'enterree', ap_found: 'pieux', ap_profAssign: 'SP1, SP2, SP2, SP1' }]) {
+  // profils symétriques (la souplesse des fondations — pieux PSH ou rotation des semelles — dépend du sondage)
+  for (const v of [{ ap_profAssign: 'SP1, SP2, SP2, SP1' }, { ap_pileType: 'colonnes', ap_hc: '0.9', ap_culType: 'enterree', ap_found: 'pieux', ap_profAssign: 'SP1, SP2, SP2, SP1' }]) {
     const st = compute(parseData({ ...formDefaults(), ...v }));
     assert.equal(st.supportsError, null);
     const s = st.supports;

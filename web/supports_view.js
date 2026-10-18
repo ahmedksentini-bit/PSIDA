@@ -152,6 +152,10 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
     }
     comment('Valeurs de couche tirées des essais (« - » dans la saisie) : p*_l moyenne géométrique, E_M moyenne harmonique des essais de la couche (à défaut, essai le plus proche du milieu de couche) ; α de Ménard selon la nature et E_M/p*_l (F62 V annexe C.5). Repères pointillés du rapport E_M/p*_l par nature (argile 9 et 16, limon 8 et 14, grave 6 et 10, autres 7 et 12). Zones bleues : sol sollicité par les fondations des lignes rattachées au sondage.');
   }
+  if (fType === 'superficielle' && sup.footRot) {
+    table(['Ligne', 'k_v (long terme) [kN/m³]', 'k_i = 2 k_v [kN/m³]', 'K_θ diff. / inst. [kN·m/rad]'], Ls.map((L, i) => { const r = sup.footRot[i][code]; return [lineName(L, n), F0(r.kv), F0(r.ki), `${F0(r.Ktheta.diff)} / ${F0(r.Ktheta.inst)}`]; }), { small: true });
+    comment('Rotation des semelles superficielles sur le sol dans la répartition des efforts horizontaux : module de réaction de Ménard 1/k_v = α B λ_c/(9 E_c) + 2 B₀ (λ_d B/B₀)^α/(9 E_d), k_i = 2 k_v (F62 annexe F.3), K_θ = k L B³/12, souplesse ramenée en tête h²/K_θ.');
+  }
   if (fType === 'superficielle') {
     table(['Ligne', 'p*_le [MPa] ; D_e [m] ; k_p (assise)', 'Semelle B × L × h [m]', 'V/R_v max', 'H/R_h max (ELU)', 'Excentrement', 'Bielles d ≥ (B − b)/4 ; e ≤ B/6', 'A_s // B [cm²]', 'A_s ⊥ B [cm²/m]'], Ls.map(L => { const f = L[code].found; const w = f.checks.reduce((a, k) => (k.ratioV > a.ratioV ? k : a), f.checks[0]); return [lineName(L, n), `${F2(w.ple)} ; ${F2(w.De)} ; ${F2(w.kp)} (${w.classe})`, `${F2(f.B)} × ${F2(f.L)} × ${F2(f.hs)}`, `${F2(f.worstV)} ${ok(f.worstV)}`, `${F2(f.worstH)} ${ok(f.worstH)}`, f.excOk ? 'OK' : 'NON', `${f.bielles.dOk ? 'OK' : 'NON'} ; ${f.bielles.eOk ? 'OK' : 'NON (calcul en console)'}`, CM(f.AsLong), CM(f.AsTransPerM)]; }));
     comment(isF ? 'Fascicule 62 titre V (annexes B.1, B.2, E.2, F.1) : p*_le moyenne géométrique de p*_l sur [D ; D + 1,5 B], D_e = (1/p*_le)∫p*_l dz, classe de la couche d\'assise ; k_p = k₀[1 + a(0,6 + 0,4 B/L) D_e/B] selon la classe de sol (D_e/B ≤ 2,5) ; q\'_ref = (3 q_max + q_min)/4 ≤ i_δβ k_p p*_le/γ_q + q\'_0 (γ_q = 2 ELU, 3 ELS rares), i_δβ = Φ₁(δ) (sols cohérents) ou Φ₂(δ, D_e/B) (sols frottants) ; surface comprimée ≥ 10 % (ELU), 75 % (ELS rares) ; glissement (ELU) V tan φ\'/1,2 + c\'A\'/1,5 (c\' ≤ 75 kPa). Ferraillage par bielles A = N\'(B − b)/(8 d f_su), N\' = N(1 + 3e/B), minimum 0,12 % par nappe (PP73 1.1.1). Combinaisons fréquentes (sol entièrement comprimé) non vérifiées.'
@@ -181,6 +185,37 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
       const pts = fl.prof.filter((_, j) => j % step === 0 || j === fl.prof.length - 1);
       B.push({ t: 'p', text: `${lineName(L, n)} — profil du pieu le plus sollicité (file ${fl.file + 1}, ${r.label}) :` });
       table(['z [m]', 'M long. [kN·m]', 'T long. [kN]', 'y long. [mm]', 'p [kPa]', ...(pts.some(q => q.Mt) ? ['M transv. [kN·m]', 'T transv. [kN]'] : [])], pts.map(q => [F1(q.z), F1(q.M), F1(q.T), F2(q.y * 1000), F1(q.p), ...(pts.some(x => x.Mt) ? [F1(q.Mt), F1(q.Tt)] : [])]), { small: true });
+    }
+    // --- compléments : plastification du sol, remblai, frottement négatif, tassement, Blévot ---
+    const plRows = Ls.filter(L => L[code].found.plast && L[code].found.plast.nodes > 0);
+    if (plRows.length) table(['Ligne', 'Combinaison', 'Nœuds au palier', 'Profondeur plastifiée [m]', 'Itérations'], plRows.map(L => { const p = L[code].found.plast; return [lineName(L, n), p.label, String(p.nodes), `0 – ${F2(p.zMax)}`, String(p.iterations)]; }), { small: true });
+    comment(`Réaction frontale du sol (F62 annexe C.5 ; NF P 94-262 annexe I) : module k = E_s/B de Ménard, palier r ≤ B p*_f (p*_f du sondage : 7e colonne des couches, essais, à défaut p*_l/2), minoration près de la surface 0,5 (1 + z/z_c) sur le module et le palier, z_c = 2B (sols cohérents) ou 4B (frottants). ${plRows.length ? 'Le palier est atteint pour les combinaisons ci-dessus : modules sécants itérés nœud par nœud (réduction commune aux pieux du groupe, déterminée par le plus sollicité).' : 'Le palier n\'est atteint pour aucune combinaison.'}`);
+    const rem = Ls.filter(L => L[code].found.earth);
+    if (rem.length) comment(`Remblai traversé par les pieux des culées sur ${F2(rem[0][code].found.earth.h)} m : poussée p = K_a (γ σ + q) avec K_a = ${F2(rem[0][code].found.earth.Ka)}, sur une largeur b = min(3 Ø ; entraxe) = ${F2(rem[0][code].found.earth.bEff)} m (hypothèse PSIDA, comme les colonnes enterrées), action permanente × 1,35 (terres) et variable (surcharge) à l'ELU, appliquée comme charge répartie sur chaque pieu (modèle PSH) ; module de réaction du remblai saisi ; frottement du remblai non compté dans la portance.`);
+    const fnL = Ls.filter(L => L[code].found.negFr);
+    if (fnL.length) {
+      h2('Frottement négatif (méthode de Combarieu)');
+      table(['Ligne', 'Remblai [m] ; h₂ [m]', 'K tan δ par couche', 'G_sn pieu isolé / groupe [kN]', 'G_sn retenu [kN]', 'Hauteur d\'action [m]', 'N ELU / ELS avec G_sn [kN]', 'Portance sans frottement au-dessus'], fnL.map(L => {
+        const f = L[code].found.negFr;
+        if (!f.applicable) return [lineName(L, n), '—', '—', '—', '—', '—', '—', f.motif];
+        return [lineName(L, n), `${F2(f.hRemb)} ; ${F2(f.h2)}`, f.couches.map(c => `${c.classe} ${F2(c.Kt)}`).join(', '), `${F0(f.iso.Fn)} / ${f.grp ? F0(f.grp.Fn) : '—'}`, F0(f.Fn), F2(f.hAction), `${F0(f.NfnU)} / ${F0(f.NfnS)}`, f.capFn.applicable ? `ELU ${F2(f.ratioELU)} ${ok(f.ratioELU)} ; ELS ${F2(f.ratioELS)} ${ok(f.ratioELS)}` : f.capFn.motif];
+      }), { small: true });
+      comment(`${isF ? 'Fascicule 62 annexe G.2' : 'NF P 94-262 annexe H'} : σ'_v au contact du pieu par la récurrence de Combarieu (λ, μ selon K tan δ du tableau, pieux ${fnL[0][code].found.negFr.mise || ''}), hauteur d'action où σ'_v retombe à σ'_v0 ou h₂ ; groupe : rayon d'influence b = d/√π (une file) ou √(d d'/π), répartition empirique (pieu d'angle 7/12 G_sn(b) + 5/12 G_sn(∞), ou d'extrémité ⅓ + ⅔), borne π b² q ; cumul ${isF ? 'F62 C.3.3' : 'EN 1997-1 7.3.2 / NF P 94-262'} : N_d = N_G + max(1,35 G_sn ; N_Q) à l'ELU, N_G + max(G_sn ; N_Q) à l'ELS ; portance recalculée sans frottement positif au-dessus de la hauteur d'action. γ des couches = γ saisi (prendre γ' sous la nappe).`);
+    }
+    h2('Tassement des fondations sur pieux (quasi permanent)');
+    table(['Ligne', 'N_qp par pieu [kN]', 'Pieu isolé (Frank et Zhao) [mm]', 'Forfaitaire 0,6 % Ø [mm]', 'Semelle fictive : z ; B × L [m] ; q [kPa]', 'Tassement du bloc [mm]', 'Total estimé [mm]'], Ls.map(L => {
+      const t = L[code].found.settle; if (!t || t.error) return [lineName(L, n), '—', '—', '—', '—', '—', t ? t.error : '—'];
+      return [lineName(L, n), F0(t.NqpPile), t.sIso === null ? 'hors domaine' : F1(t.sIso), F1(t.sForf), `${F1(t.raft.zf)} ; ${F2(t.raft.B)} × ${F2(t.raft.L)} ; ${F0(t.raft.q)}`, F1(t.raft.s), F1(t.total)];
+    }), { small: true });
+    comment('Pieu isolé : lois de transfert de Frank et Zhao (k_t = 2 E_M/B en sols fins, 0,8 E_M/B en sols granulaires ; k_q = 11 et 4,8 E_M/B ; q_s et q_b de la portance) ; contrôle forfaitaire 0,6 % Ø (pieux forés, LCPC-Sétra 1985) ; groupe : semelle fictive aux 2/3 de la fiche, de la dimension du bloc de pieux, tassement de Ménard (F62 annexe F.2 ; NF P 94-261 annexe H) sous la charge quasi permanente totale (part soutenue des combinaisons ELS) — estimation à confronter aux tassements admissibles de l\'ouvrage (dénivellations d\'appui du tablier).');
+    const bl = Ls.filter(L => L[code].found.blev);
+    if (bl.length) {
+      h2('Semelles sur quatre pieux — méthode de Blévot');
+      table(['Ligne', 'P_u [kN]', 'a poteau (carré éq.) ; a\' entraxe [m]', 'd ; [d_min ; d_max] [m]', 'θ', 'Bielles poteau / pieux [MPa] (≤ lim.)', 'Cerces A_c [cm²]', 'Diagonales A_d [cm²]'], bl.map(L => {
+        const b = L[code].found.blev;
+        return [lineName(L, n), F0(b.Pu), `${F2(b.aEq)} ; ${F2(b.apE)}${b.nonCarre ? ' (maille non carrée : moyenne)' : ''}`, `${F2(b.e ? (L[code].found.hs - 0.10) : NaN)} ; [${F2(b.dmin)} ; ${F2(b.dmax)}] ${b.dOk ? 'OK' : 'NON'}`, `${F1(b.theta)}°`, `${F1(b.sigCol)} / ${F1(b.sigPile)} (${F1(b.lim)}) ${b.sigCol <= b.lim && b.sigPile <= b.lim ? 'OK' : 'NON'}`, CM(b.Ac), CM(b.Ad)];
+      }));
+      comment('Méthode de Blévot et Frémy (1967), règles BAEL (J. Perchat, Techniques de l\'Ingénieur C 2 314 § 6.3.3.3) : 0,71 (a\' − a/2) ≤ d ≤ a\' − a/2, tan θ = d √2/(a\' − a/2) ; bielles P_u/(B sin²θ) et (P_u + 1,35 G₀)/(4 B_p sin²θ) ≤ 1,35 f_c28 ; disposition a : cerces A_c = P₁ (a\' − a/2)/(8 d f_su), P₁ = 0,5 P_u, et diagonales A_d = (P_u − P₁) √2 (a\' − a/2)/(8 d f_su), majorées de 10 % (fissuration préjudiciable). Semelles sur 3 pieux (disposition en triangle) : formules disponibles (blevot, n = 3), disposition non saisissable par files.');
     }
     const f0 = Ls[0][code].found;
     if (f0.nF === 2) {

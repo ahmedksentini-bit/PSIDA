@@ -50,7 +50,7 @@ export function parseData(d) {
 
 /**
  * Profils pressiométriques (sondages). Une ligne « [SP1] » ouvre un profil nommé (sans en-tête : profil unique « SP1 »).
- * Couche : « z0 z1 classe p*_l E_M α » (m, m, classe F62, MPa, MPa, –) ; p*_l, E_M ou α peuvent valoir « - » : ils sont
+ * Couche : « z0 z1 classe p*_l E_M α [p*_f] » (m, m, classe F62, MPa, MPa, –, MPa) ; p*_l, E_M ou α peuvent valoir « - » : ils sont
  * alors tirés des essais de la couche (p*_l moyenne géométrique, E_M moyenne harmonique — pratique du bureau de calcul
  * fond.ksr-infra.org) et α du rapport E_M/p*_l (Ménard). Essai : « e z E_M p*_l [p*_f] » (m, MPa).
  * @returns {{name:string, layers:object[], tests:object[]}[]}
@@ -71,7 +71,7 @@ export function parseProfiles(text) {
       if (Number.isFinite(e.z) && e.EM > 0 && e.plNette > 0) cur.tests.push(e);
       continue;
     }
-    cur.layers.push({ z0: num(w[0]), z1: num(w[1]), classe: w[2], pl: num(w[3]), EM: num(w[4]), alpha: num(w[5]) });
+    cur.layers.push({ z0: num(w[0]), z1: num(w[1]), classe: w[2], pl: num(w[3]), EM: num(w[4]), alpha: num(w[5]), pf: num(w[6]) });
   }
   for (const p of out) {
     p.layers = p.layers.filter(l => Number.isFinite(l.z0) && Number.isFinite(l.z1) && l.z1 > l.z0 && l.classe).map(l => {
@@ -81,7 +81,10 @@ export function parseProfiles(text) {
       const pl = l.pl > 0 ? l.pl : ins.length ? Math.exp(ins.reduce((a, e) => a + Math.log(e.plNette), 0) / ins.length) : NaN;
       const EM = l.EM > 0 ? l.EM : ins.length ? ins.length / ins.reduce((a, e) => a + 1 / e.EM, 0) : NaN;
       const alpha = Number.isFinite(l.alpha) ? l.alpha : alphaMenard(l.classe, EM / pl);
-      return { ...l, pl, EM, alpha, nEssais: ins.length, estimee, derive: !(l.pl > 0 && l.EM > 0) };
+      // p*_f : saisie (7e colonne), sinon moyenne géométrique des essais de la couche, sinon p*_l/2 (hypothèse PSIDA)
+      const insF = ins.filter(e => e.pfNette > 0);
+      const pf = l.pf > 0 ? l.pf : insF.length ? Math.exp(insF.reduce((a, e) => a + Math.log(e.pfNette), 0) / insF.length) : pl / 2;
+      return { ...l, pl, EM, alpha, pf, pfSource: l.pf > 0 ? 'saisie' : insF.length ? 'essais' : 'p*_l/2', nEssais: ins.length, estimee, derive: !(l.pl > 0 && l.EM > 0) };
     }).filter(l => l.pl > 0 && l.EM > 0);
   }
   return out.filter(p => p.layers.length);
@@ -112,7 +115,9 @@ export function parseSupports(d) {
     pile: { type: d.ap_pileType || 'voile', H: H.length ? H : [6], b: v('ap_pileB', 0.6), Lv: v('ap_pileLv', null), nCol: v('ap_nCol', 3), D: v('ap_D', 0.8), hc: v('ap_hc', 0), lc: v('ap_lc', 1.2) },
     culee: { type: d.ap_culType || 'remblayee', Hm: v('ap_Hm', 3), em: v('ap_em', 0.8), hGG: v('ap_hGG', null), Lret: v('ap_Lret', 4), nCol: v('ap_culNCol', 3), D: v('ap_culD', 0.8), hc: v('ap_culHc', 1.0), lc: v('ap_culLc', 1.6), hv: v('ap_culHv', 1.0), dalle: (d.ap_dalleGG || 'oui') === 'oui' },
     found: { type: d.ap_found || 'superficielle', pileType: d.ap_pieu || 'fore-boue', B: v('ap_B', 3), hs: v('ap_hs', 1), De: v('ap_De', 1), pileD: v('ap_pileD', 0.8), nPile: v('ap_nPile', 3), nFiles: v('ap_nFiles', 2), sPile: v('ap_sPile', 2.4), Lpile: v('ap_Lpile', 15),
-      incl: nums(d.ap_incl || ''), tete: d.ap_tete || 'encastre', pied: d.ap_pied || 'libre' },
+      incl: nums(d.ap_incl || ''), tete: d.ap_tete || 'encastre', pied: d.ap_pied || 'libre',
+      remblai: { h: v('ap_remH', 0), gamma: v('ap_gamma', 20), Ka: v('ap_remKa', 0.33), EM: v('ap_remEM', 5), alpha: 0.5, pf: v('ap_remPf', 0.3) },
+      fn: { actif: !!d.ap_fn, h: v('ap_fnH', null), h2: v('ap_fnH2', null) } },
     soil: { profiles: parseProfiles(d.ap_profil), assign: String(d.ap_profAssign || '').split(/[,;\s]+/).filter(Boolean), classe: d.ap_soil || 'sable-B', ple: v('ap_ple', 1), EM: v('ap_EM', 10), alpha: v('ap_alpha', 0.5), phi: v('ap_phi', 30), gamma: v('ap_gamma', 20), q: v('ap_q', 10), kSus: v('ap_kSus', 0.5) },
     mat: { fck: v('ap_fck', +d.fck || 25), fyk: v('ap_fyk', +d.fyk || 400), c: v('ap_c', 0.05) },
     eps: { TLD: v('ap_TLD', 3e-4), TCD: v('ap_TCD', 1e-4) },

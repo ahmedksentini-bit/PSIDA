@@ -360,7 +360,11 @@
         <label>Inclinaison de chaque file [°] (ex. 0, 0 ; vers l'extérieur) <input name="ap_incl" value=""></label>
         <label>Liaison tête / pied des pieux ; k soutenu / k instantané<div class="row"><select name="ap_tete"><option value="encastre">tête encastrée</option><option value="articule">tête articulée</option></select><select name="ap_pied"><option value="libre">pied libre</option><option value="encastre">pied encastré</option></select><input name="ap_kSus" value="0.5" type="number" step="any"></div></label>
       </div>
-      <label>Profils pressiométriques (un par sondage, « [nom] » puis une couche par ligne, profondeurs depuis le terrain naturel) : « z0 z1 classe p*_l [MPa] E_M [MPa] α » (« - » : valeur tirée des essais de la couche, p*_l moyenne géométrique, E_M moyenne harmonique, α de Ménard), et un essai par ligne « e z E_M p*_l [p*_f] » — classes du Fascicule 62 : argile-A/B/C, sable-A/B/C, craie-A/B/C, marne-A/B, roche-A/B<textarea name="ap_profil" rows="10">[SP1]
+      <div class="row">
+        <label>Culées : remblai traversé par les pieux sous la semelle h [m] / K_a / E_M [MPa] / p*_f [MPa]<div class="row"><input name="ap_remH" value="0" type="number" step="any"><input name="ap_remKa" value="0.33" type="number" step="any"><input name="ap_remEM" value="5" type="number" step="any"><input name="ap_remPf" value="0.3" type="number" step="any"></div></label>
+        <label><input type="checkbox" name="ap_fn">Frottement négatif aux culées (Combarieu) : hauteur du remblai d'accès / h₂ [m] (vide = auto)<div class="row"><input name="ap_fnH" value="" type="number" step="any"><input name="ap_fnH2" value="" type="number" step="any"></div></label>
+      </div>
+      <label>Profils pressiométriques (un par sondage, « [nom] » puis une couche par ligne, profondeurs depuis le terrain naturel) : « z0 z1 classe p*_l [MPa] E_M [MPa] α [p*_f MPa] » (« - » : valeur tirée des essais de la couche, p*_l moyenne géométrique, E_M moyenne harmonique, α de Ménard), et un essai par ligne « e z E_M p*_l [p*_f] » — classes du Fascicule 62 : argile-A/B/C, sable-A/B/C, craie-A/B/C, marne-A/B, roche-A/B<textarea name="ap_profil" rows="10">[SP1]
 0 2 argile-B 0.8 6 0.67
 2 8 sable-B 1.2 12 0.33
 8 40 marne-A 2.5 30 0.67
@@ -501,8 +505,8 @@ e 18 33 2.7 1.6
   </div>
 </section>
 </form>
-<script src="./web/tabs.js?v=0.22"></script>
-<script type="module">import('./web/app.js?v=0.22').catch(e => { const el = document.getElementById('error'); if (el) el.textContent = 'Le calcul n\'a pas pu se charger (' + e.message + '). Recharger la page sans cache (Ctrl+F5) ; si le problème persiste, le signaler.'; });</script>
+<script src="./web/tabs.js?v=0.23"></script>
+<script type="module">import('./web/app.js?v=0.23').catch(e => { const el = document.getElementById('error'); if (el) el.textContent = 'Le calcul n\'a pas pu se charger (' + e.message + '). Recharger la page sans cache (Ctrl+F5) ; si le problème persiste, le signaler.'; });</script>
 <noscript><p style="padding:16px">PSIDA nécessite JavaScript.</p></noscript>
 </body>
 </html>

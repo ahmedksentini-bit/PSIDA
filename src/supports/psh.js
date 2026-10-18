@@ -43,11 +43,12 @@ const mv = (A, v) => A.map(r => r.reduce((s, x, k) => s + x * v[k], 0));
 export function winklerPile({ L, D, E, k, tip = 'libre', n = 240 }) {
   const I = Math.PI * D ** 4 / 64, EI = E * I, h = L / n, kOf = typeof k === 'function' ? k : () => k;
   const N = n + 1, idx = i => i + 2, m = N + 4;
-  const sys = (y0, f0) => {
+  const sys = (y0, f0, q = null) => {
     const A = Array.from({ length: m }, () => new Array(m).fill(0)), rhs = new Array(m).fill(0);
     for (let i = 1; i <= n; i++) {           // nœud 0 : déplacement imposé ; équation de Winkler aux nœuds 1..n
       const r = idx(i);
       A[r][idx(i - 2)] += EI / h ** 4; A[r][idx(i - 1)] += -4 * EI / h ** 4; A[r][idx(i)] += 6 * EI / h ** 4 + kOf(i * h) * D; A[r][idx(i + 1)] += -4 * EI / h ** 4; A[r][idx(i + 2)] += EI / h ** 4;
+      if (q) rhs[r] = q(i * h);                // charge linéique transversale répartie (poussée des terres) [kN/m]
     }
     A[0][idx(0)] = 1; rhs[0] = y0;                                   // y(0) = t
     A[1][idx(-1)] = -1 / (2 * h); A[1][idx(1)] = 1 / (2 * h); rhs[1] = f0;   // y'(0) = φ
@@ -71,7 +72,20 @@ export function winklerPile({ L, D, E, k, tip = 'libre', n = 240 }) {
   const unit = Y.map(y => ({ y: z.map((_, i) => at(y, i)), M: z.map((_, i) => EI * curv(y, i)) }));
   // effort tranchant par dérivation du moment (différences centrées)
   for (const u of unit) u.T = u.M.map((_, i) => (i === 0 ? (-3 * u.M[0] + 4 * u.M[1] - u.M[2]) / (2 * h) : i === n ? (3 * u.M[n] - 4 * u.M[n - 1] + u.M[n - 2]) / (2 * h) : (u.M[i + 1] - u.M[i - 1]) / (2 * h)));
-  return { K, z, unit, EI, kOf, D, L, E };
+  const out = { K, z, unit, EI, kOf, D, L, E };
+  /**
+   * Cas de charge répartie q(z) [kN/m] sur le pieu (poussée des terres) : solution à tête bloquée (t = φ = 0) et forces
+   * généralisées équivalentes f_a = ∫ q Y_a dz (travaux virtuels) à ajouter aux efforts de la semelle.
+   */
+  out.loadCase = q => {
+    const y = sys(0, 0, q), yq = z.map((_, i) => at(y, i));
+    const f = [0, 0];
+    for (let i = 0; i <= n; i++) { const w = i === 0 || i === n ? h / 2 : h; f[0] += w * q(i * h) * at(Y[0], i); f[1] += w * q(i * h) * at(Y[1], i); }
+    const M = z.map((_, i) => EI * curv(y, i));
+    const Tq = M.map((_, i) => (i === 0 ? (-3 * M[0] + 4 * M[1] - M[2]) / (2 * h) : i === n ? (3 * M[n] - 4 * M[n - 1] + M[n - 2]) / (2 * h) : (M[i + 1] - M[i - 1]) / (2 * h)));
+    return { f, y: yq, M, T: Tq };
+  };
+  return out;
 }
 
 /** Matrice locale 3 × 3 d'un pieu en (a, t, φ) : axiale E A/L, transversale de Winkler, tête encastrée ou articulée. */
@@ -101,19 +115,29 @@ export function pileGroup(piles, wp, opt = {}) {
   return {
     K, Kl, wp, piles,
     /** Efforts (V, M, H) au niveau des têtes → déplacements de la semelle et efforts locaux de chaque pieu. */
-    respond(V, M, H) {
-      const q = solve(K.map(r => [...r]), [V, M, H]);
-      return { q, piles: Bs.map((B, i) => { const d = mv(B, q), f = mv(Kl, d); return { x: piles[i].x, omega: piles[i].omega || 0, a: d[0], t: d[1], phi: d[2], N: f[0], T: f[1], M: f[2] }; }) };
+    respond(V, M, H, lc = null) {
+      // charge répartie sur chaque pieu (même cas lc = wp.loadCase(q)) : forces équivalentes locales [0, f_t, f_φ]
+      // (tête articulée : condensation de la rotation), reportées sur la semelle par Bᵀ
+      let fl = [0, 0, 0];
+      if (lc) { const [[, ktf], [, kff]] = wp.K; fl = opt.head === 'articule' ? [0, lc.f[0] - ktf / kff * lc.f[1], 0] : [0, lc.f[0], lc.f[1]]; }
+      const F = [V, M, H];
+      if (lc) for (const B of Bs) { const add = mv(T(B), fl); for (let k = 0; k < 3; k++) F[k] += add[k]; }
+      const q = solve(K.map(r => [...r]), F);
+      return { q, piles: Bs.map((B, i) => { const d = mv(B, q), f = mv(Kl, d).map((v, k) => v - fl[k]); return { x: piles[i].x, omega: piles[i].omega || 0, a: d[0], t: d[1], phi: d[2], N: f[0], T: f[1], M: f[2], lc }; }) };
     },
   };
 }
 
 /** Profil d'un pieu (M, T, y, p) pour des déplacements de tête (t, φ) : combinaison des solutions unitaires. */
-export function pileProfile(wp, t, phi, head = 'encastre') {
+export function pileProfile(wp, t, phi, head = 'encastre', lc = null) {
   let ph = phi;
-  if (head === 'articule') { const [[ktt, ktf], [, kff]] = wp.K; ph = -ktf * t / kff; }   // rotation libre : moment de tête nul
+  // rotation libre (tête articulée) : moment de tête nul, K₂₁ t + K₂₂ φ = f_φ
+  if (head === 'articule') { const [, [kft, kff]] = wp.K; ph = ((lc ? lc.f[1] : 0) - kft * t) / kff; }
   const [u1, u2] = wp.unit;
-  return wp.z.map((z, i) => { const y = t * u1.y[i] + ph * u2.y[i]; return { z, y, M: t * u1.M[i] + ph * u2.M[i], T: t * u1.T[i] + ph * u2.T[i], p: wp.kOf(z) * y }; });
+  return wp.z.map((z, i) => {
+    const y = t * u1.y[i] + ph * u2.y[i] + (lc ? lc.y[i] : 0);
+    return { z, y, M: t * u1.M[i] + ph * u2.M[i] + (lc ? lc.M[i] : 0), T: t * u1.T[i] + ph * u2.T[i] + (lc ? lc.T[i] : 0), p: wp.kOf(z) * y };
+  });
 }
 
 /**
@@ -175,4 +199,29 @@ export function pileCapFiles({ files, b, hs, cover = 0.10, fsu }) {
   const Mface = s => side(s).reduce((a, r) => a + r.R * (Math.abs(r.x) - b / 2), 0);
   const tieMax = Math.max(0, ...rows.map(r => r.tie)), Mmax = Math.max(Mface(1), Mface(-1));
   return { h, rows, tieMax, A: tieMax / (fsu * 1000), Mface: Mmax, Abend: Mmax / (0.9 * h * fsu * 1000), thetaMin: Math.min(...rows.filter(r => !r.inside).map(r => r.theta), 90) };
+}
+
+/**
+ * Semelle sur 3 ou 4 pieux sous un poteau (méthode de Blévot et Frémy, 1967 ; règles BAEL, J. Perchat, Techniques de
+ * l'Ingénieur C 2 314 § 6.3.3) — a côté du poteau carré (circulaire : carré de même aire), a' entraxe des pieux, d hauteur
+ * utile, B aire du poteau, Bp aire d'un pieu, G₀ poids de la semelle :
+ *   3 pieux : 0,58 (a' − a/2) ≤ d ≤ 0,825 (a' − a/2), tan θ = d √3/(a' − a/2) ; cerces A_c = P_u (a' − a/2)/(9 d f_su),
+ *             quadrillage ≥ A_c/5 (disposition b) ; bielles P_u/(B sin²θ) et (P_u + 1,35 G₀)/(3 B_p sin²θ) ≤ 1,15 f_c28 ;
+ *   4 pieux : 0,71 (a' − a/2) ≤ d ≤ a' − a/2, tan θ = d √2/(a' − a/2) ; cerces A_c = P₁ (a' − a/2)/(8 d f_su) et
+ *             diagonales A_d = (P_u − P₁) √2 (a' − a/2)/(8 d f_su), 0,5 P_u ≤ P₁ ≤ 0,65 P_u (disposition a, P₁ = 0,5 P_u) ;
+ *             bielles ≤ 1,35 f_c28 (poteau et pieux, 4 B_p).
+ * Majoration des sections : 10 % (fissuration préjudiciable), 50 % (très préjudiciable).
+ */
+export function blevot({ n, Pu, G0 = 0, a, ap, d, B, Bp, fc28, fsu, fiss = 'P' }) {
+  const e = ap - a / 2, maj = fiss === 'FTP' ? 1.5 : fiss === 'P' ? 1.1 : 1.0;
+  if (n === 3) {
+    const tan = d * Math.sqrt(3) / e, s2 = tan ** 2 / (1 + tan ** 2), lim = 1.15 * fc28;
+    const Ac = maj * Pu * e / (9 * d * fsu * 1000);
+    return { n, e, dmin: 0.58 * e, dmax: 0.825 * e, dOk: d >= 0.58 * e - 1e-9 && d <= 0.825 * e + 1e-9, theta: Math.atan(tan) * 180 / Math.PI,
+      sigCol: Pu / (B * s2) / 1000, sigPile: (Pu + 1.35 * G0) / (3 * Bp * s2) / 1000, lim, Ac, Ar: Ac / 5, disposition: 'cerces + quadrillage (Ar ≥ Ac/5 par sens)' };
+  }
+  const tan = d * Math.SQRT2 / e, s2 = tan ** 2 / (1 + tan ** 2), lim = 1.35 * fc28, P1 = 0.5 * Pu;
+  return { n, e, dmin: 0.71 * e, dmax: e, dOk: d >= 0.71 * e - 1e-9 && d <= e + 1e-9, theta: Math.atan(tan) * 180 / Math.PI,
+    sigCol: Pu / (B * s2) / 1000, sigPile: (Pu + 1.35 * G0) / (4 * Bp * s2) / 1000, lim,
+    Ac: maj * P1 * e / (8 * d * fsu * 1000), Ad: maj * (Pu - P1) * Math.SQRT2 * e / (8 * d * fsu * 1000), disposition: 'cerces (P₁ = 0,5 P_u) + diagonales' };
 }

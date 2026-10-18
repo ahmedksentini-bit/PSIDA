@@ -333,11 +333,20 @@ Le modèle reprend les principes du programme SETRA/CETE de l'Ouest PSH (« Calc
   - bielles généralisées, tirant R (|x| − b/4)/h par pieu (identique à PP73 pour deux files) ;
   - angle de bielle ≥ 45° ;
   - contrôle en flexion au nu du fût.
-- **Non traités :**
-  - plastification du sol (réaction bornée à la pression de fluage) ;
-  - méthode de Blévot pour 3 ou 4 pieux ;
-  - frottement négatif et tassement du groupe (hors PSH) ;
-  - poussée des remblais sur les pieux.
+- **Compléments (v0.23)** — modules `lateral`, `frottement-negatif`, `tassement-pieu` et `tassements` du dépôt fondation :
+  - **Réaction du sol :** palier B p*_f (F62 C.5, NF P 94-262 I), avec modules sécants itérés nœud par nœud ; la réduction est commune aux pieux du groupe. Minoration près de la surface 0,5 (1 + z/z_c). p*_f vient de la 7e colonne des couches ou des essais, à défaut p*_l/2 (hypothèse PSIDA).
+  - **Remblai traversé par les pieux des culées :**
+    - poussée K_a (γ σ + q) sur une largeur min(3 Ø ; entraxe) (hypothèse PSIDA), en charge répartie sur chaque pieu (cas de charge du pieu de Winkler et forces équivalentes) ;
+    - module et p*_f du remblai saisis ;
+    - pas de frottement dans le remblai.
+  - **Frottement négatif (Combarieu, F62 G.2 / NF P 94-262 H) :**
+    - couches compressibles : A et argiles jusqu'à h₂ (automatique ou saisi) ;
+    - pieu isolé et groupe (rayon d'influence, répartition empirique) ;
+    - cumul N_G + max(1,35 G_sn ; N_Q) ;
+    - portance sans frottement au-dessus de la hauteur d'action.
+  - **Tassement :** pieu isolé par Frank et Zhao, plus le bloc par une semelle fictive aux 2/3 de la fiche (Ménard) ; contrôle forfaitaire 0,6 % Ø.
+  - **Semelle sur 4 pieux sous un poteau :** méthode de Blévot (BAEL, Perchat C 2 314 § 6.3.3) ; 3 pieux codés mais non saisissables par files.
+  - **Semelles superficielles :** rotation sur le sol (k_v de Ménard, k_i = 2 k_v, F62 F.3) dans la répartition des efforts horizontaux.
 
 ## 2. Protocole de comparaison avec une note de référence
 

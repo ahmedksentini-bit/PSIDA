@@ -243,3 +243,78 @@ export function paroiFlechie({ l, lNu = null, hs, Hwall, Mt, Ma, fsu, travees = 
   const multi = travees > 1, z = r > 1 ? (multi ? 0.5 : 0.6) * lc : 0.2 * (lc + (multi ? 1.5 : 2) * h), ha = Math.min(h, lc);
   return { applicable: true, h, r, l: lc, z, ha, Abot: Mt / (z * fsu * 1000), Atop: Ma / (z * fsu * 1000), hTie: 0.15 * ha };
 }
+
+// ------------------------------------------------------------------------------------------------------------------
+// Frottement négatif (Combarieu) et tassement des pieux — modules geotech du dépôt fondation (fond.ksr-infra.org)
+// ------------------------------------------------------------------------------------------------------------------
+import { K_TAN_DELTA, frottementNegatif, rayonInfluence, repartitionGroupe, lambdaCombarieu } from '../geotech/frottement-negatif.js';
+import { courbeChargement, tassementForfaitaire } from '../geotech/tassement-pieu.js';
+import { tranchesMenard, moduleEd, tassementMenard, moduleReaction } from '../geotech/tassements.js';
+
+/** Nature de sol du tableau K tan δ (F62 G.2 ; NF P 94-262 H) d'après la classe du Fascicule 62 (null : non compressible). */
+export const natureCombarieu = classe => ({ 'argile-A': 'argile-molle', 'argile-B': 'argile-ferme', 'argile-C': 'argile-ferme', 'sable-A': 'sable-lache', 'sable-B': 'sable-autre', 'sable-C': 'sable-autre' }[classe] ?? null);
+const miseCombarieu = type => (/battu/.test(type) ? 'battu' : /tube|metal/.test(type) ? 'tube' : 'fore');
+
+/**
+ * Frottement négatif sur les pieux d'une culée (méthode de Combarieu, F62 annexe G.2 ; NF P 94-262 annexe H) :
+ * remblai d'accès de hauteur hRemb au-dessus du terrain naturel (dont hR traversés par les pieux), couches compressibles du
+ * profil jusqu'à h2 sous le TN (par défaut : couches A et argiles B/C contiguës depuis la surface), pieu isolé et pieu en
+ * groupe (rayon d'influence, répartition empirique : pieu d'angle ou d'extrémité, le plus chargé).
+ */
+export function negativeFrictionPiles({ profile, D, type, hRemb, hR = 0, gamma = 20, q = 0, h2 = null, Dhead = 0, dFile, dRow = null, nFiles = 1 }) {
+  const soft = []; for (const l of profile.layers) { if (natureCombarieu(l.classe) && (l.classe.endsWith('-A') || l.classe.startsWith('argile'))) soft.push(l); else break; }
+  const h2v = h2 ?? (soft.length ? soft[soft.length - 1].z1 : 0);
+  if (!(hRemb > 0) || !(h2v > Dhead)) return { applicable: false, motif: !(hRemb > 0) ? 'pas de remblai' : 'pas de couche compressible au-dessus de la tête des pieux' };
+  const mise = miseCombarieu(type);
+  // couches repérées depuis la tête des pieux (profondeur Dhead sous le TN si hR = 0)
+  const couches = profile.layers.filter(l => l.z1 > Dhead && l.z0 < h2v).map(l => {
+    const nat = natureCombarieu(l.classe) || 'sable-autre';
+    return { z0: Math.max(l.z0, Dhead) - Dhead, z1: Math.min(l.z1, h2v) - Dhead, gamma, Kt: K_TAN_DELTA[nat][mise], classe: l.classe };
+  });
+  const remblai = hR > 0 ? { h: hR, gamma } : null, qTop = gamma * Math.max(0, hRemb - hR) + q;
+  const KtR = K_TAN_DELTA['sable-autre'][mise];
+  const iso = frottementNegatif({ R: D / 2, remblai, q: qTop, couches, h2: h2v - Dhead, KtRemblai: KtR });
+  const b = rayonInfluence(nFiles > 1 && dRow ? { d: dFile, dPrime: dRow } : { d: dFile });
+  const grp = b > D / 2 ? frottementNegatif({ R: D / 2, remblai, q: qTop, couches, h2: h2v - Dhead, KtRemblai: KtR, b }) : null;
+  const rep = grp ? repartitionGroupe({ FnIsole: iso.Fn, FnGroupe: grp.Fn, files: nFiles }) : null;
+  const Fn = rep ? (nFiles > 1 ? rep.angle : rep.extremite) : iso.Fn;
+  return { applicable: true, Fn, iso, grp, rep, b, h2: h2v, hAction: iso.hAction + Dhead - hR, mise, couches, qTop, lambda: couches.map(c => lambdaCombarieu(c.Kt)) };
+}
+
+/**
+ * Tassement d'une fondation sur pieux sous charges quasi permanentes : pieu isolé par les lois de transfert de Frank et
+ * Zhao (guide Cerema / NF P 94-262 annexe L ; q_s et q_b de la portance calculée) et contrôle forfaitaire ; effet de groupe
+ * par la semelle fictive (Terzaghi) posée aux 2/3 de la fiche, de dimensions celles du bloc de pieux, tassement de Ménard
+ * (F62 F.2 ; NF P 94-261 H) — estimation.
+ */
+export function pileGroupSettlement({ profile, D, Lpile, Dhead = 0, Ep, capDetail, NqpPile, Vqp, Bg, Lg, type, code = 'EC' }) {
+  const fin = c => (/argile|marne|craie/.test(c) ? 'fin' : 'grossier');
+  const lignes = (capDetail?.lignes || []).filter(l => l.qs > 0);
+  const couches = lignes.map(l => { const lay = profile.at((l.z0 + l.z1) / 2); return { z0: l.z0 - Dhead, z1: l.z1 - Dhead, EM: lay.EM, qs: l.qs, sol: fin(lay.classe) }; });
+  const tip = profile.at(Dhead + Lpile);
+  const qb = capDetail?.pointe?.qb ?? capDetail?.qu ?? 0;
+  let sIso = null;
+  if (couches.length && qb > 0) {
+    const cc = courbeChargement({ B: D, D: Lpile, Ep, couches, pointe: { EM: tip.EM, qb, sol: fin(tip.classe) }, n: 80, points: 30 });
+    const s = cc.tassementSous(NqpPile);
+    sIso = s === null ? null : s * 1000;
+  }
+  const forf = tassementForfaitaire({ B: D, mise: /battu/.test(type) ? 'battu' : 'fore' });
+  // semelle fictive aux 2/3 de la fiche
+  const zf = Dhead + 2 * Lpile / 3, B = Math.min(Bg, Lg), L = Math.max(Bg, Lg);
+  const prof = { fn: z => profile.at(z).EM, ruptures: profile.ruptures };
+  const tr = tranchesMenard({ profilEM: prof, D: zf, B });
+  const Ed = moduleEd({ ...tr, referentiel: code === 'BAEL' ? 'F62' : 'EC7' });
+  const raft = tassementMenard({ forme: 'rectangulaire', B, L, q: Vqp / (B * L), alpha: profile.at(zf + 1e-6).alpha, Ec: tr.E1, Ed });
+  return { sIso, sForf: forf.s * 1000, raft: { zf, B, L, q: Vqp / (B * L), s: raft.sf, Ec: tr.E1, Ed }, total: (sIso ?? forf.s * 1000) + raft.sf };
+}
+
+/** Raideurs d'une semelle superficielle sur le sol (module de réaction de Ménard, F62 annexe F.3) : rotation K_θ = k I. */
+export function footingRotationStiffness({ profile, B, L, D, code = 'EC' }) {
+  const prof = { fn: z => profile.at(z).EM, ruptures: profile.ruptures };
+  const tr = tranchesMenard({ profilEM: prof, D, B });
+  const Ed = moduleEd({ ...tr, referentiel: code === 'BAEL' ? 'F62' : 'EC7' });
+  const r = moduleReaction({ forme: 'rectangulaire', B: Math.min(B, L), L: Math.max(B, L), alpha: profile.at(D + 1e-6).alpha, Ec: tr.E1, Ed });
+  const I = L * B ** 3 / 12;
+  return { kv: r.kv, ki: r.ki, Ktheta: { diff: r.kv * I, inst: r.ki * I }, Ed, Ec: tr.E1 };
+}
