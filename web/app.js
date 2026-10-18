@@ -395,11 +395,18 @@ $('#case-select').addEventListener('change', () => state && renderCase(state));
 $('#surface-which').addEventListener('change', () => state && renderCase(state));
 $('#section-select').addEventListener('change', () => state && renderSection(state));
 $('#design-ref').addEventListener('change', () => state && renderDesign(state));
+// Les boutons de note / rapport du tablier exigent le calcul complet : si l'état courant vient d'un autre mode
+// (conception seule, appuis seuls, poutres), le calcul complet est relancé à partir du formulaire.
+function ensureFull() {
+  if (state && state.design && !state.conceptOnly) return true;
+  try { setMode('full'); state = compute(parseForm($('#f'))); renderStatic(state); $('#error').textContent = ''; return true; }
+  catch (e) { $('#error').textContent = 'Calcul complet impossible : ' + (e.stack || String(e)); return false; }
+}
 $('#btn-report').addEventListener('click', async () => {
-  if (!state) return;
+  if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.17', hSearch: lastSearch });
+    const html = await buildReport({ ...state, version: '0.17.1', hSearch: lastSearch });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -419,10 +426,10 @@ async function noteFigures() {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.17' }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.17.1' }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
-  if (!state || state.conceptOnly) { $('#error').textContent = 'Lancer d\'abord le calcul complet.'; return; }
+  if (!ensureFull()) return;
   const btn = $('#btn-note'); btn.disabled = true;
   try {
     const html = noteToHTML(await makeNote());
@@ -432,10 +439,10 @@ $('#btn-note').addEventListener('click', async () => {
   } catch (e) { $('#error').textContent = e.stack || String(e); } finally { btn.disabled = false; }
 });
 $('#btn-note-docx').addEventListener('click', async () => {
-  if (!state || state.conceptOnly) { $('#error').textContent = 'Lancer d\'abord le calcul complet.'; return; }
+  if (!ensureFull()) return;
   const btn = $('#btn-note-docx'); btn.disabled = true; btn.textContent = 'Préparation…';
   try {
-    const docx = await import('./vendor/docx.mjs');
+    const docx = await import('./vendor/docx.js');
     const blob = await noteToDocx(await makeNote(), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = `note-de-calcul-${$('#note-ref').value}.docx`; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); } finally { btn.disabled = false; btn.textContent = 'Note de calcul (Word)'; }
@@ -475,7 +482,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.17', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.17.1', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));
@@ -485,7 +492,7 @@ $('#btn-sup-note').addEventListener('click', () => {
 $('#btn-sup-docx').addEventListener('click', async () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   try {
-    const docx = await import('./vendor/docx.mjs');
+    const docx = await import('./vendor/docx.js');
     const blob = await noteToDocx(supNote(), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = `note-appuis-${$('#supports-ref').value}.docx`; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }

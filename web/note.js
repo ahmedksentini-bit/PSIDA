@@ -331,7 +331,7 @@ export function noteToHTML(note) {
 /**
  * Document Word (.docx) de la note : titres, paragraphes, commentaires encadrés, tableaux et figures (PNG).
  * @param {object} note  modèle de buildNote
- * @param {object} docx  module de la bibliothèque docx (import dynamique de ./vendor/docx.mjs)
+ * @param {object} docx  module de la bibliothèque docx (import dynamique de ./vendor/docx.js)
  * @returns {Promise<Blob|Buffer>}
  */
 export async function noteToDocx(note, docx, { asBuffer = false } = {}) {
