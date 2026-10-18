@@ -8,7 +8,8 @@
  * Générique : BPEL 91 révisé 99, annexe 3 (torons en conduits acier, cas I : f = 0,18 (R ≥ 6 m), φ = 0,002 m⁻¹ ;
  * cas II, nombreux joints ou reprises : f = 0,20, φ = 0,003 m⁻¹), recul d'ancrage 6 mm, plaques forfaitaires.
  * Distance au bord, règle commune Freyssinet (brochure V14 p. 11) et VSL (ETA 06/0006 § 3.5.2) :
- * e ≥ x/2 + c − 10 mm (x : entraxe minimal, c : enrobage sur l'ouvrage).
+ * e ≥ x/2 + c − 10 mm (x : entraxe minimal, c : enrobage sur l'ouvrage) ; DYWIDAG : distance de la brochure (enrobage
+ * 30 mm) corrigée de l'enrobage.
  */
 export const AGREMENTS = {
   generique: {
@@ -50,10 +51,48 @@ export const AGREMENTS = {
       '6-19': { nom: 'VSL 6-19', torons: 19, Ap_mm2: 2850, gaine_ext_mm: 97, gaine_int_mm: 90, plaque_mm: null, entraxe_par_fcm0_mm: null, Rmin_m: 9.0, ref: 'ETA 06/0006 v5 : A_p tableau A.1.2 p. 17, R_min = 100 Ø_int (A.2.3.2 p. 23) ; gaines : brochure VSL 2009 tableau 1.4 p. 21 ; plaque et entraxe (annexe A.6) non lus' },
     },
   },
+  dywidag: {
+    label: 'DYWIDAG MA (ETA-13/0815)',
+    document: 'ETA-13/0815 du 29.01.2021 (OIB), texte principal et annexes 1 à 7 ; ancrages MA : brochure DSI 04160-1/10.09 (base ETA-06/0022), annexes 11 à 13 de l\'ETA non lues',
+    url: 'https://spennteknikk.b-cdn.net/wp-content/uploads/2023/11/ETA-MA-SYSTEM-13_0815_EN.pdf',
+    rentree_mm: 8, mu: 0.20, k_rad_m: 0.005, bordEnrobage_mm: 30,
+    note: 'μ = 0,20 et k = 0,005 rad/m en gaine acier I (ETA-13/0815) ; recul 8 mm sans blocage hydraulique des clavettes, 4 mm avec (brochure) : saisir g = 4 mm si le blocage est prévu. Entraxe et distance au bord donnés pour un seul niveau de résistance (f_cm,0 = 33 MPa cylindre, 40 MPa cube) : l\'ETA admet des valeurs plus faibles (annexes non lues). Distance au bord corrigée de l\'enrobage : e = e_brochure + c − 30 mm.',
+    unites: {
+      '6805': { nom: 'DYWIDAG 6805', torons: 5, Ap_mm2: 750, gaine_ext_mm: 57, gaine_int_mm: 50, plaque_mm: [150, 150], entraxe_par_fcm0_mm: {"33": 230}, bord_min_mm: 135, Rmin_m: 4.7, ref: 'ancrage MA Ø a, entraxe et bord (enrobage 30 mm, f_cm,0 = 33 MPa cylindre) : brochure DSI 04160-1/10.09 p. 19-20 (base ETA-06/0022) ; A_p, gaine I (annexe 3), R_min (annexe 7, p_R,max = 140 kN/m) : ETA-13/0815' },
+      '6807': { nom: 'DYWIDAG 6807', torons: 7, Ap_mm2: 1050, gaine_ext_mm: 62, gaine_int_mm: 55, plaque_mm: [170, 170], entraxe_par_fcm0_mm: {"33": 270}, bord_min_mm: 155, Rmin_m: 6, ref: 'ancrage MA Ø a, entraxe et bord (enrobage 30 mm, f_cm,0 = 33 MPa cylindre) : brochure DSI 04160-1/10.09 p. 19-20 (base ETA-06/0022) ; A_p, gaine I (annexe 3), R_min (annexe 7, p_R,max = 140 kN/m) : ETA-13/0815' },
+      '6809': { nom: 'DYWIDAG 6809', torons: 9, Ap_mm2: 1350, gaine_ext_mm: 72, gaine_int_mm: 65, plaque_mm: [190, 190], entraxe_par_fcm0_mm: {"33": 305}, bord_min_mm: 175, Rmin_m: 6.5, ref: 'ancrage MA Ø a, entraxe et bord (enrobage 30 mm, f_cm,0 = 33 MPa cylindre) : brochure DSI 04160-1/10.09 p. 19-20 (base ETA-06/0022) ; A_p, gaine I (annexe 3), R_min (annexe 7, p_R,max = 140 kN/m) : ETA-13/0815' },
+      '6812': { nom: 'DYWIDAG 6812', torons: 12, Ap_mm2: 1800, gaine_ext_mm: 82, gaine_int_mm: 75, plaque_mm: [220, 220], entraxe_par_fcm0_mm: {"33": 355}, bord_min_mm: 200, Rmin_m: 7.5, ref: 'ancrage MA Ø a, entraxe et bord (enrobage 30 mm, f_cm,0 = 33 MPa cylindre) : brochure DSI 04160-1/10.09 p. 19-20 (base ETA-06/0022) ; A_p, gaine I (annexe 3), R_min (annexe 7, p_R,max = 140 kN/m) : ETA-13/0815' },
+      '6815': { nom: 'DYWIDAG 6815', torons: 15, Ap_mm2: 2250, gaine_ext_mm: 87, gaine_int_mm: 80, plaque_mm: [250, 250], entraxe_par_fcm0_mm: {"33": 395}, bord_min_mm: 220, Rmin_m: 8.8, ref: 'ancrage MA Ø a, entraxe et bord (enrobage 30 mm, f_cm,0 = 33 MPa cylindre) : brochure DSI 04160-1/10.09 p. 19-20 (base ETA-06/0022) ; A_p, gaine I (annexe 3), R_min (annexe 7, p_R,max = 140 kN/m) : ETA-13/0815' },
+      '6819': { nom: 'DYWIDAG 6819', torons: 19, Ap_mm2: 2850, gaine_ext_mm: 97, gaine_int_mm: 90, plaque_mm: [280, 280], entraxe_par_fcm0_mm: {"33": 445}, bord_min_mm: 245, Rmin_m: 9.9, ref: 'ancrage MA Ø a, entraxe et bord (enrobage 30 mm, f_cm,0 = 33 MPa cylindre) : brochure DSI 04160-1/10.09 p. 19-20 (base ETA-06/0022) ; A_p, gaine I (annexe 3), R_min (annexe 7, p_R,max = 140 kN/m) : ETA-13/0815' },
+      '6822': { nom: 'DYWIDAG 6822', torons: 22, Ap_mm2: 3300, gaine_ext_mm: 102, gaine_int_mm: 95, plaque_mm: [310, 310], entraxe_par_fcm0_mm: {"33": 485}, bord_min_mm: 265, Rmin_m: 10.9, ref: 'ancrage MA Ø a, entraxe et bord (enrobage 30 mm, f_cm,0 = 33 MPa cylindre) : brochure DSI 04160-1/10.09 p. 19-20 (base ETA-06/0022) ; A_p, gaine I (annexe 3), R_min (annexe 7, p_R,max = 140 kN/m) : ETA-13/0815' },
+      '6827': { nom: 'DYWIDAG 6827', torons: 27, Ap_mm2: 4050, gaine_ext_mm: 112, gaine_int_mm: 105, plaque_mm: [340, 340], entraxe_par_fcm0_mm: {"33": 540}, bord_min_mm: 290, Rmin_m: 12.1, ref: 'ancrage MA Ø a, entraxe et bord (enrobage 30 mm, f_cm,0 = 33 MPa cylindre) : brochure DSI 04160-1/10.09 p. 19-20 (base ETA-06/0022) ; A_p, gaine I (annexe 3), R_min (annexe 7, p_R,max = 140 kN/m) : ETA-13/0815' },
+      '6831': { nom: 'DYWIDAG 6831', torons: 31, Ap_mm2: 4650, gaine_ext_mm: 122, gaine_int_mm: 115, plaque_mm: [420, 420], entraxe_par_fcm0_mm: {"33": 590}, bord_min_mm: 315, Rmin_m: 12.6, ref: 'ancrage MA Ø a, entraxe et bord (enrobage 30 mm, f_cm,0 = 33 MPa cylindre) : brochure DSI 04160-1/10.09 p. 19-20 (base ETA-06/0022) ; A_p, gaine I (annexe 3), R_min (annexe 7, p_R,max = 140 kN/m) : ETA-13/0815' },
+      '6837': { nom: 'DYWIDAG 6837', torons: 37, Ap_mm2: 5550, gaine_ext_mm: 137, gaine_int_mm: 130, plaque_mm: [420, 420], entraxe_par_fcm0_mm: {"33": 650}, bord_min_mm: 345, Rmin_m: 13.3, ref: 'ancrage MA Ø a, entraxe et bord (enrobage 30 mm, f_cm,0 = 33 MPa cylindre) : brochure DSI 04160-1/10.09 p. 19-20 (base ETA-06/0022) ; A_p, gaine I (annexe 3), R_min (annexe 7, p_R,max = 140 kN/m) : ETA-13/0815' },
+    },
+  },
+  bbr: {
+    label: 'BBR VT CONA CMI (ETA-06/0147)',
+    document: 'ETA-06/0147 du 26.06.2025 (OIB) lue p. 1 à 24 ; trompe-plaques : ETA-06/0147 du 30.10.2017 ; gaines et rayons : agrément DIBt de 2011 ; annexes 37 à 76 (entraxes, bords) non lues',
+    url: 'https://www.bbrnetwork.com/fileadmin/userdaten/Zulassungen%20EU/CONA%20CMI%20intern/BBR_ETA-06-0147_CMI_EN_Rev10_0702.pdf',
+    rentree_mm: 6, mu: 0.18, k_rad_m: 0.005, bordRegle: true,
+    note: 'μ = 0,18 et k = 0,005 rad/m en gaine feuillard, recul 6 mm (4 mm avec clavettes pré-enfoncées) ; distance au bord e = x/2 + c − 10 mm (ETA 2025 § 1.8) ; entraxes minimaux et diamètre extérieur des gaines non lus : valeurs génériques. Rayons minimaux de l\'agrément DIBt (antérieur à l\'ETA) : à vérifier.',
+    unites: {
+      '0406': { nom: 'BBR CONA CMI 0406', torons: 4, Ap_mm2: 600, gaine_ext_mm: null, gaine_int_mm: 40, plaque_mm: [130, 130], entraxe_par_fcm0_mm: null, Rmin_m: 5.1, ref: 'trompe-plaque BT Ø B : ETA-06/0147 (30.10.2017) annexe 4 p. 33 ; gaine Ø int et R_min : agrément DIBt Z-13.71-60147 (2011) tableau 7 p. 8, à vérifier sur l\'ETA' },
+      '0706': { nom: 'BBR CONA CMI 0706', torons: 7, Ap_mm2: 1050, gaine_ext_mm: null, gaine_int_mm: 55, plaque_mm: [170, 170], entraxe_par_fcm0_mm: null, Rmin_m: 5.2, ref: 'trompe-plaque BT Ø B : ETA-06/0147 (30.10.2017) annexe 4 p. 33 ; gaine Ø int et R_min : agrément DIBt Z-13.71-60147 (2011) tableau 7 p. 8, à vérifier sur l\'ETA' },
+      '0906': { nom: 'BBR CONA CMI 0906', torons: 9, Ap_mm2: 1350, gaine_ext_mm: null, gaine_int_mm: 60, plaque_mm: [225, 225], entraxe_par_fcm0_mm: null, Rmin_m: 6.1, ref: 'trompe-plaque BT Ø B : ETA-06/0147 (30.10.2017) annexe 4 p. 33 ; gaine Ø int et R_min : agrément DIBt Z-13.71-60147 (2011) tableau 7 p. 8, à vérifier sur l\'ETA' },
+      '1206': { nom: 'BBR CONA CMI 1206', torons: 12, Ap_mm2: 1800, gaine_ext_mm: null, gaine_int_mm: 70, plaque_mm: [225, 225], entraxe_par_fcm0_mm: null, Rmin_m: 7, ref: 'trompe-plaque BT Ø B : ETA-06/0147 (30.10.2017) annexe 4 p. 33 ; gaine Ø int et R_min : agrément DIBt Z-13.71-60147 (2011) tableau 7 p. 8, à vérifier sur l\'ETA' },
+      '1506': { nom: 'BBR CONA CMI 1506', torons: 15, Ap_mm2: 2250, gaine_ext_mm: null, gaine_int_mm: 80, plaque_mm: [280, 280], entraxe_par_fcm0_mm: null, Rmin_m: 7.6, ref: 'trompe-plaque BT Ø B : ETA-06/0147 (30.10.2017) annexe 4 p. 33 ; gaine Ø int et R_min : agrément DIBt Z-13.71-60147 (2011) tableau 7 p. 8, à vérifier sur l\'ETA' },
+      '1906': { nom: 'BBR CONA CMI 1906', torons: 19, Ap_mm2: 2850, gaine_ext_mm: null, gaine_int_mm: 90, plaque_mm: [280, 280], entraxe_par_fcm0_mm: null, Rmin_m: 8.5, ref: 'trompe-plaque BT Ø B : ETA-06/0147 (30.10.2017) annexe 4 p. 33 ; gaine Ø int et R_min : agrément DIBt Z-13.71-60147 (2011) tableau 7 p. 8, à vérifier sur l\'ETA' },
+      '2206': { nom: 'BBR CONA CMI 2206', torons: 22, Ap_mm2: 3300, gaine_ext_mm: null, gaine_int_mm: 95, plaque_mm: [310, 310], entraxe_par_fcm0_mm: null, Rmin_m: 9.3, ref: 'trompe-plaque BT Ø B : ETA-06/0147 (30.10.2017) annexe 4 p. 33 ; gaine Ø int et R_min : agrément DIBt Z-13.71-60147 (2011) tableau 7 p. 8, à vérifier sur l\'ETA' },
+      '2406': { nom: 'BBR CONA CMI 2406', torons: 24, Ap_mm2: 3600, gaine_ext_mm: null, gaine_int_mm: 100, plaque_mm: [325, 325], entraxe_par_fcm0_mm: null, Rmin_m: 9.6, ref: 'trompe-plaque BT Ø B : ETA-06/0147 (30.10.2017) annexe 4 p. 33 ; gaine Ø int et R_min : agrément DIBt Z-13.71-60147 (2011) tableau 7 p. 8, à vérifier sur l\'ETA' },
+      '2706': { nom: 'BBR CONA CMI 2706', torons: 27, Ap_mm2: 4050, gaine_ext_mm: null, gaine_int_mm: 105, plaque_mm: [360, 360], entraxe_par_fcm0_mm: null, Rmin_m: 10.3, ref: 'trompe-plaque BT Ø B : ETA-06/0147 (30.10.2017) annexe 4 p. 33 ; gaine Ø int et R_min : agrément DIBt Z-13.71-60147 (2011) tableau 7 p. 8, à vérifier sur l\'ETA' },
+      '3106': { nom: 'BBR CONA CMI 3106', torons: 31, Ap_mm2: 4650, gaine_ext_mm: null, gaine_int_mm: 110, plaque_mm: [360, 360], entraxe_par_fcm0_mm: null, Rmin_m: 11.3, ref: 'trompe-plaque BT Ø B : ETA-06/0147 (30.10.2017) annexe 4 p. 33 ; gaine Ø int et R_min : agrément DIBt Z-13.71-60147 (2011) tableau 7 p. 8, à vérifier sur l\'ETA' },
+    },
+  },
 };
 
 /** Liste pour l'interface : [{ id, label, unites: [{ id, nom }] }]. */
-export const agrementList = () => Object.entries(AGREMENTS).map(([id, a]) => ({ id, label: a.label, unites: Object.entries(a.unites).map(([uid, u]) => ({ id: uid, nom: u.nom, torons: u.torons })) }));
+export const agrementList = () => Object.entries(AGREMENTS).map(([id, a]) => ({ id, label: a.label, unites: Object.entries(a.unites).map(([uid, u]) => ({ id: uid, nom: u.nom, torons: u.torons })).sort((p, q) => p.torons - q.torons || (p.id < q.id ? -1 : 1)) }));
 
 /** Unité générique de référence pour n torons : la plus petite unité générique T15 d'au moins n torons. */
 function genericFor(n) {
@@ -72,8 +111,10 @@ export function unitOf(agrId = 'generique', unitId = '12', { cas = 'I', fcj = nu
   const A = AGREMENTS[agrId] || AGREMENTS.generique, id = AGREMENTS[agrId] ? agrId : 'generique';
   let uid = A.unites[unitId] ? unitId : null;
   if (!uid) {
-    const nT = (AGREMENTS.generique.unites[unitId] || {}).torons ?? parseInt(unitId, 10);
-    uid = Object.keys(A.unites).find(k => A.unites[k].torons === nT) || Object.keys(A.unites)[0];
+    // nombre de torons de l'unité demandée (dans n'importe quel procédé), puis unité du procédé la plus proche
+    const src = Object.values(AGREMENTS).map(x => x.unites[unitId]).find(Boolean);
+    const nT = src ? src.torons : 12;
+    uid = Object.keys(A.unites).sort((p, q) => Math.abs(A.unites[p].torons - nT) - Math.abs(A.unites[q].torons - nT) || A.unites[q].torons - A.unites[p].torons)[0];
   }
   const u = A.unites[uid], gu = genericFor(u.torons), notes = [];
   const pick = (v, d, what) => { if (v === null || v === undefined) { if (id !== 'generique' && what) notes.push(what); return d; } return v; };
@@ -84,15 +125,16 @@ export function unitOf(agrId = 'generique', unitId = '12', { cas = 'I', fcj = nu
     const keys = Object.keys(u.entraxe_par_fcm0_mm).map(Number).sort((p, q) => p - q);
     const k = fcj == null ? keys[0] : (keys.filter(x => x <= fcj + 1e-9).pop() ?? keys[0]);
     if (fcj != null && fcj < keys[0] - 1e-9) tensionOK = false;
-    fcm0 = k; spacingMin = u.entraxe_par_fcm0_mm[String(k)] / 1000;
+    fcm0 = k; spacingMin = u.entraxe_par_fcm0_mm[String(k)] / 1000; var fcm0Niveaux = keys.length;
   } else if (id !== 'generique') notes.push('entraxe minimal');
-  const edgeMin = spacingMin && A.bordRegle ? spacingMin / 2 + cover - 0.010 : null;
+  const edgeMin = u.bord_min_mm && A.bordEnrobage_mm != null ? u.bord_min_mm / 1000 + cover - A.bordEnrobage_mm / 1000
+    : spacingMin && A.bordRegle ? spacingMin / 2 + cover - 0.010 : null;
   const plate = u.plaque_mm ? u.plaque_mm[0] / 1000 : pick(null, gu.plaque_mm[0] / 1000, 'plaque d\'ancrage (forfait générique)');
   const plateB = u.plaque_mm ? (u.plaque_mm[1] ?? u.plaque_mm[0]) / 1000 : gu.plaque_mm[1] / 1000;
   return {
     label: u.nom, Ap: u.Ap_mm2 * 1e-6, torons: u.torons,
     phiG: pick(u.gaine_ext_mm, gu.gaine_ext_mm, 'gaine') / 1000, Rmin: pick(u.Rmin_m, gu.Rmin_m, 'rayon minimal'),
-    plate, plateB, spacingMin, edgeMin, fcm0, tensionOK, cover,
+    plate, plateB, spacingMin, edgeMin, fcm0, fcm0Niveaux: typeof fcm0Niveaux === 'number' ? fcm0Niveaux : 0, tensionOK, cover,
     f, phi, g: pick(A.rentree_mm, 6, 'recul d\'ancrage (6 mm par défaut)') / 1000,
     source: A.document, url: A.url, agrNote: A.note || null, ref: u.ref || null, manquants: notes, agrement: id, unite: uid,
   };

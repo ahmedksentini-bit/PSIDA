@@ -196,7 +196,8 @@ test('PSI-DP — pertes selon le BPEL 91 révisé 99 (3.3,13 ; 3.3,21 à 3.3,24)
 test('procédés de précontrainte : choix de l\'agrément et de l\'unité (Freyssinet, VSL, générique)', async () => {
   const { unitOf, agrementList } = await import('../src/psidp/agrements.js');
   const L = agrementList();
-  assert.deepEqual(L.map(a => a.id), ['generique', 'freyssinet', 'vsl']);
+  assert.deepEqual(L.map(a => a.id), ['generique', 'freyssinet', 'vsl', 'dywidag', 'bbr']);
+  for (const a of L) for (let i = 1; i < a.unites.length; i++) assert.ok(a.unites[i].torons >= a.unites[i - 1].torons, `${a.id} : unités triées`);
   // Freyssinet 12C15 (brochure V14) : plaque 240 × 200, entraxe a = 430 / 320 mm pour f_cm,0 = 24 / 44 MPa, μ = 0,19, k = 0,007
   const f = unitOf('freyssinet', '12C15', { fcj: 30, cover: 0.05 });
   assert.equal(f.Ap, 1.8e-3); assert.equal(f.plate, 0.24); assert.equal(f.plateB, 0.2);
@@ -212,6 +213,14 @@ test('procédés de précontrainte : choix de l\'agrément et de l\'unité (Frey
   const v = unitOf('vsl', '6-12');
   assert.equal(v.g, 0.006); assert.ok(Math.abs(v.phi - 0.0009) < 1e-12); assert.equal(v.plate, 0.25);
   assert.ok(v.manquants.some(m => /plaque/.test(m)));
+  // DYWIDAG 6812 : ancrage MA Ø 220, entraxe 355, bord 200 mm pour un enrobage de 30 mm (c = 50 mm ⇒ 220 mm), μ = 0,20, k = 0,005
+  const d = unitOf('dywidag', '12C15', { fcj: 35, cover: 0.05 });
+  assert.equal(d.unite, '6812'); assert.equal(d.plate, 0.22); assert.equal(d.spacingMin, 0.355);
+  assert.ok(Math.abs(d.edgeMin - 0.22) < 1e-12); assert.ok(Math.abs(d.phi - 0.001) < 1e-12); assert.equal(d.tensionOK, true);
+  assert.equal(unitOf('dywidag', '12', { fcj: 30 }).tensionOK, false);
+  // BBR : trompe-plaque Ø 225 pour 1206, entraxe non lu ; unité de 13 torons Freyssinet ⇒ 1206 (nombre de torons le plus proche)
+  const bq = unitOf('bbr', '1206'); assert.equal(bq.plate, 0.225); assert.equal(bq.spacingMin, null);
+  assert.equal(unitOf('bbr', '13C15').unite, '1206');
   // générique inchangé (BPEL annexe 3, cas II)
   const g = unitOf('generique', '12', { cas: 'II' });
   assert.equal(g.f, 0.20); assert.equal(g.phi, 0.003); assert.deepEqual(g.manquants, []);
