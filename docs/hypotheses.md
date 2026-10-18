@@ -296,7 +296,7 @@ Rapport détaillé : vérification des règles d'appuis sur les pièces PP73 1.1
   - charges de la dalle de transition (15 + D) t/ml (11 t/ml sans dalle), du garde-grève et des murs en retour ou murettes en bout du chevêtre de culée ;
   - pile-culée apparente : poussée sur la partie haute seulement (§ 3.1.3.1, i = 1/3, p = 15 kPa, à 0,6 h₁) ;
   - vérification de la culée sans tablier (§ 3.1.4.6, G favorable) ;
-  - voile sur une file de pieux en paroi fléchie (§ 4.4, BAEL annexe E.5) ;
+  - voile sur une file de pieux en paroi fléchie (§ 4.4, BAEL annexe E.5). Formules relues dans J. Perchat, Techniques de l'Ingénieur C 2 314 § 2.7.3 : paroi si h ≥ l/2, z = 0,2 (l + 1,5 h) ou 0,5 l (travées continues), l = min(l_axes ; 1,15 l_nus), A sur 0,15 h_a. Torsion relue dans C 2 308 § 1.4 : b₀ = D/6, τ_uT² + τ_uV² ≤ τ_lim² ;
   - colonnes de piles-culées armées à environ 2 % (1.1.3 § 2.3.2) ;
   - garde-grève de 0,30 m si la dalle de transition s'y appuie ;
   - avertissements H/V > 0,20 (pieux inclinés) et Ø ≥ 0,80 m pour une culée sur une file.

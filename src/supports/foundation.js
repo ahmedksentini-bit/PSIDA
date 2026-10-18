@@ -230,14 +230,16 @@ export function pileCapacity({ code = 'EC', type = 'fore-simple', D, Lpile, clas
 
 /**
  * Semelle sur une file de pieux sous un voile unique, PP73 1.3.2 § 4.4 : la semelle et la base du voile travaillent en
- * paroi fléchie (Fascicule 61 titre VI annexe A4 ; BAEL 91 annexe E.5). Hauteur de paroi h = h_s + H_voile ≤ portée l
- * entre pieux ; bras de levier (poutre-cloison continue, Leonhardt) z = 0,2 (l + 1,5 h) pour 1/3 ≤ h/l ≤ 1, z = 0,5 l
- * pour h > l ; tirant inférieur en travée A = M_t/(z f_su), aciers sur appuis A' = M_a/(z f_su) répartis dans la partie
- * basse de la paroi. En deçà de h/l = 1/3, la poutre ordinaire de hauteur h_s s'applique.
+ * paroi fléchie (Fascicule 61 titre VI annexe A4 ; BAEL 91 annexe E.5, relu dans J. Perchat, Techniques de l'Ingénieur
+ * C 2 314 § 2.7.3). Paroi fléchie : hauteur h ≥ l/2 ; portée de calcul l = min(l_axes ; 1,15 l_nus) ; hauteur active
+ * h_a = min(h ; l) ; A (ou A') = M_u/(z f_e/γ_s) avec, pour plusieurs travées, z = 0,2 (l + 1,5 h) si 1/2 ≤ h/l ≤ 1 et
+ * z = 0,5 l si h > l (deux appuis : 0,2 (l + 2h) et 0,6 l) ; armatures inférieures A réparties sur 0,15 h_a.
+ * Les moments sont ceux de la poutre continue sur les pieux (à la place de la méthode forfaitaire). En deçà de h/l = 1/2,
+ * la poutre ordinaire de hauteur h_s s'applique.
  */
-export function paroiFlechie({ l, hs, Hwall, Mt, Ma, fsu }) {
-  const h = hs + Math.max(0, Hwall), r = h / l;
-  if (r < 1 / 3) return { applicable: false, h, r };
-  const z = r > 1 ? 0.5 * l : 0.2 * (l + 1.5 * h);
-  return { applicable: true, h, r, z, Abot: Mt / (z * fsu * 1000), Atop: Ma / (z * fsu * 1000), hTie: Math.min(0.15 * h, 0.2 * l) };
+export function paroiFlechie({ l, lNu = null, hs, Hwall, Mt, Ma, fsu, travees = 2 }) {
+  const lc = lNu ? Math.min(l, 1.15 * lNu) : l, h = hs + Math.max(0, Hwall), r = h / lc;
+  if (r < 0.5) return { applicable: false, h, r, l: lc };
+  const multi = travees > 1, z = r > 1 ? (multi ? 0.5 : 0.6) * lc : 0.2 * (lc + (multi ? 1.5 : 2) * h), ha = Math.min(h, lc);
+  return { applicable: true, h, r, l: lc, z, ha, Abot: Mt / (z * fsu * 1000), Atop: Ma / (z * fsu * 1000), hTie: 0.15 * ha };
 }

@@ -385,7 +385,7 @@ export function computeSupports(st, input = {}) {
           const bm = pierCap({ length: Lf, supports: piles, loads, q: nc > 0 ? gU * Wsem / Lf : Vu / Lf, b: F.B, h: F.hs, c: 0.07, fck, fyk, code, rhoMin: 0.0012 });
           capBeam = { Mneg: bm.Mneg, Mpos: bm.Mpos, V: bm.V, AsTop: bm.AsTop, AsBot: bm.AsBot };
           // voile unique sur une file : semelle + base du voile en paroi fléchie (PP73 1.3.2 § 4.4)
-          if (nc === 0) capBeam.paroi = paroiFlechie({ l: Lf / nP, hs: F.hs, Hwall: end ? (sp.culee.type === 'remblayee' ? sp.culee.Hm : 0) : Hpile(i), Mt: bm.Mpos, Ma: bm.Mneg, fsu: fyk / 1.15 });
+          if (nc === 0) capBeam.paroi = paroiFlechie({ l: Lf / nP, lNu: Lf / nP - D, travees: nP - 1, hs: F.hs, Hwall: end ? (sp.culee.type === 'remblayee' ? sp.culee.Hm : 0) : Hpile(i), Mt: bm.Mpos, Ma: bm.Mneg, fsu: fyk / 1.15 });
         }
         found = { type: 'pieux', D, n: xsP.length, nF, nP, Lpile: F.Lpile, k: kHead, rows, NmaxU, NmaxS, NminU, As: Math.max(AsP, pileMinSteel({ D, code })), AsReq: AsP, Amin: pileMinSteel({ D, code }), cap, capRatio, NmaxA, group, scour, pileConc: pc, tie, capBeam, sigSels, hs: F.hs, hOk: F.hs >= Math.max(0.60, nF === 2 ? 1.4 * D : D) - 1e-9, hMin: Math.max(0.60, nF === 2 ? 1.4 * D : D), W: Wsem };
       }

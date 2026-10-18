@@ -116,9 +116,10 @@ export function pierCap({ length, supports, loads, q = 0, b, h, c = 0.05, fck = 
  * entraxe e de colonnes, M_gh = 2,5 (h_g + 0,5 h_c + 1) e [t·m], sens opposé M'_gh = −3,5 e, couple de torsion au droit
  * d'une colonne C = M/2 (sollicitations du 1er genre ; ELU × 1,35).
  * Justification en section creuse équivalente :
- *   BAEL 91 A.5.4 : paroi b₀ = a/6 (a diamètre du plus grand cercle inscrit), Ω aire du contour médian, τ_t = T_u/(2 Ω b₀),
- *     (τ_v² + τ_t²) ≤ τ_lim² (section pleine), τ_lim = min(0,15 f_c28/γ_b ; 4 MPa) ; A_t/s_t = T_u/(2 Ω f_su),
- *     ΣA_l = T_u u/(2 Ω f_su) ;
+ *   BAEL 91 A.5.4 (relu dans J. Perchat, Techniques de l'Ingénieur C 2 308 § 1.4) : section pleine remplacée par une section
+ *     creuse de paroi b₀ = D/6 (D diamètre du plus grand cercle inscrit), Ω aire intérieure au contour à mi-épaisseur,
+ *     τ_uT = T_u/(2 Ω b₀), τ_uV = V_u/(b d), τ_uT² + τ_uV² ≤ τ_lim², τ_lim = min(0,15 f_c28/γ_b ; 4 MPa) (fissuration
+ *     préjudiciable, § 1.1.4.2) ; ΣA_l/u = A_t/s_t = T_u/(2 Ω f_e/γ_s) ;
  *   EN 1992-1-1 § 6.3.2 (θ = 45°) : t_ef = A/u, A_k, u_k ; T_Rd,max = 2 ν α_cw f_cd A_k t_ef sin θ cos θ,
  *     T_Ed/T_Rd,max + V_Ed/V_Rd,max ≤ 1 ; A_sw/s = T_Ed/(2 A_k f_yd), ΣA_sl = T_Ed u_k/(2 A_k f_yd).
  * Unités : m, kN, kN·m, MPa.

@@ -218,10 +218,13 @@ test('PP73 : pile-culée apparente, culée à vide, chevêtre de culée (charges
   rel(t.b0, 1.0 / 6, 1e-12, 'paroi b₀ = a/6');
   const tE = chevetreTorsion({ hg: 1.5, hc: 1.0, b: 1.2, e: 3.5, code: 'EC', V: 300 });
   assert.ok(tE.ratio > 0 && tE.Al > 0);
-  // paroi fléchie (BAEL E.5) : z = 0,2 (l + 1,5 h) pour 1/3 ≤ h/l ≤ 1 ; 0,5 l au-delà ; poutre si h/l < 1/3
+  // paroi fléchie (BAEL E.5, Perchat C 2 314 § 2.7.3) : plusieurs travées z = 0,2 (l + 1,5 h) pour 1/2 ≤ h/l ≤ 1, 0,5 l au-delà ;
+  // deux appuis 0,2 (l + 2h) et 0,6 l ; l = min(l_axes ; 1,15 l_nus) ; poutre si h/l < 1/2
   rel(paroiFlechie({ l: 4, hs: 1, Hwall: 2, Mt: 100, Ma: 100, fsu: 348 }).z, 0.2 * (4 + 4.5), 1e-12, 'z');
+  rel(paroiFlechie({ l: 4, hs: 1, Hwall: 2, Mt: 100, Ma: 100, fsu: 348, travees: 1 }).z, 0.2 * (4 + 6), 1e-12, 'z deux appuis');
   rel(paroiFlechie({ l: 4, hs: 1, Hwall: 6, Mt: 100, Ma: 100, fsu: 348 }).z, 2, 1e-12, 'z = 0,5 l');
-  assert.equal(paroiFlechie({ l: 12, hs: 1, Hwall: 2, Mt: 1, Ma: 1, fsu: 348 }).applicable, false);
+  rel(paroiFlechie({ l: 4, lNu: 3, hs: 1, Hwall: 6, Mt: 1, Ma: 1, fsu: 348 }).l, 3.45, 1e-12, 'l = 1,15 l_nus');
+  assert.equal(paroiFlechie({ l: 7, hs: 1, Hwall: 2, Mt: 1, Ma: 1, fsu: 348 }).applicable, false, 'h/l = 0,43 < 1/2');
   // intégration
   const { formDefaults } = await import('../tools/formdefaults.mjs');
   const { parseData, compute } = await import('../src/pipeline.js');
