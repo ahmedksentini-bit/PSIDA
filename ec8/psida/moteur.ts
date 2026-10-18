@@ -9,3 +9,4 @@ export { verifierAppuis } from "../src/moteur/verif-appuis.ts";
 export { exporterEfforts } from "../src/moteur/export-efforts.ts";
 export { REFERENTIEL } from "../src/referentiel/index.ts";
 export { SOURCES } from "../src/referentiel/sources.ts";
+export { valeur as spectreValeur, echantillonner as echantillonnerSpectre, deplacement as spectreDeplacement } from "../src/moteur/spectres.ts";

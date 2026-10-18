@@ -6,9 +6,12 @@
  * près (référentiel de Pont EC8).
  */
 import * as EC8 from '../src/vendor/pont-ec8.js';
+import { lineChart, barChart, svgBlock } from './note_figures.js';
 
 const nb = (v, d = 3) => (typeof v === 'number' && Number.isFinite(v) ? v.toLocaleString('fr-FR', { maximumFractionDigits: d }) : String(v ?? '—'));
 const texNb = (v, d = 3) => nb(v, d).replace(',', '{,}').replace(/[  ]/g, '\\,');
+/** Texte placé dans \\text{…} : caractères spéciaux de LaTeX neutralisés (le % ouvrirait un commentaire). */
+const texTxt = t => String(t ?? '').replace(/[{}\\]/g, '').replace(/([%#&$_])/g, '\\$1');
 const ETAT = { ok: 'OK', alerte: 'À EXAMINER', ko: 'NON', info: 'INFO', na: 'sans objet' };
 
 /** Texte des références d'une ligne (source, localisation, page du guide Cerema, état de vérification). */
@@ -28,8 +31,8 @@ function sectionBlocks(B, sections, prefix) {
       B.push({ t: 'h3', text: l.titre });
       if (l.formule) B.push({ t: 'math', tex: l.formule });
       const r = l.resultat;
-      if (r && typeof r.valeur === 'number') B.push({ t: 'math', tex: `${r.symbole} = ${l.application ? `${l.application} = ` : ''}\\boldsymbol{${texNb(r.valeur, r.decimales ?? 3)}}${r.unite ? `\\ \\text{${r.unite}}` : ''}` });
-      else if (r) B.push({ t: 'math', tex: `${r.symbole} : \\text{${String(r.valeur).replace(/[{}\\]/g, '')}}` });
+      if (r && typeof r.valeur === 'number') B.push({ t: 'math', tex: `${r.symbole ? `${r.symbole} = ` : ''}${l.application ? `${l.application} = ` : ''}\\boldsymbol{${texNb(r.valeur, r.decimales ?? 3)}}${r.unite ? `\\ \\text{${texTxt(r.unite)}}` : ''}` });
+      else if (r) B.push({ t: 'math', tex: `${r.symbole ? `${r.symbole} : ` : ''}\\text{${texTxt(r.valeur)}}` });
       else if (l.application) B.push({ t: 'math', tex: l.application });
       if (l.commentaire) B.push({ t: l.niveau === 'alerte' ? 'comment' : 'p', text: `${l.niveau === 'alerte' ? 'Alerte — ' : ''}${l.commentaire}` });
       const refs = referencesText(l.references);
@@ -55,6 +58,27 @@ export function seismicBlocks(seisme) {
     const d = r.directions[dk];
     return [dk === 'x' ? 'Longitudinale (X)' : 'Transversale (Y)', `${nb(d.lbdp.K, 2)} / ${nb(d.ubdp.K, 2)}`, `${nb(d.lbdp.T, 3)} / ${nb(d.ubdp.T, 3)}`, nb(d.ubdp.F * 1000, 0), nb((d.lbdp.dE ?? NaN) * 100, 2)];
   }) });
+  // spectres de réponse (EN 1998-1 § 3.2.2) avec les périodes du mode fondamental, puis efforts sismiques par appui
+  try {
+    const S = a.spectres, pts = f => EC8.echantillonnerSpectre(f, 4, 0.01);
+    const T = r.directions, mk = [];
+    for (const [dk, lab, f] of [['x', 'T_x', S.calculLong], ['y', 'T_y', S.calculTrans]]) for (const pr of ['lbdp', 'ubdp']) {
+      const Tv = T[dk][pr].T; if (Number.isFinite(Tv)) mk.push({ x: Tv, y: EC8.spectreValeur(f, Tv), couleur: dk === 'x' ? '#dc2626' : '#0f766e', libelle: `${lab} ${pr === 'lbdp' ? 'LBDP' : 'UBDP'} = ${nb(Tv, 2)} s`, guides: true, rayon: 4 });
+    }
+    B.push(svgBlock(lineChart({ xlabel: 'période T [s]', ylabel: 'S [m/s²]', xRange: [0, 4], marques: mk, series: [
+      { points: pts(S.elastiqueH), libelle: 'élastique horizontal S_e (ξ = 5 %)', couleur: '#64748b' },
+      { points: pts(S.calculLong), libelle: `calcul longitudinal S_d (q = ${nb(p.comportement.qLongitudinal, 2)})`, couleur: '#dc2626' },
+      { points: pts(S.calculTrans), libelle: `calcul transversal S_d (q = ${nb(p.comportement.qTransversal, 2)})`, couleur: '#0f766e', tirets: '6 3' },
+      { points: pts(S.elastiqueV), libelle: 'élastique vertical S_ve', couleur: '#7c3aed', tirets: '2 3' }] }),
+    `Spectres de réponse (EN 1998-1 § 3.2.2.2 à 3.2.2.5 ; zone ${p.site.zone}, sol ${p.site.classeSol}) et périodes du mode fondamental`));
+    B.push(svgBlock(lineChart({ xlabel: 'période T [s]', ylabel: 'S_De [cm]', xRange: [0, 4], hauteur: 240, series: [{ points: EC8.echantillonnerSpectre(S.elastiqueH, 4, 0.02, EC8.spectreDeplacement).map(([x, y]) => [x, 100 * y]), libelle: 'spectre élastique en déplacement S_De = S_e (T/2π)²', couleur: '#0369a1' }] }),
+    'Spectre élastique en déplacement (EN 1998-1 éq. 3.7)'));
+    const ef = seisme.efforts || EC8.exporterEfforts(p, a, r), ap = ef.appuis || [];
+    if (ap.length) B.push(svgBlock(barChart({ cats: ap.map((x, i) => x.id || `A${i + 1}`), ylabel: 'F [kN]', series: [
+      { libelle: 'F_x (X + 0,3 Y + 0,3 Z)', values: ap.map(x => x.cas[0].Fx), couleur: '#dc2626' },
+      { libelle: 'F_y (0,3 X + Y + 0,3 Z)', values: ap.map(x => x.cas[1].Fy), couleur: '#0f766e' },
+      { libelle: 'F_z (0,3 X + 0,3 Y + Z)', values: ap.map(x => x.cas[2].Fz), couleur: '#7c3aed' }] }), 'Efforts sismiques par appui (combinaisons des directions 100/30/30)'));
+  } catch (e) { /* figures sismiques indisponibles */ }
   if (problemes.length) B.push({ t: 'comment', text: `Alertes de saisie : ${problemes.map(x => `${x.cible} : ${x.message}`).join(' ; ')}` });
   sectionBlocks(B, a.note, 'Action sismique');
   sectionBlocks(B, m.note, 'Modèle');

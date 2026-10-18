@@ -15,6 +15,7 @@ import { mechanicalSkew } from '../src/skew.js';
 import { supportsBlocks, waterBlocks } from './supports_view.js';
 import { seismicBlocks, texToText } from './seismic_note.js';
 import { ddrBlocks } from './ddr_view.js';
+import { deckFigures, supportSchema, distributionChart, pileProfileCharts, footingPressureChart, svgBlock } from './note_figures.js';
 
 const F = (v, n = 1) => (v === null || v === undefined || !isFinite(v) ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: n, maximumFractionDigits: n }));
 const F0 = v => F(v, 0), F1 = v => F(v, 1), F2 = v => F(v, 2), F3 = v => F(v, 3);
@@ -40,6 +41,9 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
   const comment = text => B.push({ t: 'comment', text });
   const table = (head, rows, opt = {}) => B.push({ t: 'table', head, rows, ...opt });
   const fig = key => { if (figures[key]) B.push({ t: 'img', ...figures[key] }); };
+  let DF = { data: [], il: [], M: [], V: [], R: [], As: [], rebar: [] };
+  try { DF = deckFigures(st, ref === 'F61' ? 'F61' : 'EC'); } catch (e) { /* figures indisponibles */ }
+  const figs = arr => { for (const b of arr || []) if (b && b.svg) B.push(b); };
   const isF = ref === 'F61';
   const dz = isF ? design.F61 : design.EC;
   const today = new Date().toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -64,6 +68,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
     ['Aire S [m²] ; inertie I [m⁴]', `${F3(deck.area)} ; ${F(I, 5)}`],
   ]);
   comment('La dalle est remplacée par un rectangle équivalent de largeur 2b et d\'inertie I (Guyon-Massonnet, dalle isotrope). Les portées sont les portées biaises mesurées suivant l\'axe longitudinal ; le biais n\'est pris en compte que par le biais mécanique (flexion transversale, directions d\'aciers).');
+  figs(DF.data);
   h2('Matériaux');
   if (isF) table(['Béton', 'Valeur', 'Acier', 'Valeur'], [
     ['f_c28 [MPa]', F1(dz.mat.fc28), 'f_e [MPa]', F0(dz.mat.fe)],
@@ -101,6 +106,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
     return [`Appui ${i + 1}`, F3(parts.reduce((a, v) => a + v, 0) + ab), F3(ab), ...parts.map(F3)];
   }));
   comment('Les lignes d\'influence sont calculées par la méthode des rotations (poutre continue à inertie constante), abouts compris : une charge sur un about équivaut à un moment imposé au nœud extrême et à une charge directe sur l\'appui.');
+  figs(DF.il);
 
   // ---------------------------------------------------------------------------------------------------------- 3
   h1('Dénivellations d\'appui', 3);
@@ -165,7 +171,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
   }
   if (isF) comment('Première ligne : moments maximaux ; seconde ligne : moments minimaux. Valeurs pour la largeur totale avec coefficients de répartition et δ (Σ K_j·δ_j·M_j). ELS = G + max[1,2 (A ou B) ; C.E.] + trottoirs ; ELU = 1,35 (G + tassements aléatoires) + max[1,6 (A ou B) ; 1,35 C.E.] + 1,6 trottoirs (G favorable 1,0) — équivalent aux combinaisons 1,125 × [1,2 G + 1,42 Q] des notes PSIDA.EL. Les sections d\'acier sont calculées fibre par fibre (m_x(y)) et données par mètre de largeur pour la fibre la plus sollicitée.');
   else comment('Valeurs « largeur totale » des cas de trafic = max_y m_x(y)·2b ; combinaisons EN 1990 annexe A2 (formules CHAMOA) : ELS caractéristique = G + Ta + max(T + ψ₀Q ; 0,6 T + Q_LM1 ; LM2) ; ELU = 1,35 G + 1,35 Q. Sections d\'acier par mètre pour la fibre la plus sollicitée.');
-  fig('M');
+  if (DF.M.length) figs(DF.M); else fig('M');
 
   // ---------------------------------------------------------------------------------------------------------- 7
   if (isF) {
@@ -213,6 +219,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
   if (isF) table(['Section', 'Charge perm.', 'A', 'B', 'C.E.', 'Trottoirs', 'ELU (valeur absolue)'], vRows);
   else table(['Section', 'Perm.', 'TS (×K)', 'UDL (×K)', 'ELU poutre'], vRows);
   if (dz.shear) para(`Vérification de l'effort tranchant (dalle sans armatures d'effort tranchant si possible) : rapport maximal ${F2(Math.max(...dz.shear.map(v => v.ratio || v.VEd / v.VRdc || 0)))} (≤ 1 : pas d'armatures transversales nécessaires).`);
+  figs(DF.V);
 
   // ---------------------------------------------------------------------------------------------------------- 9
   h1('Réactions d\'appui pour la largeur totale [kN]', isF ? 9 : 8);
@@ -225,7 +232,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
     }));
     comment('Réactions de la largeur totale, sans coefficient de répartition ; δ des appuis intermédiaires : max des deux travées ; culées : ½[δ + max(δ ; 1,5)] (B) et ½[δ + max(δ ; 1,2)] (Mc120). Les réactions par appareil d\'appui (inégalité de répartition) sont au chapitre des appareils d\'appui.');
   } else table(['Appui', 'Perm. max / min', 'TS max', 'UDL max', 'LM1 max', 'ELS car. max / min', 'ELU max'], bm.ILR.map((_, i) => [`Appui ${i + 1}`, `${F1(perm.Rmax[i])} / ${F1(perm.Rmin[i])}`, F1(ec.TS.Rmax[i]), F1(ec.UDL.Rmax[i]), F1(ec.LM1.Rmax[i]), `${F1(dz.beam.R.CARmax[i])} / ${F1(dz.beam.R.CARmin[i])}`, F1(dz.beam.R.ELUmax[i])]));
-  fig('R');
+  if (DF.R.length) figs(DF.R); else fig('R');
 
   // ---------------------------------------------------------------------------------------------------------- 10
   h1('Flexion transversale', isF ? 10 : 9);
@@ -252,7 +259,8 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
   for (let j = 0; j < nSp; j++) for (const r of sectionRows(deck, j).filter(r => [0, 0.2, 0.4, 0.5, 0.6, 0.8, 1].includes(r.fr))) lr.push([`Travée ${j + 1} ${F2(r.fr)} L`, F2(r.x), CM(dz.envBot[r.idx]), CM(dz.envTop[r.idx]), F0(dz.envBot[r.idx] * 2 * deck.b * 1e4), F0(dz.envTop[r.idx] * 2 * deck.b * 1e4)]);
   table(['Section', 'x [m]', 'A_s inf [cm²/m]', 'A_s sup [cm²/m]', 'A_s inf largeur totale [cm²]', 'A_s sup largeur totale [cm²]'], lr, { small: true });
   comment(isF ? 'Flexion simple BAEL 91 (A.4.3 à l\'ELU, A.4.5 à l\'ELS), fibre par fibre ; minimum de non-fragilité et sections minimales de dalle. La largeur totale est indicative (le ferraillage suit la répartition m_x(y)).' : 'Flexion EC2 (ELU, ELS caractéristique σ_s ≤ 0,8 f_yk et σ_c ≤ 0,6 f_ck, ouverture des fissures en quasi-permanent), minimum § 9.2.1.1 et 7.3.2.');
-  fig('As');
+  if (DF.As.length) figs(DF.As); else fig('As');
+  figs(DF.rebar);
 
   // ---------------------------------------------------------------------------------------------------------- 12
   h1('Appareils d\'appui et chevêtres incorporés', isF ? 12 : 11);

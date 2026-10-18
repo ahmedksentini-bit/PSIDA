@@ -71,6 +71,13 @@
 </header>
 <form id="f" class="app" novalidate>
 <section class="tab active" id="tab-projet">
+  <div class="card" id="scheme-card" style="margin-bottom:14px"><h2>Ce que vous saisissez</h2>
+    <div class="svgbox" id="scheme-elevation"></div>
+    <div class="svgbox" id="scheme-cross"></div>
+    <div class="svgbox" id="scheme-plan"></div>
+    <p class="small">Schémas mis à jour en direct à partir du formulaire, avant tout calcul (représentation du guide SETRA « Ponts-dalles », 1989) : vérifiez que la travure, la coupe et les charges correspondent à votre projet.</p>
+    <div id="scheme-summary"></div>
+  </div>
   <div class="cols">
     <div class="card form-card"><h2>Tablier</h2>
     <details id="help-box"><summary>Aide sur les données (survoler un champ affiche aussi son explication)</summary><div id="help-list" class="small"></div></details>
@@ -141,13 +148,6 @@
     <button type="button" class="secondary" id="btn-psidael">Charger l'exemple PSIDA.EL 1984 (9,75-13,93-13,93-9,75 m, Fasc. 61)</button>
     <p class="small">Valeurs caractéristiques non pondérées. Moments de la poutre entière en kN·m, par mètre de largeur en kN·m/m.</p>
     </div>
-    <div class="card" id="scheme-card"><h2>Ce que vous saisissez</h2>
-    <p class="small">Schémas mis à jour en direct à partir du formulaire, avant tout calcul : vérifiez que la travure, la coupe et les charges correspondent à votre projet.</p>
-    <div id="scheme-summary"></div>
-    <div class="svgbox" id="scheme-elevation"></div>
-    <div class="svgbox" id="scheme-cross"></div>
-    <div class="svgbox" id="scheme-plan"></div>
-  </div>
   </div>
 </section>
 <section class="tab" id="tab-conception">
@@ -505,8 +505,8 @@ e 18 33 2.7 1.6
   </div>
 </section>
 </form>
-<script src="./web/tabs.js?v=0.23"></script>
-<script type="module">import('./web/app.js?v=0.23').catch(e => { const el = document.getElementById('error'); if (el) el.textContent = 'Le calcul n\'a pas pu se charger (' + e.message + '). Recharger la page sans cache (Ctrl+F5) ; si le problème persiste, le signaler.'; });</script>
+<script src="./web/tabs.js?v=0.24"></script>
+<script type="module">import('./web/app.js?v=0.24').catch(e => { const el = document.getElementById('error'); if (el) el.textContent = 'Le calcul n\'a pas pu se charger (' + e.message + '). Recharger la page sans cache (Ctrl+F5) ; si le problème persiste, le signaler.'; });</script>
 <noscript><p style="padding:16px">PSIDA nécessite JavaScript.</p></noscript>
 </body>
 </html>

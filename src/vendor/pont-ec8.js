@@ -1462,6 +1462,25 @@ function valeur(f, T) {
 	const v = f.amplitude * k;
 	return f.plancher !== void 0 && T >= f.TC ? Math.max(v, f.plancher) : v;
 }
+/** Spectre élastique en déplacement SDe(T) = Se(T)·(T/2π)², en m (EN 1998-1 éq. 3.7). */
+const deplacement = (f, T) => valeur(f, T) * (T / (2 * Math.PI)) ** 2;
+/** Échantillonnage pour le tracé, en incluant exactement les périodes de coin. */
+function echantillonner(f, Tmax = 4, pas = .01, fn = valeur) {
+	const Ts = /* @__PURE__ */ new Set();
+	for (let T = 0; T <= Tmax + 1e-9; T += pas) Ts.add(Math.round(T * 1e6) / 1e6);
+	for (const T of [
+		f.TB,
+		f.TC,
+		f.TD
+	]) if (T <= Tmax) Ts.add(T);
+	if (f.plancher !== void 0) {
+		const k = f.amplitude * f.plateau;
+		const T1 = k * f.TC / f.plancher;
+		const T2 = Math.sqrt(k * f.TC * f.TD / f.plancher);
+		for (const T of [T1, T2]) if (T > f.TC && T <= Tmax) Ts.add(T);
+	}
+	return [...Ts].sort((a, b) => a - b).map((T) => [T, fn(f, T)]);
+}
 //#endregion
 //#region src/moteur/action.ts
 function actionSismique(p) {
@@ -6067,4 +6086,4 @@ const REFERENTIEL = [
 	...VERIFICATIONS
 ];
 //#endregion
-export { REFERENTIEL, SOURCES, actionSismique, analyse, exporterEfforts, lireProjet, modele, valider, verifierAppuis };
+export { REFERENTIEL, SOURCES, actionSismique, analyse, echantillonner as echantillonnerSpectre, exporterEfforts, lireProjet, modele, deplacement as spectreDeplacement, valeur as spectreValeur, valider, verifierAppuis };

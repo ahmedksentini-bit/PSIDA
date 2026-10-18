@@ -348,6 +348,20 @@ Le modèle reprend les principes du programme SETRA/CETE de l'Ouest PSH (« Calc
   - **Semelle sur 4 pieux sous un poteau :** méthode de Blévot (BAEL, Perchat C 2 314 § 6.3.3) ; 3 pieux codés mais non saisissables par files.
   - **Semelles superficielles :** rotation sur le sol (k_v de Ménard, k_i = 2 k_v, F62 F.3) dans la répartition des efforts horizontaux.
 
+## 1 quaterdecies. Schémas et figures (v0.24, `web/guide_schema.js`, `web/note_figures.js`)
+- Onglet Projet et chapitre 1 de la note : élévation et coupe transversale dessinées au trait dans la représentation du guide
+  SETRA « Ponts-dalles — guide de conception » (1989, § 2.1 profils en long, § 2.3 coupes transversales et encorbellements) :
+  tablier mince avec garde-corps, piles voiles ou colonnes avec chevêtre, semelles et pieux, culées remblayées (mur de front,
+  mur en retour en tireté), enterrées (sommier sur colonnes noyées) ou apparentes (colonnes devant le talus), talus 3/2
+  figuré par des traits rayonnants issus de la crête, terrain naturel hachuré, point fixe, cotes ; encorbellements tramés,
+  corniches, trottoirs et bordures, chaussée en toit, voies EN 1991-2, charges de superstructure saisies (bandes et charges
+  linéiques avec k min / k max), appareils d'appui, ordonnées de calcul. Dessins de principe : échelle verticale amplifiée.
+- Note globale : lignes d'influence, enveloppes M et V, réactions, sections d'acier requises, plans de ferraillage ;
+  appuis : raideurs et répartition du freinage, schéma à l'échelle de chaque appui (eau, affouillement), contraintes sous
+  les semelles superficielles (diagramme du bureau de calcul fond.ksr-infra.org), profils M(z), y(z), p(z) du pieu le plus
+  sollicité ; sondages pressiométriques. Les mêmes figures apparaissent dans l'onglet Appuis et fondations. En Word, les
+  figures SVG sont converties en images.
+
 ## 2. Protocole de comparaison avec une note de référence
 
 ### 2.1 Référentiel Eurocodes — note CHAMOA-PSIDA (Cerema, guide technique, ch. 4)

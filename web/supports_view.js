@@ -5,6 +5,7 @@
  */
 import { profilPressio } from '../src/vendor/fond-figures.js';
 import { seismicBlocks } from './seismic_note.js';
+import { svgBlock, supportSchema, distributionChart, sideBySide, pileProfileCharts, footingPressureChart } from './note_figures.js';
 
 /** Figure du sondage (bureau de calcul fond.ksr-infra.org) : essais, ou à défaut valeurs de couche en escalier. */
 export function profileFigure(pr, bandes = []) {
@@ -43,6 +44,7 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
       return [lineName(L, n), TYPE[L.type], F2(L.x), F0(dist.K.inst[i]), F0(dist.K.diff[i]), isF ? F1(sup.braking.F61.A * bk) : F1(sup.braking.EC * bk), ...(isF ? [F1(sup.braking.F61.Bc * bk)] : []), imp.map(F1).join(' / ')];
     }));
   comment(`Souplesse d'une ligne = souplesse des appareils en élastomère fretté T_e/(n G a b) (G = 1,8 MPa instantané, 0,9 MPa différé ; T_e enrobages compris) + souplesse du fût console H³/(3EI) (${isF ? 'E_i = 11 000 f_c28^(1/3), E_v = 3 700 f_c28^(1/3)' : 'E_cm, E_cm/3 en différé'}) ; fondation supposée rigide, culée remblayée rigide. Freinage réparti au prorata des rigidités instantanées ; déformations imposées ε : H_i = K_i ε (x₀ − x_i), centre de déformation x₀ = ${F2(dist.x0.diff)} m (différé) / ${F2(dist.x0.inst)} m (instantané) ; ε retrait + fluage = ${F(sup.eps.RF * 1e4, 2)}·10⁻⁴${isF ? `, TLD ${F(sup.eps.TLD * 1e4, 1)}·10⁻⁴ (K différé), TCD ${F(sup.eps.TCD * 1e4, 1)}·10⁻⁴ (K instantané)` : `, température α ΔT_N = ${F(sup.eps.T * 1e4, 1)}·10⁻⁴`}. ${isF ? `Freinage Fascicule 61 : A(l) H = A·S/(20 + 0,0035 S) = ${F0(sup.braking.F61.A)} kN (S = ${F0(sup.braking.F61.S)} m²) ; Bc un camion de 300 kN.` : `Freinage EN 1991-2 § 4.4.1 : Q_lk = ${F0(sup.braking.EC)} kN (groupe gr2).`}`);
+  if (!opts.noFigures) try { const dc = distributionChart(sup, code); if (dc) B.push(svgBlock(dc, 'Raideurs des lignes d\'appui (instantanée, différée) et répartition du freinage')); } catch (e) { /* figure indisponible */ }
 
   if (sup.seisme) {
     h2(`Séisme — EN 1998-2, méthode du mode fondamental (${sup.seisme.source === 'onglet' ? 'onglet « Calcul sismique » : Pont EC8 complet' : 'moteur de Pont EC8, projet PSIDA'})`);
@@ -86,6 +88,18 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
     table(['Ligne', 'Avertissement'], warn.flatMap(L => L.warnings.map(w => [lineName(L, n), w])));
   }
 
+  if (!opts.noFigures) {
+    // schémas à l'échelle : une culée et chaque pile, deux par figure
+    const sch = [];
+    for (const L of Ls) if (L.kind !== 'culee' || L.i === 0) { try { sch.push({ L, svg: supportSchema(sup, L, code) }); } catch (e) { /* schéma indisponible */ } }
+    if (sch.length) {
+      h2('Schémas des appuis (à l\'échelle)');
+      for (let k = 0; k < sch.length; k += 2) {
+        const a1 = sch[k], a2 = sch[k + 1];
+        B.push(svgBlock(sideBySide(a2 ? [a1.svg, a2.svg] : [a1.svg], 10, 760), a2 ? `${lineName(a1.L, n)} et ${lineName(a2.L, n)} : fût, chevêtre, semelle, pieux, terrain et niveaux d'eau` : `${lineName(a1.L, n)} : fût, chevêtre, semelle, pieux, terrain et niveaux d'eau`));
+      }
+    }
+  }
   h2('Efforts en tête et en pied des fûts (combinaisons les plus défavorables)');
   const rows = [];
   for (const L of Ls) {
@@ -160,6 +174,7 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
     table(['Ligne', 'p*_le [MPa] ; D_e [m] ; k_p (assise)', 'Semelle B × L × h [m]', 'V/R_v max', 'H/R_h max (ELU)', 'Excentrement', 'Bielles d ≥ (B − b)/4 ; e ≤ B/6', 'A_s // B [cm²]', 'A_s ⊥ B [cm²/m]'], Ls.map(L => { const f = L[code].found; const w = f.checks.reduce((a, k) => (k.ratioV > a.ratioV ? k : a), f.checks[0]); return [lineName(L, n), `${F2(w.ple)} ; ${F2(w.De)} ; ${F2(w.kp)} (${w.classe})`, `${F2(f.B)} × ${F2(f.L)} × ${F2(f.hs)}`, `${F2(f.worstV)} ${ok(f.worstV)}`, `${F2(f.worstH)} ${ok(f.worstH)}`, f.excOk ? 'OK' : 'NON', `${f.bielles.dOk ? 'OK' : 'NON'} ; ${f.bielles.eOk ? 'OK' : 'NON (calcul en console)'}`, CM(f.AsLong), CM(f.AsTransPerM)]; }));
     comment(isF ? 'Fascicule 62 titre V (annexes B.1, B.2, E.2, F.1) : p*_le moyenne géométrique de p*_l sur [D ; D + 1,5 B], D_e = (1/p*_le)∫p*_l dz, classe de la couche d\'assise ; k_p = k₀[1 + a(0,6 + 0,4 B/L) D_e/B] selon la classe de sol (D_e/B ≤ 2,5) ; q\'_ref = (3 q_max + q_min)/4 ≤ i_δβ k_p p*_le/γ_q + q\'_0 (γ_q = 2 ELU, 3 ELS rares), i_δβ = Φ₁(δ) (sols cohérents) ou Φ₂(δ, D_e/B) (sols frottants) ; surface comprimée ≥ 10 % (ELU), 75 % (ELS rares) ; glissement (ELU) V tan φ\'/1,2 + c\'A\'/1,5 (c\' ≤ 75 kPa). Ferraillage par bielles A = N\'(B − b)/(8 d f_su), N\' = N(1 + 3e/B), minimum 0,12 % par nappe (PP73 1.1.1). Combinaisons fréquentes (sol entièrement comprimé) non vérifiées.'
       : 'NF P 94-261 (annexe D, guide Cerema 2015) : p*_le moyenne géométrique de p*_l sur [D ; D + h_r] (h_r = 1,5 B, réduit selon l\'excentrement à l\'ELU), D_e = (1/p*_le)∫p*_l dz ; k_p (tableau D.2.3, D_e/B ≤ 2), i_δ (D.2.4), R_v;d = A\' k_p p*_le i_δ/(γ_R;v γ_R;d;v), γ_R;v = 1,4 (ELU), 2,3 (ELS), γ_R;d;v = 1,2, R₀ = A q₀ déduit ; A\' = A(1 − 2e/B) ; 1 − 2e/B ≥ 1/15 (ELU), 1/2 (ELS car.) ; glissement (ELU) V tan φ\'/(γ_R;h γ_R;d;h), γ_R;h = γ_R;d;h = 1,1. Ferraillage par bielles, minimum 0,12 % par nappe. ELS quasi-permanent (1 − 2e/B ≥ 2/3) non vérifié.');
+    if (!opts.noFigures) { const fp = Ls.map(L => { try { return footingPressureChart(L, code); } catch (e) { return null; } }).filter(Boolean); for (let k = 0; k < fp.length; k += 2) B.push(fp[k + 1] ? svgBlock(sideBySide(fp[k].svg, fp[k + 1].svg), `${fp[k].caption} ; ${fp[k + 1].caption}`) : fp[k]); }
   } else {
     table(['Ligne', 'Pieux', 'k Ménard en tête [kN/m³]', 'N max / min ELU [kN]', 'N max ELS [kN]', 'M max ; T max pieu ELU [kN·m ; kN]', 'Portance ELU / ELS', 'Groupe C_e ; taux', 'A_s pieu [cm²]', 'Effort tranchant'], Ls.map(L => {
       const f = L[code].found, el = f.rows.filter(r => r.ls === 'ELU'), mm = Math.max(...el.map(r => r.Mmax)), sh = f.shear.ELU;
@@ -185,6 +200,7 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
       const pts = fl.prof.filter((_, j) => j % step === 0 || j === fl.prof.length - 1);
       B.push({ t: 'p', text: `${lineName(L, n)} — profil du pieu le plus sollicité (file ${fl.file + 1}, ${r.label}) :` });
       table(['z [m]', 'M long. [kN·m]', 'T long. [kN]', 'y long. [mm]', 'p [kPa]', ...(pts.some(q => q.Mt) ? ['M transv. [kN·m]', 'T transv. [kN]'] : [])], pts.map(q => [F1(q.z), F1(q.M), F1(q.T), F2(q.y * 1000), F1(q.p), ...(pts.some(x => x.Mt) ? [F1(q.Mt), F1(q.Tt)] : [])]), { small: true });
+      if (!opts.noFigures) try { for (const b of pileProfileCharts(L, code)) B.push(b); } catch (e) { /* profil indisponible */ }
     }
     // --- compléments : plastification du sol, remblai, frottement négatif, tassement, Blévot ---
     const plRows = Ls.filter(L => L[code].found.plast && L[code].found.plast.nodes > 0);
