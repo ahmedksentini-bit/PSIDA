@@ -25,7 +25,7 @@ export function psidpChecks(r, o) {
   const { sec, lim, steel } = o, { v, vp, h } = sec, half = 1.5 * o.phiG;
   const out = { stresses: [], extremes: {}, steel: [], elu: [], shear: [] };
   const LIM = {
-    MT: { c: 0.6 * lim.fcj, encR: -lim.ftj, horsR: -1.5 * lim.ftj },
+    MT: { c: 0.6 * lim.fcj, encR: -(lim.kExec ?? 0.7) * lim.ftj, horsR: -1.5 * lim.ftj },   // BPEL 91 rév. 99, 6.1,23 : 0,7 f_tj en exécution
     rare: { c: 0.6 * lim.fc28, enc: -lim.ft28, hors: -1.5 * lim.ft28 },
     freq: { c: 0.6 * lim.fc28, enc: 0, hors: null },
     QL: { c: 0.5 * lim.fc28, enc: 0, hors: null },
@@ -66,7 +66,9 @@ export function psidpChecks(r, o) {
   for (const row of out.stresses) {
     let top = 0, bot = 0;
     for (const ph of ['MS', 'ES']) for (const c of row.phases[ph].rare) { top = Math.max(top, nfArea(c.s, c.i, sec.bTop)); bot = Math.max(bot, nfArea(c.i, c.s, sec.bBot)); }
-    const skT = steel.skin * sec.bTop, skB = steel.skin * sec.bBot, sup = nearSupport(row.x) ? 0.0015 * sec.B : 0;
+    // peau (6.1,31) : 3 cm²/m de parement et au moins 0,10 % de la section de béton (réparti au prorata des parements)
+    const per = 2 * h + sec.bTop + sec.bBot, kSk = Math.max(1, 0.001 * sec.B / (steel.skin * per));
+    const skT = kSk * steel.skin * sec.bTop, skB = kSk * steel.skin * sec.bBot, sup = nearSupport(row.x) ? 0.0015 * sec.B : 0;
     out.steel.push({ x: row.x, label: row.label, top: { skin: skT, nf: top, As: Math.max(skT, top) }, bot: { skin: skB, nf: bot, sup, As: Math.max(skB, bot, sup) } });
   }
 
@@ -88,20 +90,27 @@ export function psidpChecks(r, o) {
     }
   }
 
-  // ---- effort tranchant au voisinage des appuis intermédiaires (section à h/2)
+  // ---- effort tranchant au voisinage des appuis (section à h/2 de l'axe), dalles : BPEL 9.6 (ELU seul) ; le contrôle ELS
+  // de la note PSIDP-EL (BPEL 7.2,2) est donné à titre indicatif
   if (o.V) {
-    const bn = sec.bBot - o.nCables * o.phiG / 2, zl = 2 * h / 3;
-    for (let i = 1; i < nSp; i++) for (const side of [-1, 1]) {
+    const bn = sec.bBot - o.nCables * o.phiG / 2, b = sec.bBot, gb = steel.gb, fc = lim.fc28, ft = lim.ft28;
+    const kh = h < 0.3 ? Math.max(0, 10 * h / 3) : 1, tau0 = 0.09 * fc / gb;
+    const cases = [[0, 1]]; for (let i = 1; i < nSp; i++) cases.push([i, -1], [i, 1]); cases.push([nSp, -1]);
+    for (const [i, side] of cases) {
       const x = x0[i] + side * h / 2, F = r.at(r.ES.min.F, x), th = r.at(r.th, x), j = side < 0 ? i - 1 : i;
       const Vh = r.ES.min.hyp.V[j], Vp = F * th + Vh;          // relevage du câble (iso) + hyperstatique
       const Vels = o.V.els(x), Velu = o.V.elu(x);
       const red = Vl => { const a = Vl.max + Vp, b2 = Vl.min + Vp; return Math.abs(a) > Math.abs(b2) ? a : b2; };
-      const Vr = red(Vels), Vu = red(Velu), sx = F / sec.B, ft = lim.ft28, fc = lim.fc28;
-      const tau = Math.abs(Vr) / (bn * zl), tauU = Math.abs(Vu) / (bn * zl);
+      const Vr = red(Vels), Vu = red(Velu), sx = F / sec.B;
+      const tau = 1.5 * Math.abs(Vr) / (bn * h);                                   // convention PSIDP-EL (b_n, z = 2h/3)
       const tauBar = Math.sqrt(Math.max(0, Math.min(0.4 * ft * (ft + sx), 2 * ft / fc * (0.6 * fc - sx) * (ft + sx))));
-      const beta = Math.max(Math.PI / 6, 0.5 * Math.atan2(2 * tauU, sx)), sb = 2 * tauU / Math.sin(2 * beta), sbLim = (2 / 3) * fbu;
-      const AtS = Math.max(steel.atMin ?? 0, (tauU - ft / 3) * Math.tan(beta)) / fsu;        // A_t/(b_n s_t) [m²/m²] : BPEL 7.3,22 ; minimum de la note PSIDP-EL (≈ 0,1 MPa)
-      out.shear.push({ support: i, side: side < 0 ? 'gauche' : 'droite', x, F, Vp, Vels: Vr, Velu: Vu, sx, tau, tauBar, okELS: tau <= tauBar, tauU, beta, sb, sbLim, okBielle: sb <= sbLim, AtS });
+      const tauU = 1.5 * Math.abs(Vu) / (b * h);                                   // BPEL 9.6,3 : section brute
+      const beta = Math.max(Math.PI / 6, 0.5 * Math.atan2(2 * tauU, sx));
+      const tauLim = kh * 0.85 * fc / (3 * gb) * Math.sin(2 * beta);               // BPEL 7.3,3 × 9.6,42
+      const needAt = tauU > tau0;                                                   // BPEL 9.6,41
+      const AtS = needAt ? Math.max(steel.atMin ?? 0, (tauU - ft / 2) * Math.tan(beta)) / fsu : 0;   // A_t/(b s_t) [m²/m²]
+      out.shear.push({ support: i, side: side < 0 ? 'gauche' : 'droite', x, F, Vp, Vels: Vr, Velu: Vu, sx, tau, tauBar, okELS: tau <= tauBar, tauU, tau0, needAt, beta, tauLim, okBeton: tauU <= tauLim, AtS,
+        sb: 2 * tauU / Math.sin(2 * beta), sbLim: kh * (2 / 3) * fbu, okBielle: tauU <= tauLim });
     }
   }
   return out;

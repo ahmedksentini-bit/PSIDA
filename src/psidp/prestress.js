@@ -150,22 +150,48 @@ export function prestress(p) {
   const hyperOf = sig => { const F = sig.map(s => nAp * s); return { F, h: hyperstatic(spans, xs, F.map((f, i) => f * z[i])) }; };
   const sigmaB = (sig, MG) => { const { F, h } = hyperOf(sig); return xs.map((x, i) => F[i] / Bn + (F[i] * z[i] + h.at(x) + (MG ? MG(x) : 0)) * z[i] / In[i]); };
 
-  // ---- raccourcissement élastique : σ̄_bj = moyenne le long du câble de σ_b sous la seule précontrainte initiale
-  // (σ_b calculée avec la tension après raccourcissement : point fixe, deux itérations suffisent)
-  let dSc = 0, sbj = 0;
-  for (let it = 0; it < 4; it++) { sbj = trapz(xs, sigmaB(sAfter.map(s => s - dSc), null)) / Lt; dSc = (mat.kc ?? 0.5) * cb.Ep / mat.Eij * sbj; }
-  const spi = sAfter.map(s => s - dSc), dSi = spi.map(s => s0 - s);
+  // Deux conventions : 'BPEL91' (BPEL 91 révisé 99, par défaut) ou 'PSIDP84' (note modèle PSIDP-EL 84-1, BPEL 83).
+  const reg = mat.reg || 'BPEL91', MG = p.MGmean || (() => 0), MO = p.MOss || MG;
+  const sbG = Mf => xs.map((x, i) => Mf(x) * z[i] / In[i]);                    // contrainte au niveau du câble due à un moment
+  // ---- raccourcissement élastique (BPEL 3.3,13 : E_p Σ k Δσ_bj/E_ij ; k = ½ pour la précontrainte et les actions
+  // permanentes appliquées simultanément (ossature), 1 pour les actions appliquées ensuite (superstructures))
+  let dScArr = xs.map(() => 0), sbj = 0;
+  if (reg === 'PSIDP84') {
+    // note PSIDP-EL : σ̄_bj = moyenne le long du câble de σ_b sous la seule précontrainte initiale, constante
+    let dSc = 0;
+    for (let it = 0; it < 4; it++) { sbj = trapz(xs, sigmaB(sAfter.map(s => s - dSc), null)) / Lt; dSc = (mat.kc ?? 0.5) * cb.Ep / mat.Eij * sbj; }
+    dScArr = xs.map(() => dSc);
+  } else {
+    const sO = sbG(MO), sSup = sbG(x => MG(x) - MO(x));
+    for (let it = 0; it < 4; it++) {
+      const sP = sigmaB(sAfter.map((s, i) => s - dScArr[i]), null);
+      dScArr = xs.map((_, i) => Math.max(0, cb.Ep / mat.Eij * (0.5 * (sP[i] + sO[i]) + sSup[i])));
+    }
+    sbj = trapz(xs, dScArr) / Lt * mat.Eij / cb.Ep;
+  }
+  const dSc = trapz(xs, dScArr) / Lt;
+  const spi = sAfter.map((s, i) => s - dScArr[i]), dSi = spi.map(s => s0 - s);
 
-  // ---- pertes différées (fluage réajusté par itération)
+  // ---- pertes différées
   const dRho = spi.map(s => Math.max(0, 0.06 * cb.rho1000 * (s / cb.fprg - cb.mu0) * s));
-  const dR = mat.epsR * cb.Ep, MG = p.MGmean || (() => 0);
-  let sInf = spi.map((s, i) => s - dR - dRho[i]), dFl = null, rect = null, dSd = null;
+  // retrait (3.3,21) : ε_r [1 − r(j)] E_p, r(t) = t/(t + 9 r_m), t en jours, r_m en cm
+  const rOf = t => (mat.rm ? t / (t + 9 * mat.rm * 100) : 0);
+  const dR = reg === 'PSIDP84' ? mat.epsR * cb.Ep : mat.epsR * (1 - rOf(mat.j ?? 7)) * cb.Ep;
+  // σ_M : contrainte maximale au niveau du câble (mise en tension : P_i + ossature)
+  const sM0 = sigmaB(spi, MO);
+  let sInf = spi.map((s, i) => s - dR - dRho[i]), dFl = null, rect = null, dSd = null, sbFin = null;
   const hist = [];
   for (let it = 0; it < (p.iterations || 6); it++) {
-    const sb = sigmaB(sInf, MG);
-    dFl = sb.map(v => Math.max(0, mat.Kfl * cb.Ep * v / mat.Ei28));
-    rect = spi.map((s, i) => -2 * dRho[i] * (dR + dFl[i]) / s);
-    dSd = spi.map((s, i) => dR + dFl[i] + dRho[i] + rect[i]);
+    const sb = sigmaB(sInf, MG); sbFin = sb;
+    if (reg === 'PSIDP84') {
+      dFl = sb.map(v => Math.max(0, mat.Kfl * cb.Ep * v / mat.Ei28));
+      rect = spi.map((s, i) => -2 * dRho[i] * (dR + dFl[i]) / s);                 // terme rectangle (BPEL 83, annexe 2)
+      dSd = spi.map((s, i) => dR + dFl[i] + dRho[i] + rect[i]);
+    } else {
+      dFl = sb.map((v, i) => Math.max(0, (v + Math.max(v, sM0[i])) * cb.Ep / mat.Eij));   // 3.3,22 : (σ_b + σ_M) E_p/E_ij
+      rect = spi.map((s, i) => -dRho[i] / 6);                                     // 3.3,24 : 5/6 Δσ_ρ
+      dSd = spi.map((s, i) => dR + dFl[i] + 5 / 6 * dRho[i]);
+    }
     const nw = spi.map((s, i) => s - dSd[i]);
     hist.push(Math.max(...nw.map((v, i) => Math.abs(v - sInf[i]))));
     sInf = nw;
@@ -182,8 +208,8 @@ export function prestress(p) {
   return {
     xs, z, th, Bn, In, Ag, nAp, geo, tenth,
     friction: { sL, sR, s: sFric }, recoil: { left: rL && { d: rL.d, sd: rL.sd }, right: rR && { d: rR.d, sd: rR.sd }, loss: lossRecoil },
-    shortening: { sbj, dSc }, spi, dSi,
-    delayed: { dRho, dR, dFl, rect, dSd, conv: hist },
+    reg, shortening: { sbj, dSc, arr: dScArr }, spi, dSi,
+    delayed: { dRho, dR, dFl, rect, dSd, conv: hist, sbFin, sM0 },
     MT, MS, ES,
     /** Valeur d'un tableau aux nœuds en x (interpolation linéaire). */
     at: (arr, x) => interp(xs, arr, x),

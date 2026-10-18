@@ -18,7 +18,7 @@ export const UNITS = {
 
 export const BP_DEFAULTS = {
   actif: false, unite: '12T15S', n: null, fprg: 1860, fpeg: 1660, sigma0: null, Ep: 190000, rho1000: 2.5, mu0: 0.43,
-  f: 0.18, phi: 0.002, g: 0.006, ends: 'both', friction: 'continu', fcj: null, epsR: 2e-4, Kfl: 2, rj: 0.5,
+  f: 0.18, phi: 0.002, g: 0.006, ends: 'both', friction: 'continu', fcj: null, epsR: 3e-4, Kfl: 2, rj: 0.5, reg: 'BPEL91', j: 7,
   cover: null, decal: 0.007, eSup: null, eLow: null, lowEnd: 0.4, a: 0.1, segs: null, fe: 500, skin: 3e-4, trace: 'optimise',
 };
 
@@ -145,9 +145,10 @@ export function designPSIDP(ctx, bpIn = {}) {
   const steel = { fe: bp.fe * MPa, skin: bp.skin, Es: 200000 * MPa, gs: 1.15, gp: 1.15, gb: 1.5, fpeg: fpeg * MPa, cover: 0.035, atMin: (bp.atMin ?? 0.1) * MPa };
 
   const cableOf = (n, sg) => ({ n, Ap: U.Ap, phiG: U.phiG, segs: sg, sigma0: sigma0 * MPa, f: bp.f, phi: bp.phi, g: bp.g, Ep: bp.Ep * MPa, rho1000: bp.rho1000, mu0: bp.mu0, fprg: fprg * MPa, ends: bp.ends, friction: bp.friction });
-  const matP = { Eij: Ei(fcj) * MPa, Ei28: Ei(fc28) * MPa, epsR: bp.epsR, Kfl: bp.Kfl, rj: bp.rj };
+  const rm = sec.B / (sec.bTop + sec.bBot + 2 * sec.h);                       // rayon moyen B/u [m] (BPEL 2.1,51)
+  const matP = { Eij: Ei(fcj) * MPa, Ei28: Ei(fc28) * MPa, epsR: bp.epsR, Kfl: bp.Kfl, rj: bp.rj, reg: bp.reg || 'BPEL91', j: bp.j ?? 7, rm };
   const run = (n, sg = segs, fast = false) => {
-    const r = prestress({ spans, sec, MGmean: at(G.moy), cable: cableOf(n, sg), mat: matP, nPerSpan: fast ? 20 : 100, iterations: fast ? 3 : 6 });
+    const r = prestress({ spans, sec, MGmean: at(G.moy), MOss: at(O.moy), cable: cableOf(n, sg), mat: matP, nPerSpan: fast ? 20 : 100, iterations: fast ? 3 : 6 });
     const c = psidpChecks(r, { sec, phiG: U.phiG, nCables: n, Ep: bp.Ep * MPa, stations, M, V, lim, steel, stressOnly: fast });
     return { n, r, c, ok: c.extremes.every(e => e.ok), segs: sg };
   };
@@ -236,7 +237,14 @@ export function designPSIDP(ctx, bpIn = {}) {
     for (let it = 0; it < 50; it++) { const m = (lo + hi) / 2; if (mLim({ ...base, As: m }).Mlim < Math.abs(q.Mcal)) lo = m; else hi = m; }
     q.AsAdd = hi - (hog ? st.top.As : st.bot.As);
   }
-  const anchors = anchorZone({ n: res.n, U, sec, sigma0: sigma0 * MPa, lim, fe: bp.fe * MPa, slope: [res.r.th[0], res.r.th[res.r.th.length - 1]], zEnd: [res.r.z[0], res.r.z[res.r.z.length - 1]], width: sec.bBot });
+  const nL = res.r.xs.length - 1, sh = res.c.shear || [];
+  const shEnd = [sh.find(q => q.support === 0), sh.find(q => q.support === spans.length)];
+  const bR = ctx.beamF61 ? ctx.beamF61.R : null, Rh = res.r.ES.min.hyp.R;
+  const anchors = anchorZone({ n: res.n, U, sec, sigma0: sigma0 * MPa, sigP1: [res.r.MT.max.sig[0], res.r.MT.max.sig[nL]], lim, fe: bp.fe * MPa,
+    slope: [res.r.th[0], res.r.th[nL]], zEnd: [res.r.z[0], res.r.z[nL]], width: sec.bBot,
+    Vabout: shEnd.map(q => (q ? q.Vels : 0)), beta: shEnd.map(q => (q ? q.beta : Math.PI / 6)),
+    Ru: bR ? [bR.ELUmax[0] + Math.max(0, Rh[0]), bR.ELUmax[spans.length] + Math.max(0, Rh[spans.length])] : [0, 0],
+    sigPm: [res.r.ES.moy.sig[0], res.r.ES.moy.sig[nL]], fpeg: fpeg * MPa });
   return { bp, unit: U, sec, sigma0, fcj, fc28, lim, steel, segs, geoChk, pre, n0, tried, auto: !bp.n, opt, anchors, xs, M, Q, G, O, ...res };
 }
 
@@ -292,40 +300,77 @@ export function psidpDeflections(dp) {
 }
 
 /**
- * Zones d'about — ancrages des câbles (BPEL 91, annexe 4) : prisme de première régularisation de chaque ancrage
- * (dimension d dans chaque plan : entraxe ou deux fois la distance au parement, plaque d'ancrage a), frettage de surface
- * A_s = 0,04 F_j0/σ_s,lim, éclatement σ_tj = 0,5 (1 − a/d) F_j0/(e′ d) ≤ 1,25 f_tj et σ_xm = F_j0/(e′ d) ≤ (2/3) f_cj,
- * armatures R = 0,25 (1 − a/d) F_j0, A_e = R/(k σ_s,lim) (k = 1 nappe d'extrémité, 1,5 nappe intermédiaire),
- * A_e ≥ 0,15 F_j0/σ_s,lim ; équilibre général dans le plan vertical sur la longueur de régularisation l_r = h : V_x(t) =
- * forces d'ancrage (réparties sur leur prisme) au-dessus de la coupure t − effort normal du béton au-dessus de t dans la
- * section régularisée (Navier), τ_g = 2 V_x,max/(b l_r), A_c = V_x,max/σ_s,lim. σ_s,lim = (2/3) f_e.
- * Ancrages en une nappe si h ≥ 2 a + 2 enrobages, sinon deux nappes (disposition conseillée par le guide SETRA 1989 § 3.3).
+ * Zones d'about — ancrages des câbles, BPEL 91 révisé 99, annexe 4 (première partie, § 1.1,13 à 1.3,2) et article 7.5,11.
+ * Dalle = panneau rectangulaire h × b étudié dans le plan vertical (niveaux = nappes d'ancrages, épaisseur e′ = b, l_r = h)
+ * et dans le plan horizontal (niveaux = files d'ancrages, épaisseur e′ = h, l_r = b).
+ *  - prisme symétrique d_j = 2 inf(c_j, c_j*) (demi-intervalles, ou distance au parement pour un niveau extrême) ;
+ *  - σ_s,lim = 2/3 f_e ; frettage de surface A_s = 0,04 max(F_j0)/σ_s,lim (1.2,1) ;
+ *  - éclatement σ_tej = 0,5 (1 − a_j/d_j) F_j0/(e′ d_j) ≤ 1,25 f_tj, σ_xmj = F_j0/(e′ d_j) ≤ 2/3 f_cj (1.2,21) ;
+ *    R_j = 0,25 (1 − a_j/d_j) F_j0, A_ej = R_j/(k_j σ_s,lim), k_j = 1 (niveau extrême) ou 1,5 (intermédiaire),
+ *    A_e = sup[max A_ej ; 0,15 max(F_j0)/σ_s,lim] sur une longueur max(d_j) (1.2,22) ;
+ *  - équilibre général de diffusion pure (1.3) : forces F_j réparties sur (a_j + d_j)/2 ≤ 2 a_j, V_x(t) = forces au-dessus
+ *    de la coupure − ∫ σ(F_j) e′ dt (contraintes de Navier dues aux F_j), τ_d = 2 V_x/(e′ l_r), τ_g = max_t(τ_d + τ) ≤ 1,5 f_tj
+ *    (τ : cisaillement de Résistance des Matériaux des autres sollicitations) ; V_xe = V_x [1 − (f_tj/3τ_d)²],
+ *    A_c = (|V_xe|max − N_tc)/σ_s,lim (N_tc = 0), complément si A_c > A_s + A_e, réparti sur 2 l_r/3 (1.3,2) ;
+ *  - bielle d'about (7.5,11) : armatures longitudinales inférieures équilibrant R_u cotg β_u ; armatures de précontrainte
+ *    situées en partie inférieure comptées à min(1,2 σ_pm ; f_peg/γ_p), passives à f_e/γ_s.
+ * F_j0 : force à l'origine (σ_p0 A_p) pour la première régularisation ; F_j : valeur de calcul P1 à l'ancrage pour l'équilibre
+ * général. Plaques d'ancrage a : valeurs forfaitaires par unité (à remplacer par celles de l'agrément du procédé).
  */
-export function anchorZone({ n, U, sec, sigma0, lim, fe, slope = [0, 0], zEnd = [0, 0], width }) {
-  const a = U.plate || 0.25, Fj0 = U.Ap * sigma0, ssl = 2 / 3 * fe, h = sec.h, c0 = 0.05;
+export function anchorZone({ n, U, sec, sigma0, sigP1 = null, lim, fe, slope = [0, 0], zEnd = [0, 0], width, Vabout = [0, 0], Ru = [0, 0], beta = [Math.PI / 6, Math.PI / 6], sigPm = [null, null], fpeg = null }) {
+  const a = U.plate || 0.25, Fj0u = U.Ap * sigma0, ssl = 2 / 3 * fe, h = sec.h, c0 = 0.05, W = width;
   const rows = h >= 2 * a + 2 * c0 ? 1 : 2, perRow = Math.ceil(n / rows);
-  const sp = (width - 2 * c0 - a) / Math.max(1, perRow - 1), dh = Math.min(perRow > 1 ? sp : width, 2 * (c0 + a / 2) + sp);
-  const dv = rows === 1 ? h : h / 2;
-  const plane = (d, e, k) => {
-    const sigT = 0.5 * (1 - a / d) * Fj0 / (e * d), sigX = Fj0 / (e * d), R = 0.25 * (1 - a / d) * Fj0;
-    return { d, e, sigT, sigX, okT: sigT <= 1.25 * lim.ftj, okX: sigX <= 2 / 3 * lim.fcj, R, Ae: Math.max(R / (k * ssl), 0.15 * Fj0 / ssl) };
+  const edge = c0 + a / 2, sp = perRow > 1 ? (W - 2 * edge) / (perRow - 1) : 0;
+  const yCols = Array.from({ length: perRow }, (_, k) => (perRow === 1 ? 0 : -W / 2 + edge + k * sp));
+  // première régularisation dans un plan : niveaux (positions dans le panneau, depuis la face « basse »), forces, hauteur e
+  const firstReg = (pos, F, e, eP) => {
+    const lv = pos.map((p, j) => {
+      const lo = j === 0 ? p : (p - pos[j - 1]) / 2, hi = j === pos.length - 1 ? e - p : (pos[j + 1] - p) / 2;
+      const d = 2 * Math.min(lo, hi), aa = Math.min(a, d);
+      const sigT = 0.5 * (1 - aa / d) * F[j] / (eP * d), sigX = F[j] / (eP * d), R = 0.25 * (1 - aa / d) * F[j];
+      const k = j === 0 || j === pos.length - 1 ? 1 : 1.5;
+      return { pos: p, d, F: F[j], sigT, sigX, okT: sigT <= 1.25 * lim.ftj, okX: sigX <= 2 / 3 * lim.fcj, R, k, Aej: R / (k * ssl) };
+    });
+    const Fmax = Math.max(...F);
+    return { levels: lv, As: 0.04 * Fmax / ssl, Ae: Math.max(Math.max(...lv.map(q => q.Aej)), 0.15 * Fmax / ssl), Lzone: Math.max(...lv.map(q => q.d)),
+      sigT: Math.max(...lv.map(q => q.sigT)), sigX: Math.max(...lv.map(q => q.sigX)), okT: lv.every(q => q.okT), okX: lv.every(q => q.okX) };
   };
-  const vert = plane(dv, dh, 1), hor = plane(dh, dv, perRow > 2 ? 1.5 : 1);
-  // équilibre général (plan vertical), par mètre de largeur multiplié par la largeur : section b × h, ancrages répartis
-  const out = zEnd.map((z0, side) => {
-    const F = n * Fj0 * Math.cos(Math.atan(slope[side])), levels = rows === 1 ? [z0] : [z0 + h / 4, z0 - h / 4];
-    const yb = -sec.vp, B = sec.B, I = sec.I, Fe = F * levels.reduce((s, z) => s + z, 0) / levels.length;
-    let Vmax = 0, tAt = 0;
-    for (let k = 0; k <= 200; k++) {
-      const y = yb + h * k / 200;
-      let Fabove = 0;
-      for (const z of levels) { const lo = z - dv / 2, hi = z + dv / 2, f = F / levels.length; Fabove += f * Math.min(1, Math.max(0, (hi - y) / (hi - lo))); }
-      // effort normal du béton au-dessus de y : ∫_y^v (F/B + Fe·η/I) b dη, b = B/h (largeur moyenne)
-      const b = B / h, v = sec.v, Nc = b * ((F / B) * (v - y) + Fe / I * (v * v - y * y) / 2);
-      const V = Fabove - Nc; if (Math.abs(V) > Math.abs(Vmax)) { Vmax = V; tAt = y; }
+  // équilibre général de diffusion pure dans un plan : poutre de répartition de hauteur e, épaisseur e′, longueur l_r = e
+  const general = (pos, F, d, e, eP, tauRdm = () => 0) => {
+    const N = F.reduce((s2, f) => s2 + f, 0), M = F.reduce((s2, f, j) => s2 + f * (pos[j] - e / 2), 0), A = e * eP, I = eP * e ** 3 / 12;
+    let best = { tg: 0 }, VxeMax = 0, VxMax = 0;
+    for (let k = 1; k < 400; k++) {
+      const t = e * k / 400;
+      let Fa = 0;
+      pos.forEach((p, j) => { const w = Math.min((a + d[j]) / 2, 2 * a), lo = p - w / 2, hi = p + w / 2; Fa += F[j] * Math.min(1, Math.max(0, (t - lo) / (hi - lo))); });
+      const y = t - e / 2, X = eP * (N / A * t + M / I * (y * y - (e / 2) ** 2) / 2);   // ∫ σ(F_j) e′ du entre la face 0 et t
+      const Vx = Fa - X, td = 2 * Math.abs(Vx) / (eP * e), tg = td + Math.abs(tauRdm(t));
+      if (tg > best.tg) best = { tg, t, td, Vx };
+      if (Math.abs(Vx) > Math.abs(VxMax)) VxMax = Vx;
+      const Vxe = td > lim.ftj / 3 ? Math.abs(Vx) * (1 - (lim.ftj / (3 * td)) ** 2) : 0;
+      VxeMax = Math.max(VxeMax, Vxe);
     }
-    const tauG = 2 * Math.abs(Vmax) / (width * h);
-    return { side: side ? 'droite' : 'gauche', F, Vmax, yAt: tAt, tauG, tauLim: 1.5 * lim.ftj, ok: tauG + vert.sigT <= 1.5 * lim.ftj, Ac: Math.abs(Vmax) / ssl };
+    return { VxMax, tauG: best.tg, tAt: best.t, tauD: best.td, ok: best.tg <= 1.5 * lim.ftj, tauLim: 1.5 * lim.ftj, VxeMax, Ac: VxeMax / ssl };
+  };
+  const sides = zEnd.map((z0, side) => {
+    const zRows = rows === 1 ? [z0] : [z0 - h / 4, z0 + h / 4];                     // depuis la fibre moyenne
+    const posV = zRows.map(z => z + sec.vp);                                         // depuis la fibre inférieure
+    const cosA = Math.cos(Math.atan(slope[side]));
+    // plan vertical : niveaux = nappes (perRow ancrages chacune), e′ = b
+    const FrowO = posV.map(() => perRow * Fj0u), vert = firstReg(posV, FrowO, h, W);
+    const Fd = (sigP1 ? sigP1[side] : sigma0) * U.Ap * cosA, FrowD = posV.map(() => perRow * Fd);
+    const V0 = Math.abs(Vabout[side] || 0), tauR = t => 1.5 * V0 / (W * h) * (1 - ((2 * t - h) / h) ** 2);
+    const gV = general(posV, FrowD, vert.levels.map(q => q.d), h, W, tauR);
+    // plan horizontal : niveaux = files (rows ancrages chacune), e′ = h
+    const posH = yCols.map(y => y + W / 2), FcolO = posH.map(() => rows * Fj0u), hor = firstReg(posH, FcolO, W, h);
+    const gH = general(posH, posH.map(() => rows * Fd), hor.levels.map(q => q.d), W, h);
+    // bielle d'about (7.5,11)
+    const tb = Math.tan(beta[side] || Math.PI / 6), Hb = Math.abs(Ru[side] || 0) / tb;
+    const lowTendons = rows === 2 ? perRow : (z0 < -0.01 ? n : 0);
+    const sp1 = Math.min(1.2 * (sigPm[side] || 0), (fpeg || sigma0) / 1.15), Fp = lowTendons * U.Ap * sp1;
+    const AsInf = Math.max(0, Hb - Fp) / (fe / 1.15);
+    return { side: side ? 'droite' : 'gauche', vert, hor, gV, gH, complV: Math.max(0, gV.Ac - vert.As - vert.Ae), complH: Math.max(0, gH.Ac - hor.As - hor.Ae), Fd,
+      bielle: { Ru: Ru[side] || 0, beta: beta[side], Hb, lowTendons, sp1, Fp, AsInf } };
   });
-  return { a, Fj0, rows, perRow, spacing: perRow > 1 ? sp : null, dv, dh, ssl, As: 0.04 * Fj0 / ssl, vert, hor, general: out };
+  return { a, Fj0: Fj0u, rows, perRow, spacing: perRow > 1 ? sp : null, edge, ssl, sides };
 }

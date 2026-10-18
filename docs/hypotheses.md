@@ -397,12 +397,27 @@ Le modèle reprend les principes du programme SETRA/CETE de l'Ouest PSH (« Calc
   pour un ouvrage symétrique ; recherche par coordonnées maximisant la marge minimale normée des contraintes (équivalent
   du centrage du tracé dans le fuseau du programme PSIDP, qui utilisait un simplexe), puis plus petit nombre d'unités de
   marge positive. Calcul rapide (20 pas par travée, 3 itérations de fluage) pendant la recherche, définitif ensuite.
-- Zones d'about (v0.27, BPEL annexe 4) : prisme de première régularisation (une nappe si h ≥ 2a + 0,10 m, sinon deux),
-  frettage de surface 0,04 F_j0/σ_s,lim, éclatement (σ_t ≤ 1,25 f_tj, σ_xm ≤ 2/3 f_cj, A_e = 0,25 (1 − a/d) F_j0/(k σ_s,lim)
-  ≥ 0,15 F_j0/σ_s,lim), équilibre général (forces réparties sur les prismes, Navier sur l_r = h, τ_g + σ_t ≤ 1,5 f_tj,
-  A_c = V_x,max/σ_s,lim), σ_s,lim = 2/3 f_e ; plaques d'ancrage forfaitaires par unité. Valeurs à contrôler sur le texte de
-  l'annexe 4 (non disponible dans les références du dépôt). Bielle d'about et coin inférieur non traités.
-
+- Zones d'about (v0.28, texte du BPEL 91 révisé 99, annexe 4 § 1.1,13 à 1.3,2, et article 7.5) : dalle étudiée comme un
+  panneau h × b dans le plan vertical (nappes d'ancrages, e′ = b, l_r = h) et dans le plan horizontal (files, e′ = h,
+  l_r = b) ; prisme symétrique d_j = 2 inf(c_j, c_j*) ; σ_s,lim = 2/3 f_e ; A_s = 0,04 max F_j0/σ_s,lim ;
+  σ_tej = 0,5 (1 − a_j/d_j) F_j0/(e′ d_j) ≤ 1,25 f_tj, σ_xmj = F_j0/(e′ d_j) ≤ 2/3 f_cj ; R_j = 0,25 (1 − a_j/d_j) F_j0,
+  A_ej = R_j/(k_j σ_s,lim) (k_j = 1 extrême, 1,5 intermédiaire), A_e = sup(max A_ej ; 0,15 max F_j0/σ_s,lim) sur max d_j ;
+  équilibre général de diffusion pure avec les F_j (P1) réparties sur (a_j + d_j)/2 ≤ 2a_j, τ_d = 2V_x/(e′ l_r),
+  τ_g = max(τ_d + τ) ≤ 1,5 f_tj (τ parabolique de l'effort tranchant ELS à l'about), V_xe = V_x [1 − (f_tj/3τ_d)²],
+  A_c = |V_xe|max/σ_s,lim, complément si A_c > A_s + A_e sur 2 l_r/3. Bielle d'about (7.5,11) : R_u cotg β_u équilibré
+  par les armatures inférieures (précontrainte en partie basse à min(1,2 σ_pm ; f_peg/γ_p), passives à f_e/γ_s) ; avec
+  les ancrages sur la fibre moyenne, la précontrainte n'est pas comptée. Coin inférieur (7.5,2) : commentaire seulement.
+  Plaques d'ancrage forfaitaires par unité (à remplacer par celles de l'agrément du procédé).
+- Pertes (v0.28) : option « BPEL 91 révisé 99 » (défaut) — déformations instantanées E_p Σ k Δσ_bj/E_ij section par
+  section (k = ½ précontrainte et poids propre, 1 superstructures), retrait ε_r [1 − r(j)] E_p avec r(t) = t/(t + 9 r_m),
+  fluage (σ_b + σ_M) E_p/E_ij, Δσ_d = Δσ_r + Δσ_fl + 5/6 Δσ_ρ ; option « note PSIDP-EL 84 » (BPEL 83) conservée pour le
+  calage : σ̄_bj moyen, K_fl E_p σ_b/E_i28, terme rectangle. Retrait final par défaut 3·10⁻⁴ (climat tempéré sec).
+- Contraintes (v0.28) : traction en exécution limitée à 0,7 f_tj dans la section d'enrobage (6.1,23 ; f_tj dans la note de
+  1984) ; aciers de peau ≥ 3 cm²/m de parement et ≥ 0,10 % de la section (6.1,31).
+- Effort tranchant (v0.28) : BPEL 9.6 (dalles, ELU seul), τ_réd,u = 1,5 V_réd,u/(b h) sur la section brute ; pas
+  d'armatures si τ_réd,u ≤ 0,09 f_cj/γ_b ; sinon (A_t/(b s_t)) f_e/γ_s ≥ (τ_réd,u − f_tj/2) tg β_u, minimum 0,1 MPa
+  (0,4 MPa sur 0,5 h le long des bords libres) ; τ_réd,u ≤ (0,85 f_cj/3γ_b) sin 2β_u × (10h/3 si h < 0,30 m) ; contrôle ELS
+  de la note (7.2,2) donné à titre indicatif ; appuis d'extrémité inclus.
 ## 2. Protocole de comparaison avec une note de référence
 
 ### 2.1 Référentiel Eurocodes — note CHAMOA-PSIDA (Cerema, guide technique, ch. 4)

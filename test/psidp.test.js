@@ -22,7 +22,7 @@ const MGmean = x => { let k = 0; while (k < xsG.length - 2 && xsG[k + 1] < x) k+
 export const INPUT = {
   spans: SPANS, sec: { B: 5.43, I: 0.136392, v: 0.273, vp: 0.277 },
   cable: { n: 18, Ap: 1116e-6, phiG: 0.07, segs: SEGS, sigma0: 151000, f: 0.18, phi: 0.002, g: 0.006, Ep: 19.4e6, rho1000: 2.5, mu0: 0.43, fprg: 189000, ends: 'both', friction: 'dixiemes' },
-  mat: { Eij: 3128069, Ei28: 3216226, epsR: 2e-4, Kfl: 2, rj: 0.5 },
+  mat: { Eij: 3128069, Ei28: 3216226, epsR: 2e-4, Kfl: 2, rj: 0.5, reg: 'PSIDP84' },
   MGmean,
 };
 const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg} : note ${b}, outil ${a.toFixed(3)}`);
@@ -99,7 +99,9 @@ test('PSI-DP — contraintes classe II, section d\'enrobage, aciers passifs, ELU
   const sh = chk.shear.find(q => q.support === 1 && q.side === 'gauche');
   rel(Math.abs(sh.Vels), 265.2, 0.01, 'V réduit ELS'); rel(sh.sx, 434, 0.01, 'σ_x'); near(sh.tau, 81, 1.5, 'τ ELS'); near(sh.tauBar, 233, 2, 'τ̄');
   // ELU : la note retranche 25,6 t (relevage × 1,42) ; PSIDA retranche le relevage sans majoration (18,6 t) : +1,9 % du côté de la sécurité
-  rel(Math.abs(sh.Velu), 365.5, 0.025, 'V réduit ELU'); near(sh.tauU, 111, 3, 'τ_u'); near(sh.beta * 200 / Math.PI, 33.333, 0.01, 'β_u'); near(sh.sb, 257, 7, 'bielle'); near(sh.sbLim, 944, 1, 'limite bielle');
+  rel(Math.abs(sh.Velu), 365.5, 0.025, 'V réduit ELU');
+  // BPEL 9.6,3 (dalles) : τ_u sur la section brute b = 9,60 m ; la note utilise b_n = 9,60 − 18 × 0,035 = 8,97 m
+  near(sh.tauU * 9.6 / 8.97, 111, 3, 'τ_u (largeur nette de la note)'); assert.ok(sh.needAt === sh.tauU > 0.09 * 2500 / 1.5); near(sh.beta * 200 / Math.PI, 33.333, 0.01, 'β_u'); near(sh.sb * 9.6 / 8.97, 257, 7, 'bielle'); near(sh.tauLim, 0.85 * 2500 / 4.5 * Math.sin(Math.PI / 3), 0.5, 'τ_u limite BPEL 7.3,3'); near(sh.sbLim, 944, 1, 'limite bielle');
 });
 
 test('PSI-DP — dimensionnement intégré au modèle PSIDA (18-24-18 m, h = 0,85 m) : nombre minimal d\'unités, note', async () => {
@@ -163,10 +165,30 @@ test('PSI-DP — recherche du tracé (nombre d\'unités minimal) et zones d\'abo
   assert.ok(!std.ok || std.n >= opt.n);
   const s3 = compute(parseData({ ...base, spans: '18, 24, 18', h: '0.85' })).psidp, s3s = compute(parseData({ ...base, spans: '18, 24, 18', h: '0.85', bp_trace: 'standard' })).psidp;
   assert.ok(s3.n <= s3s.n && s3.ok && s3s.ok, `${s3.n} / ${s3s.n}`);
-  // zones d'about : formules de l'annexe 4 recalculées à la main
-  const A = s3.anchors, U = s3.unit, Fj0 = U.Ap * s3.sigma0 * 1000, ssl = 2 / 3 * 500000;
-  rel(A.Fj0, Fj0, 1e-9, 'F_j0'); rel(A.As, 0.04 * Fj0 / ssl, 1e-9, 'frettage de surface');
-  const d = A.dv, e = A.dh;
-  rel(A.vert.sigT, 0.5 * (1 - A.a / d) * Fj0 / (e * d), 1e-9, 'σ_t éclatement'); rel(A.vert.Ae, Math.max(0.25 * (1 - A.a / d) * Fj0 / ssl, 0.15 * Fj0 / ssl), 1e-9, 'A_e');
-  assert.equal(A.rows, 1); assert.ok(A.general.every(g => Math.abs(g.Vmax) < 0.05 * Fj0), 'ancrages centrés : équilibre général quasi nul');
+  // zones d'about : formules de l'annexe 4 du BPEL 91 recalculées à la main (plan vertical : une nappe centrée, e′ = b)
+  const A = s3.anchors, U = s3.unit, Fj0 = U.Ap * s3.sigma0 * 1000, ssl = 2 / 3 * 500000, S = A.sides[0], W = s3.sec.bBot, h = s3.sec.h;
+  rel(A.Fj0, Fj0, 1e-9, 'F_j0'); assert.equal(A.rows, 1);
+  const Frow = A.perRow * Fj0, d = S.vert.levels[0].d;
+  rel(d, h, 1e-9, 'prisme vertical d = h (nappe centrée)');
+  rel(S.vert.As, 0.04 * Frow / ssl, 1e-9, 'frettage de surface 1.2,1');
+  rel(S.vert.sigT, 0.5 * (1 - A.a / d) * Frow / (W * d), 1e-9, 'σ_tej 1.2,21'); rel(S.vert.sigX, Frow / (W * d), 1e-9, 'σ_xmj');
+  rel(S.vert.Ae, Math.max(0.25 * (1 - A.a / d) * Frow / ssl, 0.15 * Frow / ssl), 1e-9, 'A_e 1.2,22 (k = 1)');
+  // plan horizontal : prisme de rive = 2 × distance au bord, courant = entraxe ; files intermédiaires k = 1,5
+  rel(S.hor.levels[0].d, 2 * A.edge, 1e-9, 'prisme de rive'); rel(S.hor.levels[1].d, A.spacing, 1e-9, 'prisme courant'); assert.equal(S.hor.levels[1].k, 1.5);
+  // équilibre général (1.3) : forces réparties sur min((a + d)/2, 2a), V_x au bord inférieur de la zone chargée = −F × t/h
+  const w = Math.min((A.a + d) / 2, 2 * A.a), Fd = A.perRow * S.Fd, Vref = Fd * (h / 2 - w / 2) / h;
+  rel(Math.abs(S.gV.VxMax), Vref, 0.02, 'V_x max'); assert.ok(S.gV.tauD > 0 && S.gV.Ac >= 0);
+  // bielle d'about : R_u cotg β_u équilibré par les aciers passifs inférieurs (ancrages sur la fibre moyenne)
+  rel(S.bielle.AsInf, S.bielle.Ru / Math.tan(S.bielle.beta) / (500000 / 1.15), 1e-9, 'bielle d\'about 7.5,11');
+});
+
+test('PSI-DP — pertes selon le BPEL 91 révisé 99 (3.3,13 ; 3.3,21 à 3.3,24) recalculées à la main', () => {
+  const MO = x => MGmean(x) * 13.575 / 17.075, rm = 5.43 / (10.0 + 9.6 + 2 * 0.55);
+  const r = prestress({ ...INPUT, MOss: MO, mat: { ...INPUT.mat, reg: 'BPEL91', j: 7, rm } });
+  const x = r.xOf(1, 0.5), Ep = 19.4e6, Eij = 3128069;
+  rel(r.delayed.dR, 2e-4 * (1 - 7 / (7 + 9 * rm * 100)) * Ep, 1e-9, 'retrait ε_r [1 − r(j)] E_p');
+  const i = r.xs.findIndex(v => Math.abs(v - x) < 1e-9), sb = r.delayed.sbFin[i], sM = Math.max(sb, r.delayed.sM0[i]);
+  rel(r.delayed.dFl[i], (sb + sM) * Ep / Eij, 1e-9, 'fluage (σ_b + σ_M) E_p/E_ij');
+  rel(r.delayed.dSd[i], r.delayed.dR + r.delayed.dFl[i] + 5 / 6 * r.delayed.dRho[i], 1e-9, 'Δσ_d = Δσ_r + Δσ_fl + 5/6 Δσ_ρ');
+  assert.ok(r.shortening.arr[i] > 0 && Math.abs(r.at(r.ES.moy.sig, x) - (151000 - r.at(r.ES.moy.dS ?? r.ES.dS, x))) < 1);
 });
