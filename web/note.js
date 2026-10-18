@@ -15,6 +15,7 @@ import { mechanicalSkew } from '../src/skew.js';
 import { supportsBlocks, waterBlocks } from './supports_view.js';
 import { seismicBlocks, texToText } from './seismic_note.js';
 import { ddrBlocks } from './ddr_view.js';
+import { psidpBlocks } from './psidp_view.js';
 import { deckFigures, supportSchema, distributionChart, pileProfileCharts, footingPressureChart, svgBlock } from './note_figures.js';
 
 const F = (v, n = 1) => (v === null || v === undefined || !isFinite(v) ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: n, maximumFractionDigits: n }));
@@ -276,6 +277,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
   }
 
   // ---------------------------------------------------------------------------------------------------------- 13
+  if (!rebar && st.rebarError) comment(`Plan de ferraillage BA : ${st.rebarError}.`);
   if (rebar && rebar.marks) {
     h1('Nomenclature des aciers', isF ? 13 : 12);
     table(['Repère', 'Désignation', 'φ [mm]', 'Espacement [m]', 'Longueur unitaire [m]', 'Nombre', 'Masse [kg]'], rebar.marks.map(m => [String(m.mark), m.label, String(m.phi), m.s ? F2(m.s) : '—', F2(m.len), String(m.count), F0(m.mass)]), { small: true });
@@ -284,6 +286,10 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
 
   // ---------------------------------------------------------------------------------------------------------- 14
   let chap = isF ? 14 : 13;
+  if (st.psidp || st.psidpError) {
+    h1('Précontrainte longitudinale — dalle PSI-DP (BPEL 91, classe II)', chap++);
+    for (const b of psidpBlocks(st.psidp, { error: st.psidpError })) B.push(b);
+  }
   if (st.supports) {
     h1('Appuis et fondations', chap++);
     for (const b of supportsBlocks(st.supports, ref, { noWater: true })) B.push(b);
@@ -306,6 +312,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
     'SETRA, Ponts-dalles précontraints d\'inertie constante — Programme PSIDP.EL, notice et note de calcul modèle, annexes 1 à 6, 1985.',
     'Cerema, CHAMOA-P PSIDA — Guide technique, 2023.',
     'Fascicule 61 titre II (1971, mod. 1981) ; BAEL 91 révisé 99 ; NF EN 1990/A1, NF EN 1991-2, NF EN 1992-1-1 et 1992-2 et annexes nationales.',
+    ...(st.psidp ? ['SETRA, PSI-DP — Passages supérieurs ou inférieurs en dalle précontrainte, dossier pilote, et note de calcul modèle PSIDP-EL 84-1, 1984-1985.', 'BPEL 91 révisé 99 — Règles techniques de conception et de calcul des ouvrages et constructions en béton précontraint suivant la méthode des états limites (fascicule 62 titre I section II du CCTG).'] : []),
     ...(st.supports ? ['SETRA, PP73 — Appuis des tabliers (piles, palées, culées), 1973-1977 ; SETRA, FOND 72 — Fondations courantes d\'ouvrages d\'art.',
       'Fascicule 62 titre V (1993) ; NF P 94-261 (2013) et guide Cerema « Eurocode 7 — fondations superficielles » (2015) ; NF P 94-262 (2012).',
       'Note de calcul des appuis et fondations du Pont de Noé (COMETE/ICI, A.P.D. mai 2012, programme PSH) — valeurs de contrôle.'] : []),

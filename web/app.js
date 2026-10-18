@@ -23,6 +23,7 @@ import { longitudinalRebarSVG, crossRebarSVG, scheduleHTML, providedPlot } from 
 import { supportsBlocks, blocksToHTML, supportsNote } from './supports_view.js';
 import { parseStandalone, computeStandalone } from '../src/supports/standalone.js';
 import { parseSupports } from '../src/pipeline.js';
+import { psidpBlocks } from './psidp_view.js';
 import { guideElevationSVG, guideCrossSectionSVG } from './guide_schema.js';
 import { toPontEC8 } from '../src/ec8export.js';
 import { parsePoutres, computePoutres, linesToStandaloneText } from '../src/beams/run.js';
@@ -196,11 +197,17 @@ function renderStatic(st) {
   h += `<h3>Fascicule 61 titre II (valeurs caractéristiques, δ inclus pour B et Mc)</h3>` + st.cases.filter(c => c.ref === 'F61').map(c => tableEnv(st, c.res, c.label)).join('');
   $('#tables').innerHTML = h;
   $('#trans-span').innerHTML = deck.spans.map((L, j) => `<option value="${j}">Travée ${j + 1} (${L} m)</option>`).join('');
-  renderConception(st); renderCase(st); renderSection(st); renderDesign(st); renderTransverse(st); renderExtra(st); renderRebar(st); renderSupports(st);
+  renderConception(st); renderCase(st); renderSection(st); renderDesign(st); renderTransverse(st); renderExtra(st); renderRebar(st); renderSupports(st); renderPrecontrainte(st);
+}
+
+function renderPrecontrainte(st) {
+  const box = $('#bp-out'); if (!box) return;
+  try { box.innerHTML = blocksToHTML(psidpBlocks(st.psidp, { error: st.psidpError })); } catch (e) { box.innerHTML = `<p class="small">Affichage impossible : ${e.message}</p>`; }
 }
 
 function renderRebar(st) {
   const { deck, rebar } = st;
+  if (!rebar) { $('#rebar-info').innerHTML = `<span class="badge warn">ATTENTION</span> ${st.rebarError || 'plan de ferraillage indisponible'}.`; for (const id of ['#rebar-long', '#rebar-cross', '#rebar-schedule']) $(id).innerHTML = ''; return; }
   $('#rebar-info').innerHTML = `Ferraillage établi sur l'enveloppe des aciers requis (profil${rebar.governing.length > 1 ? 's' : ''} ${rebar.governing.join(', ')}) : épure décalée a_l = d = ${rebar.al.toFixed(3)} m, au moins 50 % des aciers inférieurs prolongés sur appuis (filantes + renforts intercalés), espacements ≤ ${(rebar.sMaxMain * 100).toFixed(0)} cm (≤ ${(rebar.sMaxPeak * 100).toFixed(0)} cm aux moments maximaux, renforts compris), ancrages et recouvrements EC2 8.4 / 8.7 (α₆ = 1,5, barres de 12 m au plus). ${rebar.deficits.length ? `<span class="badge warn">ATTENTION</span> ${rebar.deficits.length} section(s) où les aciers mis en place sont inférieurs aux aciers requis.` : '<span class="badge ok">OK</span> aciers mis en place ≥ aciers requis dans toutes les sections.'} Total ${(rebar.totalMass / 1000).toFixed(1)} t, soit ${rebar.ratio.toFixed(0)} kg/m³.`;
   $('#rebar-long').innerHTML = longitudinalRebarSVG(deck, rebar);
   const opts = [];
@@ -425,7 +432,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.24.2', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = await buildReport({ ...state, version: '0.25', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -462,7 +469,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.24.2', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.25', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -518,7 +525,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.24.2', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.25', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));

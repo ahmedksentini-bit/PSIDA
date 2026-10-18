@@ -121,6 +121,20 @@ Chaque résultat de cas de charge contient, par section de calcul (tous les L/20
 Les hypothèses détaillées et les points à confronter aux notes CHAMOA / PSIDA sont dans
 [docs/hypotheses.md](docs/hypotheses.md) ; la méthode complète, avec les formules à refaire à la main, est dans [docs/methode.md](docs/methode.md).
 
+## Dalle précontrainte — module PSI-DP (`src/psidp/`, onglet « Précontrainte »)
+
+Précontrainte longitudinale par post-tension d'un pont-dalle continu, d'après le dossier pilote SETRA PSI-DP et la note modèle
+PSIDP-EL 84-1, règles BPEL 91 révisé 99 (classe II) ; charges du Fascicule 61 titre II du modèle PSIDA.
+- Tracé du câble moyen par paraboles (automatique ou saisi), rayon minimal et continuité contrôlés.
+- Pertes : frottement, recul d'ancrage, raccourcissement élastique, relaxation, retrait, fluage réajusté par itérations.
+- P1 / P2, moments et réactions hyperstatiques (méthode des forces) pour les trois phases (mise en tension, mise en service,
+  service définitif).
+- Contraintes en classe II avec section d'enrobage, aciers passifs (peau, 1,5 ‰ sur appuis, non-fragilité), ELU de flexion
+  par équilibre de la section, effort tranchant (ELS, bielles, armatures d'âme). Nombre d'unités minimal trouvé
+  automatiquement (départ au prédimensionnement de l'annexe 1).
+- Calage : `test/psidp.test.js` reproduit la note modèle (13,50-17,61-17,61-13,50 m, 18 × 12T13) à 0,3 % près sur les
+  tensions, au dixième de t·m sur les moments hyperstatiques, et M_lim ELU sur appui à 0,1 %.
+
 ## Calcul sismique — Pont EC8 intégré (`ec8/`, `web/ec8/`)
 
 L'application Pont EC8 (dépôt ouvpara) est intégrée en entier : sources dans `ec8/` (React + TypeScript, tests du moteur dans `ec8/tests`), version compilée servie par l'onglet « Calcul sismique » dans `web/ec8/` (site statique, aucune compilation au déploiement).

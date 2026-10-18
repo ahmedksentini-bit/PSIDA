@@ -3,6 +3,7 @@
  * dimensionnement longitudinal et transversal), appareils d'appui, chevêtres, conception, compléments, plan de ferraillage.
  * Utilisée par l'interface (web/app.js) et par les tests / la génération de notes sous Node.
  */
+import { designPSIDP } from './psidp/index.js';
 import { SlabDeck } from './analysis.js';
 import { EC_ALPHA } from './loads_ec.js';
 import { designEC, designBAEL, designTransverseEC, designTransverseBAEL, designSingleActionEC } from './design.js';
@@ -43,6 +44,7 @@ export function parseData(d) {
     mat: { fck: +d.fck, fyk: +d.fyk, fc28: +d.fck, fe: +d.fyk, c: +d.cover, phi: +d.phi / 1000, phiT: +(d.phiT || 16) / 1000, wkMax: +d.wk, fissuration: d.fiss, tRev: +d.tRev },
     extra: parseExtra(d),
     supports: parseSupports(d),
+    bp: parseBP(d),
     concept: { psi: +(d.psi || 100), tirantAir: (d.tirantAir || '').trim() ? +d.tirantAir : null, type: d.typeDalle || 'auto', D: +(d.Dabout || 25) / 1000, rhoMax: +(d.rhoMax || 1) / 100,
       transversePerpendicular: d.transDir === 'perp', nBearings: (d.nBearings || '').trim() ? +d.nBearings : null, xFixed: (d.xFixed || '').trim() ? +d.xFixed : null, epsSlow: +(d.epsSlow || 2.5e-4), dTu: +(d.dTu || 30) },
   };
@@ -108,6 +110,15 @@ export function alphaMenard(classe, r) {
 export const parseProfile = text => (parseProfiles(text)[0] || { layers: [] }).layers;
 
 /** Données « Appuis et fondations » (champs ap_* ; valeurs vides = défauts de SUPPORT_DEFAULTS). */
+/** Données de la dalle précontrainte (onglet Précontrainte). */
+export function parseBP(d) {
+  const num = (k, def = null) => (String(d[k] ?? '').trim() === '' ? def : +d[k]);
+  return { actif: d.bp_actif === 'on' || d.bp_actif === true, unite: d.bp_unite || '12T15S', n: num('bp_n'), fprg: num('bp_fprg', 1860), fpeg: num('bp_fpeg', 1660), sigma0: num('bp_sigma0'),
+    f: num('bp_f', 0.18), phi: num('bp_phi', 0.002), g: num('bp_g', 6) / 1000, ends: d.bp_ends || 'both', friction: d.bp_friction || 'continu', rho1000: num('bp_rho1000', 2.5), mu0: num('bp_mu0', 0.43),
+    Ep: num('bp_Ep', 190000), fcj: num('bp_fcj'), epsR: num('bp_epsR', 2e-4), Kfl: num('bp_Kfl', 2), rj: num('bp_rj', 0.5), eSup: num('bp_eSup'), eLow: num('bp_eLow'),
+    lowEnd: num('bp_lowEnd', 0.4), a: num('bp_a', 0.1), segs: String(d.bp_segs || '').trim() || null, fe: num('bp_fe', 500), atMin: num('bp_atMin', 0.1) };
+}
+
 export function parseSupports(d) {
   const v = (k, def) => (String(d[k] ?? '').trim() === '' ? def : +d[k]);
   const H = nums(d.ap_pileH || '');
@@ -264,11 +275,15 @@ export function compute(p) {
     dz.envTop.forEach((v, i) => { if (v > env.envTop[i] + 1e-9) { env.envTop[i] = v; used = true; } });
     if (used) governing.push(lab);
   }
-  const rebar = rebarPlan({ deck, design: env, trans: transDesign.EC, opt: { fck: p.mat.fck, fyk: p.mat.fyk, phiLong: Math.round(p.mat.phi * 1000), phiTrans: Math.round(p.mat.phiT * 1000) } });
-  rebar.governing = governing;
+  // plan de ferraillage BA : impossible quand aucune disposition de barres ne suffit (dalle à précontraindre, travées longues)
+  let rebar = null, rebarError = null;
+  try { rebar = rebarPlan({ deck, design: env, trans: transDesign.EC, opt: { fck: p.mat.fck, fyk: p.mat.fyk, phiLong: Math.round(p.mat.phi * 1000), phiTrans: Math.round(p.mat.phiT * 1000) } }); rebar.governing = governing; }
+  catch (e) { rebarError = `plan de ferraillage BA impossible (${e.message}) : sections d'acier hors des dispositions courantes — dalle à précontraindre ou à épaissir`; }
+  let psidp = null, psidpError = null;
+  if (p.bp && p.bp.actif) { try { psidp = designPSIDP({ deck, perm, f61, thermal, beamF61: design.F61.beam, fc28: p.mat.fck }, p.bp); } catch (e) { psidpError = e.message; } }
   let supports = null, supportsError = null;
   try { supports = computeSupports({ p, deck, perm, f61, ec, bearings }, p.supports); } catch (e) { supportsError = e.message; }
-  return { supports, supportsError, rebar, p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transF, transELU, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
+  return { psidp, psidpError, supports, supportsError, rebar, rebarError, p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transF, transELU, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
 }
 
 /** Aide à la conception seule : géométrie, charges permanentes et règles du guide (quelques dixièmes de seconde). */

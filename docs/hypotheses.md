@@ -362,6 +362,32 @@ Le modèle reprend les principes du programme SETRA/CETE de l'Ouest PSH (« Calc
   sollicité ; sondages pressiométriques. Les mêmes figures apparaissent dans l'onglet Appuis et fondations. En Word, les
   figures SVG sont converties en images.
 
+## 1 quindecies. Dalle précontrainte PSI-DP (v0.25, `src/psidp/`)
+- Câble moyen (toute la largeur) : paraboles z = A x² + B x + C par tronçon, z depuis la fibre moyenne de la section brute.
+  Tracé automatique : ancrages sur la fibre moyenne aux culées, sommets sur appuis intermédiaires à (enrobage + Ø/2 + 7 mm)
+  de la fibre supérieure, points bas à 0,4 L (rives) / 0,5 L à la même distance de la fibre inférieure, raccordements sur a·L.
+- Section nette B_n = B − n A_gaine, I_n(x) = I − n A_gaine z², v et v′ bruts (convention PSIDP-EL).
+- Frottement exp(−f α − φ x) ; α = variation totale de pente (option : grille des dixièmes du programme PSIDP, qui saute
+  les points d'inflexion) ; recul d'ancrage ∫₀^d 2[σ(x) − σ(d)] dx = g E_p ; raccourcissement ½ (E_p/E_ij) σ̄_bj, σ̄_bj =
+  contrainte moyenne au niveau du câble sous la précontrainte seule (point fixe) ; P1 = 1,02 σ_p0 − 0,8 Δσ,
+  P2 = 0,98 σ_p0 − 1,2 Δσ.
+- Pertes différées BPEL 3.3,2 avec terme □ de l'annexe 2 ; fluage K_fl E_p σ_b/E_i28, σ_b sous C.P. moyennes +
+  précontrainte finale moyenne (iso + hyper), itéré jusqu'à convergence ; r(j) = 0,5 à la mise en service.
+- Moments de calcul des charges = max_y m_x · 2b (répartition de Guyon-Massonnet comprise, comme PSIDP-EL) ; C.P. et
+  ossature min / max par les coefficients k ; rare G + max(1,2 A ; 1,2 B ; Mc ; D) + trottoirs (+ 0,6 T) ; fréquente
+  G + 0,6 (A ou B + trottoirs) (+ 0,5 T) ; ELU 1,35 G + 1,6 (A|B + trottoirs) | 1,35 Mc + 1,6 trottoirs | 1,35 D.
+- Phases : mise en tension (ossature + P1, f_cj), mise en service (P1), service définitif (P2), comme PSIDP-EL.
+- Classe II : section d'enrobage = bande de 3 Ø gaine centrée sur le câble ; pas de traction dans l'enrobage en quasi
+  permanente et fréquente ; −f_t28 (rare) et −f_tj (mise en tension) dans l'enrobage, −1,5 f_t ailleurs ; compression
+  0,6 f_cj, 0,6 f_c28, 0,5 f_c28 (quasi permanente, que la note modèle ne vérifie pas).
+- ELU : M_lim par équilibre (parabole-rectangle, pivots), surtension σ_p − σ_p2 comptée comme armature (σ_p ≤ f_peg/γ_p),
+  terme 5 σ_b du BPEL négligé ; armatures passives complémentaires calculées si nécessaire.
+- Tranchant : section à h/2 de l'axe d'appui, V_red = V + F sin α + V_hyp (la note modèle majore le relevage de 1,42 à
+  l'ELU ; PSIDA ne le majore pas, +1,9 % sur l'exemple), τ = V_red/(b_n 2h/3), b_n = b_inf − n Ø/2. Minimum d'armatures
+  d'âme 0,1 MPa (note modèle ; BPEL 7.4 : 0,4 MPa pour les poutres).
+- Non traité : recherche automatique du fuseau et du tracé optimal (simplexe de PSIDP), zones d'about et diffusion
+  (BPEL annexe 4), flexion transversale due à la précontrainte, flèches et contre-flèches.
+
 ## 2. Protocole de comparaison avec une note de référence
 
 ### 2.1 Référentiel Eurocodes — note CHAMOA-PSIDA (Cerema, guide technique, ch. 4)

@@ -37,6 +37,7 @@
   table { border-collapse: collapse; width:100%; font-size:12.5px; margin: 6px 0 14px; }
   th, td { border-bottom:1px solid var(--line); padding:4px 6px; text-align:right; white-space:nowrap; }
   th:first-child, td:first-child { text-align:left; } thead th { color:var(--muted); font-weight:600; }
+  #bp-out { overflow-x:auto; } #bp-out td, #bp-out th { white-space:normal; } #bp-out table:first-of-type td:last-child { text-align:left; }
   .neg { color: var(--warn); } .small { font-size:12px; color:var(--muted); }
   details { margin: 6px 0; } summary { cursor:pointer; font-weight:600; }
   #results .card { overflow-x:auto; }
@@ -72,7 +73,7 @@
 <header>
   <div class="hrow"><h1>PSIDA</h1><span class="sub">calcul manuel assisté des ponts-dalles · Eurocodes et Fascicule 61 / BAEL · code ouvert</span>
     <span class="actions"><button type="submit" form="f" id="btn-calc">Calculer</button></span></div>
-  <nav class="tabs" role="tablist"><a href="#projet" role="tab" data-tab="projet">Projet</a><a href="#conception" role="tab" data-tab="conception">Conception</a><a href="#tablier" role="tab" data-tab="tablier">Tablier</a><a href="#ferraillage" role="tab" data-tab="ferraillage">Ferraillage</a><a href="#complements" role="tab" data-tab="complements">Compléments</a><a href="#poutres" role="tab" data-tab="poutres">Ponts à poutres</a><a href="#appuis" role="tab" data-tab="appuis">Appuis et fondations</a><a href="#seisme" role="tab" data-tab="seisme">Calcul sismique</a><a href="#retenue" role="tab" data-tab="retenue">Dispositifs de retenue</a><a href="#notes" role="tab" data-tab="notes">Notes de calcul</a></nav>
+  <nav class="tabs" role="tablist"><a href="#projet" role="tab" data-tab="projet">Projet</a><a href="#conception" role="tab" data-tab="conception">Conception</a><a href="#tablier" role="tab" data-tab="tablier">Tablier</a><a href="#ferraillage" role="tab" data-tab="ferraillage">Ferraillage</a><a href="#complements" role="tab" data-tab="complements">Compléments</a><a href="#poutres" role="tab" data-tab="poutres">Ponts à poutres</a><a href="#precontrainte" role="tab" data-tab="precontrainte">Précontrainte</a><a href="#appuis" role="tab" data-tab="appuis">Appuis et fondations</a><a href="#seisme" role="tab" data-tab="seisme">Calcul sismique</a><a href="#retenue" role="tab" data-tab="retenue">Dispositifs de retenue</a><a href="#notes" role="tab" data-tab="notes">Notes de calcul</a></nav>
   <pre id="error"></pre>
 </header>
 <form id="f" class="app" novalidate>
@@ -333,6 +334,53 @@
     </div>
   </div>
 </section>
+<section class="tab" id="tab-precontrainte">
+  <div class="cols">
+    <div class="card form-card"><h2>Dalle précontrainte (PSI-DP)</h2>
+      <p class="small">Précontrainte longitudinale par post-tension, câbles filants tendus aux extrémités : dossier pilote SETRA PSI-DP et note modèle PSIDP-EL 84-1, BPEL 91 révisé 99 (classe II). Les charges sont celles du Fascicule 61 titre II du modèle PSIDA (moments de calcul max_y m_x · 2b).</p>
+      <label class="chk"><input type="checkbox" name="bp_actif"> Calculer la dalle en béton précontraint</label>
+      <div class="row">
+        <label>Unité<select name="bp_unite"><option value="12T15S" selected>12 T 15 S (A_p 1 800 mm², gaine Ø 80)</option><option value="12T13">12 T 13 (1 116 mm², Ø 70)</option><option value="7T15S">7 T 15 S (1 050 mm², Ø 65)</option><option value="19T15S">19 T 15 S (2 850 mm², Ø 95)</option></select></label>
+        <label>Nombre d'unités (vide = minimum en classe II)<input name="bp_n" value="" type="number" step="1"></label>
+      </div>
+      <div class="row">
+        <label>f_prg / f_peg [MPa]<div class="row"><input name="bp_fprg" value="1860" type="number" step="any"><input name="bp_fpeg" value="1660" type="number" step="any"></div></label>
+        <label>σ_p0 [MPa] (vide = min(0,8 f_prg ; 0,9 f_peg))<input name="bp_sigma0" value="" type="number" step="any"></label>
+      </div>
+      <div class="row">
+        <label>Frottement f [1/rad] / φ [1/m]<div class="row"><input name="bp_f" value="0.18" type="number" step="any"><input name="bp_phi" value="0.002" type="number" step="any"></div></label>
+        <label>Recul d'ancrage g [mm]<input name="bp_g" value="6" type="number" step="any"></label>
+      </div>
+      <div class="row">
+        <label>Ancrages actifs<select name="bp_ends"><option value="both">aux deux extrémités</option><option value="left">à gauche (C0)</option><option value="right">à droite</option></select></label>
+        <label>Déviation cumulée<select name="bp_friction"><option value="continu">variation totale de pente (BPEL)</option><option value="dixiemes">grille des dixièmes (programme PSIDP)</option></select></label>
+      </div>
+      <div class="row">
+        <label>ρ₁₀₀₀ [%] / μ₀<div class="row"><input name="bp_rho1000" value="2.5" type="number" step="any"><input name="bp_mu0" value="0.43" type="number" step="any"></div></label>
+        <label>E_p [MPa]<input name="bp_Ep" value="190000" type="number" step="any"></label>
+      </div>
+      <div class="row">
+        <label>f_cj à la mise en tension [MPa] (vide = 0,8 f_c28 + 2)<input name="bp_fcj" value="" type="number" step="any"></label>
+        <label>Retrait ε_r / K_fl / r(j)<div class="row"><input name="bp_epsR" value="0.0002" type="number" step="any"><input name="bp_Kfl" value="2" type="number" step="any"><input name="bp_rj" value="0.5" type="number" step="any"></div></label>
+      </div>
+      <h3>Tracé du câble moyen</h3>
+      <div class="row">
+        <label>Distance axe câble – fibre sup. sur appuis [m] (vide = enrobage + Ø/2 + décalage)<input name="bp_eSup" value="" type="number" step="any"></label>
+        <label>Distance axe câble – fibre inf. en travée [m] (idem)<input name="bp_eLow" value="" type="number" step="any"></label>
+      </div>
+      <div class="row">
+        <label>Point bas des travées de rive [× L]<input name="bp_lowEnd" value="0.4" type="number" step="any"></label>
+        <label>Inflexion à a·L des appuis intermédiaires, a<input name="bp_a" value="0.1" type="number" step="any"></label>
+      </div>
+      <label>Paraboles imposées (option) : « A B C x_fin ; … | … » par travée, z [m] vers le haut depuis la fibre moyenne, x local<textarea name="bp_segs" rows="3" placeholder="vide = tracé automatique"></textarea></label>
+      <div class="row">
+        <label>Aciers passifs f_e [MPa]<input name="bp_fe" value="500" type="number" step="any"></label>
+        <label>Armatures d'âme minimales [MPa] (note PSIDP-EL ≈ 0,1)<input name="bp_atMin" value="0.1" type="number" step="any"></label>
+      </div>
+    </div>
+    <div class="card full-only"><h2>Résultats de la précontrainte</h2><div id="bp-out"><p class="small">Cocher « Calculer la dalle en béton précontraint » puis lancer le calcul.</p></div></div>
+  </div>
+</section>
 <section class="tab" id="tab-appuis">
   <div class="cols">
     <div class="card form-card"><h2>Appuis et fondations</h2>
@@ -511,8 +559,8 @@ e 18 33 2.7 1.6
   </div>
 </section>
 </form>
-<!-- importmap:début (tools/version.mjs) --><script type="importmap">{"imports":{"./src/abaques1989.js":"./src/abaques1989.js?v=0.24.2","./src/analysis.js":"./src/analysis.js?v=0.24.2","./src/beam.js":"./src/beam.js?v=0.24.2","./src/beams/design.js":"./src/beams/design.js?v=0.24.2","./src/beams/index.js":"./src/beams/index.js?v=0.24.2","./src/beams/run.js":"./src/beams/run.js?v=0.24.2","./src/bearings.js":"./src/bearings.js?v=0.24.2","./src/cantilever.js":"./src/cantilever.js?v=0.24.2","./src/chevetre.js":"./src/chevetre.js?v=0.24.2","./src/combinations.js":"./src/combinations.js?v=0.24.2","./src/conception.js":"./src/conception.js?v=0.24.2","./src/ddr/indice.js":"./src/ddr/indice.js?v=0.24.2","./src/design.js":"./src/design.js?v=0.24.2","./src/ec8export.js":"./src/ec8export.js?v=0.24.2","./src/fatigue.js":"./src/fatigue.js?v=0.24.2","./src/geotech/frottement-negatif.js":"./src/geotech/frottement-negatif.js?v=0.24.2","./src/geotech/groupes.js":"./src/geotech/groupes.js?v=0.24.2","./src/geotech/lateral.js":"./src/geotech/lateral.js?v=0.24.2","./src/geotech/outils.js":"./src/geotech/outils.js?v=0.24.2","./src/geotech/pieux.js":"./src/geotech/pieux.js?v=0.24.2","./src/geotech/sols.js":"./src/geotech/sols.js?v=0.24.2","./src/geotech/superficielles.js":"./src/geotech/superficielles.js?v=0.24.2","./src/geotech/tassement-pieu.js":"./src/geotech/tassement-pieu.js?v=0.24.2","./src/geotech/tassements.js":"./src/geotech/tassements.js?v=0.24.2","./src/guyon.js":"./src/guyon.js?v=0.24.2","./src/linalg.js":"./src/linalg.js?v=0.24.2","./src/loads_ec.js":"./src/loads_ec.js?v=0.24.2","./src/loads_f61.js":"./src/loads_f61.js?v=0.24.2","./src/pipeline.js":"./src/pipeline.js?v=0.24.2","./src/psidp/prestress.js":"./src/psidp/prestress.js?v=0.24.2","./src/rebar.js":"./src/rebar.js?v=0.24.2","./src/section_bael.js":"./src/section_bael.js?v=0.24.2","./src/section_ec2.js":"./src/section_ec2.js?v=0.24.2","./src/skew.js":"./src/skew.js?v=0.24.2","./src/supports/abutment.js":"./src/supports/abutment.js?v=0.24.2","./src/supports/actions.js":"./src/supports/actions.js?v=0.24.2","./src/supports/beam1d.js":"./src/supports/beam1d.js?v=0.24.2","./src/supports/foundation.js":"./src/supports/foundation.js?v=0.24.2","./src/supports/index.js":"./src/supports/index.js?v=0.24.2","./src/supports/pier.js":"./src/supports/pier.js?v=0.24.2","./src/supports/psh.js":"./src/supports/psh.js?v=0.24.2","./src/supports/section_nm.js":"./src/supports/section_nm.js?v=0.24.2","./src/supports/standalone.js":"./src/supports/standalone.js?v=0.24.2","./src/supports/water.js":"./src/supports/water.js?v=0.24.2","./src/transverse.js":"./src/transverse.js?v=0.24.2","./src/vehicles.js":"./src/vehicles.js?v=0.24.2","./src/vendor/fond-figures.js":"./src/vendor/fond-figures.js?v=0.24.2","./src/vendor/pont-ec8.js":"./src/vendor/pont-ec8.js?v=0.24.2","./src/zonage.js":"./src/zonage.js?v=0.24.2","./web/app.js":"./web/app.js?v=0.24.2","./web/beams_view.js":"./web/beams_view.js?v=0.24.2","./web/ddr_view.js":"./web/ddr_view.js?v=0.24.2","./web/guide_schema.js":"./web/guide_schema.js?v=0.24.2","./web/note.js":"./web/note.js?v=0.24.2","./web/note_figures.js":"./web/note_figures.js?v=0.24.2","./web/plots.js":"./web/plots.js?v=0.24.2","./web/rebarplan.js":"./web/rebarplan.js?v=0.24.2","./web/report.js":"./web/report.js?v=0.24.2","./web/schema.js":"./web/schema.js?v=0.24.2","./web/seismic_note.js":"./web/seismic_note.js?v=0.24.2","./web/supports_view.js":"./web/supports_view.js?v=0.24.2","./web/svg.js":"./web/svg.js?v=0.24.2","./web/vendor/docx.js":"./web/vendor/docx.js?v=0.24.2"}}</script><!-- importmap:fin -->
-<script src="./web/tabs.js?v=0.24.2"></script>
+<!-- importmap:début (tools/version.mjs) --><script type="importmap">{"imports":{"./src/abaques1989.js":"./src/abaques1989.js?v=0.25","./src/analysis.js":"./src/analysis.js?v=0.25","./src/beam.js":"./src/beam.js?v=0.25","./src/beams/design.js":"./src/beams/design.js?v=0.25","./src/beams/index.js":"./src/beams/index.js?v=0.25","./src/beams/run.js":"./src/beams/run.js?v=0.25","./src/bearings.js":"./src/bearings.js?v=0.25","./src/cantilever.js":"./src/cantilever.js?v=0.25","./src/chevetre.js":"./src/chevetre.js?v=0.25","./src/combinations.js":"./src/combinations.js?v=0.25","./src/conception.js":"./src/conception.js?v=0.25","./src/ddr/indice.js":"./src/ddr/indice.js?v=0.25","./src/design.js":"./src/design.js?v=0.25","./src/ec8export.js":"./src/ec8export.js?v=0.25","./src/fatigue.js":"./src/fatigue.js?v=0.25","./src/geotech/frottement-negatif.js":"./src/geotech/frottement-negatif.js?v=0.25","./src/geotech/groupes.js":"./src/geotech/groupes.js?v=0.25","./src/geotech/lateral.js":"./src/geotech/lateral.js?v=0.25","./src/geotech/outils.js":"./src/geotech/outils.js?v=0.25","./src/geotech/pieux.js":"./src/geotech/pieux.js?v=0.25","./src/geotech/sols.js":"./src/geotech/sols.js?v=0.25","./src/geotech/superficielles.js":"./src/geotech/superficielles.js?v=0.25","./src/geotech/tassement-pieu.js":"./src/geotech/tassement-pieu.js?v=0.25","./src/geotech/tassements.js":"./src/geotech/tassements.js?v=0.25","./src/guyon.js":"./src/guyon.js?v=0.25","./src/linalg.js":"./src/linalg.js?v=0.25","./src/loads_ec.js":"./src/loads_ec.js?v=0.25","./src/loads_f61.js":"./src/loads_f61.js?v=0.25","./src/pipeline.js":"./src/pipeline.js?v=0.25","./src/psidp/checks.js":"./src/psidp/checks.js?v=0.25","./src/psidp/index.js":"./src/psidp/index.js?v=0.25","./src/psidp/prestress.js":"./src/psidp/prestress.js?v=0.25","./src/rebar.js":"./src/rebar.js?v=0.25","./src/section_bael.js":"./src/section_bael.js?v=0.25","./src/section_ec2.js":"./src/section_ec2.js?v=0.25","./src/skew.js":"./src/skew.js?v=0.25","./src/supports/abutment.js":"./src/supports/abutment.js?v=0.25","./src/supports/actions.js":"./src/supports/actions.js?v=0.25","./src/supports/beam1d.js":"./src/supports/beam1d.js?v=0.25","./src/supports/foundation.js":"./src/supports/foundation.js?v=0.25","./src/supports/index.js":"./src/supports/index.js?v=0.25","./src/supports/pier.js":"./src/supports/pier.js?v=0.25","./src/supports/psh.js":"./src/supports/psh.js?v=0.25","./src/supports/section_nm.js":"./src/supports/section_nm.js?v=0.25","./src/supports/standalone.js":"./src/supports/standalone.js?v=0.25","./src/supports/water.js":"./src/supports/water.js?v=0.25","./src/transverse.js":"./src/transverse.js?v=0.25","./src/vehicles.js":"./src/vehicles.js?v=0.25","./src/vendor/fond-figures.js":"./src/vendor/fond-figures.js?v=0.25","./src/vendor/pont-ec8.js":"./src/vendor/pont-ec8.js?v=0.25","./src/zonage.js":"./src/zonage.js?v=0.25","./web/app.js":"./web/app.js?v=0.25","./web/beams_view.js":"./web/beams_view.js?v=0.25","./web/ddr_view.js":"./web/ddr_view.js?v=0.25","./web/guide_schema.js":"./web/guide_schema.js?v=0.25","./web/note.js":"./web/note.js?v=0.25","./web/note_figures.js":"./web/note_figures.js?v=0.25","./web/plots.js":"./web/plots.js?v=0.25","./web/psidp_view.js":"./web/psidp_view.js?v=0.25","./web/rebarplan.js":"./web/rebarplan.js?v=0.25","./web/report.js":"./web/report.js?v=0.25","./web/schema.js":"./web/schema.js?v=0.25","./web/seismic_note.js":"./web/seismic_note.js?v=0.25","./web/supports_view.js":"./web/supports_view.js?v=0.25","./web/svg.js":"./web/svg.js?v=0.25","./web/vendor/docx.js":"./web/vendor/docx.js?v=0.25"}}</script><!-- importmap:fin -->
+<script src="./web/tabs.js?v=0.25"></script>
 <script type="module">import('./web/app.js').catch(e => { const el = document.getElementById('error'); if (el) el.textContent = 'Le calcul n\'a pas pu se charger (' + e.message + '). Recharger la page sans cache (Ctrl+F5) ; si le problème persiste, le signaler.'; });</script>
 <noscript><p style="padding:16px">PSIDA nécessite JavaScript.</p></noscript>
 </body>
