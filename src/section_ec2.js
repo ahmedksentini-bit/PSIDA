@@ -128,7 +128,7 @@ export function chamferWidthFn({ width, h, hEdge, joue }) {
 
 /**
  * Ouverture de fissure wk (EN 1992-1-1 §7.3.4) pour une section b×h, aciers As de diamètre φ, sous M.
- * k3 selon l'annexe nationale française : k3 = 3,4·(25/c)^(2/3) pour c > 25 mm (option `k3FR`).
+ * k3 selon l'annexe nationale française : k3 = 3,4·(25/c)^(2/3) pour c > 25 mm (option `k3FR`) ; α_e = E_s/E_cm dans (7.9).
  * @returns {{wk:number, srMax:number, epsDiff:number, sigS:number, rhoEff:number}} wk en mm
  */
 export function crackWidth(M, { b = 1, h, d, As, phi = 0.020, c = 0.030, widthFn = null }, mat, { kt = 0.4, k3FR = true } = {}) {
@@ -137,7 +137,9 @@ export function crackWidth(M, { b = 1, h, d, As, phi = 0.020, c = 0.030, widthFn
   const fctEff = mat.fctm;
   const hcEf = Math.min(2.5 * (h - d), (h - r.x) / 3, h / 2);
   const rhoEff = As / (b * hcEf);
-  const epsDiff = Math.max((r.sigS - kt * fctEff / rhoEff * (1 + mat.alphaE * rhoEff)) / mat.Es, 0.6 * r.sigS / mat.Es);
+  // EN 1992-1-1 (7.9) : α_e = E_s/E_cm (et non le coefficient d'équivalence 15 des contraintes)
+  const aE = mat.Ecm ? mat.Es / mat.Ecm : mat.alphaE;
+  const epsDiff = Math.max((r.sigS - kt * fctEff / rhoEff * (1 + aE * rhoEff)) / mat.Es, 0.6 * r.sigS / mat.Es);
   const cmm = c * 1000;
   const k3 = k3FR && cmm > 25 ? 3.4 * Math.pow(25 / cmm, 2 / 3) : 3.4;
   const k1 = 0.8, k2 = 0.5, k4 = 0.425;

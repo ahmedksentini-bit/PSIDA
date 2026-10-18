@@ -180,6 +180,8 @@ ne s'appliquent pas, tableau de détail bielles / consoles / minimum ; pieux —
 p*_le, k_p, q_u, courbes Q1–Q7, Q_pu, Q_su, Q_u, Q_c ; NF P 94-262 : D_ef, k_p, f_sol, α, q_s, γ_R;d1 γ_R;d2, R_c;d, R_c;cr;d).
 Depuis la v0.40 : second ordre EC2 (courbure nominale) des fûts en situation sismique ou accidentelle avec γ_s = 1,0 et
 γ_c = 1,2 (ε_yd = f_yk/E_s) ; commentaire des souplesses des lignes d'appui précisé (rotation des semelles comptée).
+Depuis la v0.41 : ouverture des fissures EC2 § 7.3.4 — le coefficient α_e de l'expression (7.9) vaut E_s/E_cm (5,87 pour un
+C35/45) et non plus le coefficient d'équivalence de l'ELS (15) ; seule la colonne w_k des aciers longitudinaux change.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et
