@@ -46,17 +46,36 @@ export function chooseBars(As, { phiMin = 12, phiMax = 32, sMax = 0.25, sMin = 0
   return best;
 }
 
-/** Épure décalée : A(x) = max de A sur [x − a_l, x + a_l]. */
+/**
+ * Épure décalée : A(x) = max de A sur [x − a_l, x + a_l], A étant linéaire entre les sections du modèle. Les bornes
+ * x ± a_l sont interpolées : sinon, avec un pas de sections (0,9 m) supérieur à a_l (0,65 m), le décalage serait sans effet.
+ */
 export function shiftedEnvelope(xs, A, al) {
-  return xs.map(x => Math.max(...A.filter((_, i) => Math.abs(xs[i] - x) <= al + 1e-9)));
+  const at = x => { // valeur(s) interpolée(s) en x (max des deux côtés d'une discontinuité)
+    let v = -Infinity;
+    for (let i = 0; i + 1 < xs.length; i++) {
+      const a = xs[i], b = xs[i + 1];
+      if (b > a && x > a - 1e-12 && x < b + 1e-12) v = Math.max(v, A[i] + (A[i + 1] - A[i]) * (x - a) / (b - a));
+    }
+    return v;
+  };
+  return xs.map(x => Math.max(...A.filter((_, i) => Math.abs(xs[i] - x) <= al + 1e-9), at(x - al), at(x + al)));
 }
 
-/** Intervalles où f(x) > A (x croissants), bornés à [lo, hi]. */
+/**
+ * Intervalles où f(x) > A (x croissants), bornés à [lo, hi] ; f est linéaire entre les sections, les extrémités des
+ * intervalles sont les abscisses interpolées où f franchit A (et non la section la plus proche, à 0,9 m près).
+ */
 function exceed(xs, f, A, lo, hi) {
   const out = []; let cur = null;
+  const cross = (i, j) => (xs[j] > xs[i] && f[j] !== f[i] ? xs[i] + (A - f[i]) * (xs[j] - xs[i]) / (f[j] - f[i]) : xs[j]);
   for (let i = 0; i < xs.length; i++) {
     if (xs[i] < lo - 1e-9 || xs[i] > hi + 1e-9) continue;
-    if (f[i] > A + 1e-9) { if (!cur) cur = { x1: xs[i], x2: xs[i] }; cur.x2 = xs[i]; } else if (cur) { out.push(cur); cur = null; }
+    const prevIn = i > 0 && xs[i - 1] >= lo - 1e-9;
+    if (f[i] > A + 1e-9) {
+      if (!cur) cur = { x1: prevIn && f[i - 1] <= A + 1e-9 ? Math.max(lo, cross(i - 1, i)) : xs[i], x2: xs[i] };
+      cur.x2 = xs[i];
+    } else if (cur) { cur.x2 = Math.min(hi, cross(i - 1, i)); out.push(cur); cur = null; }
   }
   if (cur) out.push(cur);
   return out;
@@ -118,7 +137,7 @@ export function rebarPlan({ deck, design, trans = null, opt = {} }) {
       hookL: leftEnd, hookR: rightEnd, label: `Filantes inférieures travée ${j + 1}`, note: `${leftEnd ? 'ancrées par retour au-delà de C0 ; ' : ''}${rightEnd ? `ancrées par retour au-delà de C${n} ; ` : ''}recouvrement l₀ = ${a.l0.toFixed(2)} m sur appui intermédiaire` });
     let renfort = null;
     if (best.r) {
-      const zones = exceed(xs, bot, best.f.As, x0[j], x0[j + 1]);
+      const zones = exceed(xs, design.envBot, best.f.As, x0[j], x0[j + 1]).map(z => ({ x1: z.x1 - al, x2: z.x2 + al })); // épure décalée de a_l
       const ar = anchB(best.r.phi);
       if (zones.length) {
         let r1 = Math.max(x0[j], Math.min(...zones.map(z => z.x1)) - ar.lbd), r2 = Math.min(x0[j + 1], Math.max(...zones.map(z => z.x2)) + ar.lbd);
@@ -159,7 +178,7 @@ export function rebarPlan({ deck, design, trans = null, opt = {} }) {
   for (const { i, pk, r } of bestT.rs) {
     if (!r) { supTop.push({ i, pk, renfort: null }); continue; }
     const ar = anchT(r.phi);
-    const zones = exceed(xs, top, bestT.f.As, x0[i] - deck.spans[i - 1] * 0.5, x0[i] + deck.spans[i] * 0.5);
+    const zones = exceed(xs, design.envTop, bestT.f.As, x0[i] - deck.spans[i - 1] * 0.5, x0[i] + deck.spans[i] * 0.5).map(z => ({ x1: z.x1 - al, x2: z.x2 + al })); // épure décalée de a_l
     const r1 = Math.max(x0[i - 1], Math.min(...zones.map(z => z.x1)) - ar.lbd), r2 = Math.min(x0[i + 1], Math.max(...zones.map(z => z.x2)) + ar.lbd);
     const pc = pieces(r2 - r1, ar.l0, Lmax);
     const m = add({ face: 'sup', dir: 'long', role: 'renfort', support: i, phi: r.phi, s: bestT.s, x1: r1, x2: r2, len: r2 - r1, pieces: pc.n, totalLen: pc.total, count: nBarsAcross(bestT.s),
@@ -206,7 +225,7 @@ export function rebarPlan({ deck, design, trans = null, opt = {} }) {
 
   // ---------------- contrôle A_s mis en place ≥ requis (épure non décalée et décalée)
   const check = xs.map((x, i) => ({ x, reqBot: design.envBot[i], reqTop: design.envTop[i], shBot: bot[i], shTop: top[i], provBot: providedBot(x), provTop: providedTop(x) }));
-  const deficits = check.filter(r => r.provBot + 1e-7 < r.reqBot || r.provTop + 1e-7 < r.reqTop);
+  const deficits = check.filter(r => r.provBot + 1e-7 < Math.max(r.reqBot, r.shBot) || r.provTop + 1e-7 < Math.max(r.reqTop, r.shTop));
   const totalMass = marks.reduce((a, m) => a + m.mass, 0);
   const volume = deck.area * (deck.beam.Ltot + aL + aR);
   return { c, marks, spansBot, filTop, supTop, transMarks, stirrups, check, deficits, totalMass, volume, ratio: totalMass / volume, al, sMaxPeak, sMaxMain, xStart, xEnd };

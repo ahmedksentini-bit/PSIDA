@@ -182,6 +182,9 @@ Depuis la v0.40 : second ordre EC2 (courbure nominale) des fûts en situation si
 γ_c = 1,2 (ε_yd = f_yk/E_s) ; commentaire des souplesses des lignes d'appui précisé (rotation des semelles comptée).
 Depuis la v0.41 : ouverture des fissures EC2 § 7.3.4 — le coefficient α_e de l'expression (7.9) vaut E_s/E_cm (5,87 pour un
 C35/45) et non plus le coefficient d'équivalence de l'ELS (15) ; seule la colonne w_k des aciers longitudinaux change.
+Depuis la v0.42 : plan de ferraillage — l'épure décalée de a_l = d interpole les bornes x ± a_l (le pas des sections,
+0,9 m, dépassait a_l = 0,65 m et rendait le décalage sans effet) et les arrêts de barres partent de l'abscisse interpolée où
+les aciers requis franchissent la section des filantes ; le contrôle « mis en place ≥ requis » porte aussi sur l'épure décalée.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

@@ -17,6 +17,8 @@ test('ancrage EC2 8.4 et choix des barres', () => {
   const c = chooseBars(20e-4, { phiMin: 12, sMax: 0.25 });
   assert.ok(c.As >= 20e-4 && c.s <= 0.25); rel(areaOf(20) / 0.15, 20.94e-4, 1e-3, 'HA20 e=15');
   assert.deepEqual(shiftedEnvelope([0, 1, 2, 3], [0, 5, 0, 0], 1), [5, 5, 5, 0]);
+  // pas de sections (0,9 m) supérieur à a_l (0,65 m) : bornes x ± a_l interpolées, sinon le décalage serait sans effet
+  assert.deepEqual(shiftedEnvelope([0, 0.9, 1.8], [0, 9, 0], 0.65).map(v => +v.toFixed(9)), [6.5, 9, 6.5]);
 });
 
 test('plan de ferraillage de l\'exemple CHAMOA : couverture, 50 % sur appuis, espacements, métré', () => {
