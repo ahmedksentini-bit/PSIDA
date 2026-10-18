@@ -129,3 +129,24 @@ test('PSI-DP — dimensionnement intégré au modèle PSIDA (18-24-18 m, h = 0,8
   // dalle en béton armé sur grandes portées : le plan de ferraillage BA ne bloque plus le calcul
   assert.ok(st.rebar || st.rebarError);
 });
+
+test('PSI-DP — flèches (NP 58) et flexion transversale due à la précontrainte (NP 48)', async () => {
+  const { deflection } = await import('../src/psidp/prestress.js');
+  const { SlabDeck } = await import('../src/analysis.js');
+  const { TransverseModel } = await import('../src/transverse.js');
+  const r = prestress(INPUT), I = 0.136392, Ei = 3128069, E28 = 3216226, x04 = r.xOf(0, 0.4);
+  const MG = r.xs.map(x => MGmean(x)), MO = MG.map(v => v * 13.575 / 17.075), MP = ph => r.xs.map((x, i) => ph.F[i] * r.z[i] + ph.Mhyp[i]);
+  const w = (M, E) => 1000 * r.at(deflection(r.xs, M, SPANS, E * I).w, x04);
+  near(w(MO, Ei), -5.2, 0.1, 'flèche ossature instantanée 0,4 L [mm]');
+  near(w(MG, Ei), -6.6, 0.1, 'flèche C.P. instantanée');
+  near(3 * w(MG, E28), -19.1, 0.15, 'flèche C.P. à long terme (E_v28)');
+  near(w(MP(r.MT.moy), Ei), 8.5, 0.35, 'contre-flèche de précontrainte instantanée');
+  near(2 * w(MP(r.ES.moy), E28), 15.0, 0.3, 'contre-flèche de précontrainte par fluage');
+  near(w(MP(r.MT.moy), Ei) + 2 * w(MP(r.ES.moy), E28) + 3 * w(MG, E28), 4.4, 0.6, 'flèche en service après fluage');
+  // travée droite équivalente de la note (2b/sin φ = 9,961 m, λ′ = 14,482 m), ν = 0,2 : p = −F2 (A2 + A3)/9 = −2,52 t/m²
+  const sp = Math.sin(89.977 * Math.PI / 200), b = 9.961 / 2, half = 3.75 / sp;
+  const deck = new SlabDeck({ spans: SPANS, width: 9.961, h: 0.55, roadway: { y1: -half, y2: half }, footways: [{ y1: -b, y2: -half }, { y1: half, y2: b }], Leq: [12.194, 14.482, 14.482, 12.194], nu: 0.2, ys: [0, -2.459 / sp, -3.689 / sp] });
+  const m = new TransverseModel(deck, { tRev: 0.08, nHarm: 15 }), u = m.response(1, 'pp', m.bandPatches(1, -b, b)).my, p = -2205 * (0.004727 + 0.005558) / 9;
+  rel(p, -2.52, 2e-3, 'poussée transversale');
+  [-6.752, -5.186, -3.105].forEach((ref, i) => rel(p * u[i], ref, 0.04, `MY_PREC fibre ${[1, 2, 4][i]}`));
+});

@@ -385,8 +385,15 @@ Le modèle reprend les principes du programme SETRA/CETE de l'Ouest PSH (« Calc
 - Tranchant : section à h/2 de l'axe d'appui, V_red = V + F sin α + V_hyp (la note modèle majore le relevage de 1,42 à
   l'ELU ; PSIDA ne le majore pas, +1,9 % sur l'exemple), τ = V_red/(b_n 2h/3), b_n = b_inf − n Ø/2. Minimum d'armatures
   d'âme 0,1 MPa (note modèle ; BPEL 7.4 : 0,4 MPa pour les poutres).
+- Flexion transversale (v0.26) : poussée au vide p = −F2 · 2Ā⁺/2b (Ā⁺ moyenne des A > 0 de la travée ; la note divise
+  par 9 m, point non élucidé), m_y par le noyau de Guyon-Massonnet des C.P. (écart 3,5 % avec MY_PREC de la note à p
+  égal), minimum × F1,MS/F2,ES ; aciers transversaux BAEL recalculés avec m_y(P) ajouté aux combinaisons (sans l'effort
+  normal des facettes biaises).
+- Flèches (v0.26) : poutre continue, inertie brute, moments réels ; E_ij pour l'instantané, C.P. à long terme
+  (1 + K_fl) w(E_i28), précontrainte par fluage K_fl w(P∞ moyenne, E_i28) — note modèle à 0,1-0,3 mm près sauf la
+  précontrainte instantanée (8,8 mm pour 8,5) ; flèche finale 4,9 mm pour 4,4.
 - Non traité : recherche automatique du fuseau et du tracé optimal (simplexe de PSIDP), zones d'about et diffusion
-  (BPEL annexe 4), flexion transversale due à la précontrainte, flèches et contre-flèches.
+  (BPEL annexe 4).
 
 ## 2. Protocole de comparaison avec une note de référence
 

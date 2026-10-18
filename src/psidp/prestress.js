@@ -191,3 +191,26 @@ export function prestress(p) {
     xOf: (j, f) => geo.x0[j] + f * spans[j],
   };
 }
+
+/**
+ * Flèche w(x) (positive vers le haut) d'une poutre continue à inertie constante sous son diagramme de moments réel M(x)
+ * (moments hyperstatiques compris) : w″ = −M/EI intégrée deux fois sur chaque travée avec w = 0 aux appuis. Renvoie aussi
+ * les rotations sur appuis (à gauche et à droite de chaque appui).
+ */
+export function deflection(xs, M, spans, EI) {
+  const x0 = [0]; spans.forEach(L => x0.push(x0[x0.length - 1] + L));
+  const w = new Array(xs.length).fill(0), rot = x0.map(() => ({ g: null, d: null }));
+  for (let j = 0; j < spans.length; j++) {
+    const idx = []; for (let k = 0; k < xs.length; k++) if (xs[k] >= x0[j] - 1e-9 && xs[k] <= x0[j + 1] + 1e-9) idx.push(k);
+    const th = [0], ww = [0];
+    for (let q = 1; q < idx.length; q++) {
+      const a = idx[q - 1], b = idx[q], dx = xs[b] - xs[a];
+      th.push(th[q - 1] + 0.5 * (M[a] + M[b]) / EI * dx);
+      ww.push(ww[q - 1] + 0.5 * (th[q - 1] + th[q]) * dx);
+    }
+    const Lj = xs[idx[idx.length - 1]] - xs[idx[0]], c = -ww[ww.length - 1] / Lj;   // w(L) = 0 : rotation initiale c
+    idx.forEach((k, q) => { w[k] = ww[q] + c * (xs[k] - xs[idx[0]]); });
+    rot[j].d = c; rot[j + 1].g = th[th.length - 1] + c;
+  }
+  return { w, rot };
+}

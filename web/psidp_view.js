@@ -119,5 +119,36 @@ export function psidpBlocks(dp, { error = null } = {}) {
     table(['Appui / côté', 'F (P2) [MN]', 'V_P relevage + hyper [kN]', 'V_red ELS / ELU [kN]', 'σ_x [MPa]', 'τ / τ̄ ELS [MPa]', 'τ_u [MPa] ; β_u [°]', 'Bielles σ / limite [MPa]', 'A_t/(b_n s_t) [cm²/m²]'], c.shear.map(s => [`appui ${s.support + 1} ${s.side}`, MN(s.F), F0(s.Vp), `${F0(s.Vels)} / ${F0(s.Velu)}`, MPa(s.sx), `${MPa(s.tau)} / ${MPa(s.tauBar)} ${ok(s.okELS)}`, `${MPa(s.tauU)} ; ${F(s.beta * 180 / Math.PI, 1)}`, `${MPa(s.sb)} / ${MPa(s.sbLim)} ${ok(s.okBielle)}`, F(s.AtS * 1e4, 2)]), { small: true });
     comment('Section à h/2 de l\'axe d\'appui, P2 en service définitif. V_red = V(G + Q) + F sin α + V_hyp ; τ = V_red/(b_n · 2h/3), b_n = b_inf − n Ø_gaine/2 (convention PSIDP-EL) ; σ_x = F/B. ELS : τ² ≤ min[0,4 f_t (f_t + σ_x) ; 2 (f_t/f_c)(0,6 f_c − σ_x)(f_t + σ_x)] (BPEL 7.2,2). ELU : β_u = max(30° ; ½ arctan(2τ_u/σ_x)), bielles 2τ_u/sin 2β_u ≤ (2/3)·0,85 f_c28/γ_b, armatures d\'âme (A_t/(b_n s_t)) f_e/γ_s ≥ max[minimum ; (τ_u − f_t/3) tg β_u] (BPEL 7.3). Poinçonnement sous appareils d\'appui et zones d\'about (BPEL annexe 4) à justifier à part.');
   }
+  // ------------------------------------------------------------------ flexion transversale
+  if (dp.trans && dp.trans.length) {
+    h2('Flexion transversale due à la précontrainte');
+    const tr = dp.trans, ys = tr[0].ys;
+    B.push(svgBlock(lineChart({ xlabel: 'y [m]', ylabel: 'm_y [kN·m/m]', hauteur: 260, series: tr.flatMap((t, k) => [
+      { points: ys.map((y, iy) => [y, t.myMax[iy]]), libelle: `travée ${t.j + 1} — P2 (E.S)`, couleur: ['#0369a1', '#dc2626', '#0f766e', '#b45309', '#7c3aed'][k % 5] },
+      { points: ys.map((y, iy) => [y, t.myMin[iy]]), libelle: `travée ${t.j + 1} — × F1,MS/F2,ES`, couleur: ['#0369a1', '#dc2626', '#0f766e', '#b45309', '#7c3aed'][k % 5], tirets: '5 3' }]) }),
+    'Moments transversaux dus à la poussée au vide du câble en travée (mi-travée)'));
+    table(['Travée', 'Ā⁺ [1/m]', 'F2 E.S / F1 M.S [MN]', 'p [kPa]', 'm_y précontrainte P2 / × F1/F2 (extrêmes) [kN·m/m]', 'N = F h/B_n [kN/m]', 'A_s inf. avec / sans précontrainte [cm²/m]', 'A_s sup. avec / sans précontrainte [cm²/m]'], tr.map(t => [String(t.j + 1), F(t.Abar, 5), `${MN(t.F2)} / ${MN(t.F1)}`, F(t.p, 1), `${F(Math.min(...t.myMax), 1)} / ${F(Math.min(...t.myMin), 1)}`, F0(t.N),
+      t.design ? `${F(t.design.bot.As * 1e4, 2)} / ${F(t.design.bot.AsBA * 1e4, 2)}` : '—', t.design ? `${F(t.design.top.As * 1e4, 2)} / ${F(t.design.top.AsBA * 1e4, 2)}` : '—']), { small: true });
+    comment('Poussée au vide uniforme p = −F2 · 2Ā⁺/2b (Ā⁺ : moyenne pondérée des coefficients A > 0 des paraboles de la travée ; la note PSIDP-EL divise par 9 m au lieu de la largeur, point non élucidé), appliquée sur toute la largeur de la travée droite équivalente ; m_y par le noyau de Guyon-Massonnet des charges permanentes (ν de la dalle), valeur maximale avec P2 en service définitif, minimale × F1,MS/F2,ES. Aciers transversaux BAEL (flexion simple, sans l\'effort normal longitudinal) avec m_y(précontrainte) ajouté aux combinaisons ELS et ELU de la flexion transversale du béton armé ; la précontrainte allège la nappe inférieure et sollicite la nappe supérieure.');
+  }
+
+  // ------------------------------------------------------------------ flèches
+  if (dp.defl) {
+    h2('Flèches et contre-flèches');
+    const D = dp.defl, mm = arr => xsP.map((x, i) => [x, 1000 * arr[i]]);
+    B.push(svgBlock(lineChart({ xlabel: 'x [m]', ylabel: 'w [mm] (vers le haut)', series: [
+      { points: mm(D.w.oss), libelle: 'ossature, instantanée', couleur: '#64748b', tirets: '2 3' },
+      { points: mm(D.w.cp), libelle: 'C.P., instantanée', couleur: '#64748b' },
+      { points: mm(D.w.cpTot), libelle: 'C.P., à long terme', couleur: '#111827' },
+      { points: mm(D.w.pI), libelle: 'précontrainte, instantanée', couleur: '#0369a1', tirets: '5 3' },
+      { points: mm(D.w.pFl), libelle: 'précontrainte, par fluage', couleur: '#0369a1' },
+      { points: mm(D.w.miseEnTension), libelle: 'à la mise en tension (ossature + P)', couleur: '#0f766e' },
+      { points: mm(D.w.service), libelle: 'en service après fluage', couleur: '#dc2626', epaisseur: 3 }] }),
+    'Flèches des charges permanentes et contre-flèches de précontrainte'));
+    const xMid = spans.map((L, j) => r.xOf(j, j === 0 && spans.length > 1 ? 0.4 : j === spans.length - 1 && spans.length > 1 ? 0.6 : 0.5));
+    table(['Section', 'Ossature inst.', 'C.P. inst.', 'C.P. long terme', 'P inst.', 'P fluage', 'Mise en tension', 'Service après fluage'], xMid.map(x => [lab(x), ...['oss', 'cp', 'cpTot', 'pI', 'pFl', 'miseEnTension', 'service'].map(k => F(1000 * r.at(D.w[k], x), 1))]), { small: true });
+    table(['Appui', 'Rotation C.P. inst. g / d [10⁻³ rad]', 'Rotation P inst.', 'Rotation en service'], D.rot.cp.map((q, i) => [String(i + 1), `${q.g == null ? '—' : F(q.g * 1000, 2)} / ${q.d == null ? '—' : F(q.d * 1000, 2)}`, `${D.rot.pI[i].g == null ? '—' : F(D.rot.pI[i].g * 1000, 2)} / ${D.rot.pI[i].d == null ? '—' : F(D.rot.pI[i].d * 1000, 2)}`, `${D.rot.service[i].g == null ? '—' : F(D.rot.service[i].g * 1000, 2)} / ${D.rot.service[i].d == null ? '—' : F(D.rot.service[i].d * 1000, 2)}`]), { small: true });
+    comment(`Flèches en mm (positives vers le haut) ; poutre continue à inertie brute constante sous les moments réels (hyperstatiques compris). E_ij = ${F0(D.Eij / 1000)} MPa (ossature, C.P. et précontrainte instantanées) ; long terme des C.P. (1 + K_fl) w(E_i28) (E_v28 = E_i28/3 pour K_fl = 2) ; précontrainte par fluage K_fl · w(P∞ moyenne, E_i28), convention retrouvée sur la note PSIDP-EL (15,2 mm calculés pour 15,0). Une flèche finale proche de zéro ou positive traduit la prépondérance de la précontrainte (contre-flèche de coffrage à prévoir en conséquence).`);
+  }
   return B;
 }

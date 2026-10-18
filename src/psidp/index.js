@@ -4,7 +4,8 @@
  * transversale de Guyon-Massonnet) — démarche du dossier pilote SETRA PSI-DP et de la note modèle PSIDP-EL 84-1, règles
  * BPEL 91 révisé 99 (classe II). Unités internes : m, kN, kPa ; entrées et sorties des matériaux en MPa.
  */
-import { prestress, cableGeometry } from './prestress.js';
+import { prestress, cableGeometry, deflection } from './prestress.js';
+import { materialsBAEL, flexureELU, flexureELS } from '../section_bael.js';
 import { psidpChecks, mLim } from './checks.js';
 
 /** Unités de précontrainte courantes (aire d'acier, Ø extérieur de gaine, rayon minimal de courbure). */
@@ -173,4 +174,55 @@ export function designPSIDP(ctx, bpIn = {}) {
     q.AsAdd = hi - (hog ? st.top.As : st.bot.As);
   }
   return { bp, unit: U, sec, sigma0, fcj, fc28, lim, steel, segs, geoChk, pre, n0, tried, auto: !bp.n, xs, M, Q, G, O, ...res };
+}
+
+/**
+ * Flexion transversale due à la précontrainte (note PSIDP-EL, NP 47-50) : la déviation du câble moyen en travée exerce une
+ * poussée vers le haut uniforme p = −F · 2Ā⁺ / 2b (Ā⁺ = moyenne pondérée des coefficients A > 0 des paraboles de la travée,
+ * F = P2 en service définitif à mi-travée), dont on tire m_y(y) par le même noyau de Guyon-Massonnet que les charges
+ * permanentes ; valeur minimale × F1,MS/F2,ES. Puis aciers transversaux BAEL avec ces moments ajoutés aux combinaisons.
+ */
+export function transversePrestress(dp, { deck, model, transDesign, mat }) {
+  const r = dp.r, b = deck.b, out = [];
+  const m = materialsBAEL(mat), h = deck.h, d = h - (mat.c ?? 0.03) - (mat.phiLong ?? 0.02), sec = { b: 1, h, d };
+  deck.spans.forEach((L, j) => {
+    const segs = dp.segs[j]; let sA = 0, sL = 0, x0 = 0;
+    for (const q of segs) { const len = q.x1 - x0; if (q.A > 0) { sA += q.A * len; sL += len; } x0 = q.x1; }
+    const Abar = sL ? sA / sL : 0, xm = r.xOf(j, 0.5);
+    const F2 = r.at(r.ES.min.F, xm), F1 = r.at(r.MS.max.F, xm), p = -F2 * 2 * Abar / (2 * b);
+    const unit = model.response(j, 'pp', model.bandPatches(j, -b, b)).my;
+    const myMax = unit.map(u => p * u), myMin = myMax.map(v => v * F1 / F2);
+    const c = transDesign && transDesign.spans[j] ? transDesign.spans[j].comb : null;
+    let design = null;
+    if (c) {
+      const face = (Mu, Ms) => { const e = flexureELU(Math.max(Mu, 0) / 1000, sec, m), s2 = flexureELS(Math.max(Ms, 0) / 1000, sec, m); return { Mu, Ms, As: Math.max(e.As, s2.As) }; };
+      const botY = myMax.map((v, iy) => face(c.ELUmax[iy] + v, c.ELSmax[iy] + v)), topY = myMin.map((v, iy) => face(-(c.ELUmin[iy] + v), -(c.ELSmin[iy] + v)));
+      const pick = arr => arr.reduce((a, f, iy) => (f.As > a.f.As ? { f, iy } : a), { f: arr[0], iy: 0 });
+      const bo = pick(botY), to = pick(topY), BA = transDesign.spans[j];
+      design = { bot: { ...bo.f, y: deck.ys[bo.iy], AsBA: BA.bot.flex }, top: { ...to.f, y: deck.ys[to.iy], AsBA: BA.top.flex } };
+    }
+    out.push({ j, L, Abar, F2, F1, p, myMax, myMin, ys: deck.ys, design, N: F2 / r.Bn * h, N1: F1 / r.Bn * h });
+  });
+  return out;
+}
+
+/**
+ * Flèches et rotations (note PSIDP-EL, NP 58) : poutre continue à inertie brute constante sous les moments réels.
+ * Ossature et C.P. instantanées avec E_ij, C.P. à long terme (1 + K_fl) w(E_i28) (= E_v28 = E_i28/3 pour K_fl = 2),
+ * précontrainte instantanée (P moyenne initiale, E_ij), précontrainte par fluage K_fl · w(P∞ moyenne, E_i28).
+ */
+export function psidpDeflections(dp) {
+  const r = dp.r, spans = r.geo.x0.slice(1).map((x, j) => x - r.geo.x0[j]), I = dp.sec.I, MPa = 1000;
+  const Eij = 11000 * Math.cbrt(dp.fcj) * MPa, E28 = 11000 * Math.cbrt(dp.fc28) * MPa, Kfl = dp.bp.Kfl;
+  const MG = r.xs.map(x => dp.M.cp(x).moy), MO = r.xs.map(x => dp.M.oss(x).moy);
+  const MP = ph => r.xs.map((x, i) => ph.F[i] * r.z[i] + ph.Mhyp[i]);
+  const oss = deflection(r.xs, MO, spans, Eij * I), cp = deflection(r.xs, MG, spans, Eij * I), cp28 = deflection(r.xs, MG, spans, E28 * I);
+  const pI = deflection(r.xs, MP(r.MT.moy), spans, Eij * I), pInf = deflection(r.xs, MP(r.ES.moy), spans, E28 * I);
+  const w = {
+    oss: oss.w, cp: cp.w, cpTot: cp28.w.map(v => (1 + Kfl) * v), pI: pI.w, pFl: pInf.w.map(v => Kfl * v),
+  };
+  w.miseEnTension = w.oss.map((v, i) => v + w.pI[i]);
+  w.service = w.cpTot.map((v, i) => v + w.pI[i] + w.pFl[i]);
+  const rot = { cp: cp.rot, pI: pI.rot, service: cp28.rot.map((q, i) => ({ g: q.g == null ? null : (1 + Kfl) * q.g + pI.rot[i].g + Kfl * pInf.rot[i].g, d: q.d == null ? null : (1 + Kfl) * q.d + pI.rot[i].d + Kfl * pInf.rot[i].d })) };
+  return { xs: r.xs, w, rot, Eij, E28 };
 }

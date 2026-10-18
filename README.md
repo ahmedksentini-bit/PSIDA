@@ -130,7 +130,8 @@ PSIDP-EL 84-1, règles BPEL 91 révisé 99 (classe II) ; charges du Fascicule 61
 - P1 / P2, moments et réactions hyperstatiques (méthode des forces) pour les trois phases (mise en tension, mise en service,
   service définitif).
 - Contraintes en classe II avec section d'enrobage, aciers passifs (peau, 1,5 ‰ sur appuis, non-fragilité), ELU de flexion
-  par équilibre de la section, effort tranchant (ELS, bielles, armatures d'âme). Nombre d'unités minimal trouvé
+  par équilibre de la section, effort tranchant (ELS, bielles, armatures d'âme), flexion transversale due à la
+  précontrainte, flèches et contre-flèches. Nombre d'unités minimal trouvé
   automatiquement (départ au prédimensionnement de l'annexe 1).
 - Calage : `test/psidp.test.js` reproduit la note modèle (13,50-17,61-17,61-13,50 m, 18 × 12T13) à 0,3 % près sur les
   tensions, au dixième de t·m sur les moments hyperstatiques, et M_lim ELU sur appui à 0,1 %.

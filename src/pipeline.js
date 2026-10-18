@@ -3,7 +3,7 @@
  * dimensionnement longitudinal et transversal), appareils d'appui, chevêtres, conception, compléments, plan de ferraillage.
  * Utilisée par l'interface (web/app.js) et par les tests / la génération de notes sous Node.
  */
-import { designPSIDP } from './psidp/index.js';
+import { designPSIDP, psidpDeflections, transversePrestress } from './psidp/index.js';
 import { SlabDeck } from './analysis.js';
 import { EC_ALPHA } from './loads_ec.js';
 import { designEC, designBAEL, designTransverseEC, designTransverseBAEL, designSingleActionEC } from './design.js';
@@ -280,7 +280,14 @@ export function compute(p) {
   try { rebar = rebarPlan({ deck, design: env, trans: transDesign.EC, opt: { fck: p.mat.fck, fyk: p.mat.fyk, phiLong: Math.round(p.mat.phi * 1000), phiTrans: Math.round(p.mat.phiT * 1000) } }); rebar.governing = governing; }
   catch (e) { rebarError = `plan de ferraillage BA impossible (${e.message}) : sections d'acier hors des dispositions courantes — dalle à précontraindre ou à épaissir`; }
   let psidp = null, psidpError = null;
-  if (p.bp && p.bp.actif) { try { psidp = designPSIDP({ deck, perm, f61, thermal, beamF61: design.F61.beam, fc28: p.mat.fck }, p.bp); } catch (e) { psidpError = e.message; } }
+  if (p.bp && p.bp.actif) {
+    try {
+      psidp = designPSIDP({ deck, perm, f61, thermal, beamF61: design.F61.beam, fc28: p.mat.fck }, p.bp);
+      psidp.defl = psidpDeflections(psidp);
+      const model = new TransverseModel(deck, { tRev: p.mat.tRev, nHarm: 15, I: p.I, skewEquivalent: true });
+      psidp.trans = transversePrestress(psidp, { deck, model, transDesign: transDesign.F61, mat: { ...p.mat, phiLong: p.mat.phi } });
+    } catch (e) { psidpError = e.message; }
+  }
   let supports = null, supportsError = null;
   try { supports = computeSupports({ p, deck, perm, f61, ec, bearings }, p.supports); } catch (e) { supportsError = e.message; }
   return { psidp, psidpError, supports, supportsError, rebar, rebarError, p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transF, transELU, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
