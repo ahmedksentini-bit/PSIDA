@@ -141,7 +141,7 @@ PSIDP-EL 84-1, règles BPEL 91 révisé 99 (classe II) ; charges du Fascicule 61
 - Appareils en élastomère fretté vérifiés selon la NF EN 1337-3 (présentation du guide Sétra de juillet 2007) pour l'appareil le plus chargé de chaque ligne : distorsion, déformation totale, flambement, stabilité en rotation (y compris sous charge minimale), frettes, non-glissement, contrainte minimale ; appareil de la gamme standard proposé si la vérification échoue.
 - Tête d'appui : pression localisée sous les appareils (BAEL A.8.4 ou EN 1992-1-1 § 6.7), frettage, partie de voile en console (BAEL annexe E.6).
 - Dalle précontrainte : les réactions hyperstatiques de précontrainte et le raccourcissement (élastique, fluage, retrait) du calcul PSI-DP passent aux appuis.
-- Contrôle sur une note d'appuis réelle (ouvrage OA2, pont-dalle précontraint) : `test/bearings1337.test.js`.
+- Contrôle sur une note d'appuis réelle (pont-dalle précontraint) : `test/bearings1337.test.js`.
 
 ## Calcul sismique — Pont EC8 intégré (`ec8/`, `web/ec8/`)
 

@@ -1,6 +1,6 @@
 /**
  * Appareils d'appui NF EN 1337-3 (guide Sétra 2007) et tête d'appui (BAEL A.8.4, annexe E.6) — contrôle sur la note
- * « appuis et fondations » de l'ouvrage OA2 tablier T2 (pont-dalle précontraint, Sfax) : appareils 500 × 600 × 8(12 + 4)
+ * « appuis et fondations » de d'un pont-dalle précontraint réel (note de bureau d'études, 6 travées) : appareils 500 × 600 × 8(12 + 4)
  * des piles simples et 350 × 450 × 6(12 + 4) des piles doubles. Valeurs de la note entre parenthèses.
  */
 import { test } from 'node:test';
@@ -10,7 +10,7 @@ import { localPressure, shortCorbel, bearingSplitting } from '../src/supports/pi
 
 const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol * Math.abs(b), `${msg} : ${a} au lieu de ${b}`);
 
-test('NF EN 1337-3 — appareil 500 × 600 × 8(12 + 4) de la pile P2-2 (note OA2, comb. 4-2)', () => {
+test('NF EN 1337-3 — appareil 500 × 600 × 8(12 + 4) de la pile P2-2 (note de référence, comb. 4-2)', () => {
   const g = bearingGeometry({ a: 0.5, b: 0.6, n: 8, t: 0.012, ts: 0.004 });
   near(g.S, 11.154, 1e-3, 'S1'); near(g.Te, 0.101, 1e-9, 'Te'); near(g.Ap, 0.2891, 1e-4, "A'");
   assert.equal(g.Tq, 0.096);   // guide § 3.3.2.2 : e = 2,5 mm ⇒ T_q = n t (la note prend T_e)
@@ -45,7 +45,7 @@ test('NF EN 1337-3 — stabilité en rotation des appareils 350 × 450 × 6(12 +
   assert.ok(r.ok, 'combinaison indicative non bloquante');
 });
 
-test('Tête d\'appui — bossage et console de la pile P2-6 (note OA2)', () => {
+test('Tête d\'appui — bossage et console de la pile P2-6 (note de référence)', () => {
   // bossage 0,60 × 0,70 sous appareil 0,50 × 0,60 : α = 0,83 > 3/4 ⇒ K = 1 (la note retient 1,09) ; σ = 14,40 > 14,17 MPa
   const p = localPressure({ R: 4320, a0: 0.5, b0: 0.6, a: 0.6, b: 0.7, fcj: 25 });
   assert.ok(p.outside); assert.equal(p.K, 1); near(p.Kformula, 1.094, 2e-3, 'K formule (1,09)');
