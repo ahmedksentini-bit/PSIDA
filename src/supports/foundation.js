@@ -9,7 +9,7 @@
  * Unités : m, kN, kPa (kN/m²), MPa.
  */
 
-import { kpF62, kpEC7, KP_EC7, idbF62, idEC7, diagramme, surfaceComprimeeF62, portanceF62, excentrementEC7, portanceEC7, glissementF62, glissementEC7 } from '../geotech/superficielles.js';
+import { kpF62, kpEC7, KP_EC7, idbF62, idEC7, pleF62, pleEC7, hrEC7, De as DeProfil, diagramme, surfaceComprimeeF62, portanceF62, excentrementEC7, portanceEC7, glissementF62, glissementEC7 } from '../geotech/superficielles.js';
 import { pieuF62, valeursLimitesEC7, modeleTerrain } from '../geotech/pieux.js';
 import { CLASSES_F62 } from '../geotech/sols.js';
 import { converseLabarre, efficaciteCoherentF62, efficaciteEC7, verifGroupeF62, verifGroupeEC7 } from '../geotech/groupes.js';
@@ -18,6 +18,17 @@ export { converseLabarre, efficaciteCoherentF62, efficaciteEC7, verifGroupeF62, 
 /** Famille F62 (« sable-B ») → catégorie NF P 94-261/262 (« sable »). */
 export const categoryOf = classe => String(classe || 'sable-B').split('-')[0];
 export const isCohesive = classe => (CLASSES_F62[classe] ? CLASSES_F62[classe].cohérent : false);
+
+/**
+ * Profil pressiométrique par couches (profondeurs depuis le terrain naturel) :
+ * [{ z0, z1, classe (F62 : « sable-B »…), pl (p*_l, MPa), EM (MPa), alpha (Ménard) }]. Couche la plus profonde prolongée.
+ */
+export function soilProfile(layers) {
+  const L = [...layers].sort((a, b) => a.z0 - b.z0).map(l => ({ ...l, sol: l.sol || categoryOf(l.classe) }));
+  if (!L.length) throw new Error('Profil pressiométrique vide.');
+  const at = z => L.find(l => z >= l.z0 && z < l.z1) ?? (z < L[0].z0 ? L[0] : L[L.length - 1]);
+  return { layers: L, at, fn: z => Math.max(at(z).pl, 1e-3), ruptures: [...new Set(L.flatMap(l => [l.z0, l.z1]))] };
+}
 
 /** k_p NF P 94-261 (tableau D.2.3, interpolation en B/L, D_e/B plafonné à 2) — module geotech du dépôt « fondation ». */
 export const KP_261 = KP_EC7;
@@ -38,9 +49,17 @@ export const iDeltaFrictional = (delta, DeB) => idEC7({ sol: 'frottant', delta: 
  *   75 % (ELS rares) ; glissement H ≤ V tan φ'/1,2 + c' A'/1,5.
  * @param {object} p classe F62 du sol (« sable-B »…), ple p*_le [MPa], q0 contrainte effective au niveau de la base [kPa]
  */
-export function shallowFooting({ code = 'EC', B, L, D = 1, V, H = 0, M = 0, ls = 'ELU', classe = 'sable-B', soil = null, ple, De = null, q0 = null, phi = 30, c = 0, gamma = 20 }) {
-  const cl = soil && !classe ? soil : classe;
-  const e = V > 0 ? Math.abs(M) / V : 0, DeV = De ?? D, q0v = q0 ?? gamma * D;
+export function shallowFooting({ code = 'EC', B, L, D = 1, V, H = 0, M = 0, ls = 'ELU', classe = 'sable-B', soil = null, ple, De = null, q0 = null, phi = 30, c = 0, gamma = 20, profile = null }) {
+  const e = V > 0 ? Math.abs(M) / V : 0, q0v = q0 ?? gamma * D;
+  // profil pressiométrique : p*_le moyenne géométrique sur [D ; D + 1,5 B] (F62 E.2) ou [D ; D + h_r] (NF P 94-261 D.2.2,
+  // h_r selon l'excentrement), D_e = (1/p*_le) ∫₀ᴰ p*_l dz, classe de la couche d'assise
+  let cl = soil && !classe ? soil : classe, DeV = De ?? D;
+  if (profile) {
+    const hr = code === 'EC' ? hrEC7({ forme: 'rectangulaire', B, L, eB: e, etat: ls === 'ELS' ? 'ELS' : 'ELU' }) : 1.5 * B;
+    ple = code === 'EC' ? pleEC7({ profil: profile, D, hr }).ple : pleF62({ profil: profile, D, B }).ple;
+    DeV = DeProfil({ profil: profile, d: 0, D, reference: ple });
+    cl = profile.at(D + 1e-6).classe;
+  }
   const delta = V > 0 ? Math.atan(Math.abs(H) / V) * 180 / Math.PI : 0;
   const sol = isCohesive(cl) ? 'coherent' : 'frottant';
   const forme = 'rectangulaire';
@@ -54,7 +73,7 @@ export function shallowFooting({ code = 'EC', B, L, D = 1, V, H = 0, M = 0, ls =
     if (!ex.applicable) return { e, kp, idelta: id, qnet, ratioV: Infinity, ratioH: Infinity, excOk: false, motif: ex.motif };
     const pv = portanceEC7({ A: B * L, ie: ex.ie, qnet, q0: q0v, Vd: V, etat });
     const gl = ls !== 'ELS' ? glissementEC7({ Vd: V, Hd: Math.abs(H), phiCrit: phi, etat: ls === 'ACC' ? 'ELU_acc' : 'ELU' }) : null;
-    return { e, Bp: ex.Bprime, Ap: ex.Aprime, kp, idelta: id, qnet, Rvd: pv.Rvd, R0: pv.R0, ratioV: pv.taux, Rhd: gl ? gl.Rhd : null, ratioH: gl ? gl.taux : 0, excOk: ex[exEtat].ok, crit: ex.critere };
+    return { e, ple, De: DeV, classe: cl, Bp: ex.Bprime, Ap: ex.Aprime, kp, idelta: id, qnet, Rvd: pv.Rvd, R0: pv.R0, ratioV: pv.taux, Rhd: gl ? gl.Rhd : null, ratioH: gl ? gl.taux : 0, excOk: ex[exEtat].ok, crit: ex.critere };
   }
   const kp = kpF62({ classe: cl, B, L, forme, De: Math.min(DeV, 2.5 * B) }).k;   // F62 B.1 : D_e/B ≤ 2,5 (au-delà : semi-profonde)
   const idb = idbF62({ sol, delta, B, De: DeV }).i;
@@ -64,7 +83,7 @@ export function shallowFooting({ code = 'EC', B, L, D = 1, V, H = 0, M = 0, ls =
   const pf = portanceF62({ qnette: kp * ple * 1000, q0: q0v, idb, qref: dg.qrefTrapeze, etat });
   const sc = surfaceComprimeeF62({ B, e, etat: ls === 'ACC' ? 'ELU' : etat });
   const gl = ls !== 'ELS' ? glissementF62({ Vd: V, Hd: Math.abs(H), phi, c, Aprime: dg.Bc * L }) : null;   // glissement vérifié à l'ELU
-  return { e, kp, idelta: idb, qmax: dg.qmax, qmin: dg.qmin, qref: dg.qrefTrapeze, qadm: pf.qadm, ratioV: pf.taux, Rhd: gl ? gl.R : null, ratioH: gl ? gl.taux : 0, compressed: dg.fraction, excOk: sc.ok };
+  return { e, ple, De: DeV, classe: cl, kp, idelta: idb, qmax: dg.qmax, qmin: dg.qmin, qref: dg.qrefTrapeze, qadm: pf.qadm, ratioV: pf.taux, Rhd: gl ? gl.R : null, ratioH: gl ? gl.taux : 0, compressed: dg.fraction, excOk: sc.ok };
 }
 
 /**
@@ -140,13 +159,14 @@ export function pileConcrete({ fc28 = 25, D, L, type = 'fore-boue' }) {
  * @returns {{y0, theta0, Mmax, M, z, flexHead}} déplacement et rotation en tête, moment maximal, profil des moments
  */
 export function lateralPile({ L, D, E, k, H, M0 = 0, n = 200, fixedHead = false }) {
-  const I = Math.PI * D ** 4 / 64, EI = E * 1000 * I, h = L / n, kh = k * D;   // k [kN/m³] → ressort linéique k·D [kN/m²]
+  // k [kN/m³] constant ou fonction de la profondeur z sous la tête (sol en couches) → ressort linéique k·D [kN/m²]
+  const I = Math.PI * D ** 4 / 64, EI = E * 1000 * I, h = L / n, kOf = typeof k === 'function' ? k : () => k;
   // inconnues y_0..y_n ; EI y'''' + k D y = 0 ; conditions : tête M = −EI y'' = M0 (ou y' = 0), V = −EI y''' = H ; pied M = V = 0
   const N = n + 1, A = Array.from({ length: N + 4 }, () => new Float64Array(N + 4)), rhs = new Float64Array(N + 4);
   const idx = i => i + 2; // nœuds fictifs −2, −1, n+1, n+2
   for (let i = 0; i <= n; i++) {
     const r = idx(i);
-    A[r][idx(i - 2)] += EI / h ** 4; A[r][idx(i - 1)] += -4 * EI / h ** 4; A[r][idx(i)] += 6 * EI / h ** 4 + kh; A[r][idx(i + 1)] += -4 * EI / h ** 4; A[r][idx(i + 2)] += EI / h ** 4;
+    A[r][idx(i - 2)] += EI / h ** 4; A[r][idx(i - 1)] += -4 * EI / h ** 4; A[r][idx(i)] += 6 * EI / h ** 4 + kOf(i * h) * D; A[r][idx(i + 1)] += -4 * EI / h ** 4; A[r][idx(i + 2)] += EI / h ** 4;
   }
   // tête : V = −EI y''' = H (signe : H pousse vers +y), M : −EI y'' = M0 ou y' = 0
   A[0][idx(-2)] = -1; A[0][idx(-1)] = 2; A[0][idx(1)] = -2; A[0][idx(2)] = 1; rhs[0] = -2 * h ** 3 * H / EI * -1;
@@ -188,15 +208,19 @@ export const PILE_TYPES = {
  * Q ≤ Q_u/1,4 ELU, Q_c/1,1 ELS rares, traction Q_tu/1,4, Q_tc/1,4) ; NF P 94-262 (modèle de terrain : k_p(D_ef/B), α f_sol,
  * γ_R;d1 γ_R;d2, puis γ_t = 1,1 à l'ELU et charge de fluage/0,9 à l'ELS caractéristique).
  */
-export function pileCapacity({ code = 'EC', type = 'fore-simple', D, Lpile, classe = 'sable-B', ple, layers = null }) {
-  const couches = layers ?? [{ z0: 0, z1: Lpile + 10, classe, sol: categoryOf(classe), pl: ple }];
+export function pileCapacity({ code = 'EC', type = 'fore-simple', D, Lpile, classe = 'sable-B', ple, layers = null, profile = null, Dhead = 0 }) {
+  // profil : couches depuis le terrain naturel, pieu de la tête (profondeur Dhead, sous la semelle) à la pointe Dhead + L ;
+  // le frottement est compté à partir de la tête (zf = Dhead)
+  const couches = profile ? profile.layers.map(l => ({ ...l, z1: l === profile.layers[profile.layers.length - 1] ? Math.max(l.z1, Dhead + Lpile + 10) : l.z1 }))
+    : layers ?? [{ z0: 0, z1: Lpile + 10, classe, sol: categoryOf(classe), pl: ple }];
+  const Dtip = (profile ? Dhead : 0) + Lpile, zf = profile ? Dhead : 0;
   if (code === 'EC') {
-    const lim = valeursLimitesEC7({ methode: 'pressio', cat: (PILE_TYPES[type] || PILE_TYPES['fore-simple']).cat, B: D, D: Lpile, couches });
+    const lim = valeursLimitesEC7({ methode: 'pressio', cat: (PILE_TYPES[type] || PILE_TYPES['fore-simple']).cat, B: D, D: Dtip, couches, zf });
     if (!lim.applicable) return { applicable: false, motif: lim.motif };
     const mt = modeleTerrain(lim);
     return { applicable: true, Rb: lim.Rb, Rs: lim.Rs, Rcd: mt.calcul.ELU.Rcd, RcdAcc: mt.calcul.ELU_acc.Rcd, Rcrd: mt.calcul.ELS_car.Rccrd, Rtd: mt.calcul.ELU.Rtd, detail: mt };
   }
-  const r = pieuF62({ methode: 'pressio', type, B: D, D: Lpile, couches });
+  const r = pieuF62({ methode: 'pressio', type, B: D, D: Dtip, couches, zf });
   if (!r.applicable) return { applicable: false, motif: r.motif };
   return { applicable: true, Rb: r.Qpu, Rs: r.Qsu, Rcd: r.limites.ELU.Qmax, RcdAcc: r.limites.ELU_acc.Qmax, Rcrd: r.limites.ELS_rare.Qmax, Rtd: -r.limites.ELU.Qmin, detail: r };
 }

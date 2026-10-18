@@ -156,3 +156,43 @@ test('Séisme (moteur Pont EC8 intégré) et chocs : combinaisons accidentelles 
   assert.ok(Number.isFinite(pile.found.capRatio.ACC) && pile.found.capRatio.ACC > 0);
   assert.ok(supportsBlocks(s, 'EC').some(b => b.t === 'h2' && /Séisme/.test(b.text)));
 });
+
+test('Appuis seuls (tablier quelconque) : réactions saisies, séisme, note', async () => {
+  const { parseStandalone, computeStandalone } = await import('../src/supports/standalone.js');
+  const { parseSupports } = await import('../src/pipeline.js');
+  const { supportsNote, blocksToHTML } = await import('../web/supports_view.js');
+  const d = { ss_spans: '33,33,33,33', ss_width: '10', ss_h: '2', ss_area: '4.5', ss_super: '45', ss_Lc: '8', ss_nb: '4', ss_bearing: '400×400×4(12+3)',
+    ss_lines: ['1275;1275;710;650;900;50;900;600', ...Array(3).fill('2550;2550;1100;900;1300;80;1300;1000'), '1275;1275;710;650;900;50;900;600'].join('\n'),
+    ap_pileH: '18.5', ap_pileB: '1.5', ap_pileLv: '8.5', ap_found: 'pieux', ap_nFiles: '1', ap_nPile: '3', ap_pileD: '1.2', ap_Lpile: '30', ap_seisme: 'on' };
+  const st = computeStandalone(parseStandalone(d), parseSupports(d));
+  // appareils 4 × 400 × 400 × 4(12 + 3) sur culée rigide : K = 1/s_néoprène = 2173 t/m (note Noé : souplesse 0,4601·10⁻³ m/t)
+  rel(st.supports.distB.K.inst[0], 21735, 1e-3, 'K culée = K néoprène');
+  assert.ok(st.supports.seisme && !st.supports.seisme.error);
+  const note = supportsNote(st.supports, { ref: 'F61', standalone: true, spans: st.deck.spans });
+  assert.ok(note.blocks.length > 10 && blocksToHTML(note.blocks).includes('Fondations'));
+  assert.throws(() => computeStandalone(parseStandalone({ ...d, ss_lines: '1;1;1;1;1;1;1;1' }), parseSupports(d)), /lignes d'appui attendues/);
+});
+
+test('Profil pressiométrique par couches : p*_le, D_e, couche d\'assise et pieux', async () => {
+  const { soilProfile, shallowFooting, pileCapacity } = await import('../src/supports/foundation.js');
+  const prof = soilProfile([{ z0: 0, z1: 2, classe: 'argile-B', pl: 0.8, EM: 6, alpha: 0.67 }, { z0: 2, z1: 8, classe: 'sable-B', pl: 1.2, EM: 12, alpha: 0.33 }, { z0: 8, z1: 40, classe: 'marne-A', pl: 2.5, EM: 30, alpha: 0.67 }]);
+  // F62 E.2 : moyenne géométrique sur [D ; D + 1,5 B] = [1 ; 5,5] m → exp[(1 ln 0,8 + 3,5 ln 1,2)/4,5]
+  const f = shallowFooting({ code: 'BAEL', B: 3, L: 13, D: 1, V: 5000, ls: 'ELU', profile: prof });
+  rel(f.ple, Math.exp((Math.log(0.8) + 3.5 * Math.log(1.2)) / 4.5), 1e-3, 'p*_le F62');
+  rel(f.De, 0.8 / f.ple, 1e-3, 'D_e = ∫₀¹ p*_l dz / p*_le'); assert.equal(f.classe, 'argile-B');
+  // pieu de 12 m sous une semelle à 1 m : pointe à 13 m dans la marne
+  const c = pileCapacity({ code: 'BAEL', type: 'fore-boue', D: 0.8, Lpile: 12, profile: prof, Dhead: 1 });
+  assert.ok(c.applicable); assert.equal(c.detail.porteuse.classe, 'marne-A');
+});
+
+test('Un profil pressiométrique par ligne d\'appui', async () => {
+  const { formDefaults } = await import('../tools/formdefaults.mjs');
+  const { parseData, compute, parseProfiles } = await import('../src/pipeline.js');
+  const prof = parseProfiles('[SP1]\n0 2 argile-B 0.8 6 0.67\n2 40 sable-B 1.2 12 0.33\n[SP2]\n0 40 marne-A 2.5 30 0.67');
+  assert.deepEqual(prof.map(p => [p.name, p.layers.length]), [['SP1', 2], ['SP2', 1]]);
+  const st = compute(parseData({ ...formDefaults(), ap_profil: '[SP1]\n0 2 argile-B 0.8 6 0.67\n2 40 sable-B 1.2 12 0.33\n[SP2]\n0 40 marne-A 2.5 30 0.67', ap_profAssign: 'SP1, SP2, SP2, SP1' }));
+  const L = st.supports.lines;
+  assert.deepEqual(L.map(l => l.profile), ['SP1', 'SP2', 'SP2', 'SP1']);
+  const c = L[0].EC.found.checks[0], p = L[1].EC.found.checks[0];
+  assert.equal(c.classe, 'argile-B'); assert.equal(p.classe, 'marne-A'); assert.ok(p.ple > c.ple);
+});

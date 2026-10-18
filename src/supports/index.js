@@ -8,7 +8,7 @@
 import { neopreneFlexibility, cantileverFlexibility, horizontalDistribution, brakingF61Deck, headCombinationsBAEL, headCombinationsEC } from './actions.js';
 import { designShaft, pierCap, buckling } from './pier.js';
 import { gardeGreve, murEnRetour, earthPressure, dalleTransition, Ka } from './abutment.js';
-import { shallowFooting, footingStrutTie, pileCapStrutTie, pileGroupForces, menardReaction, lateralPile, pileMinSteel, pileCapacity, PILE_TYPES, pileCapTwoRows, sigmaSBAEL, pileConcrete, efficaciteCoherentF62, efficaciteEC7, isCohesive } from './foundation.js';
+import { shallowFooting, footingStrutTie, pileCapStrutTie, pileGroupForces, menardReaction, lateralPile, pileMinSteel, pileCapacity, PILE_TYPES, pileCapTwoRows, sigmaSBAEL, pileConcrete, efficaciteCoherentF62, efficaciteEC7, isCohesive, soilProfile } from './foundation.js';
 import { requiredSteelNM } from './section_nm.js';
 import { bearingSpacing } from '../bearings.js';
 import { toPontEC8 } from '../ec8export.js';
@@ -44,7 +44,7 @@ export const SUPPORT_DEFAULTS = {
   pile: { type: 'voile', H: [6], b: 0.6, Lv: null, nCol: 3, D: 0.8, hc: 0, lc: 1.2 },
   culee: { type: 'remblayee', Hm: 3.0, em: 0.8, hGG: null, Lret: 4.0, nCol: 3, D: 0.8, hc: 1.0, lc: 1.6 },
   found: { type: 'superficielle', B: 3.0, hs: 1.0, De: 1.0, pileType: 'fore-boue', pileD: 0.8, nPile: 3, nFiles: 2, sPile: 2.4, Lpile: 15 },
-  soil: { classe: 'sable-B', ple: 1.0, EM: 10, alpha: 0.5, phi: 30, gamma: 20, q: 10 },
+  soil: { layers: null, classe: 'sable-B', ple: 1.0, EM: 10, alpha: 0.5, phi: 30, gamma: 20, q: 10 },
   mat: { fck: 25, fyk: 400, c: 0.05 },
   eps: { TLD: 3e-4, TCD: 1e-4 },
   ec8: { zone: 3, categorie: 'III', classeSol: 'B' },
@@ -137,8 +137,13 @@ export function computeSupports(st, input = {}) {
 
   // --- éléments d'appui ---
   const soil = sp.soil, KA = Ka(soil.phi);
+  // profils pressiométriques (sondages, couches depuis le terrain naturel), un profil associé à chaque ligne d'appui
+  // (liste « assign » : nom du profil par ligne ; à défaut le premier) ; sans profil : couche unique homogène
+  const profs = (soil.profiles && soil.profiles.length ? soil.profiles : [{ name: 'SP1', layers: soil.layers && soil.layers.length ? soil.layers : [{ z0: 0, z1: 100, classe: soil.classe, pl: soil.ple, EM: soil.EM, alpha: soil.alpha }] }])
+    .map(p => ({ name: p.name, ...soilProfile(p.layers) }));
+  const profileOf = i => profs.find(p => p.name === (soil.assign || [])[i]) || profs[0];
   const lines = xs.map((x, i) => {
-    const end = isEnd(i), out = { i, x, kind: end ? 'culee' : 'pile', type: end ? sp.culee.type : sp.pile.type, head: heads[i] };
+    const end = isEnd(i), profile = profileOf(i), out = { i, x, kind: end ? 'culee' : 'pile', type: end ? sp.culee.type : sp.pile.type, head: heads[i], profile: profile.name };
     out.K = { BAEL: { inst: distB.K.inst[i], diff: distB.K.diff[i] }, EC: { inst: distE.K.inst[i], diff: distE.K.diff[i] } };
     const per = {};
     for (const code of ['BAEL', 'EC']) {
@@ -201,7 +206,7 @@ export function computeSupports(st, input = {}) {
       const fd = base.map(b => { const g = b.ls === 'ELU' ? gU : 1; return { label: b.label, ls: b.ls, V: b.Nb + g * Wsem, H: b.Hb, M: b.Mb + b.Hb * F.hs }; });
       let found;
       if (F.type === 'superficielle') {
-        const checks = fd.map(f => ({ ...f, ...shallowFooting({ code, B: F.B, L: Lf, D: F.De, De: F.De, V: f.V, H: f.H, M: f.M, ls: f.ls, classe: soil.classe, ple: soil.ple, phi: soil.phi, gamma: soil.gamma }) }));
+        const checks = fd.map(f => ({ ...f, ...shallowFooting({ code, B: F.B, L: Lf, D: F.De, De: F.De, V: f.V, H: f.H, M: f.M, ls: f.ls, profile, phi: soil.phi, gamma: soil.gamma }) }));
         const eluMax = fd.filter(f => f.ls === 'ELU').reduce((a, f) => (f.V * (1 + 3 * Math.abs(f.M) / f.V / F.B) > a.Nn ? { f, Nn: f.V * (1 + 3 * Math.abs(f.M) / f.V / F.B) } : a), { Nn: 0 });
         const d = F.hs - c - 0.01, fsu = fyk / 1.15;
         const eMax = Math.max(...fd.map(f => Math.abs(f.M) / f.V));
@@ -221,7 +226,10 @@ export function computeSupports(st, input = {}) {
       } else {
         const nF = Math.max(1, F.nFiles), nP = Math.max(1, F.nPile), D = F.pileD;
         const xsP = []; for (let f = 0; f < nF; f++) for (let k = 0; k < nP; k++) xsP.push(nF === 1 ? 0 : (f - (nF - 1) / 2) * F.sPile);
-        const mr = menardReaction({ EM: soil.EM * 1000, alpha: soil.alpha, B: D }), kR = mr.k;
+        // module de Ménard couche par couche le long du pieu (tête à la profondeur D_e de la base de semelle)
+        const kAt = z => { const l = profile.at(F.De + z); return menardReaction({ EM: l.EM * 1000, alpha: l.alpha, B: D }); };
+        const mr = { k: z => kAt(z).k, kLong: z => kAt(z).kLong }, kR = mr.k;
+        const kHead = kAt(0).k;
         const pc = pileConcrete({ fc28: fck, D, L: F.Lpile, type: F.pileType });
         const Ep = code === 'BAEL' ? pc.Ei : Ecm(Math.min(fck, 30));
         // pieu de Winkler-Ménard : réponses linéaires unitaires. Deux files : tête encastrée dans la semelle (H seul) ;
@@ -249,7 +257,7 @@ export function computeSupports(st, input = {}) {
         const pileMatAcc = { ...pileMat, gammaC: code === 'BAEL' ? 1.15 : 1.2, gammaS: 1.0 };
         const AsOf = (r, mt) => Math.max(requiredSteelNM(shapeP, mt, Math.max(0, r.Nmin), r.Mmax).As ?? Infinity, requiredSteelNM(shapeP, mt, r.Nmax, r.Mmax).As ?? Infinity);
         const AsP = Math.max(...elu.map(r => AsOf(r, pileMat)), ...accR.map(r => AsOf(r, pileMatAcc)));
-        const cap = pileCapacity({ code, type: F.pileType, D, Lpile: F.Lpile, classe: soil.classe, ple: soil.ple });
+        const cap = pileCapacity({ code, type: F.pileType, D, Lpile: F.Lpile, profile, Dhead: F.De });
         const NmaxU = Math.max(...elu.map(r => r.Nmax)), NmaxS = Math.max(0, ...els.map(r => r.Nmax)), NminU = Math.min(...elu.map(r => r.Nmin));
         const NminS = Math.min(...els.map(r => r.Nmin));
         const NmaxA = accR.length ? Math.max(...accR.map(r => r.Nmax)) : 0;
@@ -258,7 +266,7 @@ export function computeSupports(st, input = {}) {
         // effet de groupe (F62 C.4.1,2 et annexe G.1 ; NF P 94-262 annexe J) : Converse-Labarre / formule J.2
         const dP = nF > 1 ? Math.min(F.sPile, Lf / nP) : Lf / nP;
         // F62 annexe G.1 § 2.5 : sols cohérents Ce = ¼(1 + d/B) (1 au-delà de d = 3B), sols frottants Ce = 1 ; NF P 94-262 J.2
-        const Ce = code === 'BAEL' ? (isCohesive(soil.classe) ? efficaciteCoherentF62({ B: D, d: dP }) : 1) : efficaciteEC7({ B: D, d: dP, m: nF, n: nP });
+        const Ce = code === 'BAEL' ? (isCohesive(profile.at(F.De + F.Lpile / 2).classe) ? efficaciteCoherentF62({ B: D, d: dP }) : 1) : efficaciteEC7({ B: D, d: dP, m: nF, n: nP });
         const VmaxU = Math.max(...elu.map(r => r.V));
         const group = cap.applicable ? { Ce: Math.min(1, Ce), d: dP, ratio: VmaxU / (Math.min(1, Ce) * xsP.length * cap.Rcd) } : null;
         const sigSels = code === 'BAEL' ? sigmaSBAEL({ fe: fyk, fc28: fck, fiss: 'FTP' }) : 0.8 * fyk;
@@ -275,12 +283,12 @@ export function computeSupports(st, input = {}) {
           const bm = pierCap({ length: Lf, supports: piles, loads, q: nc > 0 ? gU * Wsem / Lf : Vu / Lf, b: F.B, h: F.hs, c: 0.07, fck, fyk, code, rhoMin: 0.0012 });
           capBeam = { Mneg: bm.Mneg, Mpos: bm.Mpos, V: bm.V, AsTop: bm.AsTop, AsBot: bm.AsBot };
         }
-        found = { type: 'pieux', D, n: xsP.length, nF, nP, Lpile: F.Lpile, k: kR, rows, NmaxU, NmaxS, NminU, As: Math.max(AsP, pileMinSteel({ D, code })), AsReq: AsP, Amin: pileMinSteel({ D, code }), cap, capRatio, NmaxA, group, pileConc: pc, tie, capBeam, sigSels, hs: F.hs, hOk: F.hs >= 0.5, W: Wsem };
+        found = { type: 'pieux', D, n: xsP.length, nF, nP, Lpile: F.Lpile, k: kHead, rows, NmaxU, NmaxS, NminU, As: Math.max(AsP, pileMinSteel({ D, code })), AsReq: AsP, Amin: pileMinSteel({ D, code }), cap, capRatio, NmaxA, group, pileConc: pc, tie, capBeam, sigSels, hs: F.hs, hOk: F.hs >= 0.5, W: Wsem };
       }
       per[code] = { base, shaft: shaftRes, ...extra, found };
     }
     out.BAEL = per.BAEL; out.EC = per.EC;
     return out;
   });
-  return { sp, xs, Lv, width, seisme, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hGG, Ka: KA, lines };
+  return { sp, xs, Lv, width, seisme, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hGG, Ka: KA, lines };
 }

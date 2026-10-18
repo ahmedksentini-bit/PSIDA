@@ -20,10 +20,32 @@ import { flm3Envelope, fatigueCheck } from '../src/fatigue.js';
 import { rebarPlan } from '../src/rebar.js';
 import { parseData, compute, computeConceptOnly, conceptInput, parseVehicle } from '../src/pipeline.js';
 import { longitudinalRebarSVG, crossRebarSVG, scheduleHTML, providedPlot } from './rebarplan.js';
-import { supportsBlocks, blocksToHTML } from './supports_view.js';
+import { supportsBlocks, blocksToHTML, supportsNote } from './supports_view.js';
+import { parseStandalone, computeStandalone } from '../src/supports/standalone.js';
+import { parseSupports } from '../src/pipeline.js';
 import { toPontEC8 } from '../src/ec8export.js';
 
 const $ = s => document.querySelector(s);
+
+// --- onglets (adresse #projet, #tablier… comme Pont EC8) ---------------------------------------------------------------
+const TABS = ['projet', 'conception', 'tablier', 'ferraillage', 'complements', 'appuis', 'notes'];
+// adresse : #onglet ou #onglet/d=<données du formulaire> (lien partageable)
+const hashTab = () => location.hash.slice(1).split('/')[0];
+const hashData = () => { const m = location.hash.match(/(?:^#|\/)d=(.+)$/); return m ? m[1] : null; };
+let currentTab = 'projet';
+function goTab(id, push = true) {
+  if (!TABS.includes(id)) id = 'projet';
+  currentTab = id;
+  document.querySelectorAll('section.tab').forEach(sec => sec.classList.toggle('active', sec.id === `tab-${id}`));
+  document.querySelectorAll('nav.tabs a').forEach(a => a.setAttribute('aria-selected', String(a.dataset.tab === id)));
+  if (push) { const d = hashData(); history.replaceState(null, '', `#${id}${d ? `/d=${d}` : ''}`); }
+  // les graphiques Plotly tracés dans un onglet masqué sont redimensionnés à l'affichage
+  requestAnimationFrame(() => document.querySelectorAll(`#tab-${id} .plot`).forEach(d => { if (d.data && window.Plotly) Plotly.Plots.resize(d); }));
+}
+function setMode(mode) { document.body.dataset.mode = mode; }
+document.querySelectorAll('nav.tabs a').forEach(a => a.addEventListener('click', ev => { ev.preventDefault(); goTab(a.dataset.tab); }));
+window.addEventListener('hashchange', () => { const h = hashTab(); if (TABS.includes(h) && h !== currentTab) goTab(h, false); });
+goTab(hashTab(), false);
 const nums = s => s.split(/[,;\s]+/).filter(Boolean).map(Number);
 const pairs = s => s.split(';').map(t => t.trim()).filter(Boolean).map(t => nums(t));
 const fmt = v => (Math.abs(v) < 0.05 ? '0' : v.toFixed(1));
@@ -322,13 +344,13 @@ function renderSection(st) {
 function formToHash(form) {
   const d = Object.fromEntries(new FormData(form).entries());
   d.chamoaSign = form.chamoaSign.checked ? 1 : 0; d.withTherm = form.withTherm.checked ? 1 : 0;
-  try { location.hash = 'd=' + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(d))))); } catch (e) { /* ignore */ }
+  try { history.replaceState(null, '', `#${currentTab}/d=` + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(d)))))); } catch (e) { /* ignore */ }
 }
 function hashToForm(form) {
-  const m = location.hash.match(/^#d=(.+)$/);
-  if (!m) return false;
+  const h = hashData();
+  if (!h) return false;
   try {
-    const d = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
+    const d = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(h)))));
     for (const [k, v] of Object.entries(d)) { const el = form.elements[k]; if (!el) continue; if (el.type === 'checkbox') el.checked = !!+v; else el.value = v; }
     return true;
   } catch (e) { return false; }
@@ -353,12 +375,13 @@ renderScheme();
 
 $('#f').addEventListener('submit', ev => {
   ev.preventDefault();
-  $('#results').hidden = false; $('#results').classList.remove('concept-only');
-  try { state = compute(parseForm(ev.target)); renderStatic(state); $('#error').textContent = ''; formToHash(ev.target); }
+  setMode('full');
+  if (currentTab === 'projet' || currentTab === 'conception') goTab('tablier');
+  try { state = compute(parseForm(ev.target)); renderStatic(state); $('#error').textContent = ''; formToHash(ev.target); goTab(currentTab); }
   catch (e) { $('#error').textContent = e.stack || String(e); }
 });
 $('#btn-concept').addEventListener('click', () => {
-  $('#results').hidden = false; $('#results').classList.add('concept-only');
+  setMode('concept'); goTab('conception');
   try { state = computeConceptOnly(parseForm($('#f'))); $('#hsearch').innerHTML = ''; renderConception(state); $('#error').textContent = ''; formToHash($('#f')); }
   catch (e) { $('#error').textContent = e.stack || String(e); }
   $('#concept-card').scrollIntoView({ behavior: 'smooth' });
@@ -374,6 +397,7 @@ $('#concept-travures').addEventListener('click', ev => {
   $('#btn-concept').click();
 });
 $('#btn-hsearch').addEventListener('click', runThicknessSearch);
+$('#btn-concept2').addEventListener('click', () => $('#btn-concept').click());
 $('#rebar-x').addEventListener('change', () => state && state.rebar && renderRebar(state));
 if (hashToForm($('#f'))) $('#f').requestSubmit();
 $('#case-select').addEventListener('change', () => state && renderCase(state));
@@ -384,7 +408,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!state) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.14', hSearch: lastSearch });
+    const html = await buildReport({ ...state, version: '0.15', hSearch: lastSearch });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -404,7 +428,7 @@ async function noteFigures() {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.14' }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.15' }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!state || state.conceptOnly) { $('#error').textContent = 'Lancer d\'abord le calcul complet.'; return; }
@@ -427,6 +451,30 @@ $('#btn-note-docx').addEventListener('click', async () => {
 });
 $('#trans-span').addEventListener('change', () => state && renderTransverse(state));
 $('#supports-ref').addEventListener('change', () => state && renderSupports(state));
+$('#btn-standalone').addEventListener('click', () => {
+  setMode('supports'); goTab('appuis');
+  try {
+    const d = Object.fromEntries(new FormData($('#f')).entries());
+    state = computeStandalone(parseStandalone(d), parseSupports(d));
+    renderSupports(state); $('#error').textContent = '';
+    $('#card-supports').scrollIntoView({ behavior: 'smooth' });
+  } catch (e) { $('#error').textContent = e.stack || String(e); }
+});
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.15', standalone: !!state.standalone, spans: state.deck.spans });
+$('#btn-sup-note').addEventListener('click', () => {
+  if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
+  const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));
+  const w = window.open(url, '_blank');
+  if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-appuis.html'; aEl.click(); }
+});
+$('#btn-sup-docx').addEventListener('click', async () => {
+  if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
+  try {
+    const docx = await import('./vendor/docx.mjs');
+    const blob = await noteToDocx(supNote(), docx);
+    const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = `note-appuis-${$('#supports-ref').value}.docx`; aEl.click();
+  } catch (e) { $('#error').textContent = e.stack || String(e); }
+});
 $('#btn-ec8').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul complet.'; return; }
   try {

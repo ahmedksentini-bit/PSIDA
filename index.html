@@ -14,6 +14,7 @@
   body { margin:0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--ink); background:var(--bg); }
   header { padding: 16px 20px 10px; border-bottom:1px solid var(--line); background:var(--card); }
   header h1 { margin:0; font-size: 20px; } header p { margin:4px 0 0; color:var(--muted); font-size:13px; }
+  /* ancienne mise en page (page unique) */
   main { max-width: 1280px; margin: 0 auto; padding: 16px; display:grid; gap:16px; grid-template-columns: 330px 1fr; grid-template-rows: auto 1fr; }
   #f { grid-row: 1 / span 2; align-self: start; }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; grid-template-rows: auto; } #f { grid-row: auto; } }
@@ -42,17 +43,36 @@
   .badge.ok { background:#1f8a4c; color:#fff; } .badge.info { background:#4e5a70; color:#fff; } .badge.warn { background:#c0392b; color:#fff; }
   ul.checks { list-style:none; padding:0; margin:0 0 8px; } ul.checks li { padding:4px 0; border-bottom:1px dashed var(--line); font-size:13px; }
   #results.concept-only .full-only { display:none; }
+  #results.supports-only > *:not(#card-supports) { display:none; }
   button.mini { width:auto; margin:0; padding:3px 9px; font-size:12px; }
+  header { position: sticky; top: 0; z-index: 10; padding: 10px 20px 0; }
+  .hrow { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; } .hrow .sub { color:var(--muted); font-size:13px; flex:1; }
+  .hrow .actions button { width:auto; margin:0; padding:8px 18px; }
+  nav.tabs { display:flex; gap:2px; overflow-x:auto; margin-top:8px; }
+  nav.tabs a { padding:8px 14px; color:var(--muted); text-decoration:none; border-bottom:3px solid transparent; white-space:nowrap; font-weight:600; font-size:14px; }
+  nav.tabs a[aria-selected=true] { color:var(--acc); border-bottom-color:var(--acc); }
+  form.app { max-width: 1320px; margin: 0 auto; padding: 16px; }
+  section.tab { display:none; } section.tab.active { display:grid; gap:16px; }
+  .cols { display:grid; gap:16px; grid-template-columns: 360px 1fr; align-items:start; } .cols > div { display:grid; gap:16px; min-width:0; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+  .form-card { position: sticky; top: 112px; max-height: calc(100vh - 128px); overflow-y: auto; }
+  .card .card { border:0; padding:0; margin-top:10px; } .card .card h2 { font-size:14px; }
+  body:not([data-mode]) .res, body:not([data-mode]) .full-only { display:none; } body[data-mode] .nores { display:none; }
+  body[data-mode=concept] .full-only { display:none; } body[data-mode=supports] .full-only:not(#card-supports) { display:none; }
+  pre#error:empty { display:none; }
 </style>
 </head>
 <body>
 <header>
-  <h1>PSIDA — calcul manuel assisté des ponts-dalles</h1>
-  <p>Poutre continue + Guyon-Massonnet recalculé · charges Eurocodes (LM1/LM2) et Fascicule 61 (A(l), Bc, Bt, Mc120, D240) · comparé à la note CHAMOA-PSIDA (Cerema) · code ouvert.</p>
+  <div class="hrow"><h1>PSIDA</h1><span class="sub">calcul manuel assisté des ponts-dalles · Eurocodes et Fascicule 61 / BAEL · code ouvert</span>
+    <span class="actions"><button type="submit" form="f" id="btn-calc">Calculer</button></span></div>
+  <nav class="tabs" role="tablist"><a href="#projet" role="tab" data-tab="projet">Projet</a><a href="#conception" role="tab" data-tab="conception">Conception</a><a href="#tablier" role="tab" data-tab="tablier">Tablier</a><a href="#ferraillage" role="tab" data-tab="ferraillage">Ferraillage</a><a href="#complements" role="tab" data-tab="complements">Compléments</a><a href="#appuis" role="tab" data-tab="appuis">Appuis et fondations</a><a href="#notes" role="tab" data-tab="notes">Notes de calcul</a></nav>
+  <pre id="error"></pre>
 </header>
-<main>
-  <form class="card" id="f">
-    <h2>Données</h2>
+<form id="f" class="app" novalidate>
+<section class="tab" id="tab-projet">
+  <div class="cols">
+    <div class="card form-card"><h2>Tablier</h2>
     <details id="help-box"><summary>Aide sur les données (survoler un champ affiche aussi son explication)</summary><div id="help-list" class="small"></div></details>
     <label>Portées [m]<input name="spans" value="14, 18, 14"></label>
     <div class="row">
@@ -82,7 +102,8 @@
       <label>F61 : classe imposée<input name="classe" value=""></label>
       <label>F61 : charges militaires / exceptionnelles<select name="mil"><option value="Mc120+D240">Mc120 et D240</option><option value="Mc120">Mc120 seule</option><option value="D240">D240 seul</option><option value="aucune">aucune</option></select></label>
     </div>
-    <details><summary>Chanfreins, température, tassements</summary>
+    <div class="card"><h2>Chanfreins, température, tassements</h2>
+
       <div class="row">
         <label>Chanfreins : hauteur au bord [m] (vide = sans)<input name="hEdge" value=""></label>
         <label>Largeur de la joue [m]<input name="joue" value=""></label>
@@ -96,8 +117,9 @@
         <label>Tassement aléatoire δ [m]<input name="delta" value="0.01" type="number" step="0.001"></label>
         <label>Fluage φ (module différé E/(1+φ))<input name="phiFluage" value="2" type="number" step="0.1"></label>
       </div>
-    </details>
-    <details open><summary>Matériaux et ferraillage</summary>
+    </div>
+    <div class="card"><h2>Matériaux et ferraillage</h2>
+
       <div class="row">
         <label>fck / fc28 [MPa]<input name="fck" value="35" type="number" step="any"></label>
         <label>fyk / fe [MPa]<input name="fyk" value="500" type="number" step="10"></label>
@@ -111,8 +133,27 @@
         <label>Fissuration BAEL<select name="fiss"><option value="prejudiciable">préjudiciable</option><option value="tres prejudiciable">très préjudiciable</option><option value="peu nuisible">peu nuisible</option></select></label>
       </div>
       <label>Épaisseur de revêtement pour la diffusion des roues [m]<input name="tRev" value="0.08" type="number" step="0.01"></label>
-    </details>
-    <details open><summary>Conception (guide SETRA 1989)</summary>
+    </div>
+    <label><input type="checkbox" name="chamoaSign">Convention CHAMOA (moment + = fibre supérieure tendue) sur le graphique M(x)</label>
+    <button type="submit">Calculer</button>
+    <button type="button" class="secondary" id="btn-concept">Aide à la conception seule (rapide)</button>
+    <button type="button" class="secondary" id="btn-chamoa">Charger l'exemple CHAMOA-PSIDA (10-15-15-10 m)</button>
+    <button type="button" class="secondary" id="btn-psidael">Charger l'exemple PSIDA.EL 1984 (9,75-13,93-13,93-9,75 m, Fasc. 61)</button>
+    <p class="small">Valeurs caractéristiques non pondérées. Moments de la poutre entière en kN·m, par mètre de largeur en kN·m/m.</p>
+    </div>
+    <div class="card" id="scheme-card"><h2>Ce que vous saisissez</h2>
+    <p class="small">Schémas mis à jour en direct à partir du formulaire, avant tout calcul : vérifiez que la travure, la coupe et les charges correspondent à votre projet.</p>
+    <div id="scheme-summary"></div>
+    <div class="svgbox" id="scheme-elevation"></div>
+    <div class="svgbox" id="scheme-cross"></div>
+    <div class="svgbox" id="scheme-plan"></div>
+  </div>
+  </div>
+</section>
+<section class="tab" id="tab-conception">
+  <div class="cols">
+    <div class="card form-card"><h2>Conception (guide SETRA 1989)</h2>
+
       <div class="row">
         <label>Biais ψ [gr] (100 = droit)<input name="psi" value="100" type="number" step="1" min="30" max="100"></label>
         <label>Hauteur libre sous tablier [m] (facultatif)<input name="tirantAir" value=""></label>
@@ -131,8 +172,79 @@
         <label>Raccourcissement lent ε (retrait + fluage)<input name="epsSlow" value="0.00025" type="number" step="0.00005"></label>
         <label>Variation uniforme de température [°C]<input name="dTu" value="30" type="number" step="5"></label>
       </div>
-    </details>
-    <details><summary>Phase de chantier, convois LM3, encorbellements, fatigue, zonage</summary>
+    <button type="button" class="secondary" id="btn-concept2">Aide à la conception seule (rapide)</button>
+    </div>
+    <div>
+    <div class="card" id="concept-card"><h2>Aide à la conception — guide SETRA « Ponts-dalles » (1989)</h2>
+      <div id="concept"></div>
+      <div class="plot" id="plot-abaque" style="min-height:380px"></div>
+      <h3>Appareils d'appui en élastomère fretté (guide § 3.6, gamme NF T 47.815)</h3>
+      <div id="concept-bearings"></div>
+      <h3>Variantes de travure pour la même longueur entre appuis extrêmes</h3>
+      <div id="concept-travures"></div>
+      <h3>Recherche de l'épaisseur minimale vérifiée (Eurocodes, flexion longitudinale)</h3>
+      <div class="toolbar">
+        <label>h min [m] <input id="hs-min" type="number" step="0.02" style="width:90px"></label>
+        <label>h max [m] <input id="hs-max" type="number" step="0.02" style="width:90px"></label>
+        <label>pas [m] <input id="hs-step" type="number" step="0.01" value="0.02" style="width:80px"></label>
+        <button type="button" id="btn-hsearch" style="width:auto;margin:0;padding:8px 14px">Rechercher</button>
+      </div>
+      <div id="hsearch"></div>
+    </div>
+    </div>
+  </div>
+</section>
+<section class="tab" id="tab-tablier">
+<p class="small nores">Lancer le calcul (bouton « Calculer » en haut de page) pour afficher les résultats.</p>
+    <div class="card full-only"><div class="toolbar"><h2 style="margin:0;flex:1">Modèle</h2></div><p id="model-info" class="small"></p>
+      <div class="svgbox" id="elevation"></div>
+      <div class="toolbar"><label>Cas de charge affiché <select id="case-select"></select></label></div>
+      <div class="svgbox" id="cross"></div>
+    </div>
+    <div class="card full-only"><h2>Enveloppes longitudinales (poutre entière)</h2>
+      <div class="plot" id="plot-M"></div><div class="plot" id="plot-V"></div><div class="plot" id="plot-R" style="min-height:300px"></div>
+    </div>
+    <div class="card full-only"><h2>Répartition transversale</h2>
+      <div class="toolbar"><label>Travée pour K(y) <select id="span-select"></select></label></div>
+      <div class="plot" id="plot-K"></div>
+      <div class="plot" id="plot-mx"></div>
+      <div class="plot" id="plot-f"></div>
+      <div class="toolbar"><label>Surface <select id="surface-which"><option value="mxMax">m_x max</option><option value="mxMin">m_x min</option></select></label></div>
+      <div class="plot" id="plot-3d" style="min-height:430px"></div>
+    </div>
+    <div class="card full-only"><h2>Lignes d'influence</h2>
+      <div class="toolbar"><label>Section <select id="section-select"></select></label></div>
+      <div class="plot" id="plot-IL"></div>
+    </div>
+    <div class="card full-only"><h2>Tableaux</h2><div id="tables"></div></div>
+</section>
+<section class="tab" id="tab-ferraillage">
+<p class="small nores">Lancer le calcul (bouton « Calculer » en haut de page) pour afficher les résultats.</p>
+    <div class="card full-only"><h2>Ferraillage longitudinal par mètre</h2>
+      <div class="toolbar"><label>Référentiel <select id="design-ref"><option value="EC">Eurocodes (EC2)</option><option value="F61">Fascicule 61 + BAEL 91</option></select></label></div>
+      <div class="plot" id="plot-As"></div>
+      <div id="design-tables"></div>
+    </div>
+    <div class="card full-only"><h2>Flexion transversale et aciers transversaux</h2>
+      <div class="toolbar"><label>Travée <select id="trans-span"></select></label><label>Référentiel <select id="trans-ref"><option value="EC">Eurocodes (EC2)</option><option value="F61">Fascicule 61 + BAEL 91</option></select></label></div>
+      <div class="plot" id="plot-my"></div>
+      <div id="trans-tables"></div>
+    </div>
+    <div class="card full-only" id="card-rebar"><h2>Plan de ferraillage</h2>
+      <p class="small" id="rebar-info"></p>
+      <div class="svgbox" id="rebar-long"></div>
+      <div class="toolbar"><label>Coupe transversale à x [m] <select id="rebar-x"></select></label></div>
+      <div class="svgbox" id="rebar-cross"></div>
+      <div class="plot" id="plot-rebar"></div>
+      <h3>Nomenclature et métré</h3>
+      <div id="rebar-schedule"></div>
+    </div>
+    <div class="card full-only"><h2>Zonage du ferraillage et dispositions constructives (guide SETRA 1989 § 3.4)</h2><div class="svgbox" id="zoning-plan"></div><div id="zoning-tables"></div></div>
+</section>
+<section class="tab" id="tab-complements">
+  <div class="cols">
+    <div class="card form-card"><h2>Phase de chantier, convois LM3, encorbellements, fatigue, zonage</h2>
+
       <label><input type="checkbox" name="withChantier">Profil provisoire (phase de chantier)</label>
       <div class="row">
         <label>Chaussée de chantier y1, y2 [m]<input name="chRoadway" value="-4, 4"></label>
@@ -166,8 +278,17 @@
         <label>Durée [ans] / voies lentes / φ_fat<div class="row"><input name="fatYears" value="100" type="number"><input name="fatLanes" value="1" type="number"><input name="fatPhi" value="1.0" type="number" step="0.1"></div></label>
       </div>
       <label>Entraxe des appareils d'appui [m] (zonage ; vide = déduit du nombre d'appareils)<input name="bearingPitch" value=""></label>
-    </details>
-    <details><summary>Appuis et fondations (piles, culées, semelles, pieux)</summary>
+    </div>
+    <div>
+<p class="small nores">Lancer le calcul (bouton « Calculer » en haut de page) pour afficher les résultats.</p>
+    <div class="card full-only" id="card-extra"><h2>Phase de chantier, convois LM3, encorbellements, fatigue</h2><div id="extra-tables"></div></div>
+    </div>
+  </div>
+</section>
+<section class="tab" id="tab-appuis">
+  <div class="cols">
+    <div class="card form-card"><h2>Appuis et fondations</h2>
+
       <div class="row">
         <label>Piles<select name="ap_pileType"><option value="voile">voile</option><option value="colonnes">colonnes</option></select></label>
         <label>Hauteur des fûts H_f [m] (une valeur ou une par pile)<input name="ap_pileH" value="6"></label>
@@ -192,10 +313,15 @@
       </div>
       <label>Type de pieu<select name="ap_pieu"><option value="fore-boue">foré boue</option><option value="fore-simple">foré simple</option><option value="fore-tube-recupere">foré tubé (virole récupérée)</option><option value="fore-tube-perdu">foré tubé (virole perdue)</option><option value="battu-prefabrique">battu béton préfabriqué</option><option value="battu-moule">battu moulé</option><option value="metal-battu-ferme">battu acier fermé</option></select></label>
       <label>Pieux : Ø [m] / par file / files / entraxe des files [m] / longueur [m]<div class="row"><input name="ap_pileD" value="0.8" type="number" step="any"><input name="ap_nPile" value="3" type="number"><input name="ap_nFiles" value="2" type="number"><input name="ap_sPile" value="2.4" type="number" step="any"><input name="ap_Lpile" value="15" type="number" step="any"></div></label>
-      <div class="row">
-        <label>Sol (classe du Fascicule 62)<select name="ap_soil"><option value="argile-A">argiles et limons mous (A)</option><option value="argile-B">argiles et limons fermes (B)</option><option value="argile-C">argiles très fermes à dures (C)</option><option value="sable-A">sables et graves lâches (A)</option><option value="sable-B" selected>sables et graves moyennement compacts (B)</option><option value="sable-C">sables et graves compacts (C)</option><option value="craie-A">craies molles (A)</option><option value="craie-B">craies altérées (B)</option><option value="craie-C">craies compactes (C)</option><option value="marne-A">marnes tendres (A)</option><option value="marne-B">marnes compactes (B)</option><option value="roche-A">roches altérées (A)</option><option value="roche-B">roches fragmentées (B)</option></select></label>
-        <label>p*_le [MPa] / E_M [MPa] / α Ménard<div class="row"><input name="ap_ple" value="1.0" type="number" step="any"><input name="ap_EM" value="10" type="number" step="any"><input name="ap_alpha" value="0.5" type="number" step="any"></div></label>
-      </div>
+      <label>Profils pressiométriques (un par sondage, « [nom] » puis une couche par ligne, profondeurs depuis le terrain naturel) : « z0 z1 classe p*_l [MPa] E_M [MPa] α » — classes du Fascicule 62 : argile-A/B/C, sable-A/B/C, craie-A/B/C, marne-A/B, roche-A/B<textarea name="ap_profil" rows="8">[SP1]
+0 2 argile-B 0.8 6 0.67
+2 8 sable-B 1.2 12 0.33
+8 40 marne-A 2.5 30 0.67
+[SP2]
+0 4 argile-A 0.5 4 0.67
+4 12 sable-B 1.4 14 0.33
+12 40 marne-A 2.8 35 0.67</textarea></label>
+      <label>Profil associé à chaque ligne d'appui, culées comprises (vide = le premier pour toutes)<input name="ap_profAssign" value="SP1, SP1, SP2, SP2"></label>
       <div class="row">
         <label>Remblai : φ' [°] / γ [kN/m³] / surcharge q [kN/m²]<div class="row"><input name="ap_phi" value="30" type="number" step="any"><input name="ap_gamma" value="20" type="number" step="any"><input name="ap_q" value="10" type="number" step="any"></div></label>
         <label>Béton appuis f_ck / acier f_yk [MPa] / enrobage [m]<div class="row"><input name="ap_fck" value="25" type="number" step="any"><input name="ap_fyk" value="400" type="number" step="any"><input name="ap_c" value="0.05" type="number" step="any"></div></label>
@@ -214,85 +340,41 @@
         <label>Choc de bateau (classe CEMT, EN 1991-1-7 C.3) / hauteur [m]<div class="row"><select name="ap_bateau"><option value="aucun">aucun</option><option>I</option><option>II</option><option>III</option><option>IV</option><option>Va</option><option>Vb</option><option>VIa</option><option>VIb</option><option>VIc</option></select><input name="ap_hB" value="2.0" type="number" step="any"></div></label>
       </div>
       <label>F61 : ε TLD / ε TCD (appuis)<div class="row"><input name="ap_TLD" value="0.0003" type="number" step="any"><input name="ap_TCD" value="0.0001" type="number" step="any"></div></label>
-    </details>
-    <label><input type="checkbox" name="chamoaSign">Convention CHAMOA (moment + = fibre supérieure tendue) sur le graphique M(x)</label>
-    <button type="submit">Calculer</button>
-    <button type="button" class="secondary" id="btn-concept">Aide à la conception seule (rapide)</button>
-    <button type="button" class="secondary" id="btn-chamoa">Charger l'exemple CHAMOA-PSIDA (10-15-15-10 m)</button>
-    <button type="button" class="secondary" id="btn-psidael">Charger l'exemple PSIDA.EL 1984 (9,75-13,93-13,93-9,75 m, Fasc. 61)</button>
-    <p class="small">Valeurs caractéristiques non pondérées. Moments de la poutre entière en kN·m, par mètre de largeur en kN·m/m.</p>
-  </form>
+      <details><summary>Appuis seuls — tablier quelconque (poutres, caisson, dalle précontrainte)</summary>
 
-  <div class="card" id="scheme-card"><h2>Ce que vous saisissez</h2>
-    <p class="small">Schémas mis à jour en direct à partir du formulaire, avant tout calcul : vérifiez que la travure, la coupe et les charges correspondent à votre projet.</p>
-    <div id="scheme-summary"></div>
-    <div class="svgbox" id="scheme-elevation"></div>
-    <div class="svgbox" id="scheme-cross"></div>
-    <div class="svgbox" id="scheme-plan"></div>
-  </div>
-  <div id="results" hidden>
-    <pre id="error"></pre>
-    <div class="card" id="concept-card"><h2>Aide à la conception — guide SETRA « Ponts-dalles » (1989)</h2>
-      <div id="concept"></div>
-      <div class="plot" id="plot-abaque" style="min-height:380px"></div>
-      <h3>Appareils d'appui en élastomère fretté (guide § 3.6, gamme NF T 47.815)</h3>
-      <div id="concept-bearings"></div>
-      <h3>Variantes de travure pour la même longueur entre appuis extrêmes</h3>
-      <div id="concept-travures"></div>
-      <h3>Recherche de l'épaisseur minimale vérifiée (Eurocodes, flexion longitudinale)</h3>
-      <div class="toolbar">
-        <label>h min [m] <input id="hs-min" type="number" step="0.02" style="width:90px"></label>
-        <label>h max [m] <input id="hs-max" type="number" step="0.02" style="width:90px"></label>
-        <label>pas [m] <input id="hs-step" type="number" step="0.01" value="0.02" style="width:80px"></label>
-        <button type="button" id="btn-hsearch" style="width:auto;margin:0;padding:8px 14px">Rechercher</button>
+      <p class="small">Calcule les appuis et fondations (section précédente) à partir des réactions par ligne d'appui, sans calculer le tablier. Une ligne par ligne d'appui, culées comprises, valeurs caractéristiques en kN (majorations dynamiques incluses) : G ; G min ; A(l) ; Bc ; Mc120 ; trottoirs ; TS ; UDL [; rotation permanente en rad].</p>
+      <div class="row">
+        <label>Portées [m]<input name="ss_spans" value="33, 33, 33, 33"></label>
+        <label>Largeur du tablier / largeur chargeable [m]<div class="row"><input name="ss_width" value="10" type="number" step="any"><input name="ss_Lc" value="8" type="number" step="any"></div></label>
       </div>
-      <div id="hsearch"></div>
+      <div class="row">
+        <label>Hauteur du tablier [m] / aire de la section [m²]<div class="row"><input name="ss_h" value="2.0" type="number" step="any"><input name="ss_area" value="4.5" type="number" step="any"></div></label>
+        <label>Superstructures [kN/m]<input name="ss_super" value="45" type="number" step="any"></label>
+      </div>
+      <div class="row">
+        <label>Appareils par ligne / type (« auto » ou a×b×n(t+ts) en mm)<div class="row"><input name="ss_nb" value="4" type="number"><input name="ss_bearing" value="400×400×4(12+3)"></div></label>
+      </div>
+      <label>Réactions par ligne d'appui [kN]<textarea name="ss_lines" rows="5">1275 ; 1275 ; 710 ; 650 ; 900 ; 50 ; 900 ; 600
+2550 ; 2550 ; 1100 ; 900 ; 1300 ; 80 ; 1300 ; 1000
+2550 ; 2550 ; 1100 ; 900 ; 1300 ; 80 ; 1300 ; 1000
+2550 ; 2550 ; 1100 ; 900 ; 1300 ; 80 ; 1300 ; 1000
+1275 ; 1275 ; 710 ; 650 ; 900 ; 50 ; 900 ; 600</textarea></label>
+      <button type="button" class="secondary" id="btn-standalone">Calculer les appuis seuls</button>
+      </details>
     </div>
-    <div class="card full-only"><div class="toolbar"><h2 style="margin:0;flex:1">Modèle</h2><button type="button" id="btn-report" style="width:auto;margin:0;padding:8px 14px">Rapport de synthèse</button><select id="note-ref" style="width:auto;margin:0 0 0 8px;padding:7px"><option value="F61">Note SETRA — Fascicule 61 / BAEL</option><option value="EC">Note — Eurocodes (CHAMOA)</option></select><button type="button" id="btn-note" style="width:auto;margin:0 0 0 6px;padding:8px 14px">Note de calcul (HTML)</button><button type="button" id="btn-note-docx" style="width:auto;margin:0 0 0 6px;padding:8px 14px">Note de calcul (Word)</button></div><p id="model-info" class="small"></p>
-      <div class="svgbox" id="elevation"></div>
-      <div class="toolbar"><label>Cas de charge affiché <select id="case-select"></select></label></div>
-      <div class="svgbox" id="cross"></div>
+    <div>
+<p class="small nores">Lancer le calcul (« Calculer » pour le pont-dalle, ou « Calculer les appuis seuls » pour un tablier quelconque).</p>
+    <div class="card full-only" id="card-supports"><div class="toolbar"><h2 style="margin:0;flex:1">Appuis et fondations</h2><select id="supports-ref" style="width:auto;margin:0;padding:7px"><option value="F61">Fascicule 61 / BAEL / F62-V</option><option value="EC">Eurocodes</option></select><button type="button" id="btn-sup-note" style="width:auto;margin:0 0 0 6px;padding:8px 14px">Note appuis (HTML)</button><button type="button" id="btn-sup-docx" style="width:auto;margin:0 0 0 6px;padding:8px 14px">Note appuis (Word)</button><button type="button" id="btn-ec8" style="width:auto;margin:0 0 0 6px;padding:8px 14px">Exporter vers Pont EC8</button></div><p class="small">Séisme (case à cocher dans les données) : calculé ici par le moteur de Pont EC8 (EN 1998-2, mode fondamental). « Exporter vers Pont EC8 » ouvre le même projet dans Pont EC8 pour la note sismique complète (appareils, repos d'appui, joints).</p><div id="supports-tables"></div></div>
     </div>
-    <div class="card full-only"><h2>Enveloppes longitudinales (poutre entière)</h2>
-      <div class="plot" id="plot-M"></div><div class="plot" id="plot-V"></div><div class="plot" id="plot-R" style="min-height:300px"></div>
-    </div>
-    <div class="card full-only"><h2>Répartition transversale</h2>
-      <div class="toolbar"><label>Travée pour K(y) <select id="span-select"></select></label></div>
-      <div class="plot" id="plot-K"></div>
-      <div class="plot" id="plot-mx"></div>
-      <div class="plot" id="plot-f"></div>
-      <div class="toolbar"><label>Surface <select id="surface-which"><option value="mxMax">m_x max</option><option value="mxMin">m_x min</option></select></label></div>
-      <div class="plot" id="plot-3d" style="min-height:430px"></div>
-    </div>
-    <div class="card full-only"><h2>Ferraillage longitudinal par mètre</h2>
-      <div class="toolbar"><label>Référentiel <select id="design-ref"><option value="EC">Eurocodes (EC2)</option><option value="F61">Fascicule 61 + BAEL 91</option></select></label></div>
-      <div class="plot" id="plot-As"></div>
-      <div id="design-tables"></div>
-    </div>
-    <div class="card full-only"><h2>Flexion transversale et aciers transversaux</h2>
-      <div class="toolbar"><label>Travée <select id="trans-span"></select></label><label>Référentiel <select id="trans-ref"><option value="EC">Eurocodes (EC2)</option><option value="F61">Fascicule 61 + BAEL 91</option></select></label></div>
-      <div class="plot" id="plot-my"></div>
-      <div id="trans-tables"></div>
-    </div>
-    <div class="card full-only" id="card-extra"><h2>Phase de chantier, convois LM3, encorbellements, fatigue</h2><div id="extra-tables"></div></div>
-    <div class="card full-only" id="card-rebar"><h2>Plan de ferraillage</h2>
-      <p class="small" id="rebar-info"></p>
-      <div class="svgbox" id="rebar-long"></div>
-      <div class="toolbar"><label>Coupe transversale à x [m] <select id="rebar-x"></select></label></div>
-      <div class="svgbox" id="rebar-cross"></div>
-      <div class="plot" id="plot-rebar"></div>
-      <h3>Nomenclature et métré</h3>
-      <div id="rebar-schedule"></div>
-    </div>
-    <div class="card full-only" id="card-supports"><div class="toolbar"><h2 style="margin:0;flex:1">Appuis et fondations</h2><select id="supports-ref" style="width:auto;margin:0;padding:7px"><option value="F61">Fascicule 61 / BAEL / F62-V</option><option value="EC">Eurocodes</option></select><button type="button" id="btn-ec8" style="width:auto;margin:0 0 0 6px;padding:8px 14px">Exporter vers Pont EC8 (séisme)</button></div><p class="small">Le calcul parasismique (EN 1998-2, méthode du mode fondamental) se fait dans l'outil Pont EC8 : le bouton télécharge le projet JSON à ouvrir par « Importer » dans Pont EC8.</p><div id="supports-tables"></div></div>
-    <div class="card full-only"><h2>Zonage du ferraillage et dispositions constructives (guide SETRA 1989 § 3.4)</h2><div class="svgbox" id="zoning-plan"></div><div id="zoning-tables"></div></div>
-    <div class="card full-only"><h2>Lignes d'influence</h2>
-      <div class="toolbar"><label>Section <select id="section-select"></select></label></div>
-      <div class="plot" id="plot-IL"></div>
-    </div>
-    <div class="card full-only"><h2>Tableaux</h2><div id="tables"></div></div>
   </div>
-</main>
+</section>
+<section class="tab" id="tab-notes">
+  <div class="card"><h2>Notes de calcul</h2>
+    <p class="small">Note au format des notes SETRA (PSIDA.EL pour le Fascicule 61, CHAMOA-PSIDA pour les Eurocodes), en HTML imprimable ou en Word ; rapport de synthèse avec toutes les vérifications. La note « appuis et fondations » seule est dans l'onglet Appuis.</p>
+    <div class="toolbar"><button type="button" id="btn-report" style="width:auto;margin:0;padding:8px 14px">Rapport de synthèse</button><select id="note-ref" style="width:auto;margin:0 0 0 8px;padding:7px"><option value="F61">Note SETRA — Fascicule 61 / BAEL</option><option value="EC">Note — Eurocodes (CHAMOA)</option></select><button type="button" id="btn-note" style="width:auto;margin:0 0 0 6px;padding:8px 14px">Note de calcul (HTML)</button><button type="button" id="btn-note-docx" style="width:auto;margin:0 0 0 6px;padding:8px 14px">Note de calcul (Word)</button></div>
+  </div>
+</section>
+</form>
 <script type="module" src="./web/app.js"></script>
 </body>
 </html>

@@ -204,6 +204,27 @@ Choix retenus (justifiés dans les en-têtes des modules) :
 - **Chocs** : EN 1991-1-7 tableau 4.1 (véhicules) et C.3 (bateaux fluviaux CEMT), valeurs recommandées à confronter à
   l'annexe nationale ; force maximale dans le sens longitudinal, une seule colonne touchée.
 
+## 1 octies. Profil pressiométrique et appuis seuls (v0.15)
+
+- **Profil pressiométrique** par couches (profondeurs depuis le terrain naturel, classe F62, p*_l, E_M, α) : semelles —
+  p*_le moyenne géométrique sur [D ; D + 1,5 B] (F62 E.2) ou [D ; D + h_r] (NF P 94-261), D_e = (1/p*_le)∫₀ᴰ p*_l dz,
+  k_p de la couche d'assise ; pieux — frottement couche par couche depuis la tête (sous la semelle), pointe dans la couche
+  porteuse ; module de Ménard couche par couche le long du pieu (Winkler à raideur variable).
+- **Appuis seuls** : le module appuis, fondations, séisme et chocs fonctionne pour un tablier quelconque (poutres, caisson,
+  dalle précontrainte) à partir des réactions caractéristiques saisies par ligne et des appareils (imposés ou choisis
+  dans la gamme standard) ; note de calcul « appuis et fondations » seule (HTML et Word).
+
+## 1 octies. Profils pressiométriques, appuis seuls, interface en onglets (v0.15)
+
+- **Profils pressiométriques** par sondage (« [SP1] » puis une couche par ligne : z0, z1, classe F62, p*_l, E_M, α ;
+  profondeurs depuis le terrain naturel), un profil associé à chaque ligne d'appui. Semelles : p*_le moyenne géométrique sur
+  [D ; D + 1,5 B] (F62 E.2) ou [D ; D + h_r] (NF P 94-261), D_e = (1/p*_le)∫₀ᴰ p*_l dz, k_p de la couche d'assise ; pieux :
+  frottement couche par couche depuis la tête, pointe dans la couche porteuse ; Ménard couche par couche le long du pieu.
+- **Appuis seuls** : appuis, fondations, séisme et chocs pour un tablier quelconque (poutres, caisson, dalle précontrainte)
+  à partir des réactions caractéristiques saisies par ligne ; note « appuis et fondations » seule (HTML et Word).
+- **Interface en onglets** (Projet, Conception, Tablier, Ferraillage, Compléments, Appuis et fondations, Notes de calcul),
+  adresse #onglet/d=… partageable comme auparavant.
+
 ## 2. Protocole de comparaison avec une note de référence
 
 ### 2.1 Référentiel Eurocodes — note CHAMOA-PSIDA (Cerema, guide technique, ch. 4)
@@ -236,7 +257,7 @@ Choix retenus (justifiés dans les en-têtes des modules) :
 
 Bibliographie : Bareš & Massonnet (1966) ; Pücher (1977) ; Homberg (1968) ; Calgaro & Virlogeux ; Hambly (1991) ; O'Brien, Keogh & O'Connor (2014) ; EN 1991-2, EN 1992-1-1, EN 1992-2 ; Fascicule 61 titre II ; BAEL 91.
 
-## 4. Vérifications internes déjà en place (`npm test`, 100 tests)
+## 4. Vérifications internes déjà en place (`npm test`, 102 tests)
 
 - Poutre : PL/4 ; −qL²/8 et 9/128·qL² (2 travées) ; −qL²/10, 0,08 qL², 0,025 qL² (3 travées) ; enveloppe une travée chargée 0,0957 qL² ; convoi glissant ; portées équivalentes 0,8L / 0,447L.
 - Guyon-Massonnet : conditions de bord libre exactes, saut de Y''' = 1 sous la charge, flèche moyenne = poutre (∫K = 2b à 10⁻⁵), réciprocité K(y,e) = K(e,y), symétrie, limite θ → 0 ⇒ K = 1, continuité en charge de bord, μ nul aux bords, ∫m_x dy = moment de poutre (séries de Fourier).

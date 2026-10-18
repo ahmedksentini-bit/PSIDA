@@ -48,6 +48,28 @@ export function parseData(d) {
   };
 }
 
+/**
+ * Profils pressiométriques (sondages) : une couche par ligne « z0 z1 classe p*_l E_M α » (m, m, classe F62, MPa, MPa, –) ;
+ * une ligne « [SP1] » ouvre un nouveau profil nommé (sans en-tête : profil unique « SP1 »).
+ * @returns {{name:string, layers:object[]}[]}
+ */
+export function parseProfiles(text) {
+  const out = [];
+  let cur = null;
+  for (const raw of String(text || '').split('\n')) {
+    const t = raw.trim();
+    if (!t || t.startsWith('#')) continue;
+    const h = t.match(/^\[(.+)\]$/);
+    if (h) { cur = { name: h[1].trim(), layers: [] }; out.push(cur); continue; }
+    if (!cur) { cur = { name: 'SP1', layers: [] }; out.push(cur); }
+    const w = t.split(/[;\s]+/).filter(Boolean);
+    const l = { z0: +w[0], z1: +w[1], classe: w[2], pl: +w[3], EM: +w[4], alpha: w[5] !== undefined ? +w[5] : 0.5 };
+    if (Number.isFinite(l.z0) && Number.isFinite(l.z1) && l.z1 > l.z0 && l.classe && l.pl > 0 && l.EM > 0) cur.layers.push(l);
+  }
+  return out.filter(p => p.layers.length);
+}
+export const parseProfile = text => (parseProfiles(text)[0] || { layers: [] }).layers;
+
 /** Données « Appuis et fondations » (champs ap_* ; valeurs vides = défauts de SUPPORT_DEFAULTS). */
 export function parseSupports(d) {
   const v = (k, def) => (String(d[k] ?? '').trim() === '' ? def : +d[k]);
@@ -56,7 +78,7 @@ export function parseSupports(d) {
     pile: { type: d.ap_pileType || 'voile', H: H.length ? H : [6], b: v('ap_pileB', 0.6), Lv: v('ap_pileLv', null), nCol: v('ap_nCol', 3), D: v('ap_D', 0.8), hc: v('ap_hc', 0), lc: v('ap_lc', 1.2) },
     culee: { type: d.ap_culType || 'remblayee', Hm: v('ap_Hm', 3), em: v('ap_em', 0.8), hGG: v('ap_hGG', null), Lret: v('ap_Lret', 4), nCol: v('ap_culNCol', 3), D: v('ap_culD', 0.8), hc: v('ap_culHc', 1.0), lc: v('ap_culLc', 1.6) },
     found: { type: d.ap_found || 'superficielle', pileType: d.ap_pieu || 'fore-boue', B: v('ap_B', 3), hs: v('ap_hs', 1), De: v('ap_De', 1), pileD: v('ap_pileD', 0.8), nPile: v('ap_nPile', 3), nFiles: v('ap_nFiles', 2), sPile: v('ap_sPile', 2.4), Lpile: v('ap_Lpile', 15) },
-    soil: { classe: d.ap_soil || 'sable-B', ple: v('ap_ple', 1), EM: v('ap_EM', 10), alpha: v('ap_alpha', 0.5), phi: v('ap_phi', 30), gamma: v('ap_gamma', 20), q: v('ap_q', 10) },
+    soil: { profiles: parseProfiles(d.ap_profil), assign: String(d.ap_profAssign || '').split(/[,;\s]+/).filter(Boolean), classe: d.ap_soil || 'sable-B', ple: v('ap_ple', 1), EM: v('ap_EM', 10), alpha: v('ap_alpha', 0.5), phi: v('ap_phi', 30), gamma: v('ap_gamma', 20), q: v('ap_q', 10) },
     mat: { fck: v('ap_fck', +d.fck || 25), fyk: v('ap_fyk', +d.fyk || 400), c: v('ap_c', 0.05) },
     eps: { TLD: v('ap_TLD', 3e-4), TCD: v('ap_TCD', 1e-4) },
     ec8: { zone: v('ap_zone', 3), categorie: d.ap_catEC8 || 'III', classeSol: d.ap_solEC8 || 'B' },
