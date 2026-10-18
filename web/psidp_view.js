@@ -50,6 +50,17 @@ export function psidpBlocks(dp, { error = null } = {}) {
   table(['Travée', 'Tronçon [m]', 'A', 'B', 'C', 'Rayon [m]'], dp.segs.flatMap((list, j) => list.map((q, k) => [String(j + 1), `${F3(k ? list[k - 1].x1 : 0)} – ${F3(q.x1)}`, F(q.A, 6), F(q.B, 6), F(q.C, 6), q.A ? F(1 / (2 * Math.abs(q.A)), 1) : '∞'])), { small: true });
   comment('z = A x² + B x + C, x depuis l\'appui gauche de la travée, z vers le haut depuis la fibre moyenne de la section brute. Tracé automatique : ancrages sur la fibre moyenne, sommets de parabole sur les appuis intermédiaires, points bas à 0,4 L (rives) et 0,5 L, paraboles de raccordement de longueur a·L de part et d\'autre des appuis (guide PSI-DP).');
 
+  if (dp.opt) {
+    const o = dp.opt, q = o.q, nS2 = spans.length;
+    const lamTxt = spans.map((_, j) => F2(q.lam[Math.min(j, nS2 - 1 - j)] ?? q.lam[j])).join(' / '), muTxt = spans.slice(1).map((_, i) => F2(q.mu[Math.min(i + 1, nS2 - i - 1)] ?? q.mu[i + 1])).join(' / ');
+    table(['Recherche du tracé', 'Résultat'], [
+      ['Paramètres retenus', `points bas à λ × excentricité maximale, λ = ${lamTxt} (travées 1 à ${nS2}) ; sommets sur appuis à μ × excentricité maximale, μ = ${muTxt} ; point bas des rives à ${F2(q.le)} L`],
+      ['Marge minimale normée des contraintes par nombre d\'unités', o.path.map(([k, m]) => `${k} : ${F(m, 3)}`).join(' ; ')],
+      ['Conclusion', o.feasible ? `${dp.n} unités avec ce tracé (marge ${F(o.m, 3)} ≥ 0)` : 'aucun tracé ne satisfait toutes les contraintes : épaissir la dalle ou changer d\'unité'],
+    ]);
+    comment('Marge = min[(σ_lim − σ)/f_c28 en compression ; (σ − σ_lim)/f_t28 en traction] sur toutes les sections, phases et combinaisons, pénalisée si le rayon de courbure est inférieur au minimum de l\'unité. Recherche par coordonnées (pas 0,2 / 0,1 / 0,05) qui maximise la marge, c\'est-à-dire centre le tracé dans le fuseau admissible comme la transformation linéaire du programme PSIDP, puis diminution du nombre d\'unités tant que la marge reste positive ; paramètres liés deux à deux pour un ouvrage symétrique.');
+  }
+
   // ------------------------------------------------------------------ pertes
   h2('Pertes de tension et tensions caractéristiques');
   B.push(svgBlock(lineChart({ xlabel: 'x [m]', ylabel: 'σ_p [MPa]', includeZero: false, series: [
@@ -149,6 +160,20 @@ export function psidpBlocks(dp, { error = null } = {}) {
     table(['Section', 'Ossature inst.', 'C.P. inst.', 'C.P. long terme', 'P inst.', 'P fluage', 'Mise en tension', 'Service après fluage'], xMid.map(x => [lab(x), ...['oss', 'cp', 'cpTot', 'pI', 'pFl', 'miseEnTension', 'service'].map(k => F(1000 * r.at(D.w[k], x), 1))]), { small: true });
     table(['Appui', 'Rotation C.P. inst. g / d [10⁻³ rad]', 'Rotation P inst.', 'Rotation en service'], D.rot.cp.map((q, i) => [String(i + 1), `${q.g == null ? '—' : F(q.g * 1000, 2)} / ${q.d == null ? '—' : F(q.d * 1000, 2)}`, `${D.rot.pI[i].g == null ? '—' : F(D.rot.pI[i].g * 1000, 2)} / ${D.rot.pI[i].d == null ? '—' : F(D.rot.pI[i].d * 1000, 2)}`, `${D.rot.service[i].g == null ? '—' : F(D.rot.service[i].g * 1000, 2)} / ${D.rot.service[i].d == null ? '—' : F(D.rot.service[i].d * 1000, 2)}`]), { small: true });
     comment(`Flèches en mm (positives vers le haut) ; poutre continue à inertie brute constante sous les moments réels (hyperstatiques compris). E_ij = ${F0(D.Eij / 1000)} MPa (ossature, C.P. et précontrainte instantanées) ; long terme des C.P. (1 + K_fl) w(E_i28) (E_v28 = E_i28/3 pour K_fl = 2) ; précontrainte par fluage K_fl · w(P∞ moyenne, E_i28), convention retrouvée sur la note PSIDP-EL (15,2 mm calculés pour 15,0). Une flèche finale proche de zéro ou positive traduit la prépondérance de la précontrainte (contre-flèche de coffrage à prévoir en conséquence).`);
+  }
+  // ------------------------------------------------------------------ zones d'about
+  if (dp.anchors) {
+    const A = dp.anchors;
+    h2('Zones d\'about — ancrages (BPEL 91, annexe 4)');
+    table(['Grandeur', 'Valeur'], [
+      ['Ancrages', `${dp.n} ancrages ${dp.unit.label} par about, ${A.rows === 1 ? 'une nappe' : 'deux nappes'} de ${A.perRow}${A.spacing ? `, entraxe ${F2(A.spacing)} m` : ''} ; plaque a = ${F2(A.a)} m ; F_j0 = A_p σ_p0 = ${F(A.Fj0 / 1000, 3)} MN`],
+      ['Prismes de première régularisation', `vertical d = ${F2(A.dv)} m ; horizontal d = ${F2(A.dh)} m`],
+      ['Frettage de surface', `A_s = 0,04 F_j0/σ_s,lim = ${F(A.As * 1e4, 1)} cm² par ancrage (σ_s,lim = 2/3 f_e = ${F0(A.ssl / 1000)} MPa)`],
+      ['Éclatement — plan vertical', `σ_t = ${MPa(A.vert.sigT)} ≤ 1,25 f_tj = ${MPa(1.25 * dp.lim.ftj)} MPa ${ok(A.vert.okT)} ; σ_xm = ${MPa(A.vert.sigX)} ≤ 2/3 f_cj = ${MPa(2 / 3 * dp.lim.fcj)} MPa ${ok(A.vert.okX)} ; A_e = ${F(A.vert.Ae * 1e4, 1)} cm² par ancrage (verticaux, entre 0,1 d et d de la face)`],
+      ['Éclatement — plan horizontal', `σ_t = ${MPa(A.hor.sigT)} ${ok(A.hor.okT)} ; σ_xm = ${MPa(A.hor.sigX)} ${ok(A.hor.okX)} ; A_e = ${F(A.hor.Ae * 1e4, 1)} cm² par ancrage (horizontaux transversaux, sur toute la largeur)`],
+      ...A.general.map(g => [`Équilibre général, about ${g.side}`, `V_x,max = ${F0(g.Vmax)} kN à y = ${F2(g.yAt)} m ; τ_g = ${MPa(g.tauG)} MPa, τ_g + σ_t = ${MPa(g.tauG + A.vert.sigT)} ≤ 1,5 f_tj = ${MPa(g.tauLim)} MPa ${ok(g.ok)} ; A_c = ${F(g.Ac * 1e4, 1)} cm² (complément A_c − ΣA_e si positif)`]),
+    ], { small: true });
+    comment('Formules de l\'annexe 4 du BPEL 91 (justification des zones d\'application des forces concentrées) : prisme symétrique de chaque ancrage, frettage de surface, éclatement (contraintes et armatures, k = 1 pour une nappe d\'extrémité, 1,5 pour une nappe intermédiaire, A_e ≥ 0,15 F_j0/σ_s,lim), équilibre général sur la longueur de régularisation l_r = h avec les forces d\'ancrage réparties sur leur prisme. Avec les ancrages centrés sur la fibre moyenne (tracé PSIDA), l\'équilibre général ne crée pratiquement pas de cisaillement ; les ancrages excentrés le sollicitent. Bielle d\'about et coin inférieur (armatures inférieures ancrées au-delà de l\'appui) à justifier avec la réaction d\'appui (BPEL 7) ; disposition en deux nappes conseillée par le guide SETRA 1989 (§ 3.3). Les valeurs de l\'annexe 4 sont à contrôler sur le texte réglementaire.');
   }
   return B;
 }

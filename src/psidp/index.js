@@ -10,16 +10,16 @@ import { psidpChecks, mLim } from './checks.js';
 
 /** Unités de précontrainte courantes (aire d'acier, Ø extérieur de gaine, rayon minimal de courbure). */
 export const UNITS = {
-  '7T15S': { Ap: 1050e-6, phiG: 0.065, Rmin: 4.5, label: '7 T 15 S' },
-  '12T13': { Ap: 1116e-6, phiG: 0.070, Rmin: 6.0, label: '12 T 13' },
-  '12T15S': { Ap: 1800e-6, phiG: 0.080, Rmin: 6.0, label: '12 T 15 S' },
-  '19T15S': { Ap: 2850e-6, phiG: 0.095, Rmin: 7.0, label: '19 T 15 S' },
+  '7T15S': { Ap: 1050e-6, phiG: 0.065, Rmin: 4.5, plate: 0.20, label: '7 T 15 S' },
+  '12T13': { Ap: 1116e-6, phiG: 0.070, Rmin: 6.0, plate: 0.22, label: '12 T 13' },
+  '12T15S': { Ap: 1800e-6, phiG: 0.080, Rmin: 6.0, plate: 0.25, label: '12 T 15 S' },
+  '19T15S': { Ap: 2850e-6, phiG: 0.095, Rmin: 7.0, plate: 0.30, label: '19 T 15 S' },
 };
 
 export const BP_DEFAULTS = {
   actif: false, unite: '12T15S', n: null, fprg: 1860, fpeg: 1660, sigma0: null, Ep: 190000, rho1000: 2.5, mu0: 0.43,
   f: 0.18, phi: 0.002, g: 0.006, ends: 'both', friction: 'continu', fcj: null, epsR: 2e-4, Kfl: 2, rj: 0.5,
-  cover: null, decal: 0.007, eSup: null, eLow: null, lowEnd: 0.4, a: 0.1, segs: null, fe: 500, skin: 3e-4,
+  cover: null, decal: 0.007, eSup: null, eLow: null, lowEnd: 0.4, a: 0.1, segs: null, fe: 500, skin: 3e-4, trace: 'optimise',
 };
 
 /** Caractéristiques de la section brute (rectangle 2b × h, ou encorbellements : épaisseur h_rive au bord, joue). */
@@ -42,12 +42,13 @@ export function sectionProps({ width, h, chamfer }) {
  * extrêmes, sommets de parabole sur les appuis intermédiaires (excentricité e_s vers le haut), points bas à 0,4 L des
  * travées de rive et 0,5 L des travées intermédiaires (excentricité e_l vers le bas), points d'inflexion à a·L des appuis.
  */
-export function autoCable(spans, { zSup, zLow, lowEnd = 0.4, a = 0.1 }) {
+export function autoCable(spans, { zSup, zLow: zLowIn, lowEnd = 0.4, a = 0.1 }) {
   const n = spans.length, segs = [];
-  const zs = i => (i === 0 || i === n ? 0 : zSup);
+  const arr = (v, i) => (Array.isArray(v) ? v[i] : v);
+  const zs = i => (i === 0 || i === n ? 0 : arr(zSup, i));
   for (let j = 0; j < n; j++) {
-    const L = spans[j], left = j === 0, right = j === n - 1;
-    const xl = n === 1 ? L / 2 : left ? lowEnd * L : right ? (1 - lowEnd) * L : L / 2;
+    const L = spans[j], left = j === 0, right = j === n - 1, zLow = arr(zLowIn, j), le = arr(lowEnd, j);
+    const xl = n === 1 ? L / 2 : left ? le * L : right ? (1 - le) * L : L / 2;
     const list = [];
     // côté gauche : ancrage (une parabole de sommet au point bas) ou appui intermédiaire (deux paraboles et inflexion)
     if (left) { const k0 = (zs(0) - zLow) / (xl * xl); list.push({ A: k0, B: -2 * k0 * xl, C: zLow + k0 * xl * xl, x1: xl }); }
@@ -105,8 +106,8 @@ export function designPSIDP(ctx, bpIn = {}) {
   const fprg = bp.fprg, fpeg = bp.fpeg, sigma0 = bp.sigma0 || Math.min(0.8 * fprg, 0.9 * fpeg);
   const cover = bp.cover ?? U.phiG, off = cover + U.phiG / 2 + bp.decal;
   const zSup = bp.eSup != null ? sec.v - bp.eSup : sec.v - off, zLow = bp.eLow != null ? -(sec.vp - bp.eLow) : -(sec.vp - off);
-  const segs = parseSegs(bp.segs, spans.length) || autoCable(spans, { zSup, zLow, lowEnd: bp.lowEnd, a: bp.a });
-  const geoChk = cableGeometry(spans, segs).checks();
+  const imposed = parseSegs(bp.segs, spans.length);
+  let segs = imposed || autoCable(spans, { zSup, zLow, lowEnd: bp.lowEnd, a: bp.a });
 
   // sollicitations de poutre entière (moments de calcul = max_y m_x · 2b, comme PSIDP-EL) aux sections du modèle
   const xs = bm.sections.map(s => s.x), W = 2 * deck.b, nS = xs.length;
@@ -143,26 +144,88 @@ export function designPSIDP(ctx, bpIn = {}) {
   const lim = { fcj: fcj * MPa, fc28: fc28 * MPa, ftj: ft(fcj) * MPa, ft28: ft(fc28) * MPa };
   const steel = { fe: bp.fe * MPa, skin: bp.skin, Es: 200000 * MPa, gs: 1.15, gp: 1.15, gb: 1.5, fpeg: fpeg * MPa, cover: 0.035, atMin: (bp.atMin ?? 0.1) * MPa };
 
-  const run = n => {
-    const r = prestress({
-      spans, sec, MGmean: at(G.moy),
-      cable: { n, Ap: U.Ap, phiG: U.phiG, segs, sigma0: sigma0 * MPa, f: bp.f, phi: bp.phi, g: bp.g, Ep: bp.Ep * MPa, rho1000: bp.rho1000, mu0: bp.mu0, fprg: fprg * MPa, ends: bp.ends, friction: bp.friction },
-      mat: { Eij: Ei(fcj) * MPa, Ei28: Ei(fc28) * MPa, epsR: bp.epsR, Kfl: bp.Kfl, rj: bp.rj },
-    });
-    const c = psidpChecks(r, { sec, phiG: U.phiG, nCables: n, Ep: bp.Ep * MPa, stations, M, V, lim, steel });
-    return { n, r, c, ok: c.extremes.every(e => e.ok) };
+  const cableOf = (n, sg) => ({ n, Ap: U.Ap, phiG: U.phiG, segs: sg, sigma0: sigma0 * MPa, f: bp.f, phi: bp.phi, g: bp.g, Ep: bp.Ep * MPa, rho1000: bp.rho1000, mu0: bp.mu0, fprg: fprg * MPa, ends: bp.ends, friction: bp.friction });
+  const matP = { Eij: Ei(fcj) * MPa, Ei28: Ei(fc28) * MPa, epsR: bp.epsR, Kfl: bp.Kfl, rj: bp.rj };
+  const run = (n, sg = segs, fast = false) => {
+    const r = prestress({ spans, sec, MGmean: at(G.moy), cable: cableOf(n, sg), mat: matP, nPerSpan: fast ? 20 : 100, iterations: fast ? 3 : 6 });
+    const c = psidpChecks(r, { sec, phiG: U.phiG, nCables: n, Ep: bp.Ep * MPa, stations, M, V, lim, steel, stressOnly: fast });
+    return { n, r, c, ok: c.extremes.every(e => e.ok), segs: sg };
+  };
+  /** Marge minimale normée des contraintes (> 0 : classe II vérifiée), pénalisée si le rayon minimal n'est pas respecté. */
+  const margin = (c, sg) => {
+    let m = Infinity;
+    for (const e of c.extremes) {
+      m = Math.min(m, (e.cLim - e.cmax) / lim.fc28, (e.enc - e.encLim) / lim.ft28);
+      if (e.horsLim !== null) m = Math.min(m, (e.hors - e.horsLim) / lim.ft28);
+    }
+    const R = cableGeometry(spans, sg).checks().Rmin;
+    return R < U.Rmin ? m - (U.Rmin - R) / U.Rmin : m;
   };
   // nombre d'unités : imposé, ou le plus petit satisfaisant les contraintes de classe II (départ au prédimensionnement)
   const Lch = deck.g.roadway.y2 - deck.g.roadway.y1;
   const pre = predimForce({ spans, g: perm.gTotal, Lch, A: l => 2.3 + 360 / (l + 12), sec, ft: ft(fc28) * MPa, phiG: U.phiG });
   const n0 = Math.max(2, Math.ceil(pre.F / (U.Ap * 0.8 * sigma0 * MPa)));
   let res, tried = [];
-  if (bp.n) res = run(bp.n);
+  const searchN = (sg, start) => {
+    let n = start, r0 = run(n, sg, true); const tr = [[n, r0.ok]];
+    if (r0.ok) { while (n > 2) { const t = run(n - 1, sg, true); tr.push([n - 1, t.ok]); if (!t.ok) break; r0 = t; n--; } }
+    else { while (!r0.ok && n < start + 40) { n++; r0 = run(n, sg, true); tr.push([n, r0.ok]); } }
+    return { n, tr };
+  };
+  let opt = null;
+  if (bp.n) { res = run(bp.n); }
   else {
-    let n = n0; res = run(n); tried.push([n, res.ok]);
-    if (res.ok) { while (n > 2) { const t = run(n - 1); tried.push([n - 1, t.ok]); if (!t.ok) break; res = t; n--; } }
-    else { while (!res.ok && n < n0 + 40) { n++; res = run(n); tried.push([n, res.ok]); } }
+    const s1 = searchN(segs, n0); tried = s1.tr;
+    let nBest = s1.n;
+    if (!imposed && bp.trace === 'optimise' && spans.length > 1) {
+      // ---- recherche du tracé : excentricités des points bas (fraction λ_j de l'excentricité maximale) et sur appuis
+      // (μ_i), position du point bas des travées de rive ; recherche par coordonnées maximisant la marge minimale (centrage
+      // du tracé dans le fuseau, comme la transformation linéaire du programme PSIDP), puis diminution du nombre d'unités.
+      const nS2 = spans.length, sym = spans.every((L, j) => Math.abs(L - spans[nS2 - 1 - j]) < 1e-6);
+      const keyL = j => (sym ? Math.min(j, nS2 - 1 - j) : j), keyS = i => (sym ? Math.min(i, nS2 - i) : i);
+      const P = { lam: {}, mu: {}, le: 0.4 };
+      for (let j = 0; j < nS2; j++) P.lam[keyL(j)] = 1;
+      for (let i = 1; i < nS2; i++) P.mu[keyS(i)] = 1;
+      const segsOf = q => autoCable(spans, { zSup: Array.from({ length: nS2 + 1 }, (_, i) => (i === 0 || i === nS2 ? 0 : zSup * q.mu[keyS(i)])), zLow: spans.map((_, j) => zLow * q.lam[keyL(j)]), lowEnd: spans.map(() => q.le), a: bp.a });
+      const evalP = (n, q) => { const sg = segsOf(q), rr = run(n, sg, true); return { m: margin(rr.c, sg), sg }; };
+      const optimise = n => {
+        let q = JSON.parse(JSON.stringify(P)), best = evalP(n, q), evals = 1;
+        const coords = [...Object.keys(q.lam).map(k => ['lam', k, -0.5, 1]), ...Object.keys(q.mu).map(k => ['mu', k, 0, 1]), ['le', null, 0.3, 0.5]];
+        for (const step of [0.2, 0.1, 0.05]) {
+          let improved = true;
+          while (improved && evals < 90) {
+            improved = false;
+            for (const [grp, k, lo, hi] of coords) for (const sgn of [1, -1]) {
+              const t = JSON.parse(JSON.stringify(q)), cur = k === null ? t[grp] : t[grp][k];
+              const nv = Math.min(hi, Math.max(lo, cur + sgn * step * (grp === 'le' ? 0.5 : 1)));
+              if (Math.abs(nv - cur) < 1e-9) continue;
+              if (k === null) t[grp] = nv; else t[grp][k] = nv;
+              const e = evalP(n, t); evals++;
+              if (e.m > best.m + 1e-6) { best = e; q = t; improved = true; }
+            }
+          }
+        }
+        return { q, ...best, evals };
+      };
+      const okDefault = s1.tr.some(([, ok]) => ok);
+      let n = okDefault ? nBest : n0, o = optimise(n);
+      opt = { path: [[n, o.m]] };
+      const step = Math.max(1, Math.round(0.1 * n));
+      for (let up = 0; o.m < 0 && up < 8; up++) { n += step; o = optimise(n); opt.path.push([n, o.m]); }
+      if (o.m >= 0) {
+        while (n > 2) { const o2 = optimise(n - 1); opt.path.push([n - 1, o2.m]); if (o2.m < 0) break; n--; o = o2; }
+        segs = o.sg; nBest = n;
+      } else if (!okDefault) {
+        // aucun nombre d'unités ne convient : on garde le meilleur compromis trouvé (marge la plus grande)
+        const [nb] = opt.path.reduce((a, b2) => (b2[1] > a[1] ? b2 : a)); o = optimise(nb); segs = o.sg; nBest = nb;
+      }
+      opt = { ...opt, n: nBest, ...o, feasible: o.m >= 0 };
+    }
+    // calcul définitif (discrétisation fine) ; si la marge disparaît, une unité de plus
+    res = run(nBest, segs);
+    for (let k = 0; !res.ok && k < 3 && (!opt || opt.feasible); k++) { nBest++; res = run(nBest, segs); tried.push([nBest, res.ok]); }
   }
+  const geoChk = cableGeometry(spans, segs).checks();
   // armatures passives complémentaires si |M_cal| > M_lim (ELU)
   for (const e of res.c.elu) for (const w of ['min', 'max']) {
     const q = e[w]; if (q.ok) continue;
@@ -173,7 +236,8 @@ export function designPSIDP(ctx, bpIn = {}) {
     for (let it = 0; it < 50; it++) { const m = (lo + hi) / 2; if (mLim({ ...base, As: m }).Mlim < Math.abs(q.Mcal)) lo = m; else hi = m; }
     q.AsAdd = hi - (hog ? st.top.As : st.bot.As);
   }
-  return { bp, unit: U, sec, sigma0, fcj, fc28, lim, steel, segs, geoChk, pre, n0, tried, auto: !bp.n, xs, M, Q, G, O, ...res };
+  const anchors = anchorZone({ n: res.n, U, sec, sigma0: sigma0 * MPa, lim, fe: bp.fe * MPa, slope: [res.r.th[0], res.r.th[res.r.th.length - 1]], zEnd: [res.r.z[0], res.r.z[res.r.z.length - 1]], width: sec.bBot });
+  return { bp, unit: U, sec, sigma0, fcj, fc28, lim, steel, segs, geoChk, pre, n0, tried, auto: !bp.n, opt, anchors, xs, M, Q, G, O, ...res };
 }
 
 /**
@@ -225,4 +289,43 @@ export function psidpDeflections(dp) {
   w.service = w.cpTot.map((v, i) => v + w.pI[i] + w.pFl[i]);
   const rot = { cp: cp.rot, pI: pI.rot, service: cp28.rot.map((q, i) => ({ g: q.g == null ? null : (1 + Kfl) * q.g + pI.rot[i].g + Kfl * pInf.rot[i].g, d: q.d == null ? null : (1 + Kfl) * q.d + pI.rot[i].d + Kfl * pInf.rot[i].d })) };
   return { xs: r.xs, w, rot, Eij, E28 };
+}
+
+/**
+ * Zones d'about — ancrages des câbles (BPEL 91, annexe 4) : prisme de première régularisation de chaque ancrage
+ * (dimension d dans chaque plan : entraxe ou deux fois la distance au parement, plaque d'ancrage a), frettage de surface
+ * A_s = 0,04 F_j0/σ_s,lim, éclatement σ_tj = 0,5 (1 − a/d) F_j0/(e′ d) ≤ 1,25 f_tj et σ_xm = F_j0/(e′ d) ≤ (2/3) f_cj,
+ * armatures R = 0,25 (1 − a/d) F_j0, A_e = R/(k σ_s,lim) (k = 1 nappe d'extrémité, 1,5 nappe intermédiaire),
+ * A_e ≥ 0,15 F_j0/σ_s,lim ; équilibre général dans le plan vertical sur la longueur de régularisation l_r = h : V_x(t) =
+ * forces d'ancrage (réparties sur leur prisme) au-dessus de la coupure t − effort normal du béton au-dessus de t dans la
+ * section régularisée (Navier), τ_g = 2 V_x,max/(b l_r), A_c = V_x,max/σ_s,lim. σ_s,lim = (2/3) f_e.
+ * Ancrages en une nappe si h ≥ 2 a + 2 enrobages, sinon deux nappes (disposition conseillée par le guide SETRA 1989 § 3.3).
+ */
+export function anchorZone({ n, U, sec, sigma0, lim, fe, slope = [0, 0], zEnd = [0, 0], width }) {
+  const a = U.plate || 0.25, Fj0 = U.Ap * sigma0, ssl = 2 / 3 * fe, h = sec.h, c0 = 0.05;
+  const rows = h >= 2 * a + 2 * c0 ? 1 : 2, perRow = Math.ceil(n / rows);
+  const sp = (width - 2 * c0 - a) / Math.max(1, perRow - 1), dh = Math.min(perRow > 1 ? sp : width, 2 * (c0 + a / 2) + sp);
+  const dv = rows === 1 ? h : h / 2;
+  const plane = (d, e, k) => {
+    const sigT = 0.5 * (1 - a / d) * Fj0 / (e * d), sigX = Fj0 / (e * d), R = 0.25 * (1 - a / d) * Fj0;
+    return { d, e, sigT, sigX, okT: sigT <= 1.25 * lim.ftj, okX: sigX <= 2 / 3 * lim.fcj, R, Ae: Math.max(R / (k * ssl), 0.15 * Fj0 / ssl) };
+  };
+  const vert = plane(dv, dh, 1), hor = plane(dh, dv, perRow > 2 ? 1.5 : 1);
+  // équilibre général (plan vertical), par mètre de largeur multiplié par la largeur : section b × h, ancrages répartis
+  const out = zEnd.map((z0, side) => {
+    const F = n * Fj0 * Math.cos(Math.atan(slope[side])), levels = rows === 1 ? [z0] : [z0 + h / 4, z0 - h / 4];
+    const yb = -sec.vp, B = sec.B, I = sec.I, Fe = F * levels.reduce((s, z) => s + z, 0) / levels.length;
+    let Vmax = 0, tAt = 0;
+    for (let k = 0; k <= 200; k++) {
+      const y = yb + h * k / 200;
+      let Fabove = 0;
+      for (const z of levels) { const lo = z - dv / 2, hi = z + dv / 2, f = F / levels.length; Fabove += f * Math.min(1, Math.max(0, (hi - y) / (hi - lo))); }
+      // effort normal du béton au-dessus de y : ∫_y^v (F/B + Fe·η/I) b dη, b = B/h (largeur moyenne)
+      const b = B / h, v = sec.v, Nc = b * ((F / B) * (v - y) + Fe / I * (v * v - y * y) / 2);
+      const V = Fabove - Nc; if (Math.abs(V) > Math.abs(Vmax)) { Vmax = V; tAt = y; }
+    }
+    const tauG = 2 * Math.abs(Vmax) / (width * h);
+    return { side: side ? 'droite' : 'gauche', F, Vmax, yAt: tAt, tauG, tauLim: 1.5 * lim.ftj, ok: tauG + vert.sigT <= 1.5 * lim.ftj, Ac: Math.abs(Vmax) / ssl };
+  });
+  return { a, Fj0, rows, perRow, spacing: perRow > 1 ? sp : null, dv, dh, ssl, As: 0.04 * Fj0 / ssl, vert, hor, general: out };
 }

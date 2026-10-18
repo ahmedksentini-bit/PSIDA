@@ -110,7 +110,7 @@ test('PSI-DP — dimensionnement intégré au modèle PSIDA (18-24-18 m, h = 0,8
   assert.equal(st.psidpError, null);
   const dp = st.psidp;
   assert.ok(dp.ok && dp.auto && dp.n >= 10 && dp.n <= 30, `n = ${dp.n}`);
-  assert.ok(dp.tried.some(([k, o]) => k === dp.n - 1 && !o) || dp.n === dp.n0, 'n − 1 insuffisant');
+  assert.ok(dp.opt && dp.opt.feasible && dp.opt.path.some(([k, m]) => k === dp.n - 1 && m < 0), 'n − 1 insuffisant avec le tracé recherché');
   assert.ok(dp.c.extremes.every(e => e.ok)); assert.ok(dp.c.elu.every(e => e.min.ok && e.max.ok));
   assert.ok(dp.geoChk.Rmin >= dp.unit.Rmin && !dp.geoChk.gaps.length, 'tracé automatique continu');
   // pertes totales moyennes plausibles (15 à 30 %) et symétrie de l'ouvrage symétrique
@@ -149,4 +149,24 @@ test('PSI-DP — flèches (NP 58) et flexion transversale due à la précontrain
   const m = new TransverseModel(deck, { tRev: 0.08, nHarm: 15 }), u = m.response(1, 'pp', m.bandPatches(1, -b, b)).my, p = -2205 * (0.004727 + 0.005558) / 9;
   rel(p, -2.52, 2e-3, 'poussée transversale');
   [-6.752, -5.186, -3.105].forEach((ref, i) => rel(p * u[i], ref, 0.04, `MY_PREC fibre ${[1, 2, 4][i]}`));
+});
+
+test('PSI-DP — recherche du tracé (nombre d\'unités minimal) et zones d\'about (BPEL annexe 4)', async () => {
+  const { formDefaults } = await import('../tools/formdefaults.mjs');
+  const { parseData, compute } = await import('../src/pipeline.js');
+  const base = { ...formDefaults(), bp_actif: 'on' };
+  // ouvrage à deux travées inégales (15 + 22 m) : le tracé standard (excentricités maximales) ne convient pour aucun nombre
+  // d'unités raisonnable ; le tracé recherché trouve une solution
+  const opt = compute(parseData({ ...base, spans: '15, 22', h: '0.8' })).psidp;
+  assert.ok(opt.ok && opt.opt.feasible, `n = ${opt.n}`);
+  const std = compute(parseData({ ...base, spans: '15, 22', h: '0.8', bp_trace: 'standard' })).psidp;
+  assert.ok(!std.ok || std.n >= opt.n);
+  const s3 = compute(parseData({ ...base, spans: '18, 24, 18', h: '0.85' })).psidp, s3s = compute(parseData({ ...base, spans: '18, 24, 18', h: '0.85', bp_trace: 'standard' })).psidp;
+  assert.ok(s3.n <= s3s.n && s3.ok && s3s.ok, `${s3.n} / ${s3s.n}`);
+  // zones d'about : formules de l'annexe 4 recalculées à la main
+  const A = s3.anchors, U = s3.unit, Fj0 = U.Ap * s3.sigma0 * 1000, ssl = 2 / 3 * 500000;
+  rel(A.Fj0, Fj0, 1e-9, 'F_j0'); rel(A.As, 0.04 * Fj0 / ssl, 1e-9, 'frettage de surface');
+  const d = A.dv, e = A.dh;
+  rel(A.vert.sigT, 0.5 * (1 - A.a / d) * Fj0 / (e * d), 1e-9, 'σ_t éclatement'); rel(A.vert.Ae, Math.max(0.25 * (1 - A.a / d) * Fj0 / ssl, 0.15 * Fj0 / ssl), 1e-9, 'A_e');
+  assert.equal(A.rows, 1); assert.ok(A.general.every(g => Math.abs(g.Vmax) < 0.05 * Fj0), 'ancrages centrés : équilibre général quasi nul');
 });

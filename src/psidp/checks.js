@@ -58,6 +58,7 @@ export function psidpChecks(r, o) {
   rec.forEach(e => { e.ok = e.cmax <= e.cLim + 1e-9 && e.enc >= e.encLim - 1e-9 && (e.horsLim === null || e.hors >= e.horsLim - 1e-9); });
   out.extremes = rec;
 
+  if (o.stressOnly) return out;
   // ---- armatures passives longitudinales
   const x0 = r.geo.x0, nSp = x0.length - 1;
   const nearSupport = x => { for (let i = 1; i < nSp; i++) { const Ll = x0[i] - x0[i - 1], Lr = x0[i + 1] - x0[i]; if (x >= x0[i] - 0.1 * Ll - 1e-6 && x <= x0[i] + 0.1 * Lr + 1e-6) return true; } return false; };
