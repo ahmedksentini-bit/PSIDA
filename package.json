@@ -1,5 +1,5 @@
 {
-  "name": "psida",
+  "name": "pontdalle",
   "version": "0.12.0",
   "description": "Calcul manuel assisté des ponts-dalles (Eurocodes et Fascicule 61) : poutre continue, Guyon-Massonnet recalculé, modèles de charges, sections. Moteur JavaScript pur, sans dépendance, exécutable sous Node (tests) et dans le navigateur (site statique).",
   "type": "module",

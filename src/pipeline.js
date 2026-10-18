@@ -113,8 +113,8 @@ export const parseProfile = text => (parseProfiles(text)[0] || { layers: [] }).l
 /** Données de la dalle précontrainte (onglet Précontrainte). */
 export function parseBP(d) {
   const num = (k, def = null) => (String(d[k] ?? '').trim() === '' ? def : +d[k]);
-  return { actif: d.bp_actif === 'on' || d.bp_actif === true, unite: d.bp_unite || '12T15S', n: num('bp_n'), fprg: num('bp_fprg', 1860), fpeg: num('bp_fpeg', 1660), sigma0: num('bp_sigma0'),
-    f: num('bp_f', 0.18), phi: num('bp_phi', 0.002), g: num('bp_g', 6) / 1000, ends: d.bp_ends || 'both', friction: d.bp_friction || 'continu', rho1000: num('bp_rho1000', 2.5), mu0: num('bp_mu0', 0.43),
+  return { actif: d.bp_actif === 'on' || d.bp_actif === true, agrement: d.bp_agrement || 'generique', unite: d.bp_unite || '12', casFrottement: d.bp_cas || 'I', n: num('bp_n'), fprg: num('bp_fprg', 1860), fpeg: num('bp_fpeg', 1660), sigma0: num('bp_sigma0'),
+    f: num('bp_f'), phi: num('bp_phi'), g: num('bp_g') == null ? null : num('bp_g') / 1000, ends: d.bp_ends || 'both', friction: d.bp_friction || 'continu', rho1000: num('bp_rho1000', 2.5), mu0: num('bp_mu0', 0.43),
     Ep: num('bp_Ep', 190000), fcj: num('bp_fcj'), epsR: num('bp_epsR', 3e-4), reg: d.bp_reg || 'BPEL91', j: num('bp_j', 7), Kfl: num('bp_Kfl', 2), rj: num('bp_rj', 0.5), eSup: num('bp_eSup'), eLow: num('bp_eLow'),
     lowEnd: num('bp_lowEnd', 0.4), a: num('bp_a', 0.1), trace: d.bp_trace || 'optimise', segs: String(d.bp_segs || '').trim() || null, fe: num('bp_fe', 500), atMin: num('bp_atMin', 0.1) };
 }

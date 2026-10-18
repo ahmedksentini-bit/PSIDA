@@ -27,6 +27,7 @@ export function psidpBlocks(dp, { error = null } = {}) {
     ['Section brute (rectangle équivalent ou encorbellements)', `B = ${F3(sec.B)} m² ; I = ${F(sec.I, 4)} m⁴ ; v = ${F3(sec.v)} m ; v′ = ${F3(sec.vp)} m ; rendement ρ = ${F3(sec.rho)}`],
     ['Section nette (gaines déduites)', `B_n = ${F3(r.Bn)} m² ; I_n(x) = I − n A_gaine z(x)²`],
     ['Câblage', `${n} unités ${U.label} (A_p = ${F0(U.Ap * 1e6)} mm², gaine Ø ${F0(U.phiG * 1000)} mm) — n A_p = ${F0(r.nAp * 1e6)} mm² ; ${dp.auto ? `nombre minimal en classe II (départ du prédimensionnement à ${dp.n0} unités ; essais ${dp.tried.map(([k, o]) => `${k} ${o ? '✓' : '✗'}`).join(', ')})` : 'nombre imposé'}`],
+    ['Procédé (agrément)', `${U.source || '—'}${U.url ? ` (${U.url})` : ''} ; frottement f = ${F2(bp.f)} rad⁻¹, φ = ${F(bp.phi, 4)} m⁻¹, recul g = ${F0(bp.g * 1000)} mm ; plaque ${F0(U.plate * 1000)} × ${F0(U.plateB * 1000)} mm${U.spacingMin ? ` ; entraxe ≥ ${F0(U.spacingMin * 1000)} mm, bord ≥ ${F0(U.edgeMin * 1000)} mm${U.fcm0 ? ` (f_cm,0 = ${F0(U.fcm0)} MPa)` : ''}` : ''}`],
     ['Acier de précontrainte', `f_prg = ${F0(bp.fprg)} MPa, f_peg = ${F0(bp.fpeg)} MPa, E_p = ${F0(bp.Ep)} MPa, ρ₁₀₀₀ = ${F(bp.rho1000, 1)} %, μ₀ = ${F2(bp.mu0)}`],
     ['Tension à l\'origine σ_p0', `${F0(dp.sigma0)} MPa (BPEL 3.2 : min(0,8 f_prg ; 0,9 f_peg) par défaut) ; P0 = ${MN(P0)} MN`],
     ['Frottement, recul d\'ancrage', `f = ${F2(bp.f)} rad⁻¹, φ = ${F3(bp.phi)} m⁻¹, g = ${F0(bp.g * 1000)} mm ; ancrages actifs ${bp.ends === 'both' ? 'aux deux extrémités' : bp.ends === 'left' ? 'à gauche' : 'à droite'} ; déviation ${bp.friction === 'dixiemes' ? 'cumulée sur la grille des dixièmes (programme PSIDP)' : 'cumulée (variation totale de pente)'}`],
@@ -169,6 +170,8 @@ export function psidpBlocks(dp, { error = null } = {}) {
   if (dp.anchors) {
     const A = dp.anchors, W = dp.sec.bBot, cm = v => F(v * 1e4, 1), cmm = v => F(v * 1e4 / W, 1);
     h2('Zones d\'about — ancrages et bielle d\'about (BPEL 91, annexe 4 et article 7.5)');
+    const L = A.layout || {};
+    if (L.spMin) comment(`Implantation des ancrages : entraxe ${A.spacing ? F0(A.spacing * 1000) : '—'} mm ≥ ${F0(L.spMin * 1000)} mm ${ok(L.okSpacing)} ; distance au bord ${F0(A.edge * 1000)} mm${L.edgeMin ? ` ≥ ${F0(L.edgeMin * 1000)} mm (agrément)` : ''} ; ${A.rows === 1 ? `une nappe : h = ${F0(dp.sec.h * 1000)} mm ≥ 2 × ${F0(A.edge * 1000)} mm` : 'deux nappes'} ${ok(L.okVertical)}${dp.unit.fcm0 ? ` ; minima de l'agrément donnés pour f_cm,0 = ${F0(dp.unit.fcm0)} MPa à la mise en tension (f_cj saisi : ${F(dp.fcj, 1)} MPa)` : ''}.`);
     para(`${dp.n} ancrages ${dp.unit.label} par about, ${A.rows === 1 ? 'une nappe centrée sur le câble' : 'deux nappes (h insuffisante pour une nappe)'} de ${A.perRow} ancrages${A.spacing ? `, entraxe ${F2(A.spacing)} m, ancrages de rive à ${F2(A.edge)} m du bord` : ''} ; plaque a = ${F2(A.a)} m ; F_j0 = σ_p0 A_p = ${F(A.Fj0 / 1000, 3)} MN par ancrage ; σ_s,lim = 2/3 f_e = ${F0(A.ssl / 1000)} MPa.`);
     for (const S of A.sides) {
       const V = S.vert, H = S.hor, b2 = S.bielle;

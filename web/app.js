@@ -24,6 +24,7 @@ import { supportsBlocks, blocksToHTML, supportsNote } from './supports_view.js';
 import { parseStandalone, computeStandalone } from '../src/supports/standalone.js';
 import { parseSupports } from '../src/pipeline.js';
 import { psidpBlocks } from './psidp_view.js';
+import { agrementList } from '../src/psidp/agrements.js';
 import { guideElevationSVG, guideCrossSectionSVG } from './guide_schema.js';
 import { toPontEC8 } from '../src/ec8export.js';
 import { parsePoutres, computePoutres, linesToStandaloneText } from '../src/beams/run.js';
@@ -81,12 +82,22 @@ function renderConception(st) {
 function bearingsTable(st) {
   const b = st.bearings;
   let h = `<p class="small">Règles du § 3.6.1 (bulletin technique n° 4 du SETRA) : σ = P/(ab) ≤ min(15 MPa ; G·ab/(t(a+b))) avec G = ${b.G1} MPa ; u_g/T ≤ 0,5 ; u_g/T + H/(G₂ab) ≤ 0,7 (G₂ = ${b.G2} MPa) ; T ≤ min(a, b)/5 ; t·T ≥ α·a²/3. Réactions ELS caractéristiques (G + trafic + T + Ta) ; réaction de l'appareil le plus chargé = [k_CP·R_G + k_Q·(R − R_G)]/${b.nb} avec les coefficients d'inégalité de répartition de PSI-DA 68 § 2.4.2 (entraxe × sin ψ = ${b.ineq ? b.ineq.e.toFixed(2) + ' m' : '—'} ; k_CP = ${b.ineq ? b.ineq.CP.toFixed(3) : '1'}, k_A (UDL) = ${b.ineq ? b.ineq.A.toFixed(3) : '1'}, k_B (TS) = ${b.ineq ? b.ineq.B.toFixed(3) : '1'}, k_Q pondéré par les réactions UDL/TS) ; u_g = (ε + α_T·ΔT)·distance au point fixe (ε = ${b.epsSlow}, ΔT = ${b.dT} °C, point fixe à x = ${b.xf.toFixed(1)} m) ; H = freinage EN 1991-2 § 4.4.1 = ${b.H.toFixed(0)} kN réparti sur ${b.nb * b.nLines} appareils ; α = ${(b.alpha0 * 1000).toFixed(0)} mrad de défaut de pose + rotation sous charges permanentes (module différé) + rotation sous gr1a (ligne d'influence de rotation). Sélection : plus petit appareil entièrement enrobé de la gamme standard du guide (NF T 47.815).</p>
-  <table><thead><tr><th>Ligne d'appui</th><th>x [m]</th><th>R max / min [kN]</th><th>P max (appareil le plus chargé) / min [kN]</th><th>u_g [mm]</th><th>H [kN]</th><th>α [mrad]</th><th>Appareil</th><th>σ / σ_lim [MPa]</th><th>u_g/T ; total</th><th>T ≤ a/5</th><th>α_lim [mrad]</th><th>σ_min</th></tr></thead><tbody>`;
+  <table class="brg"><thead><tr><th>Ligne d'appui</th><th>Réactions [kN]</th><th>Déplacement, effort, rotation</th><th>Appareil retenu</th><th>Vérifications (valeur ≤ limite)</th><th>Observations</th></tr></thead><tbody>`;
+  const f1 = v => v.toFixed(1), f2 = v => v.toFixed(2);
   for (const r of b.rows) {
     const s = r.sel;
-    h += `<tr><td>${r.i === 0 || r.i === b.rows.length - 1 ? 'Culée' : 'Pile'} ${r.i}</td><td>${r.x.toFixed(1)}</td><td>${r.Rmax.toFixed(0)} / ${r.Rmin.toFixed(0)}${r.uplift ? ' (soulèvement)' : ''}</td><td>${r.Pmax.toFixed(0)} / ${r.Pmin.toFixed(0)}<br><span class="small">k_CP ${r.kCP.toFixed(2)}, k_Q ${r.kQ.toFixed(2)}</span></td><td>${(r.ug * 1000).toFixed(1)}</td><td>${r.Hb.toFixed(1)}</td><td>${(r.alpha * 1000).toFixed(1)}</td>`;
-    if (s) h += `<td><b>${s.label}</b> (${s.hTot} mm)</td><td>${s.sig.toFixed(1)} / ${s.sigLim.toFixed(1)}</td><td>${s.dist1.toFixed(2)} ; ${s.dist2.toFixed(2)}</td><td>${(s.T * 1000).toFixed(0)} ≤ ${(s.Tmax * 1000).toFixed(0)}</td><td>${(s.rotLim * 1000).toFixed(1)}</td><td>${s.sigMin.toFixed(1)}${s.antiCheminement ? ' <span class="badge warn">&lt; 2 : anti-cheminement</span>' : ''}${s.glissement ? ' <span class="badge warn">H &gt; f·P : blocage</span>' : ''}${s.glissantNecessaire ? ' <span class="badge warn">u_g &gt; min(a,b)/10 : appareil glissant (§ 3.6.2)</span>' : ''}</td></tr>`;
-    else h += `<td colspan="6"><span class="badge warn">ATTENTION</span>aucun appareil standard ne convient : augmenter le nombre d'appareils par ligne, appareils sur mesure ou à pot d'élastomère (§ 3.7)</td></tr>`;
+    h += `<tr><td><b>${r.i === 0 || r.i === b.rows.length - 1 ? 'Culée' : 'Pile'} ${r.i}</b><br><span class="small">x = ${f1(r.x)} m</span></td>
+      <td class="chk">ligne : ${r.Rmax.toFixed(0)} / ${r.Rmin.toFixed(0)}${r.uplift ? ' (soulèvement)' : ''}<br>appareil : <b>${r.Pmax.toFixed(0)}</b> / ${r.Pmin.toFixed(0)}<br><span class="small">k_CP ${f2(r.kCP)} ; k_Q ${f2(r.kQ)}</span></td>
+      <td>u_g = ${f1(r.ug * 1000)} mm<br>H = ${f1(r.Hb)} kN<br>α = ${f1(r.alpha * 1000)} mrad</td>`;
+    if (s) {
+      const obs = [];
+      if (s.antiCheminement) obs.push(`σ_min = ${f1(s.sigMin)} MPa &lt; 2 MPa : risque de cheminement, prévoir un dispositif anti-cheminement (taquets) ou augmenter la charge permanente par appareil (moins d'appareils)`);
+      if (s.glissement) obs.push(`H &gt; f·P_min (f = ${f2(s.f)}) : risque de glissement, bloquer l'appareil`);
+      if (s.glissantNecessaire) obs.push(`u_g &gt; min(a, b)/10 : appareil glissant élastomère + PTFE (§ 3.6.2)`);
+      h += `<td><b>${s.label}</b><br><span class="small">hauteur ${s.hTot} mm</span></td>
+      <td class="chk">σ = ${f1(s.sig)} ≤ ${f1(s.sigLim)} MPa<br>u_g/T = ${f2(s.dist1)} ≤ 0,5<br>u_g/T + H/(G₂ab) = ${f2(s.dist2)} ≤ 0,7<br>T = ${(s.T * 1000).toFixed(0)} ≤ a/5 = ${(s.Tmax * 1000).toFixed(0)} mm<br>α = ${f1(r.alpha * 1000)} ≤ ${f1(s.rotLim * 1000)} mrad<br>σ_min = ${f1(s.sigMin)} ${s.antiCheminement ? '<b class="ko">&lt; 2</b>' : '≥ 2'} MPa</td>
+      <td>${obs.length ? obs.map(o => `<div class="obs">${o}</div>`).join('') : '<span class="badge ok">OK</span>'}</td></tr>`;
+    } else h += `<td colspan="3"><span class="badge warn">ATTENTION</span>aucun appareil standard ne convient : augmenter le nombre d'appareils par ligne, appareils sur mesure ou à pot d'élastomère (§ 3.7)</td></tr>`;
   }
   h += `</tbody></table><p class="small">Désignation a×b×n(t+ts) : dimensions efficaces en plan [mm], n feuillets d'élastomère de t mm et frettes de ts mm (hauteur totale avec frettes entre parenthèses). Les appareils sont supposés identiques sur une ligne et libres (pas de point fixe mécanique) ; prévoir bossages, taquets et 5 cm minimum au bord (figure § 3.6.1). Prédimensionnement à confirmer selon la norme en vigueur (NF EN 1337-3).</p>`;
   return h;
@@ -97,7 +108,7 @@ function chevetresTable(st) {
   let h = `<h3>Chevêtres incorporés et réaction par appareil (annexe 4 du guide PSIDP-EL)</h3><p class="small">ELU fondamental 1,35 G + 1,35 LM1. Ligne d'appui de longueur B = 2b/sin ψ, ${st.chevetres[0].n} appareils à a = ${f2(st.chevetres[0].a)} m (le long de la ligne), consoles c = ${f2(st.chevetres[0].c)} m. Charges de type 1 (permanentes et trafic éloigné) réparties comme une charge uniforme, de type 2 (trafic à moins de d de la ligne) comme sur une poutre sur appuis : d = max[a + c ; (a + e)/2 ; min(B/2 ; L)], ζ_UDL = (d/L)(2 − d/L), ζ_TS = (1 − d/2L)·P_d/S_q. Moments du chevêtre par poutre continue sur les appareils (consoles c), moments locaux m_c⁻ = M_c⁻/(1,5 c), m_e = 1,5 M_e/e ; ferraillage par bandes (§ 6.2) en plus du ferraillage courant de la dalle, d = ${f2(st.chevetres[0].dEff)} m. Culées : adaptation de la règle (L = about + demi-travée de rive).</p>
   <table><thead><tr><th>Ligne</th><th>L [m]</th><th>d [m]</th><th>ζ TS / UDL</th><th>R rive / centre ELU [kN]</th><th>R moyen [kN]</th><th>M_c⁻ / M_e⁻ / M_e⁺ [kN·m]</th><th>m_c⁻ / m_e⁻ / m_e⁺ [kN·m/m]</th><th>Face sup. ① / ② / ③ [cm²/m]</th><th>Face inf. ①' / ②' [cm²/m]</th></tr></thead><tbody>`;
   for (const r of st.chevetres) {
-    h += `<tr><td>${r.i === 0 || r.i === st.chevetres.length - 1 ? 'Culée' : 'Pile'} ${r.i}</td><td>${f2(r.L)}</td><td>${f2(r.d)}</td><td>${r.zetas.map(f2).join(' / ')}</td><td>${f0(r.R1)} / ${f0(r.R2)}</td><td>${f0(r.Rmoy)}</td><td>${f0(r.Mc)} / ${f0(r.Me_neg)} / ${f0(r.Me_pos)}</td><td>${f0(r.mc)} / ${f0(r.me_neg)} / ${f0(r.me_pos)}</td><td>${r.bands.top.map(b => `${cm(b.As)} <span class="small">(${f2(b.width)} m)</span>`).join(' / ')}</td><td>${r.bands.bot.map(b => `${cm(b.As)} <span class="small">(${f2(b.width)} m)</span>`).join(' / ')}</td></tr>`;
+    h += `<tr><td>${r.i === 0 || r.i === st.chevetres.length - 1 ? 'Culée' : 'Pile'} ${r.i}</td><td>${f2(r.L)}</td><td>${f2(r.d)}</td><td>${r.zetas.map(f2).join(' / ')}</td><td>${f0(r.R1)} / ${f0(r.R2)}</td><td>${f0(r.Rmoy)}</td><td>${f0(r.Mc)} / ${f0(r.Me_neg)} / ${f0(r.Me_pos)}</td><td>${f0(r.mc)} / ${f0(r.me_neg)} / ${f0(r.me_pos)}</td><td>${r.bands.top.map((b, k) => `${'①②③'[k]} ${cm(b.As)} <span class="small">(${f2(b.width)} m)</span>`).join('<br>')}</td><td>${r.bands.bot.map((b, k) => `${'①②'[k]}' ${cm(b.As)} <span class="small">(${f2(b.width)} m)</span>`).join('<br>')}</td></tr>`;
   }
   return h + `</tbody></table><p class="small">Largeurs des bandes mesurées perpendiculairement à la ligne d'appui, centrées sur elle : ① 2/3·max(c, a, e), ② max(2c, a, e), ③ 2·max(a, e, c) (face supérieure) ; ①' 2/3·max(a, e), ②' 2·max(a, e) (face inférieure). Valeurs à cumuler avec le ferraillage courant en travée au-delà des bandes ① (guide PSIDP-EL, annexe 4, § 6.2).</p>`;
 }
@@ -348,12 +359,24 @@ function formToHash(form) {
   d.chamoaSign = form.chamoaSign.checked ? 1 : 0; d.withTherm = form.withTherm.checked ? 1 : 0;
   try { history.replaceState(null, '', `#${T.current()}/d=` + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(d)))))); } catch (e) { /* ignore */ }
 }
+// procédés de précontrainte (agréments) : listes déroulantes de l'onglet Précontrainte
+const AGR = agrementList();
+function fillUnits(keep) {
+  const a = AGR.find(x => x.id === $('#bp-agrement').value) || AGR[0], sel = $('#bp-unite'), prev = keep ?? sel.value;
+  sel.innerHTML = a.unites.map(u => `<option value="${u.id}">${u.nom}</option>`).join('');
+  if (a.unites.some(u => u.id === prev)) sel.value = prev; else if (a.unites.some(u => u.id === '12')) sel.value = '12';
+}
+if ($('#bp-agrement')) {
+  $('#bp-agrement').innerHTML = AGR.map(a => `<option value="${a.id}">${a.label}</option>`).join('');
+  fillUnits('12');
+  $('#bp-agrement').addEventListener('change', () => fillUnits());
+}
 function hashToForm(form) {
   const h = hashData();
   if (!h) return false;
   try {
     const d = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(h)))));
-    for (const [k, v] of Object.entries(d)) { const el = form.elements[k]; if (!el) continue; if (el.type === 'checkbox') el.checked = !!+v; else el.value = v; }
+    for (const [k, v] of Object.entries(d)) { const el = form.elements[k]; if (!el) continue; if (el.type === 'checkbox') el.checked = !!+v; else el.value = v; if (k === 'bp_agrement' && $('#bp-agrement')) fillUnits(d.bp_unite); }
     return true;
   } catch (e) { return false; }
 }
@@ -432,7 +455,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.28', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = await buildReport({ ...state, version: '0.29', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -469,7 +492,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.28', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.29', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -525,7 +548,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.28', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.29', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));

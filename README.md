@@ -1,4 +1,4 @@
-# PSIDA — calcul manuel assisté des ponts-dalles
+# PontDalle — calcul manuel assisté des ponts-dalles
 
 Outil ouvert pour **recalculer « à la main » (de façon reproductible) un pont-dalle** en béton armé
 du type PSI-DA, sans se limiter aux notes de calcul automatiques (PSIDA.EL du SETRA, CHAMOA-P du

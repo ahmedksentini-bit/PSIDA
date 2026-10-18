@@ -7,6 +7,7 @@
 import { prestress, cableGeometry, deflection } from './prestress.js';
 import { materialsBAEL, flexureELU, flexureELS } from '../section_bael.js';
 import { psidpChecks, mLim } from './checks.js';
+import { unitOf } from './agrements.js';
 
 /** Unités de précontrainte courantes (aire d'acier, Ø extérieur de gaine, rayon minimal de courbure). */
 export const UNITS = {
@@ -17,8 +18,8 @@ export const UNITS = {
 };
 
 export const BP_DEFAULTS = {
-  actif: false, unite: '12T15S', n: null, fprg: 1860, fpeg: 1660, sigma0: null, Ep: 190000, rho1000: 2.5, mu0: 0.43,
-  f: 0.18, phi: 0.002, g: 0.006, ends: 'both', friction: 'continu', fcj: null, epsR: 3e-4, Kfl: 2, rj: 0.5, reg: 'BPEL91', j: 7,
+  actif: false, agrement: 'generique', unite: '12', casFrottement: 'I', n: null, fprg: 1860, fpeg: 1660, sigma0: null, Ep: 190000, rho1000: 2.5, mu0: 0.43,
+  f: null, phi: null, g: null, ends: 'both', friction: 'continu', fcj: null, epsR: 3e-4, Kfl: 2, rj: 0.5, reg: 'BPEL91', j: 7,
   cover: null, decal: 0.007, eSup: null, eLow: null, lowEnd: 0.4, a: 0.1, segs: null, fe: 500, skin: 3e-4, trace: 'optimise',
 };
 
@@ -99,7 +100,10 @@ const interpS = (xs, ys, x) => { if (x <= xs[0]) return ys[0]; for (let k = 1; k
 export function designPSIDP(ctx, bpIn = {}) {
   const bp = { ...BP_DEFAULTS, ...bpIn };
   const { deck, perm, f61, thermal } = ctx, bm = deck.beam, spans = deck.spans;
-  const U = UNITS[bp.unite] || UNITS['12T15S'];
+  const OLD = { '7T15S': '7', '12T15S': '12', '19T15S': '19', '12T13': '12T13' };
+  const U = unitOf(bp.agrement || 'generique', OLD[bp.unite] || bp.unite || '12', { cas: bp.casFrottement || 'I' });
+  // frottement et recul d'ancrage : valeurs saisies, sinon celles de l'agrément (ou BPEL annexe 3)
+  bp.f = bp.f ?? U.f; bp.phi = bp.phi ?? U.phi; bp.g = bp.g ?? U.g;
   const sec = sectionProps({ width: 2 * deck.b, h: deck.h, chamfer: deck.g.chamfer });
   const MPa = 1000, fc28 = ctx.fc28, fcj = bp.fcj || Math.min(fc28, 0.8 * fc28 + 2);
   const ft = v => 0.6 + 0.06 * v, Ei = v => 11000 * Math.cbrt(v);
@@ -319,8 +323,14 @@ export function psidpDeflections(dp) {
  */
 export function anchorZone({ n, U, sec, sigma0, sigP1 = null, lim, fe, slope = [0, 0], zEnd = [0, 0], width, Vabout = [0, 0], Ru = [0, 0], beta = [Math.PI / 6, Math.PI / 6], sigPm = [null, null], fpeg = null }) {
   const a = U.plate || 0.25, Fj0u = U.Ap * sigma0, ssl = 2 / 3 * fe, h = sec.h, c0 = 0.05, W = width;
-  const rows = h >= 2 * a + 2 * c0 ? 1 : 2, perRow = Math.ceil(n / rows);
-  const edge = c0 + a / 2, sp = perRow > 1 ? (W - 2 * edge) / (perRow - 1) : 0;
+  // implantation : distance au bord = max(minimum de l'agrément ; enrobage + a/2) ; une nappe si la hauteur et l'entraxe
+  // le permettent, sinon deux nappes (guide SETRA 1989 § 3.3) ; contrôle des minima de l'agrément
+  const edge = Math.max(U.edgeMin || 0, c0 + a / 2), spMin = U.spacingMin || a + 0.05;
+  const sp1 = n > 1 ? (W - 2 * edge) / (n - 1) : Infinity;
+  const rows = h >= 2 * edge && sp1 >= spMin ? 1 : 2, perRow = Math.ceil(n / rows);
+  const sp = perRow > 1 ? (W - 2 * edge) / (perRow - 1) : 0;
+  const layout = { edge, spMin, edgeMin: U.edgeMin, okSpacing: perRow < 2 || sp >= spMin - 1e-9,
+    okVertical: rows === 1 ? h >= 2 * edge - 1e-9 : (h / 2 >= spMin - 1e-9 && h / 4 >= (U.edgeMin || c0 + a / 2) - 1e-9) };
   const yCols = Array.from({ length: perRow }, (_, k) => (perRow === 1 ? 0 : -W / 2 + edge + k * sp));
   // première régularisation dans un plan : niveaux (positions dans le panneau, depuis la face « basse »), forces, hauteur e
   const firstReg = (pos, F, e, eP) => {
@@ -372,5 +382,5 @@ export function anchorZone({ n, U, sec, sigma0, sigP1 = null, lim, fe, slope = [
     return { side: side ? 'droite' : 'gauche', vert, hor, gV, gH, complV: Math.max(0, gV.Ac - vert.As - vert.Ae), complH: Math.max(0, gH.Ac - hor.As - hor.Ae), Fd,
       bielle: { Ru: Ru[side] || 0, beta: beta[side], Hb, lowTendons, sp1, Fp, AsInf } };
   });
-  return { a, Fj0: Fj0u, rows, perRow, spacing: perRow > 1 ? sp : null, edge, ssl, sides };
+  return { a, Fj0: Fj0u, rows, perRow, spacing: perRow > 1 ? sp : null, edge, ssl, sides, layout, unit: U };
 }
