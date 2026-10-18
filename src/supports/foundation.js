@@ -123,6 +123,25 @@ export function pileCapTwoRows({ RU, RS, l, b, hs, D, fsu, sigSels, cover = 0.10
 export function footingStrutTie({ N, B, b, d, fsu }) { return N * (B - b) / (8 * d * fsu * 1000); }
 
 /**
+ * Semelle superficielle par la méthode des consoles (BAEL 91 révisé 99 / DTU 13.12, cas e > B/6 ou d < (B − b)/4) :
+ * diagramme de contrainte linéaire (trapèze si e ≤ B/6, triangle de longueur c = 3(B/2 − e) sinon), moment par mètre
+ * de semelle dans la section S₁ située à 0,35 b en arrière du nu de l'appui, côté le plus comprimé :
+ * M₁ = ∫₀^x₁ q(x)(x₁ − x) dx, x₁ = (B − b)/2 + 0,35 b ; A_s = M₁ L/(z f_su), z = 0,9 d. Poids de la semelle et des
+ * terres sur le débord négligés (sécurité).
+ */
+export function footingCantilever({ V, M, B, L, b, d, fsu }) {
+  const e = V > 0 ? Math.abs(M) / V : 0, x1 = (B - b) / 2 + 0.35 * b;
+  let qmax, qmin, c;
+  if (e <= B / 6) { qmax = V / (B * L) * (1 + 6 * e / B); qmin = V / (B * L) * (1 - 6 * e / B); c = B; }
+  else { c = 3 * (B / 2 - e); qmax = c > 0 ? 2 * V / (3 * L * (B / 2 - e)) : Infinity; qmin = 0; }
+  const q = x => (e <= B / 6 ? qmax + (qmin - qmax) * x / B : Math.max(0, qmax * (1 - x / c)));
+  const n = 400; let M1 = 0;
+  for (let k = 0; k < n; k++) { const x = (k + 0.5) * x1 / n; M1 += q(x) * (x1 - x) * x1 / n; }
+  const z = 0.9 * d;
+  return { e, x1, c, qmax, qmin, q1: q(x1), M1, z, As: M1 * L / (z * fsu * 1000) };
+}
+
+/**
  * Efforts dans les pieux d'un groupe sous semelle rigide : N_k = N/n ± (M − n·M_tête)·x_k/Σx², H partagé également.
  * @param {number[]} xs abscisses des pieux par rapport au centre de la semelle (une valeur par pieu)
  */
@@ -307,6 +326,26 @@ export function pileGroupSettlement({ profile, D, Lpile, Dhead = 0, Ep, capDetai
   const Ed = moduleEd({ ...tr, referentiel: code === 'BAEL' ? 'F62' : 'EC7' });
   const raft = tassementMenard({ forme: 'rectangulaire', B, L, q: Vqp / (B * L), alpha: profile.at(zf + 1e-6).alpha, Ec: tr.E1, Ed });
   return { sIso, sForf: forf.s * 1000, raft: { zf, B, L, q: Vqp / (B * L), s: raft.sf, Ec: tr.E1, Ed }, total: (sIso ?? forf.s * 1000) + raft.sf };
+}
+
+/**
+ * Tassement final d'une semelle superficielle sous charges quasi permanentes (méthode pressiométrique de Ménard,
+ * Fascicule 62 titre V annexe F.2 ; NF P 94-261 annexe H) : s_f = s_c + s_d,
+ *   s_c = α/(9 E_c) (q' − σ'_v0) λ_c B ;  s_d = 2/(9 E_d) (q' − σ'_v0) B₀ (λ_d B/B₀)^α, B₀ = 0,6 m,
+ * q' = V_qp/(B L) contrainte moyenne apportée, σ'_v0 = γ D contrainte verticale effective initiale au niveau de la base
+ * (terres excavées), E_c = E₁ et E_d sur 16 tranches de B/2 sous la base. Rotation sous M_qp : θ = M_qp/K_θ,diff.
+ */
+export function footingSettlement({ profile, B, L, D, Vqp, Mqp = 0, gamma = 20, dAff = 0, code = 'EC' }) {
+  const Bm = Math.min(B, L), Lm = Math.max(B, L);
+  const prof = { fn: z => profile.at(z).EM, ruptures: profile.ruptures };
+  const tr = tranchesMenard({ profilEM: prof, D, B: Bm });
+  const Ed = moduleEd({ ...tr, referentiel: code === 'BAEL' ? 'F62' : 'EC7' });
+  const alpha = profile.at(D + 1e-6).alpha;
+  const q = Vqp / (B * L), s0 = gamma * Math.max(0, D - Math.max(0, dAff));
+  const r = tassementMenard({ forme: 'rectangulaire', B: Bm, L: Lm, q, sigmaV0: s0, alpha, Ec: tr.E1, Ed });
+  const kr = moduleReaction({ forme: 'rectangulaire', B: Bm, L: Lm, alpha, Ec: tr.E1, Ed });
+  const theta = Mqp / (kr.kv * L * B ** 3 / 12);
+  return { q, sigmaV0: s0, dq: r.dq, alpha, E: tr.E, E1: tr.E1, E2: tr.E2, E35: tr.E35, E68: tr.E68, E916: tr.E916, Ed, lc: r.lc, ld: r.ld, sc: r.sc, sd: r.sd, s: r.sf, Mqp, theta, dTilt: theta * B / 2 * 1000 };
 }
 
 /** Raideurs d'une semelle superficielle sur le sol (module de réaction de Ménard, F62 annexe F.3) : rotation K_θ = k I. */

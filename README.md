@@ -174,6 +174,10 @@ données (`spans = "14, 18, 14"`…) sont inchangés : liens partagés, notes et
 Depuis la v0.38 : appareils d'appui imposés sur les culées et sur les piles (onglet Conception, désignation a×b×n(t+ts)),
 vérifiés par le prédimensionnement puis par la NF EN 1337-3 et conservés même s'ils ne passent pas ; lignes d'appui
 désignées partout C0, P1…, Cn ; virgule décimale acceptée dans les éditeurs de valeurs.
+Depuis la v0.39 : semelles superficielles — tassement de Ménard sous charges quasi permanentes (s_c + s_d, tranches E₁…E₉,₁₆,
+E_d, λ_c, λ_d) et rotation θ = M_qp/K_θ, ferraillage par la méthode des consoles (section S₁ à 0,35 b) quand les bielles
+ne s'appliquent pas, tableau de détail bielles / consoles / minimum ; pieux — détail de la portance du pieu isolé (F62 :
+p*_le, k_p, q_u, courbes Q1–Q7, Q_pu, Q_su, Q_u, Q_c ; NF P 94-262 : D_ef, k_p, f_sol, α, q_s, γ_R;d1 γ_R;d2, R_c;d, R_c;cr;d).
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

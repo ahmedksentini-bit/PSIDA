@@ -8,7 +8,7 @@
 import { neopreneFlexibility, cantileverFlexibility, horizontalDistribution, brakingF61Deck, headCombinationsBAEL, headCombinationsEC } from './actions.js';
 import { designShaft, pierCap, buckling, chevetreTorsion } from './pier.js';
 import { gardeGreve, murEnRetour, earthPressure, earthPressureUpper, videCombos, dalleTransition, Ka } from './abutment.js';
-import { shallowFooting, footingStrutTie, pileCapStrutTie, pileGroupForces, menardReaction, lateralPile, pileMinSteel, pileCapacity, minPileLength, PILE_TYPES, pileCapTwoRows, paroiFlechie, negativeFrictionPiles, pileGroupSettlement, footingRotationStiffness, sigmaSBAEL, pileConcrete, efficaciteCoherentF62, efficaciteEC7, isCohesive, soilProfile } from './foundation.js';
+import { shallowFooting, footingStrutTie, pileCapStrutTie, pileGroupForces, menardReaction, lateralPile, pileMinSteel, pileCapacity, minPileLength, PILE_TYPES, pileCapTwoRows, paroiFlechie, negativeFrictionPiles, pileGroupSettlement, footingRotationStiffness, footingSettlement, footingCantilever, sigmaSBAEL, pileConcrete, efficaciteCoherentF62, efficaciteEC7, isCohesive, soilProfile } from './foundation.js';
 import { requiredSteelNM } from './section_nm.js';
 import { winklerPile, pileGroup, headFlexibility, pileProfile, pileShear, pileCapFiles, blevot } from './psh.js';
 import { minorationSurface } from '../geotech/lateral.js';
@@ -507,8 +507,17 @@ export function computeSupports(st, input = {}) {
         const d = F.hs - c - 0.01, fsu = fyk / 1.15;
         const eMax = Math.max(...fd.map(f => Math.abs(f.M) / f.V));
         found = { type: 'superficielle', B: F.B, L: Lf, hs: F.hs, W: Wsem, checks, scour: wl ? { dAff, De: F.De, ok: F.De > dAff } : null, worstV: Math.max(...checks.map(k => k.ratioV)), worstH: Math.max(...checks.map(k => k.ratioH)), excOk: checks.every(k => k.excOk),
-          AsLong: Math.max(footingStrutTie({ N: eluMax.Nn, B: F.B, b: bWall, d, fsu }), 0.0012 * F.hs * Lf),
-          bielles: { dOk: d >= (F.B - bWall) / 4, eOk: eMax <= F.B / 6, eMax } };
+          bielles: { dOk: d >= (F.B - bWall) / 4, eOk: eMax <= F.B / 6, eMax, N: eluMax.Nn, label: eluMax.f ? eluMax.f.label : '', d, b: bWall, As: footingStrutTie({ N: eluMax.Nn, B: F.B, b: bWall, d, fsu }) } };
+        // méthode des consoles (e > B/6 ou semelle trop mince pour les bielles) : combinaison ELU donnant le plus grand moment en S₁
+        found.console = fd.filter(f => f.ls === 'ELU').map(f => ({ label: f.label, V: f.V, M: f.M, ...footingCantilever({ V: f.V, M: f.M, B: F.B, L: Lf, b: bWall, d, fsu }) })).reduce((a, r) => (!a || r.M1 > a.M1 ? r : a), null);
+        found.AsMin = 0.0012 * F.hs * Lf;
+        found.method = found.bielles.dOk && found.bielles.eOk ? 'bielles' : 'console';
+        found.AsLong = Math.max(found.method === 'bielles' ? found.bielles.As : found.console.As, found.AsMin);
+        // tassement sous charges quasi permanentes : part soutenue des combinaisons ELS (hors crue)
+        try {
+          const qp = fd.filter(f => f.ls !== 'ELU' && f.ls !== 'ACC' && !f.crue).reduce((a, f) => (f.V - f.inst.V > a.V ? { V: f.V - f.inst.V, M: f.M - f.inst.M } : a), { V: 0, M: 0 });
+          found.settle = footingSettlement({ profile, B: F.B, L: Lf, D: F.De, Vqp: qp.V, Mqp: Math.abs(qp.M), gamma: soil.gamma, code });
+        } catch (e) { found.settle = { error: e.message }; }
         // sens transversal : semelle filante sous voile → aciers de répartition ≥ 1/4 des aciers principaux (par m) ;
         // sous colonnes → poutre renversée sur les colonnes chargée par la réaction du sol uniforme
         const nc = end ? (sp.culee.type !== 'remblayee' ? sp.culee.nCol : 0) : (sp.pile.type === 'colonnes' ? sp.pile.nCol : 0);
