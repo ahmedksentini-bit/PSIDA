@@ -192,3 +192,27 @@ test('PSI-DP — pertes selon le BPEL 91 révisé 99 (3.3,13 ; 3.3,21 à 3.3,24)
   rel(r.delayed.dSd[i], r.delayed.dR + r.delayed.dFl[i] + 5 / 6 * r.delayed.dRho[i], 1e-9, 'Δσ_d = Δσ_r + Δσ_fl + 5/6 Δσ_ρ');
   assert.ok(r.shortening.arr[i] > 0 && Math.abs(r.at(r.ES.moy.sig, x) - (151000 - r.at(r.ES.moy.dS ?? r.ES.dS, x))) < 1);
 });
+
+test('procédés de précontrainte : choix de l\'agrément et de l\'unité (Freyssinet, VSL, générique)', async () => {
+  const { unitOf, agrementList } = await import('../src/psidp/agrements.js');
+  const L = agrementList();
+  assert.deepEqual(L.map(a => a.id), ['generique', 'freyssinet', 'vsl']);
+  // Freyssinet 12C15 (brochure V14) : plaque 240 × 200, entraxe a = 430 / 320 mm pour f_cm,0 = 24 / 44 MPa, μ = 0,19, k = 0,007
+  const f = unitOf('freyssinet', '12C15', { fcj: 30, cover: 0.05 });
+  assert.equal(f.Ap, 1.8e-3); assert.equal(f.plate, 0.24); assert.equal(f.plateB, 0.2);
+  assert.equal(f.spacingMin, 0.43); assert.equal(f.fcm0, 24);
+  assert.ok(Math.abs(f.edgeMin - (0.215 + 0.05 - 0.01)) < 1e-12);   // e = x/2 + c − 10 mm
+  assert.ok(Math.abs(f.phi - 0.19 * 0.007) < 1e-12); assert.equal(f.f, 0.19);
+  assert.equal(unitOf('freyssinet', '12C15', { fcj: 45 }).spacingMin, 0.32);
+  assert.equal(unitOf('freyssinet', '12C15', { fcj: 20 }).tensionOK, false);
+  // unité générique « 12 » demandée sur un procédé : même nombre de torons
+  assert.equal(unitOf('freyssinet', '12').unite, '12C15');
+  assert.equal(unitOf('vsl', '19').unite, '6-19');
+  // VSL : recul 6 mm, μ = 0,18, k = 0,005 ; plaques non lues ⇒ forfait générique signalé
+  const v = unitOf('vsl', '6-12');
+  assert.equal(v.g, 0.006); assert.ok(Math.abs(v.phi - 0.0009) < 1e-12); assert.equal(v.plate, 0.25);
+  assert.ok(v.manquants.some(m => /plaque/.test(m)));
+  // générique inchangé (BPEL annexe 3, cas II)
+  const g = unitOf('generique', '12', { cas: 'II' });
+  assert.equal(g.f, 0.20); assert.equal(g.phi, 0.003); assert.deepEqual(g.manquants, []);
+});

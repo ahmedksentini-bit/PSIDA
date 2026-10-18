@@ -101,7 +101,8 @@ export function designPSIDP(ctx, bpIn = {}) {
   const bp = { ...BP_DEFAULTS, ...bpIn };
   const { deck, perm, f61, thermal } = ctx, bm = deck.beam, spans = deck.spans;
   const OLD = { '7T15S': '7', '12T15S': '12', '19T15S': '19', '12T13': '12T13' };
-  const U = unitOf(bp.agrement || 'generique', OLD[bp.unite] || bp.unite || '12', { cas: bp.casFrottement || 'I' });
+  const fcj0 = bp.fcj || Math.min(ctx.fc28, 0.8 * ctx.fc28 + 2);
+  const U = unitOf(bp.agrement || 'generique', OLD[bp.unite] || bp.unite || '12', { cas: bp.casFrottement || 'I', fcj: fcj0, cover: 0.05 });
   // frottement et recul d'ancrage : valeurs saisies, sinon celles de l'agrément (ou BPEL annexe 3)
   bp.f = bp.f ?? U.f; bp.phi = bp.phi ?? U.phi; bp.g = bp.g ?? U.g;
   const sec = sectionProps({ width: 2 * deck.b, h: deck.h, chamfer: deck.g.chamfer });

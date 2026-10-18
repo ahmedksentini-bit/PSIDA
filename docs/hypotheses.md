@@ -407,7 +407,13 @@ Le modèle reprend les principes du programme SETRA/CETE de l'Ouest PSH (« Calc
   A_c = |V_xe|max/σ_s,lim, complément si A_c > A_s + A_e sur 2 l_r/3. Bielle d'about (7.5,11) : R_u cotg β_u équilibré
   par les armatures inférieures (précontrainte en partie basse à min(1,2 σ_pm ; f_peg/γ_p), passives à f_e/γ_s) ; avec
   les ancrages sur la fibre moyenne, la précontrainte n'est pas comptée. Coin inférieur (7.5,2) : commentaire seulement.
-  Plaques d'ancrage forfaitaires par unité (à remplacer par celles de l'agrément du procédé).
+  Plaques d'ancrage, entraxes et distances au bord : ceux du procédé choisi (v0.30, `src/psidp/agrements.js`), sinon forfait générique.
+- Procédés (v0.30) : liste « Procédé de précontrainte (agrément) » dans l'onglet Précontrainte.
+  - Générique : BPEL 91 révisé 99, annexe 3 (f = 0,18 / φ = 0,002 m⁻¹ en cas I, 0,20 / 0,003 en cas II), recul 6 mm, plaques forfaitaires.
+  - Freyssinet C (brochure V14 de 09/2014, conforme à l'ETA 06/0226 dont le texte n'a pas été lu) : unités 4 à 19 C15, plaque A × B (p. 8), entraxe a selon f_cm,0 = 24 / 44 / 60 MPa (p. 11), gaine (p. 9), μ = 0,19 (torons non lubrifiés) et k = 0,007 rad/m (p. 29), R_min = 100 Ø_int (p. 28). Recul non donné : 6 mm.
+  - VSL (ETA 06/0006 version 5 du 12/05/2026) : unités 6-4 à 6-19, A_p (tableau A.1.2), recul 6 mm (A.2.6.3), μ = 0,18 et k = 0,005 rad/m (A.2.6.1), R_min = 100 Ø_int (A.2.3.2), gaines (brochure 2009). Plaques et entraxes (annexe A.6) non lus : forfait générique, signalé dans la note.
+  - Entraxe minimal retenu pour la plus grande f_cm,0 du tableau ne dépassant pas f_cj (f_cj caractéristique ≤ f_cm,0 moyenne : choix prudent) ; alerte si f_cj est sous la plus faible valeur du tableau. Distance au bord e = x/2 + c − 10 mm (règle Freyssinet p. 11 et VSL § 3.5.2), c = 5 cm.
+  - En changeant de procédé, l'interface garde le même nombre de torons. f, φ et g saisis restent prioritaires sur ceux de l'agrément.
 - Pertes (v0.28) : option « BPEL 91 révisé 99 » (défaut) — déformations instantanées E_p Σ k Δσ_bj/E_ij section par
   section (k = ½ précontrainte et poids propre, 1 superstructures), retrait ε_r [1 − r(j)] E_p avec r(t) = t/(t + 9 r_m),
   fluage (σ_b + σ_M) E_p/E_ij, Δσ_d = Δσ_r + Δσ_fl + 5/6 Δσ_ρ ; option « note PSIDP-EL 84 » (BPEL 83) conservée pour le

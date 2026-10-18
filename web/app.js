@@ -363,8 +363,11 @@ function formToHash(form) {
 const AGR = agrementList();
 function fillUnits(keep) {
   const a = AGR.find(x => x.id === $('#bp-agrement').value) || AGR[0], sel = $('#bp-unite'), prev = keep ?? sel.value;
+  const nPrev = (AGR.flatMap(x => x.unites).find(u => u.id === prev) || { torons: 12 }).torons;
   sel.innerHTML = a.unites.map(u => `<option value="${u.id}">${u.nom}</option>`).join('');
-  if (a.unites.some(u => u.id === prev)) sel.value = prev; else if (a.unites.some(u => u.id === '12')) sel.value = '12';
+  // même unité si elle existe dans le procédé, sinon même nombre de torons, sinon 12 torons
+  const same = a.unites.find(u => u.id === prev) || a.unites.find(u => u.torons === nPrev) || a.unites.find(u => u.torons === 12) || a.unites[0];
+  sel.value = same.id;
 }
 if ($('#bp-agrement')) {
   $('#bp-agrement').innerHTML = AGR.map(a => `<option value="${a.id}">${a.label}</option>`).join('');
@@ -455,7 +458,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.29', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = await buildReport({ ...state, version: '0.30', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -492,7 +495,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.29', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.30', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -548,7 +551,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.29', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.30', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));

@@ -35,6 +35,8 @@ export function psidpBlocks(dp, { error = null } = {}) {
     ['Pertes différées', `${bp.reg === 'PSIDP84' ? 'convention PSIDP-EL 84 (BPEL 83)' : 'BPEL 91 révisé 99'} ; retrait final ε_r = ${F(bp.epsR * 1e4, 1)}·10⁻⁴ ; âge à la mise en tension j = ${F(bp.j ?? 7, 0)} jours ; fraction à la mise en service r(j) = ${F2(bp.rj)}${bp.reg === 'PSIDP84' ? ` ; K_fl = ${F2(bp.Kfl)}` : ''}`],
     ['Prédimensionnement (annexe 1 du dossier PSI-DP)', `l = ${F2(dp.pre.l)} m, ξ = ${F3(dp.pre.xi)}, Z = ${F3(dp.pre.Z)} m → F∞ ≥ max(F1 ; F2) = max(${MN(dp.pre.F1)} ; ${MN(dp.pre.F2)}) = ${MN(dp.pre.F)} MN`],
   ]);
+  if (U.agrement && U.agrement !== 'generique') comment(`Procédé ${U.label} : ${U.agrNote || ''}${U.ref ? ` Références : ${U.ref}.` : ''}${U.manquants && U.manquants.length ? ` Données absentes du document lu, valeurs génériques utilisées : ${U.manquants.join(', ')}.` : ''}`);
+  if (U.tensionOK === false) comment(`Attention : f_cj = ${F(dp.fcj, 1)} MPa à la mise en tension est inférieur à la plus faible résistance du tableau de l'agrément (f_cm,0 = ${F0(U.fcm0)} MPa) : mise en tension à pleine force non admise par le procédé, retarder la mise en tension ou la faire par étapes.`);
   if (dp.geoChk.gaps.length) comment(`Paraboles discontinues : ${dp.geoChk.gaps.map(gq => `travée ${gq.span} à x = ${F2(gq.x)} m (Δz = ${F3(gq.dz)} m, Δpente = ${F3(gq.dp)})`).join(' ; ')}.`);
   comment(`Rayon de courbure minimal du câble moyen : ${F(dp.geoChk.Rmin, 1)} m (≥ ${F(U.Rmin, 1)} m requis pour ${U.label} : ${ok(dp.geoChk.Rmin >= U.Rmin)}).`);
 
