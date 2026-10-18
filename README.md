@@ -185,6 +185,8 @@ C35/45) et non plus le coefficient d'équivalence de l'ELS (15) ; seule la colon
 Depuis la v0.42 : plan de ferraillage — l'épure décalée de a_l = d interpole les bornes x ± a_l (le pas des sections,
 0,9 m, dépassait a_l = 0,65 m et rendait le décalage sans effet) et les arrêts de barres partent de l'abscisse interpolée où
 les aciers requis franchissent la section des filantes ; le contrôle « mis en place ≥ requis » porte aussi sur l'épure décalée.
+Depuis la v0.43 : phase de chantier et convoi LM3 — l'ELS fréquent retient aussi le cas du gradient thermique dominant,
+G + 0,6 T (EN 1990 A2), en plus de G + ψ₁ Q + 0,5 T ; seule la colonne w_k peut changer.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

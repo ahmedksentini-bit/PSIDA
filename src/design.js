@@ -103,7 +103,8 @@ export function designSingleActionEC(deck, perm, Q, opt = {}) {
   const comb = {
     ELU: { max: mk((s, iy) => 1.35 * perm.mxMax[s][iy] + 1.35 * Math.max(q('mxMax', s, iy), 0)), min: mk((s, iy) => 1.35 * perm.mxMin[s][iy] + 1.35 * Math.min(q('mxMin', s, iy), 0)) },
     CAR: { max: mk((s, iy) => perm.mxMax[s][iy] + ta('mxMax', s, iy) + 0.6 * t('mxMax', s, iy) + Math.max(q('mxMax', s, iy), 0)), min: mk((s, iy) => perm.mxMin[s][iy] + ta('mxMin', s, iy) + 0.6 * t('mxMin', s, iy) + Math.min(q('mxMin', s, iy), 0)) },
-    FREQ: { max: mk((s, iy) => perm.mxMax[s][iy] + 0.5 * t('mxMax', s, iy) + psi1 * Math.max(q('mxMax', s, iy), 0)), min: mk((s, iy) => perm.mxMin[s][iy] + 0.5 * t('mxMin', s, iy) + psi1 * Math.min(q('mxMin', s, iy), 0)) },
+    // ELS fréquent (EN 1990 A2) : trafic dominant G + ψ1 Q + 0,5 T, ou gradient dominant G + 0,6 T (ψ2 du trafic nul)
+    FREQ: { max: mk((s, iy) => perm.mxMax[s][iy] + Math.max(0.5 * t('mxMax', s, iy) + psi1 * Math.max(q('mxMax', s, iy), 0), 0.6 * t('mxMax', s, iy))), min: mk((s, iy) => perm.mxMin[s][iy] + Math.min(0.5 * t('mxMin', s, iy) + psi1 * Math.min(q('mxMin', s, iy), 0), 0.6 * t('mxMin', s, iy))) },
     QP: { max: mk((s, iy) => perm.mxMax[s][iy] + ta('mxMax', s, iy) + 0.5 * t('mxMax', s, iy)), min: mk((s, iy) => perm.mxMin[s][iy] + ta('mxMin', s, iy) + 0.5 * t('mxMin', s, iy)) },
   };
   const beamM = { max: deck.beam.sections.map((_, s) => perm.Mmax[s] + (settle ? settle.Mmax[s] : 0) + 0.6 * (thermal ? thermal.Mmax[s] : 0) + Math.max(Q ? Q.Mmax[s] : 0, 0)), min: deck.beam.sections.map((_, s) => perm.Mmin[s] + (settle ? settle.Mmin[s] : 0) + 0.6 * (thermal ? thermal.Mmin[s] : 0) + Math.min(Q ? Q.Mmin[s] : 0, 0)) };
