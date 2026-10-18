@@ -24,6 +24,8 @@ import { supportsBlocks, blocksToHTML, supportsNote } from './supports_view.js';
 import { parseStandalone, computeStandalone } from '../src/supports/standalone.js';
 import { parseSupports } from '../src/pipeline.js';
 import { toPontEC8 } from '../src/ec8export.js';
+import { parsePoutres, computePoutres, linesToStandaloneText } from '../src/beams/run.js';
+import { beamsBlocks } from './beams_view.js';
 
 const $ = s => document.querySelector(s);
 
@@ -396,7 +398,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!state) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.15', hSearch: lastSearch });
+    const html = await buildReport({ ...state, version: '0.16', hSearch: lastSearch });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -416,7 +418,7 @@ async function noteFigures() {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.15' }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.16' }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!state || state.conceptOnly) { $('#error').textContent = 'Lancer d\'abord le calcul complet.'; return; }
@@ -439,6 +441,23 @@ $('#btn-note-docx').addEventListener('click', async () => {
 });
 $('#trans-span').addEventListener('change', () => state && renderTransverse(state));
 $('#supports-ref').addEventListener('change', () => state && renderSupports(state));
+let poutres = null;
+$('#btn-poutres').addEventListener('click', () => {
+  try {
+    poutres = computePoutres(parsePoutres(Object.fromEntries(new FormData($('#f')).entries())));
+    $('#poutres-tables').innerHTML = blocksToHTML(beamsBlocks(poutres));
+    $('#card-poutres').hidden = false; $('#poutres-empty').hidden = true; $('#error').textContent = '';
+  } catch (e) { $('#error').textContent = e.stack || String(e); }
+});
+$('#btn-poutres-appuis').addEventListener('click', () => {
+  if (!poutres) $('#btn-poutres').click();
+  if (!poutres) return;
+  const f = $('#f'), inp = poutres.inp;
+  f.ss_spans.value = inp.spans.join(', '); f.ss_width.value = (inp.n * inp.b1).toFixed(2);
+  f.ss_Lc.value = (inp.roadway.y2 - inp.roadway.y1).toFixed(2); f.ss_h.value = String(poutres.sec.H || inp.beam.H || 2);
+  f.ss_area.value = (inp.n * poutres.sec.A).toFixed(3); f.ss_lines.value = linesToStandaloneText(poutres.lines);
+  $('#btn-standalone').click();
+});
 $('#btn-standalone').addEventListener('click', () => {
   setMode('supports'); goTab('appuis');
   try {
@@ -448,7 +467,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.15', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.16', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));

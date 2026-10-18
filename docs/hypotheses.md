@@ -225,6 +225,20 @@ Choix retenus (justifiés dans les en-têtes des modules) :
 - **Interface en onglets** (Projet, Conception, Tablier, Ferraillage, Compléments, Appuis et fondations, Notes de calcul),
   adresse #onglet/d=… partageable comme auparavant.
 
+## 1 nonies. Ponts à poutres (v0.16, `src/beams/`)
+
+- Travées indépendantes, réseau poutres + hourdis de Guyon-Massonnet : ρ_p = I/b₁, γ_p = K/(2 b₁), hourdis ρ_e = γ_e = h_d³/12,
+  θ = (b/L)(ρ_p/ρ_e)^¼, α = (γ_p + γ_e)/(2√(ρ_p ρ_e)) ; interpolation de Massonnet en √α ; le modèle de dalle (SlabDeck) est
+  utilisé avec la portée de Guyon L/(ρ_p/ρ_e)^¼ et α, les fibres de calcul étant les axes des poutres (M_k = m_x(y_k) b₁).
+- Validé sur la sortie PONTYPE/PAP du Pont de Noé (`test/poutres.test.js`) : θ, α exacts ; A et Mc120 par poutre ≤ 0,3 % ;
+  Bc −1,7 % en rive (placement transversal, cf. § 1 quinquies) ; trottoirs ≤ 1 % ; ELS/ELU ≤ 0,6 % ; permanentes rive 0,2 %,
+  poutre 2 −1,2 % (coefficients QSUP de PAP non reproduits exactement pour les superstructures de rive hors largeur active,
+  extrapolées linéairement).
+- Efforts tranchants par poutre = V du tablier × η/n ; réactions par ligne (travées indépendantes) par lignes d'influence sur
+  deux travées et δ d'appui ½[δ + max(δ ; 1,5 ou 1,2)] — reproduit les réactions de culée du modèle de dalle.
+- Dimensionnement : poutre en T en BA (ELU) ; poutre précontrainte : vérification simplifiée des contraintes à mi-travée sur
+  section composite avec P∞ et e₀, et précontrainte minimale de Guyon — ne remplace pas un calcul phasé (PONTYPE/BP).
+
 ## 2. Protocole de comparaison avec une note de référence
 
 ### 2.1 Référentiel Eurocodes — note CHAMOA-PSIDA (Cerema, guide technique, ch. 4)

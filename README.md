@@ -68,6 +68,7 @@ src/rebar.js        plan de ferraillage : choix φ/e, épure décalée, filantes
 web/rebarplan.js    dessins du plan de ferraillage (coupe longitudinale, coupes transversales), nomenclature, A_s mis en place / requis
 src/supports/       appuis et fondations : section N-M (section_nm), efforts horizontaux et combinaisons (actions), fûts et
                     chevêtres (pier, beam1d), culées (abutment), semelles et pieux (foundation), chaîne complète (index)
+src/beams/          ponts à poutres : Guyon-Massonnet poutres + hourdis, efforts par poutre, poutres BA / BP, réactions par ligne
 src/geotech/         modules géotechniques du dépôt « fondation » (F62-V, NF P 94-261/262)
 src/vendor/pont-ec8.mjs moteur sismique de Pont EC8 (dépôt « ouvpara », EN 1998-2)
 src/ec8export.js    projet Pont EC8 construit depuis PSIDA (export JSON et calcul intégré)

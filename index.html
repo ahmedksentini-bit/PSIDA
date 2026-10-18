@@ -66,7 +66,7 @@
 <header>
   <div class="hrow"><h1>PSIDA</h1><span class="sub">calcul manuel assisté des ponts-dalles · Eurocodes et Fascicule 61 / BAEL · code ouvert</span>
     <span class="actions"><button type="submit" form="f" id="btn-calc">Calculer</button></span></div>
-  <nav class="tabs" role="tablist"><a href="#projet" role="tab" data-tab="projet">Projet</a><a href="#conception" role="tab" data-tab="conception">Conception</a><a href="#tablier" role="tab" data-tab="tablier">Tablier</a><a href="#ferraillage" role="tab" data-tab="ferraillage">Ferraillage</a><a href="#complements" role="tab" data-tab="complements">Compléments</a><a href="#appuis" role="tab" data-tab="appuis">Appuis et fondations</a><a href="#notes" role="tab" data-tab="notes">Notes de calcul</a></nav>
+  <nav class="tabs" role="tablist"><a href="#projet" role="tab" data-tab="projet">Projet</a><a href="#conception" role="tab" data-tab="conception">Conception</a><a href="#tablier" role="tab" data-tab="tablier">Tablier</a><a href="#ferraillage" role="tab" data-tab="ferraillage">Ferraillage</a><a href="#complements" role="tab" data-tab="complements">Compléments</a><a href="#poutres" role="tab" data-tab="poutres">Ponts à poutres</a><a href="#appuis" role="tab" data-tab="appuis">Appuis et fondations</a><a href="#notes" role="tab" data-tab="notes">Notes de calcul</a></nav>
   <pre id="error"></pre>
 </header>
 <form id="f" class="app" novalidate>
@@ -285,6 +285,48 @@
     </div>
   </div>
 </section>
+<section class="tab" id="tab-poutres">
+  <div class="cols">
+    <div class="card form-card"><h2>Pont à poutres (travées indépendantes)</h2>
+      <p class="small">VIPP, PRAD, poutres BA : répartition transversale de Guyon-Massonnet du réseau poutres + hourdis, efforts par poutre (Fascicule 61 et Eurocodes), réactions par ligne d'appui. Valeurs par défaut : Pont de Noé (VIPP 33 m, 4 poutres).</p>
+      <div class="row">
+        <label>Portées des travées [m]<input name="pt_spans" value="33, 33, 33, 33"></label>
+        <label>Type de poutres<select name="pt_type"><option value="BP">précontraintes (VIPP)</option><option value="BA">béton armé</option></select></label>
+      </div>
+      <div class="row">
+        <label>Nombre de poutres / entraxe b₁ [m]<div class="row"><input name="pt_n" value="4" type="number"><input name="pt_b1" value="3.28" type="number" step="any"></div></label>
+        <label>Épaisseur du hourdis [m]<input name="pt_hd" value="0.30" type="number" step="any"></label>
+      </div>
+      <label>Poutre + hourdis : A [m²] / I [m⁴] / K torsion [m⁴]<div class="row"><input name="pt_A" value="2.047" type="number" step="any"><input name="pt_I" value="1.006057" type="number" step="any"><input name="pt_K" value="0.036412" type="number" step="any"></div></label>
+      <label>v / v' [m] / hauteur totale H [m]<div class="row"><input name="pt_v" value="0.65" type="number" step="any"><input name="pt_vp" value="1.67" type="number" step="any"><input name="pt_H" value="2.32" type="number" step="any"></div></label>
+      <label>Ou géométrie de la poutre (rectangles du talon vers la table, b h ; … — le hourdis est ajouté) : calcule A, I, K, v, v'<input name="pt_parts" value="" placeholder="ex. 0.6 0.25 ; 0.25 1.47 ; 1.0 0.3"></label>
+      <div class="row">
+        <label>Chaussée y1, y2 [m]<input name="pt_road" value="-4, 4"></label>
+        <label>Trottoirs y1,y2 ; …<input name="pt_foot" value="-6.56,-4 ; 4,6.56"></label>
+      </div>
+      <label>Superstructures linéaires g [kN/m] @ e [m] ; … (e peut dépasser b : corniches)<input name="pt_lines" value="18 @ -6.87 ; 18 @ 6.87"></label>
+      <div class="row">
+        <label>Superstructures réparties q [kN/m²] sur y1,y2<input name="pt_bands" value="1.79 sur -6.56,6.56"></label>
+        <label>Poids propre complémentaire (entretoises…) [kN/m]<input name="pt_extra" value="0" type="number" step="any"></label>
+      </div>
+      <div class="row">
+        <label>F61 : dispositifs de retenue (réduction de Lc)<input name="pt_ret" value="0" type="number" min="0" max="2"></label>
+        <label>F61 : charges militaires<select name="pt_mil"><option value="Mc120">Mc120</option><option value="Mc120+D240">Mc120 et D240</option><option value="aucune">aucune</option></select></label>
+      </div>
+      <div class="row">
+        <label>Béton f_ck / acier f_yk [MPa]<div class="row"><input name="pt_fck" value="35" type="number" step="any"><input name="pt_fyk" value="500" type="number" step="any"></div></label>
+        <label>BA : âme b₀ / enrobage à l'axe [m]<div class="row"><input name="pt_b0" value="0.25" type="number" step="any"><input name="pt_cover" value="0.12" type="number" step="any"></div></label>
+      </div>
+      <label>BP : précontrainte finale P∞ par poutre [kN] / excentricité e₀ à mi-travée [m] (négative sous le c.d.g.)<div class="row"><input name="pt_P" value="6500" type="number" step="any"><input name="pt_e0" value="-1.46" type="number" step="any"></div></label>
+      <button type="button" id="btn-poutres">Calculer le pont à poutres</button>
+      <button type="button" class="secondary" id="btn-poutres-appuis">Transmettre les réactions aux appuis (appuis seuls)</button>
+    </div>
+    <div>
+<p class="small nores-p" id="poutres-empty">Saisir le tablier puis « Calculer le pont à poutres ».</p>
+      <div class="card" id="card-poutres" hidden><h2>Pont à poutres</h2><div id="poutres-tables"></div></div>
+    </div>
+  </div>
+</section>
 <section class="tab" id="tab-appuis">
   <div class="cols">
     <div class="card form-card"><h2>Appuis et fondations</h2>
@@ -375,8 +417,8 @@
   </div>
 </section>
 </form>
-<script src="./web/tabs.js?v=0.15"></script>
-<script type="module">import('./web/app.js?v=0.15').catch(e => { const el = document.getElementById('error'); if (el) el.textContent = 'Le calcul n\'a pas pu se charger (' + e.message + '). Recharger la page sans cache (Ctrl+F5) ; si le problème persiste, le signaler.'; });</script>
+<script src="./web/tabs.js?v=0.16"></script>
+<script type="module">import('./web/app.js?v=0.16').catch(e => { const el = document.getElementById('error'); if (el) el.textContent = 'Le calcul n\'a pas pu se charger (' + e.message + '). Recharger la page sans cache (Ctrl+F5) ; si le problème persiste, le signaler.'; });</script>
 <noscript><p style="padding:16px">PSIDA nécessite JavaScript.</p></noscript>
 </body>
 </html>
