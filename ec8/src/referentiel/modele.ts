@@ -509,6 +509,32 @@ export const MODELE_DYNAMIQUE: Regle = {
   note: "Choix de modélisation propres à PSIDA ; la norme impose seulement un modèle discret approprié, compatible avec la mécanique et l'idéalisation de l'action sismique.",
 };
 
+export const CALCUL_TEMPOREL_LINEAIRE: Regle = {
+  id: "calcul_temporel_lineaire",
+  type: "regle",
+  etape: "analyse",
+  libelle: "Calcul temporel linéaire (analyse chronologique)",
+  enonce:
+    "Méthode linéaire alternative à l'analyse spectrale : l'action sismique de calcul est prise comme la moyenne des réponses extrêmes calculées pour chaque accélérogramme d'un ensemble ; le choix de l'ensemble suit 3.2.3 (EN 1998-2) et 3.2.3.1 (EN 1998-1).",
+  references: [
+    { source: "NF_EN_1998_2", localisation: "4.2.3.1(1)P", page: "54" },
+    { source: "NF_EN_1998_2", localisation: "3.2.3 (paires d'accélérogrammes pour l'analyse non linéaire : au moins 3 ; spectre SRSS moyen ≥ 1,3 Se entre 0,2 T1 et 1,5 T1)", page: "37" },
+  ],
+  statut: "verifie",
+  note: "PSIDA traite chaque direction séparément, avec des accélérogrammes artificiels ajustés au spectre élastique, par superposition modale des modes retenus par l'analyse multimodale ; les directions se combinent ensuite par 100/30/30. Les efforts sont divisés par q, les déplacements restent ceux du calcul élastique.",
+};
+
+export const ACCELEROGRAMMES_ARTIFICIELS: Regle = {
+  id: "accelerogrammes_artificiels",
+  type: "regle",
+  etape: "action_sismique",
+  libelle: "Accélérogrammes artificiels compatibles avec le spectre",
+  enonce:
+    "Établis pour correspondre au spectre élastique à 5 % ; durée de la partie stationnaire au moins 10 s à défaut de données ; au moins 3 accélérogrammes ; moyenne des accélérations spectrales à période nulle ≥ ag·S ; entre 0,2 T1 et 2 T1, spectre moyen à 5 % ≥ 90 % du spectre élastique.",
+  references: [{ source: "NF_EN_1998_1", localisation: "3.2.3.1.2(1)P à (4)", page: "37" }],
+  statut: "verifie",
+};
+
 export const MODELE: EntreeReferentiel[] = [
   ECM,
   TMIN_B,
@@ -538,4 +564,6 @@ export const MODELE: EntreeReferentiel[] = [
   MODES_SIGNIFICATIFS,
   COMBINAISON_MODALE,
   MODELE_DYNAMIQUE,
+  CALCUL_TEMPOREL_LINEAIRE,
+  ACCELEROGRAMMES_ARTIFICIELS,
 ];

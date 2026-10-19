@@ -54,6 +54,10 @@ par Cholesky et Jacobi, modes retenus jusqu'à 90 % de la masse (4.2.1.2), combi
 mode fondamental et animation des déformées. Inerties du tablier : champs facultatifs `inertieVerticale` et
 `inertieTransversale` (défauts A·e²/12 et A·B²/12). `options.methodeEfforts` choisit la méthode des efforts exportés.
 
+Le **calcul temporel linéaire** (EN 1998-2 4.2.3) génère des accélérogrammes artificiels compatibles avec le spectre
+(EN 1998-1 3.2.3.1.2), superpose les modes de la multimodale (intégration exacte de Nigam et Jennings) et retient la moyenne
+des extrêmes ; un sous-onglet anime le pont sous l'accélérogramme.
+
 ## Référentiel
 
 Chaque entrée porte :

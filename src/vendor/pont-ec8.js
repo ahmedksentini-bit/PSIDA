@@ -3242,6 +3242,37 @@ const MODELE = [
 		}],
 		statut: "verifie",
 		note: "Choix de modélisation propres à PSIDA ; la norme impose seulement un modèle discret approprié, compatible avec la mécanique et l'idéalisation de l'action sismique."
+	},
+	{
+		id: "calcul_temporel_lineaire",
+		type: "regle",
+		etape: "analyse",
+		libelle: "Calcul temporel linéaire (analyse chronologique)",
+		enonce: "Méthode linéaire alternative à l'analyse spectrale : l'action sismique de calcul est prise comme la moyenne des réponses extrêmes calculées pour chaque accélérogramme d'un ensemble ; le choix de l'ensemble suit 3.2.3 (EN 1998-2) et 3.2.3.1 (EN 1998-1).",
+		references: [{
+			source: "NF_EN_1998_2",
+			localisation: "4.2.3.1(1)P",
+			page: "54"
+		}, {
+			source: "NF_EN_1998_2",
+			localisation: "3.2.3 (paires d'accélérogrammes pour l'analyse non linéaire : au moins 3 ; spectre SRSS moyen ≥ 1,3 Se entre 0,2 T1 et 1,5 T1)",
+			page: "37"
+		}],
+		statut: "verifie",
+		note: "PSIDA traite chaque direction séparément, avec des accélérogrammes artificiels ajustés au spectre élastique, par superposition modale des modes retenus par l'analyse multimodale ; les directions se combinent ensuite par 100/30/30. Les efforts sont divisés par q, les déplacements restent ceux du calcul élastique."
+	},
+	{
+		id: "accelerogrammes_artificiels",
+		type: "regle",
+		etape: "action_sismique",
+		libelle: "Accélérogrammes artificiels compatibles avec le spectre",
+		enonce: "Établis pour correspondre au spectre élastique à 5 % ; durée de la partie stationnaire au moins 10 s à défaut de données ; au moins 3 accélérogrammes ; moyenne des accélérations spectrales à période nulle ≥ ag·S ; entre 0,2 T1 et 2 T1, spectre moyen à 5 % ≥ 90 % du spectre élastique.",
+		references: [{
+			source: "NF_EN_1998_1",
+			localisation: "3.2.3.1.2(1)P à (4)",
+			page: "37"
+		}],
+		statut: "verifie"
 	}
 ];
 //#endregion
@@ -4044,6 +4075,37 @@ function combiner(valeurs, omegas, xi, regle) {
 	}
 	return Math.sqrt(Math.max(s, 0));
 }
+/** Grandeurs par appui pour un champ de déplacements u (m) du modèle dynamique (signées). */
+function grandeursAppuis(md, u) {
+	const val = (i) => i < 0 ? 0 : u[i] ?? 0;
+	return md.appuis.map((ap) => {
+		const F = ap.ressort ? ap.ressort.k * (val(ap.ressort.i) - val(ap.ressort.j)) / 1e3 : 0;
+		const dTablier = val(ap.ddlTablier);
+		let dTete, dAppareils;
+		if (ap.type === "pile" && md.direction !== "z") {
+			dTete = val(ap.ddlTete);
+			dAppareils = dTablier - dTete;
+		} else {
+			dTete = Number.isFinite(ap.kSupport) && ap.kSupport > 0 ? F * 1e3 / ap.kSupport : 0;
+			dAppareils = Number.isFinite(ap.kAppareils) && ap.kAppareils > 0 ? F * 1e3 / ap.kAppareils : 0;
+		}
+		const g = {
+			F,
+			dTablier,
+			dTete,
+			dAppareils
+		};
+		const pile = md.piles.find((pl) => pl.id === ap.id);
+		if (pile) {
+			const base = pile.elements[0];
+			const ue = base.ddl.map((i) => val(i));
+			const f = base.k.map((l) => l.reduce((s, v, j) => s + v * ue[j], 0));
+			g.Vpied = (f[0] ?? 0) / 1e3;
+			g.Mpied = (f[1] ?? 0) / 1e3;
+		}
+		return g;
+	});
+}
 /** Réponse spectrale multimodale dans une direction. */
 function reponseDirection(p, a, m, direction, borne) {
 	const md = modeleDynamique(p, m, direction, borne);
@@ -4119,43 +4181,24 @@ function reponseDirection(p, a, m, direction, borne) {
 		const c = x.omega > 0 ? x.gamma * x.Sd / (x.omega * x.omega) : 0;
 		return phi.map((v) => v * c);
 	});
-	const val = (u, i) => i < 0 ? 0 : u[i] ?? 0;
 	const comb = (v) => facteur * combiner(v, omegas, xi, regle);
-	const appuis = md.appuis.map((ap) => {
-		const Fm = deplacements.map((u) => ap.ressort ? ap.ressort.k * (val(u, ap.ressort.i) - val(u, ap.ressort.j)) / 1e3 : 0);
-		const dT = deplacements.map((u) => val(u, ap.ddlTablier));
-		let dTete;
-		let dApp;
-		if (ap.type === "pile" && direction !== "z") {
-			dTete = deplacements.map((u) => val(u, ap.ddlTete));
-			dApp = dT.map((v, k) => v - (dTete[k] ?? 0));
-		} else {
-			dTete = Fm.map((F) => Number.isFinite(ap.kSupport) && ap.kSupport > 0 ? F * 1e3 / ap.kSupport : 0);
-			dApp = Fm.map((F) => Number.isFinite(ap.kAppareils) && ap.kAppareils > 0 ? F * 1e3 / ap.kAppareils : 0);
-		}
+	const parMode = deplacements.map((u) => grandeursAppuis(md, u));
+	const appuis = md.appuis.map((ap, ia) => {
+		const g = parMode.map((gm) => gm[ia]);
+		const Fm = g.map((x) => x.F);
 		const sortie = {
 			id: ap.id,
 			type: ap.type,
 			x: ap.x,
 			F: comb(Fm),
-			dTablier: ampD * comb(dT),
-			dTete: ampD * comb(dTete),
-			dAppareils: ampD * comb(dApp),
+			dTablier: ampD * comb(g.map((x) => x.dTablier)),
+			dTete: ampD * comb(g.map((x) => x.dTete)),
+			dAppareils: ampD * comb(g.map((x) => x.dAppareils)),
 			Fmodes: Fm
 		};
-		const pile = md.piles.find((pl) => pl.id === ap.id);
-		if (pile) {
-			const base = pile.elements[0];
-			const efforts = deplacements.map((u) => {
-				const ue = base.ddl.map((i) => val(u, i));
-				const f = base.k.map((l) => l.reduce((s, v, j) => s + v * ue[j], 0));
-				return {
-					V: (f[0] ?? 0) / 1e3,
-					M: (f[1] ?? 0) / 1e3
-				};
-			});
-			sortie.Vpied = comb(efforts.map((e) => e.V));
-			sortie.Mpied = comb(efforts.map((e) => e.M));
+		if (g[0]?.Vpied !== void 0) {
+			sortie.Vpied = comb(g.map((x) => x.Vpied ?? 0));
+			sortie.Mpied = comb(g.map((x) => x.Mpied ?? 0));
 		}
 		return sortie;
 	});

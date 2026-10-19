@@ -1943,3 +1943,18 @@ tr.mm-actif > * {
   font: italic 12px var(--police);
   fill: var(--texte-2);
 }
+
+/* --- Calcul temporel ---------------------------------------------------- */
+.th-courbe { width: 100%; height: auto; display: block; margin: 6px 0; }
+.th-axe { stroke: var(--texte-2); stroke-width: 1; }
+.th-grad { font: 11px var(--police); fill: var(--texte-2); }
+.th-acc { fill: none; stroke: var(--serie-1); stroke-width: 1; }
+.th-effort { fill: none; stroke: var(--serie-2); stroke-width: 1.2; }
+.th-curseur { stroke: #c0392b; stroke-width: 1.5; }
+.th-bande { fill: var(--alerte-fond); }
+.th-spectre-un { fill: none; stroke: var(--texte-2); stroke-width: 0.8; opacity: 0.45; }
+.th-spectre-moyen { fill: none; stroke: var(--serie-1); stroke-width: 2.6; }
+.th-spectre-cible { fill: none; stroke: var(--serie-2); stroke-width: 2; }
+.th-spectre-90 { fill: none; stroke: var(--serie-2); stroke-width: 1.4; stroke-dasharray: 6 4; }
+.th-legende { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.84rem; color: var(--texte-2); }
+.th-legende svg { vertical-align: middle; }

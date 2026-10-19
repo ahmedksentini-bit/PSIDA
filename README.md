@@ -202,6 +202,10 @@ direction (tablier, fûts en consoles à masse répartie, appareils, culées ; a
 Jacobi), masses effectives jusqu'à 90 %, combinaison SRSS ou CQC (éq. 4.6 à 4.9), efforts en tête et en pied d'appui, réactions
 verticales, comparaison au mode fondamental et déformées animées. Les efforts transmis aux appuis peuvent venir de l'une ou
 l'autre méthode ; la note sismique compare toujours les deux. L'inertie de la section du tablier est transmise à Pont EC8.
+Depuis la v0.47 : « Temporel linéaire » (EN 1998-2 § 4.2.3) dans l'onglet Méthodes : 7 accélérogrammes artificiels par direction
+ajustés au spectre élastique (EN 1998-1 § 3.2.3.1.2, contrôles affichés, graine fixe), superposition des modes de la multimodale
+avec intégration exacte (Nigam et Jennings), moyenne des extrêmes comparée à l'analyse spectrale, et animation du pont sous le
+séisme avec l'accélérogramme et l'effort d'un appui au cours du temps.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

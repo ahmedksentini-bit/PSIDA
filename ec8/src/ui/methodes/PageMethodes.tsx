@@ -10,9 +10,10 @@ import { Onglets, Panneau } from "../Onglets.tsx";
 import { aller, lien } from "../route.ts";
 import { AnimationMode } from "./AnimationMode.tsx";
 import { SchemaChoix } from "./SchemaChoix.tsx";
+import { PageTemporel } from "./PageTemporel.tsx";
 
-type SousOnglet = "choix" | "multimodale";
-const SOUS: SousOnglet[] = ["choix", "multimodale"];
+type SousOnglet = "choix" | "multimodale" | "temporel";
+const SOUS: SousOnglet[] = ["choix", "multimodale", "temporel"];
 type Vue = "synthese" | "modes" | "efforts" | "comparaison" | "note";
 
 const f = (v: number, d = 3) => formatNombre(Number(v.toFixed(d)) || 0);
@@ -52,8 +53,9 @@ const METHODES: Methode[] = [
     nom: "Calcul temporel linéaire",
     clause: "EN 1998-2 4.2.3 ; EN 1998-1 3.2.3",
     quand: "Alternative à la méthode spectrale, surtout pour comprendre la réponse dans le temps, ou quand des accélérogrammes de site sont imposés.",
-    donne: "Moyenne (au moins 7 accélérogrammes) ou maximum (3 à 6) des réponses extrêmes.",
-    dispo: "a_venir",
+    donne: "Moyenne des réponses extrêmes d'un jeu d'accélérogrammes compatibles avec le spectre (au moins 3 ; PSIDA en génère 7).",
+    dispo: "oui",
+    lien: lien("methodes", "temporel"),
   },
   {
     id: "pushover",
@@ -485,10 +487,12 @@ export default function PageMethodes({ projet, sous, modifier }: { projet: Proje
         onglets={[
           { id: "choix", titre: "Choisir la méthode" },
           { id: "multimodale", titre: "Analyse multimodale" },
+          { id: "temporel", titre: "Temporel linéaire" },
         ]}
       />
       <Panneau prefixe="methodes" actif={onglet} className="panneau-onglet">
         {onglet === "choix" && <Choix r={r} projet={projet} />}
+        {onglet === "temporel" && <PageTemporel projet={projet} a={a} m={m} r={r} />}
         {onglet === "multimodale" && (typeof mm === "string" ? <p className="probleme niveau-alerte">Analyse multimodale impossible : {mm}</p> : mm && <PageMultimodale projet={projet} mm={mm} modifier={modifier} />)}
       </Panneau>
     </main>
