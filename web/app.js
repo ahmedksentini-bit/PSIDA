@@ -356,9 +356,22 @@ function renderSection(st) {
   influencePlot($('#plot-IL'), st.deck, k.idx, Math.min(sup, st.deck.spans.length));
 }
 
-function formToHash(form) {
+/** Toutes les données du formulaire, cases à cocher comprises (0 ou 1 : FormData omet les cases décochées). */
+function formSnapshot(form) {
   const d = Object.fromEntries(new FormData(form).entries());
-  d.chamoaSign = form.chamoaSign.checked ? 1 : 0; d.withTherm = form.withTherm.checked ? 1 : 0;
+  for (const el of form.querySelectorAll('input[type=checkbox][name]')) d[el.name] = el.checked ? 1 : 0;
+  return d;
+}
+/** Affecte des données au formulaire (lien partagé, projet ouvert) : les éditeurs et blocs conditionnels se redessinent. */
+function applyData(form, d) {
+  for (const [k, v] of Object.entries(d)) {
+    const el = form.elements[k]; if (!el) continue;
+    if (el.type === 'checkbox') el.checked = v === true || v === 'on' || !!+v; else el.value = v;
+  }
+  if (d.bp_agrement && $('#bp-agrement')) { $('#bp-agrement').value = d.bp_agrement; fillUnits(d.bp_unite); }
+}
+function formToHash(form) {
+  const d = formSnapshot(form);
   try { history.replaceState(null, '', `#${T.current()}/d=` + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(d)))))); } catch (e) { /* ignore */ }
 }
 // procédés de précontrainte (agréments) : listes déroulantes de l'onglet Précontrainte
@@ -381,7 +394,7 @@ function hashToForm(form) {
   if (!h) return false;
   try {
     const d = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(h)))));
-    for (const [k, v] of Object.entries(d)) { const el = form.elements[k]; if (!el) continue; if (el.type === 'checkbox') el.checked = !!+v; else el.value = v; if (k === 'bp_agrement' && $('#bp-agrement')) fillUnits(d.bp_unite); }
+    applyData(form, d);
     return true;
   } catch (e) { return false; }
 }
@@ -445,6 +458,50 @@ $('#concept-travures').addEventListener('click', ev => {
 $('#btn-hsearch').addEventListener('click', runThicknessSearch);
 $('#btn-concept2').addEventListener('click', () => $('#btn-concept').click());
 $('#rebar-x').addEventListener('change', () => state && state.rebar && renderRebar(state));
+// --- projet : enregistrer / ouvrir un fichier .json (toutes les données, et les efforts reçus de l'onglet sismique) ---
+const PROJ_FORMAT = 'psida-projet';
+const DEFAULTS = formSnapshot($('#f')); // valeurs à l'ouverture : complètent un projet enregistré par une version antérieure
+let projName = null;
+function setProjName(n) { projName = n; $('#proj-name').textContent = n ? n.replace(/\.json$/i, '') : ''; $('#proj-name').title = n || ''; }
+async function saveProject() {
+  const form = $('#f');
+  const spans = String(form.spans.value || '').split(/[,;\s]+/).filter(Boolean).join('-');
+  const name = projName || `projet-psida-${spans || 'ouvrage'}.json`;
+  const file = { format: PROJ_FORMAT, version: '0.44', date: new Date().toISOString(), data: formSnapshot(form) };
+  if (ec8Data) file.ec8 = ec8Data;
+  const txt = JSON.stringify(file, null, 1);
+  if (window.showSaveFilePicker) { // Chrome, Edge : choix du nom et du dossier
+    try {
+      const h = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'Projet PSIDA', accept: { 'application/json': ['.json'] } }] });
+      const w = await h.createWritable(); await w.write(txt); await w.close(); setProjName(h.name); return;
+    } catch (e) { if (e.name === 'AbortError') return; /* sinon : téléchargement ci-dessous */ }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'application/json' })); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  setProjName(name);
+}
+/** Lit un projet enregistré (ou un objet de données brut) et relance le calcul. */
+function loadProject(text, name) {
+  let j;
+  try { j = JSON.parse(text); } catch (e) { throw new Error('le fichier n\'est pas un JSON valide'); }
+  const d = j && j.format === PROJ_FORMAT ? j.data : j;
+  if (!d || typeof d !== 'object' || !('spans' in d)) throw new Error('ce fichier n\'est pas un projet PSIDA');
+  applyData($('#f'), { ...DEFAULTS, ...d });
+  ec8Data = j.ec8 || null; ec8Status();
+  setProjName(name); renderScheme(); $('#error').textContent = '';
+  $('#f').requestSubmit();
+}
+$('#btn-save').addEventListener('click', saveProject);
+$('#btn-open').addEventListener('click', () => $('#file-open').click());
+$('#file-open').addEventListener('change', ev => {
+  const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
+  f.text().then(t => loadProject(t, f.name)).catch(e => { $('#error').textContent = `Ouverture de « ${f.name} » impossible : ${e.message}`; });
+});
+document.addEventListener('keydown', ev => { // Ctrl+S, Ctrl+O
+  if (!(ev.ctrlKey || ev.metaKey) || ev.altKey) return;
+  const k = ev.key.toLowerCase();
+  if (k === 's') { ev.preventDefault(); saveProject(); } else if (k === 'o') { ev.preventDefault(); $('#file-open').click(); }
+});
 if (hashToForm($('#f'))) $('#f').requestSubmit();
 $('#case-select').addEventListener('change', () => state && renderCase(state));
 $('#surface-which').addEventListener('change', () => state && renderCase(state));
@@ -461,7 +518,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.43', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = await buildReport({ ...state, version: '0.44', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -498,7 +555,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.43', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.44', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -554,7 +611,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.43', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.44', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));

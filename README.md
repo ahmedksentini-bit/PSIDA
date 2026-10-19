@@ -187,6 +187,10 @@ Depuis la v0.42 : plan de ferraillage — l'épure décalée de a_l = d interpol
 les aciers requis franchissent la section des filantes ; le contrôle « mis en place ≥ requis » porte aussi sur l'épure décalée.
 Depuis la v0.43 : phase de chantier et convoi LM3 — l'ELS fréquent retient aussi le cas du gradient thermique dominant,
 G + 0,6 T (EN 1990 A2), en plus de G + ψ₁ Q + 0,5 T ; seule la colonne w_k peut changer.
+Depuis la v0.44 : boutons « Ouvrir » et « Enregistrer » à côté de « Calculer » (raccourcis Ctrl+O et Ctrl+S). Le projet est
+un fichier .json qui contient toutes les données de tous les onglets et, s'il y en a, les efforts reçus de l'onglet Calcul
+sismique ; à l'ouverture, les champs absents d'un fichier plus ancien prennent leur valeur par défaut et le calcul est relancé.
+Le lien partageable conserve désormais toutes les cases à cocher (frottement négatif, séisme, phase de chantier…).
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et
