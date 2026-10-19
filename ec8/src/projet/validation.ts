@@ -125,6 +125,13 @@ export function valider(p: Projet): Probleme[] {
       if (appui.appareils.nombre % futs.nombre !== 0) {
         sortie.push({ niveau: "alerte", cible: appui.id, message: "Le nombre d'appareils n'est pas un multiple du nombre de fûts : répartition uniforme sur la largeur." });
       }
+      if (appui.armatures) {
+        const { As, db, enrobage, rhoW } = appui.armatures;
+        if (!(As > 0) || !(db > 0) || !(enrobage > 0)) sortie.push({ niveau: "erreur", cible: appui.id, message: "Armatures des fûts : As, le diamètre des barres et l'enrobage doivent être strictement positifs." });
+        if (rhoW !== undefined && !(rhoW >= 0)) sortie.push({ niveau: "erreur", cible: appui.id, message: "Le taux d'armatures transversales ρw ne peut pas être négatif." });
+        if (enrobage > 0 && 2 * enrobage >= Math.min(futs.long, futs.forme === "circulaire" ? futs.long : futs.trans)) sortie.push({ niveau: "erreur", cible: appui.id, message: "L'enrobage des armatures dépasse la demi-épaisseur du fût." });
+      }
+      if (appui.facteurInertie !== undefined && !(appui.facteurInertie > 0 && appui.facteurInertie <= 1)) sortie.push({ niveau: "erreur", cible: appui.id, message: "Le facteur d'inertie effective des fûts doit être compris entre 0 et 1." });
       if (futs.hauteur / Math.min(futs.long, futs.forme === "circulaire" ? futs.long : futs.trans) > 25) {
         sortie.push({ niveau: "alerte", cible: appui.id, message: "Fûts très élancés : vérifier la pertinence de la méthode du mode fondamental et les effets du second ordre." });
       }

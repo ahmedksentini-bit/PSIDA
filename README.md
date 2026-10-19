@@ -206,6 +206,11 @@ Depuis la v0.47 : « Temporel linéaire » (EN 1998-2 § 4.2.3) dans l'onglet M�
 ajustés au spectre élastique (EN 1998-1 § 3.2.3.1.2, contrôles affichés, graine fixe), superposition des modes de la multimodale
 avec intégration exacte (Nigam et Jennings), moyenne des extrêmes comparée à l'analyse spectrale, et animation du pont sous le
 séisme avec l'accélérogramme et l'effort d'un appui au cours du temps.
+Depuis la v0.48 : « Poussée progressive » (EN 1998-2 § 4.2.5 et annexe H) dans l'onglet Méthodes : loi moment-courbure des
+fûts en fibres (matériaux probables et béton confiné de l'annexe E, bilinéaire à aires égales), rotule plastique L_p et capacité
+de rotation θ_p,d (E.16b à E.21, γ_R,p = 1,40), second ordre, rigidité effective (annexe C), déplacement cible par la
+multimodale à q = 1 (H.1) et par la méthode N2 (EN 1998-1 annexe B) pour comparaison, animation du pont poussé avec l'état des
+rotules. Les armatures des fûts calculées par PSIDA sont transmises à Pont EC8.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

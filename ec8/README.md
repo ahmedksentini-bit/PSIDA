@@ -58,6 +58,13 @@ Le **calcul temporel linéaire** (EN 1998-2 4.2.3) génère des accélérogramme
 (EN 1998-1 3.2.3.1.2), superpose les modes de la multimodale (intégration exacte de Nigam et Jennings) et retient la moyenne
 des extrêmes ; un sous-onglet anime le pont sous l'accélérogramme.
 
+La **poussée progressive** (EN 1998-2 4.2.5, annexe H) calcule la loi moment-courbure de chaque fût par fibres (annexe E :
+f_cm, 1,15 f_yk, 1,20 f_yk, béton confiné de Mander si `armatures.rhoW` > 0), la rotule plastique (E.16b, E.19 à E.21) et la
+courbe effort-déplacement avec le second ordre, pousse le tablier indéformable (appareils et culées élastiques) jusqu'au-delà du
+déplacement cible (multimodale à q = 1 avec J_eff = 1,2 M_Rd/(E_c φ_y), annexe C) et vérifie θ_p,E ≤ θ_p,d ; la méthode N2
+(EN 1998-1 annexe B) est donnée pour comparaison. Saisie : `appuis[i].armatures` { As (cm²), db (mm), enrobage (m), rhoW } ;
+`appuis[i].facteurInertie` réduit l'inertie des fûts dans le modèle.
+
 ## Référentiel
 
 Chaque entrée porte :

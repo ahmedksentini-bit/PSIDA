@@ -524,6 +524,59 @@ export const CALCUL_TEMPOREL_LINEAIRE: Regle = {
   note: "PSIDA traite chaque direction séparément, avec des accélérogrammes artificiels ajustés au spectre élastique, par superposition modale des modes retenus par l'analyse multimodale ; les directions se combinent ensuite par 100/30/30. Les efforts sont divisés par q, les déplacements restent ceux du calcul élastique.",
 };
 
+export const POUSSEE_PROGRESSIVE: Regle = {
+  id: "poussee_progressive",
+  type: "regle",
+  etape: "analyse",
+  libelle: "Analyse statique non linéaire en poussée progressive",
+  enonce:
+    "Analyse statique non linéaire sous charges horizontales croissantes, jusqu'au déplacement cible au point de référence (centre de masse du tablier) ; le déplacement cible est celui de l'analyse multimodale avec q = 1, fondée sur la rigidité effective des éléments ductiles ; elle donne la répartition des déformations et la séquence de formation des rotules ; vérification : rotation plastique θp,E ≤ θp,d en chaque rotule.",
+  references: [
+    { source: "NF_EN_1998_2", localisation: "4.2.5", page: "56" },
+    { source: "NF_EN_1998_2", localisation: "Annexe H, H.1 à H.3", page: "131" },
+  ],
+  statut: "verifie",
+  note: "Annexe H informative, maintenue informative par l'annexe nationale (AN.8), qui précise qu'il existe d'autres méthodes plus élaborées. PSIDA pousse le tablier supposé indéformable dans son plan, appareils et culées élastiques, fûts non linéaires.",
+};
+
+export const RIGIDITE_EFFECTIVE: Regle = {
+  id: "rigidite_effective",
+  type: "regle",
+  etape: "analyse",
+  libelle: "Rigidité effective des fûts en béton armé (méthode 2)",
+  enonce: "J_eff = 1,20 M_Rd / (E_c φ_y), où φ_y est la courbure à la limite élastique de l'idéalisation bilinéaire.",
+  references: [{ source: "NF_EN_1998_2", localisation: "Annexe C, C.3 (C.3)", page: "112" }],
+  statut: "verifie",
+  note: "Annexe C informative au niveau national (AN.4).",
+};
+
+export const CAPACITE_ROTATION: Regle = {
+  id: "capacite_rotation",
+  type: "regle",
+  etape: "verif_piles",
+  libelle: "Propriétés probables et capacité de rotation plastique",
+  enonce:
+    "Matériaux probables : fcm, béton confiné (E.1 à E.10), fym = 1,15 fyk, ftm = 1,20 fyk, εsu = εuk ; θp,u = (φu − φy) Lp (1 − Lp/2L) (E.16b), Lp = 0,10 L + 0,015 fyk dbL (E.19) ; réduction √(αs/3) si αs = L/d < 3 (E.20, E.21) ; θp,d = θp,u / γR,p avec γR,p = 1,40.",
+  references: [
+    { source: "NF_EN_1998_2", localisation: "Annexe E, E.2 (E.1) à (E.10)", page: "121" },
+    { source: "NF_EN_1998_2", localisation: "E.3.1(3), E.3.2 (E.16) à (E.21)", page: "124" },
+  ],
+  statut: "verifie",
+  note: "Annexe E informative au niveau national (AN.6). PSIDA calcule φy et φu par une analyse de section en fibres et une idéalisation bilinéaire à aires égales.",
+};
+
+export const DEPLACEMENT_CIBLE_N2: Regle = {
+  id: "deplacement_cible_n2",
+  type: "regle",
+  etape: "analyse",
+  libelle: "Déplacement cible par la méthode N2 (bâtiments)",
+  enonce:
+    "Système équivalent à un degré de liberté (m*, Γ), idéalisation élasto-plastique à énergies égales (d*y = 2(d*m − E*m/F*y)), T* = 2π √(m* d*y / F*y) ; d*t = Se(T*) (T*/2π)² si T* ≥ TC, sinon corrigé par qu.",
+  references: [{ source: "NF_EN_1998_1", localisation: "Annexe B, B.1 à B.5", page: "170" }],
+  statut: "verifie",
+  note: "Donné à titre de comparaison : pour les ponts, l'EN 1998-2 H.1 retient le déplacement de l'analyse multimodale.",
+};
+
 export const ACCELEROGRAMMES_ARTIFICIELS: Regle = {
   id: "accelerogrammes_artificiels",
   type: "regle",
@@ -566,4 +619,8 @@ export const MODELE: EntreeReferentiel[] = [
   MODELE_DYNAMIQUE,
   CALCUL_TEMPOREL_LINEAIRE,
   ACCELEROGRAMMES_ARTIFICIELS,
+  POUSSEE_PROGRESSIVE,
+  RIGIDITE_EFFECTIVE,
+  CAPACITE_ROTATION,
+  DEPLACEMENT_CIBLE_N2,
 ];

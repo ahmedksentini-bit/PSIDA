@@ -130,6 +130,10 @@ export interface Pile {
     entraxe: number;
     hauteur: number;
   };
+  /** Armatures longitudinales d'un fût, pour l'analyse non linéaire (pushover) : section totale (cm²), diamètre des barres (mm), enrobage (m), taux de confinement ρw. */
+  armatures?: { As: number; db: number; enrobage: number; rhoW?: number };
+  /** Rapport inertie effective / inertie brute des fûts (rigidité fissurée, EN 1998-2 annexe C) ; 1 par défaut. */
+  facteurInertie?: number;
   semelle: Semelle;
   appareils: LigneAppareils;
   butees: Butees;

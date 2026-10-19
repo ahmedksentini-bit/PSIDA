@@ -38,6 +38,12 @@ export function toPontEC8(st, opt = {}) {
   const Lfoot = (end) => (end ? width : (sp.pile.type === 'voile' ? (sp.pile.Lv ?? width) : width)) + 1.0;
   const semelle = end => ({ long: sp.found.B, trans: Lfoot(end), epaisseur: sp.found.hs });
   const Hpile = i => { const H = [].concat(sp.pile.H); return H[Math.min(H.length - 1, i - 1)] ?? H[0]; };
+  // armatures longitudinales du fût (une colonne ou le voile) retenues par PSIDA, pour la poussée progressive de Pont EC8 :
+  // barres Ø 20, axe des aciers à c + 1 cm du parement (comme le calcul en flexion composée de PSIDA)
+  const armatures = i => {
+    const l = supports.lines?.[i], sh = l?.EC?.shaft ?? l?.BAEL?.shaft;
+    return sh && sh.As > 0 ? { armatures: { As: Math.round(sh.As * 1e4 * 10) / 10, db: 20, enrobage: sp.mat.c ?? 0.04 } } : {};
+  };
   const appuis = Array.from({ length: n }, (_, i) => {
     const end = i === 0 || i === n - 1;
     if (!end) {
@@ -47,6 +53,7 @@ export function toPontEC8(st, opt = {}) {
         futs: col ? { forme: 'circulaire', nombre: P.nCol, long: P.D, trans: P.D, entraxe: width / P.nCol, hauteur: Hpile(i) + (P.hc || 0) }
           : { forme: 'rectangulaire', nombre: 1, long: P.b, trans: P.Lv ?? width, entraxe: 0, hauteur: Hpile(i) },
         semelle: semelle(false), appareils: appareils(i), butees: { transversales: false, longitudinales: false }, chargesPermanentes: charges(i),
+        ...armatures(i),
       };
     }
     const C = sp.culee, rem = C.type === 'remblayee';

@@ -144,6 +144,9 @@ test('Export Pont EC8 (ouvpara) : projet v1 complet et cohérent avec le tablier
   assert.equal(j.appuis[1].futs.forme, 'circulaire'); assert.equal(j.appuis[0].type, 'culee');
   rel(j.appuis[1].chargesPermanentes.Nmax, st.perm.Rmax[1] / 1000, 1e-12, 'N permanent pile (MN)');
   for (const a of j.appuis) assert.ok(a.appareils.a > 0 && a.appareils.nbFeuillets > 0);
+  // armatures du fût (pour la poussée progressive) : As d'une colonne, en cm²
+  rel(j.appuis[1].armatures.As, st.supports.lines[1].EC.shaft.As * 1e4, 1e-3, 'As fût (cm²)');
+  assert.ok(j.appuis[1].armatures.enrobage > 0 && j.appuis[1].armatures.db === 20);
 });
 
 test('Séisme (moteur Pont EC8 intégré) et chocs : combinaisons accidentelles des appuis', async () => {

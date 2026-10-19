@@ -56,12 +56,13 @@ const txtK = (k: number) => (k === Infinity ? "rigide" : `${nombre(k, 2)} MN/m`)
 
 export function inerties(appui: Pile): { Ix: number; Iy: number; aire: number } {
   const { forme, long, trans } = appui.futs;
+  const k = appui.facteurInertie && appui.facteurInertie > 0 ? appui.facteurInertie : 1;
   if (forme === "circulaire") {
-    const I = (Math.PI * long ** 4) / 64;
+    const I = (k * Math.PI * long ** 4) / 64;
     return { Ix: I, Iy: I, aire: (Math.PI * long ** 2) / 4 };
   }
   // Ix : flexion sous séisme longitudinal (épaisseur selon X) ; Iy : séisme transversal.
-  return { Ix: (trans * long ** 3) / 12, Iy: (long * trans ** 3) / 12, aire: long * trans };
+  return { Ix: (k * trans * long ** 3) / 12, Iy: (k * long * trans ** 3) / 12, aire: long * trans };
 }
 
 export function modele(p: Projet): Modele {

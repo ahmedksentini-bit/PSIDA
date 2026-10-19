@@ -11,9 +11,10 @@ import { aller, lien } from "../route.ts";
 import { AnimationMode } from "./AnimationMode.tsx";
 import { SchemaChoix } from "./SchemaChoix.tsx";
 import { PageTemporel } from "./PageTemporel.tsx";
+import { PagePushover } from "./PagePushover.tsx";
 
-type SousOnglet = "choix" | "multimodale" | "temporel";
-const SOUS: SousOnglet[] = ["choix", "multimodale", "temporel"];
+type SousOnglet = "choix" | "multimodale" | "temporel" | "pushover";
+const SOUS: SousOnglet[] = ["choix", "multimodale", "temporel", "pushover"];
 type Vue = "synthese" | "modes" | "efforts" | "comparaison" | "note";
 
 const f = (v: number, d = 3) => formatNombre(Number(v.toFixed(d)) || 0);
@@ -63,7 +64,8 @@ const METHODES: Methode[] = [
     clause: "EN 1998-2 4.2.5 et annexe H",
     quand: "Pont ductile (q > 1,5) : vérifier la formation des rotules plastiques et les demandes en rotation ; réponse assimilable à un système à un degré de liberté.",
     donne: "La courbe de capacité, le déplacement cible, la séquence des rotules et leurs rotations.",
-    dispo: "a_venir",
+    dispo: "oui",
+    lien: lien("methodes", "pushover"),
   },
   {
     id: "temporel_non_lineaire",
@@ -488,11 +490,13 @@ export default function PageMethodes({ projet, sous, modifier }: { projet: Proje
           { id: "choix", titre: "Choisir la méthode" },
           { id: "multimodale", titre: "Analyse multimodale" },
           { id: "temporel", titre: "Temporel linéaire" },
+          { id: "pushover", titre: "Poussée progressive" },
         ]}
       />
       <Panneau prefixe="methodes" actif={onglet} className="panneau-onglet">
         {onglet === "choix" && <Choix r={r} projet={projet} />}
         {onglet === "temporel" && <PageTemporel projet={projet} a={a} m={m} r={r} />}
+        {onglet === "pushover" && <PagePushover projet={projet} a={a} modifier={modifier} />}
         {onglet === "multimodale" && (typeof mm === "string" ? <p className="probleme niveau-alerte">Analyse multimodale impossible : {mm}</p> : mm && <PageMultimodale projet={projet} mm={mm} modifier={modifier} />)}
       </Panneau>
     </main>

@@ -306,6 +306,29 @@ function valider(p) {
 				cible: appui.id,
 				message: "Le nombre d'appareils n'est pas un multiple du nombre de fûts : répartition uniforme sur la largeur."
 			});
+			if (appui.armatures) {
+				const { As, db, enrobage, rhoW } = appui.armatures;
+				if (!(As > 0) || !(db > 0) || !(enrobage > 0)) sortie.push({
+					niveau: "erreur",
+					cible: appui.id,
+					message: "Armatures des fûts : As, le diamètre des barres et l'enrobage doivent être strictement positifs."
+				});
+				if (rhoW !== void 0 && !(rhoW >= 0)) sortie.push({
+					niveau: "erreur",
+					cible: appui.id,
+					message: "Le taux d'armatures transversales ρw ne peut pas être négatif."
+				});
+				if (enrobage > 0 && 2 * enrobage >= Math.min(futs.long, futs.forme === "circulaire" ? futs.long : futs.trans)) sortie.push({
+					niveau: "erreur",
+					cible: appui.id,
+					message: "L'enrobage des armatures dépasse la demi-épaisseur du fût."
+				});
+			}
+			if (appui.facteurInertie !== void 0 && !(appui.facteurInertie > 0 && appui.facteurInertie <= 1)) sortie.push({
+				niveau: "erreur",
+				cible: appui.id,
+				message: "Le facteur d'inertie effective des fûts doit être compris entre 0 et 1."
+			});
 			if (futs.hauteur / Math.min(futs.long, futs.forme === "circulaire" ? futs.long : futs.trans) > 25) sortie.push({
 				niveau: "alerte",
 				cible: appui.id,
@@ -1906,8 +1929,9 @@ const fmtK = (k, d = 2) => k === Infinity ? "\\infty" : tex(k, d);
 const txtK = (k) => k === Infinity ? "rigide" : `${nombre(k, 2)} MN/m`;
 function inerties(appui) {
 	const { forme, long, trans } = appui.futs;
+	const k = appui.facteurInertie && appui.facteurInertie > 0 ? appui.facteurInertie : 1;
 	if (forme === "circulaire") {
-		const I = Math.PI * long ** 4 / 64;
+		const I = k * Math.PI * long ** 4 / 64;
 		return {
 			Ix: I,
 			Iy: I,
@@ -1915,8 +1939,8 @@ function inerties(appui) {
 		};
 	}
 	return {
-		Ix: trans * long ** 3 / 12,
-		Iy: long * trans ** 3 / 12,
+		Ix: k * trans * long ** 3 / 12,
+		Iy: k * long * trans ** 3 / 12,
 		aire: long * trans
 	};
 }
@@ -3273,6 +3297,70 @@ const MODELE = [
 			page: "37"
 		}],
 		statut: "verifie"
+	},
+	{
+		id: "poussee_progressive",
+		type: "regle",
+		etape: "analyse",
+		libelle: "Analyse statique non linéaire en poussée progressive",
+		enonce: "Analyse statique non linéaire sous charges horizontales croissantes, jusqu'au déplacement cible au point de référence (centre de masse du tablier) ; le déplacement cible est celui de l'analyse multimodale avec q = 1, fondée sur la rigidité effective des éléments ductiles ; elle donne la répartition des déformations et la séquence de formation des rotules ; vérification : rotation plastique θp,E ≤ θp,d en chaque rotule.",
+		references: [{
+			source: "NF_EN_1998_2",
+			localisation: "4.2.5",
+			page: "56"
+		}, {
+			source: "NF_EN_1998_2",
+			localisation: "Annexe H, H.1 à H.3",
+			page: "131"
+		}],
+		statut: "verifie",
+		note: "Annexe H informative, maintenue informative par l'annexe nationale (AN.8), qui précise qu'il existe d'autres méthodes plus élaborées. PSIDA pousse le tablier supposé indéformable dans son plan, appareils et culées élastiques, fûts non linéaires."
+	},
+	{
+		id: "rigidite_effective",
+		type: "regle",
+		etape: "analyse",
+		libelle: "Rigidité effective des fûts en béton armé (méthode 2)",
+		enonce: "J_eff = 1,20 M_Rd / (E_c φ_y), où φ_y est la courbure à la limite élastique de l'idéalisation bilinéaire.",
+		references: [{
+			source: "NF_EN_1998_2",
+			localisation: "Annexe C, C.3 (C.3)",
+			page: "112"
+		}],
+		statut: "verifie",
+		note: "Annexe C informative au niveau national (AN.4)."
+	},
+	{
+		id: "capacite_rotation",
+		type: "regle",
+		etape: "verif_piles",
+		libelle: "Propriétés probables et capacité de rotation plastique",
+		enonce: "Matériaux probables : fcm, béton confiné (E.1 à E.10), fym = 1,15 fyk, ftm = 1,20 fyk, εsu = εuk ; θp,u = (φu − φy) Lp (1 − Lp/2L) (E.16b), Lp = 0,10 L + 0,015 fyk dbL (E.19) ; réduction √(αs/3) si αs = L/d < 3 (E.20, E.21) ; θp,d = θp,u / γR,p avec γR,p = 1,40.",
+		references: [{
+			source: "NF_EN_1998_2",
+			localisation: "Annexe E, E.2 (E.1) à (E.10)",
+			page: "121"
+		}, {
+			source: "NF_EN_1998_2",
+			localisation: "E.3.1(3), E.3.2 (E.16) à (E.21)",
+			page: "124"
+		}],
+		statut: "verifie",
+		note: "Annexe E informative au niveau national (AN.6). PSIDA calcule φy et φu par une analyse de section en fibres et une idéalisation bilinéaire à aires égales."
+	},
+	{
+		id: "deplacement_cible_n2",
+		type: "regle",
+		etape: "analyse",
+		libelle: "Déplacement cible par la méthode N2 (bâtiments)",
+		enonce: "Système équivalent à un degré de liberté (m*, Γ), idéalisation élasto-plastique à énergies égales (d*y = 2(d*m − E*m/F*y)), T* = 2π √(m* d*y / F*y) ; d*t = Se(T*) (T*/2π)² si T* ≥ TC, sinon corrigé par qu.",
+		references: [{
+			source: "NF_EN_1998_1",
+			localisation: "Annexe B, B.1 à B.5",
+			page: "170"
+		}],
+		statut: "verifie",
+		note: "Donné à titre de comparaison : pour les ponts, l'EN 1998-2 H.1 retient le déplacement de l'analyse multimodale."
 	}
 ];
 //#endregion

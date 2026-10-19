@@ -21,7 +21,7 @@ interface Serie {
 }
 
 /** Petit graphique SVG (axes, graduations, séries, curseur vertical éventuel). */
-export function Courbe({ series, xlabel, ylabel, logx = false, curseur, hauteur = 240, xmin, xmax, bande }: { series: Serie[]; xlabel: string; ylabel: string; logx?: boolean; curseur?: number; hauteur?: number; xmin?: number; xmax?: number; bande?: [number, number] }) {
+export function Courbe({ series, xlabel, ylabel, logx = false, curseur, hauteur = 240, xmin, xmax, bande, reperes = [], pastille }: { series: Serie[]; xlabel: string; ylabel: string; logx?: boolean; curseur?: number; hauteur?: number; xmin?: number; xmax?: number; bande?: [number, number]; reperes?: { x: number; texte: string; classe: string }[]; pastille?: [number, number] }) {
   const W = 880, H = hauteur, g = 56, d = 16, h = 26, b = 40;
   const tous = series.flatMap((s) => s.points);
   const x0 = xmin ?? Math.min(...tous.map((p) => p[0])), x1 = xmax ?? Math.max(...tous.map((p) => p[0]));
@@ -49,12 +49,19 @@ export function Courbe({ series, xlabel, ylabel, logx = false, curseur, hauteur 
       {series.map((s, i) => (
         <polyline key={i} points={s.points.map(([x, y]) => `${X(x).toFixed(1)},${Y(y).toFixed(1)}`).join(" ")} className={s.classe} />
       ))}
+      {reperes.map((r, i) => (
+        <g key={`r${i}`}>
+          <line x1={X(r.x)} x2={X(r.x)} y1={h} y2={H - b} className={r.classe} />
+          <text x={X(r.x) > W - 140 ? X(r.x) - 4 : X(r.x) + 4} y={H - b - 8 - 14 * (i % 3)} className="th-grad" textAnchor={X(r.x) > W - 140 ? "end" : "start"}>{r.texte}</text>
+        </g>
+      ))}
       {curseur !== undefined && <line x1={X(curseur)} x2={X(curseur)} y1={h} y2={H - b} className="th-curseur" />}
+      {pastille && <circle cx={X(pastille[0])} cy={Y(pastille[1])} r={5} className="po-pastille" />}
     </svg>
   );
 }
 
-function Legende({ items }: { items: { classe: string; nom: string }[] }) {
+export function Legende({ items }: { items: { classe: string; nom: string }[] }) {
   return (
     <p className="th-legende">
       {items.map((x) => (
