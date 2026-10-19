@@ -12,9 +12,10 @@ import { AnimationMode } from "./AnimationMode.tsx";
 import { SchemaChoix } from "./SchemaChoix.tsx";
 import { PageTemporel } from "./PageTemporel.tsx";
 import { PagePushover } from "./PagePushover.tsx";
+import { PageTemporelNL } from "./PageTemporelNL.tsx";
 
-type SousOnglet = "choix" | "multimodale" | "temporel" | "pushover";
-const SOUS: SousOnglet[] = ["choix", "multimodale", "temporel", "pushover"];
+type SousOnglet = "choix" | "multimodale" | "temporel" | "pushover" | "nonlineaire";
+const SOUS: SousOnglet[] = ["choix", "multimodale", "temporel", "pushover", "nonlineaire"];
 type Vue = "synthese" | "modes" | "efforts" | "comparaison" | "note";
 
 const f = (v: number, d = 3) => formatNombre(Number(v.toFixed(d)) || 0);
@@ -73,7 +74,8 @@ const METHODES: Methode[] = [
     clause: "EN 1998-2 4.2.4",
     quand: "En complément d'une analyse spectrale (sauf ponts isolés ou irréguliers) : ductilité locale, ponts irréguliers, ouvrages importants.",
     donne: "Les demandes en rotation plastique et en déplacement au cours du temps ; moyenne sur au moins 7 paires d'accélérogrammes.",
-    dispo: "a_venir",
+    dispo: "oui",
+    lien: lien("methodes", "nonlineaire"),
   },
   {
     id: "isolation",
@@ -491,12 +493,14 @@ export default function PageMethodes({ projet, sous, modifier }: { projet: Proje
           { id: "multimodale", titre: "Analyse multimodale" },
           { id: "temporel", titre: "Temporel linéaire" },
           { id: "pushover", titre: "Poussée progressive" },
+          { id: "nonlineaire", titre: "Temporel non linéaire" },
         ]}
       />
       <Panneau prefixe="methodes" actif={onglet} className="panneau-onglet">
         {onglet === "choix" && <Choix r={r} projet={projet} />}
         {onglet === "temporel" && <PageTemporel projet={projet} a={a} m={m} r={r} />}
         {onglet === "pushover" && <PagePushover projet={projet} a={a} modifier={modifier} />}
+        {onglet === "nonlineaire" && <PageTemporelNL projet={projet} a={a} />}
         {onglet === "multimodale" && (typeof mm === "string" ? <p className="probleme niveau-alerte">Analyse multimodale impossible : {mm}</p> : mm && <PageMultimodale projet={projet} mm={mm} modifier={modifier} />)}
       </Panneau>
     </main>

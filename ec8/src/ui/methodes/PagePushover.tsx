@@ -12,7 +12,7 @@ const f = (v: number, d = 3) => formatNombre(Number(v.toFixed(d)) || 0);
 const NOMS: Record<DirectionPO, string> = { x: "Longitudinal (X)", y: "Transversal (Y)" };
 type Vue = "synthese" | "animation" | "sections" | "armatures" | "note";
 
-function etatRotule(e: EtatPushover["piles"][number] | undefined): "elastique" | "plastique" | "depasse" {
+export function etatRotule(e: EtatPushover["piles"][number] | undefined): "elastique" | "plastique" | "depasse" {
   if (!e || !e.plastique) return "elastique";
   return e.rapport > 1 ? "depasse" : "plastique";
 }
@@ -126,7 +126,7 @@ function Synthese({ r }: { r: Pushover }) {
 }
 
 /** Déformée d'un fût en console : partie élastique (cubique) + rotation plastique en pied. */
-function deformee(c: CapacitePile, delta: number, n = 16): { z: number; u: number }[] {
+export function deformee(c: CapacitePile, delta: number, n = 16): { z: number; u: number }[] {
   const de = Math.min(delta, c.deltaY);
   const thetaP = delta > c.deltaY ? (delta - c.deltaY) / c.L : 0;
   return Array.from({ length: n + 1 }, (_, j) => {

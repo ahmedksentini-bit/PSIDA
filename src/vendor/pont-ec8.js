@@ -3361,6 +3361,24 @@ const MODELE = [
 		}],
 		statut: "verifie",
 		note: "Donné à titre de comparaison : pour les ponts, l'EN 1998-2 H.1 retient le déplacement de l'analyse multimodale."
+	},
+	{
+		id: "calcul_temporel_non_lineaire",
+		type: "regle",
+		etape: "analyse",
+		libelle: "Calcul temporel non linéaire (analyse dynamique non linéaire)",
+		enonce: "Intégration directe des équations du mouvement non linéaires sous des accélérogrammes, charges gravitaires et second ordre compris ; en complément d'une analyse spectrale, sauf ponts isolés ou irréguliers ; avec au moins 7 accélérogrammes, la moyenne des réponses est la valeur de calcul, sinon le maximum ; matériaux probables, forme des boucles d'hystérésis représentative ; vérification θp,E ≤ θp,d.",
+		references: [{
+			source: "NF_EN_1998_2",
+			localisation: "4.2.4.1 à 4.2.4.3",
+			page: "54"
+		}, {
+			source: "NF_EN_1998_2",
+			localisation: "4.2.4.4(2) (4.22), (4.23)",
+			page: "55"
+		}],
+		statut: "verifie",
+		note: "PSIDA : tablier indéformable (un degré de liberté par direction), fûts non linéaires (courbe de la poussée progressive idéalisée en bilinéaire) en série avec les appareils, loi de Takeda modifiée ou bilinéaire cinématique, différences centrales, une direction à la fois avec les accélérogrammes artificiels du calcul temporel linéaire."
 	}
 ];
 //#endregion

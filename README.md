@@ -211,6 +211,11 @@ fûts en fibres (matériaux probables et béton confiné de l'annexe E, bilinéa
 de rotation θ_p,d (E.16b à E.21, γ_R,p = 1,40), second ordre, rigidité effective (annexe C), déplacement cible par la
 multimodale à q = 1 (H.1) et par la méthode N2 (EN 1998-1 annexe B) pour comparaison, animation du pont poussé avec l'état des
 rotules. Les armatures des fûts calculées par PSIDA sont transmises à Pont EC8.
+Depuis la v0.49 : « Temporel non linéaire » (EN 1998-2 § 4.2.4) dans l'onglet Méthodes : tablier indéformable à un degré de
+liberté par direction, fûts non linéaires (courbe de la poussée, second ordre compris) en série avec les appareils, lois
+d'hystérésis de Takeda modifiée ou bilinéaire, différences centrales, 7 accélérogrammes artificiels et moyenne des réponses
+(§ 4.2.4.3), vérification θ_p,E ≤ θ_p,d, déplacements résiduels, multiplicateur de l'action pour étudier la réserve et
+détection de l'effondrement ; boucles d'hystérésis et animation du pont sous le séisme.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

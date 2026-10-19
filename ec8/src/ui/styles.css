@@ -1974,3 +1974,5 @@ tr.mm-actif > * {
 .po-saisie input { width: 6.5em; }
 .po-saisie td, .po-saisie th { white-space: nowrap; }
 .po-appareil { stroke: var(--texte-2); stroke-width: 3; }
+.table-defilante { overflow-x: auto; }
+.ligne-total th, .ligne-total td { font-weight: 600; border-top: 2px solid var(--texte-2); }

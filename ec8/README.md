@@ -65,6 +65,11 @@ déplacement cible (multimodale à q = 1 avec J_eff = 1,2 M_Rd/(E_c φ_y), annex
 (EN 1998-1 annexe B) est donnée pour comparaison. Saisie : `appuis[i].armatures` { As (cm²), db (mm), enrobage (m), rhoW } ;
 `appuis[i].facteurInertie` réduit l'inertie des fûts dans le modèle.
 
+Le **calcul temporel non linéaire** simplifié (EN 1998-2 4.2.4) réduit le pont à un oscillateur par direction (tablier
+indéformable) ; chaque pile est un fût non linéaire (courbe de la poussée idéalisée en bilinéaire, pente post-élastique
+négative possible par P-Δ) en série avec ses appareils ; lois de Takeda modifiée (décharge k₀ (δy/δmax)^0,5, recharge vers le
+pic opposé) ou bilinéaire cinématique ; différences centrales ; moyenne sur 7 accélérogrammes (4.2.4.3) ; θ_p,E ≤ θ_p,d.
+
 ## Référentiel
 
 Chaque entrée porte :
