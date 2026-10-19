@@ -5,6 +5,7 @@
  */
 import { profilPressio } from '../src/vendor/fond-figures.js';
 import { seismicBlocks } from './seismic_note.js';
+import { menardSchema, bulbSchema, footingRebarSchema, pileRebarSchema, capRebarSchema } from './fond_plans.js';
 import { svgBlock, supportSchema, distributionChart, sideBySide, pairWidth, pileProfileCharts, footingPressureChart, barChart } from './note_figures.js';
 
 /** Figure du sondage (bureau de calcul fond.ksr-infra.org) : essais, ou à défaut valeurs de couche en escalier. */
@@ -226,9 +227,20 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
       : 'NF P 94-261 (annexe D, guide Cerema 2015) : p*_le moyenne géométrique de p*_l sur [D ; D + h_r] (h_r = 1,5 B, réduit selon l\'excentrement à l\'ELU), D_e = (1/p*_le)∫p*_l dz ; k_p (tableau D.2.3, D_e/B ≤ 2), i_δ (D.2.4), R_v;d = A\' k_p p*_le i_δ/(γ_R;v γ_R;d;v), γ_R;v = 1,4 (ELU), 2,3 (ELS), γ_R;d;v = 1,2, R₀ = A q₀ déduit ; A\' = A(1 − 2e/B) ; 1 − 2e/B ≥ 1/15 (ELU), 1/2 (ELS car.) ; glissement (ELU) V tan φ\'/(γ_R;h γ_R;d;h), γ_R;h = γ_R;d;h = 1,1. Ferraillage par bielles, minimum 0,12 % par nappe. ELS quasi-permanent (1 − 2e/B ≥ 2/3) non vérifié.');
     table(['Ligne', 'Bielles : N\' = N(1 + 3e/B) [kN] ; b ; d [m]', 'A_bielles = N\'(B − b)/(8 d f_su) [cm²]', 'Consoles : combinaison ; e [m]', 'q_max ; q(x₁) [kPa] ; x₁ [m]', 'M₁ [kN·m/m]', 'A_consoles = M₁ L/(0,9 d f_su) [cm²]', 'A_min 0,12 % [cm²]', 'Retenu [cm²]'], Ls.map(L => { const f = L[code].found, bi = f.bielles, co = f.console; return [lineName(L, n), `${F0(bi.N)} ; ${F2(bi.b)} ; ${F2(bi.d)}`, CM(bi.As) + (f.method === 'bielles' ? ' ←' : ''), co ? `${co.label} ; ${F2(co.e)}` : '-', co ? `${F1(co.qmax)} ; ${F1(co.q1)} ; ${F2(co.x1)}` : '-', co ? F1(co.M1) : '-', co ? CM(co.As) + (f.method === 'console' ? ' ←' : '') : '-', CM(f.AsMin), CM(f.AsLong)]; }), { small: true });
     comment('Aciers inférieurs parallèles à B (nappe principale, sur toute la longueur L de la semelle). Méthode des bielles (BAEL, DTU 13.12) si la semelle est assez épaisse (d ≥ (B − b)/4) et la résultante dans le noyau central (e ≤ B/6) : N\' = N(1 + 3e/B), combinaison ELU donnant le plus grand N\'. Sinon méthode des consoles : contrainte du sol linéaire (trapèze, ou triangle de longueur 3(B/2 − e) si e > B/6), moment M₁ = ∫₀^x₁ q(x)(x₁ − x) dx dans la section S₁ à 0,35 b en arrière du nu de l\'appui (x₁ = (B − b)/2 + 0,35 b), côté le plus comprimé, poids de la semelle et des terres sur le débord négligés (sécurité), bras de levier z = 0,9 d, f_su = f_e/1,15. Minimum 0,12 % de la section par nappe (PP73 1.1.1).');
+    if (!opts.noFigures) {
+      const c0 = Ls.find(L => L.kind === 'culee'), pw = Ls.filter(L => L.kind !== 'culee').reduce((a, L) => (!a || L[code].found.AsLong > a[code].found.AsLong ? L : a), null);
+      for (const Lr of [c0, pw].filter(Boolean)) { try { const fr = footingRebarSchema(sup, Lr, code); if (fr) B.push(svgBlock(fr, `${lineName(Lr, n)} — plan de ferraillage de la semelle (barres proposées pour les sections calculées)`)); } catch (e) { /* plan indisponible */ } }
+    }
     if (Ls.some(L => L[code].found.settle && !L[code].found.settle.error)) {
       table(['Ligne', 'V_qp [kN] ; q\' [kPa]', 'σ\'_v0 = γ D [kPa] ; q\' − σ\'_v0', 'E₁ ; E₂ ; E₃,₅ ; E₆,₈ ; E₉,₁₆ [MPa]', 'E_d [MPa] ; α', 'λ_c ; λ_d', 's_c + s_d = s_f [mm]', 'θ = M_qp/K_θ [mrad] ; Δs bord [mm]'], Ls.map(L => { const t = L[code].found.settle; if (!t || t.error) return [lineName(L, n), '-', '-', '-', '-', '-', t && t.error ? t.error : '-', '-']; return [lineName(L, n), `${F0(t.q * L[code].found.B * L[code].found.L)} ; ${F1(t.q)}`, `${F1(t.sigmaV0)} ; ${F1(t.dq)}`, [t.E1, t.E2, t.E35, t.E68, t.E916].map(F1).join(' ; '), `${F1(t.Ed)} ; ${F2(t.alpha)}`, `${F2(t.lc)} ; ${F2(t.ld)}`, `${F1(t.sc)} + ${F1(t.sd)} = ${F1(t.s)}`, `${F2(t.theta * 1000)} ; ${F1(t.dTilt)}`]; }), { small: true });
       comment(`Tassement final sous charges quasi permanentes (part soutenue de la combinaison ELS la plus chargée, hors crue) par la méthode pressiométrique de Ménard (${isF ? 'Fascicule 62 titre V annexe F.2' : 'NF P 94-261 annexe H'}) : s_c = α (q' − σ'_v0) λ_c B/(9 E_c), s_d = 2 (q' − σ'_v0) B₀ (λ_d B/B₀)^α/(9 E_d), B₀ = 0,6 m, E_c = E₁, E_d ${isF ? '4/E_d = 1/E₁ + 1/(0,85 E₂) + 1/E₃,₅ + 1/(2,5 E₆,₈) + 1/(2,5 E₉,₁₆)' : '1/E_d = 0,25/E₁ + 0,3/E₂ + 0,25/E₃,₅ + 0,1/E₆,₈ + 0,1/E₉,₁₆'}, E_i moyenne harmonique de E_M sur la tranche i d'épaisseur B/2. Le tassement différentiel entre lignes d'appui est à reporter dans le calcul du tablier (dénivellations d'appui).`);
+      if (!opts.noFigures) {
+        const Lt = Ls.filter(L => L[code].found.settle && !L[code].found.settle.error).reduce((a, L) => (!a || L[code].found.settle.s > a[code].found.settle.s ? L : a), null);
+        if (Lt) {
+          try { const m = menardSchema(sup, Lt, code); if (m) B.push(svgBlock(m, `${lineName(Lt, n)} (tassement le plus fort) — découpage de Ménard : 16 tranches de B/2, modules regroupés, tassements sphérique et déviatorique`)); } catch (e) { /* figure indisponible */ }
+          try { const bb = bulbSchema(sup, Lt, code); if (bb) B.push(svgBlock(bb, `${lineName(Lt, n)} — bulbe des contraintes de Boussinesq sous la semelle et profil sur l'axe`)); } catch (e) { /* figure indisponible */ }
+        }
+      }
     }
     if (!opts.noFigures) { const fp = Ls.map(L => { try { return footingPressureChart(L, code); } catch (e) { return null; } }).filter(Boolean); for (let k = 0; k < fp.length; k += 2) B.push(fp[k + 1] ? svgBlock(sideBySide(fp[k].svg, fp[k + 1].svg), `${fp[k].caption} ; ${fp[k + 1].caption}`) : svgBlock(sideBySide([fp[k].svg], null, 10, pairWidth(fp.map(x => x.svg))), fp[k].caption)); }
   } else {
@@ -238,6 +250,10 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
       const shTxt = isF ? `τ_u ${F2(sh.tau)} / ${F2(sh.lim)} MPa ${sh.ok ? 'OK' : 'NON'} ; A_t/s ${CM(Math.max(sh.AtS, sh.AtSmin))} cm²/m` : `V ${F0(f.shear.TmaxU)} / V_Rd,c ${F0(sh.VRdc)} kN ; A_sw/s ${CM(Math.max(sh.AtS, sh.AtSmin))} cm²/m ${sh.ok ? '' : '(V_Rd,max dépassé : NON)'}`;
       return [lineName(L, n), `${f.nF} × ${f.nP} Ø ${F2(f.D)}, L = ${F1(f.Lpile)}${(sup.sp.found.incl || []).some(a => a) ? `, incl. ${sup.sp.found.incl.join(' / ')}°` : ''}`, F0(f.k), `${F0(f.NmaxU)} / ${F0(f.NminU)}`, F0(f.NmaxS), `${F0(mm)} ; ${F0(f.shear.TmaxU)}`, f.cap.applicable ? `${F2(f.capRatio.ELU)} ${ok(f.capRatio.ELU)} / ${F2(f.capRatio.ELS)} ${ok(f.capRatio.ELS)}${trac}` : `non calculable : ${f.cap.motif}`, f.group ? `${F2(f.group.Ce)} ; ${F2(f.group.ratio)} ${ok(f.group.ratio)}` : '—', `${CM(f.As)} (min ${CM(f.Amin)})`, shTxt];
     }), { small: true });
+    if (!opts.noFigures) {
+      const Lpm = Ls.reduce((a, L) => (!a || L[code].found.As > a[code].found.As ? L : a), null);
+      try { const pr = pileRebarSchema(sup, Lpm, code); if (pr) B.push(svgBlock(pr, `${lineName(Lpm, n)} — plan de ferraillage d'un pieu (section d'acier la plus forte) : élévation, moments du modèle de Winkler, coupe`)); } catch (e) { /* plan indisponible */ }
+    }
     // --- portance du pieu isolé : détail du calcul ---
     const capL = Ls.filter(L => L[code].found.cap && L[code].found.cap.applicable && L[code].found.cap.detail);
     if (capL.length) {
@@ -324,6 +340,10 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
         return [lineName(L, n), F2(t.h), `${F1(t.theta)}° ${t.thetaOk ? 'OK' : 'NON (< 45° : calcul en dalle)'}`, t.hOk ? 'OK' : `NON (${F2(t.hmin)} m)`, `${CM(t.A1U)} / ${CM(t.A1S)}`, CM(t.total), F2(t.band), CM(t.A2), CM(t.Aanchor), t.punchOk === null ? 'sans objet (PP73 § 4.6.2 : pieux d\'angle, > 2 pieux, θ ≥ 45°)' : `${F0(L[code].found.NmaxS)} / ${F0(t.Rpunch)} kN ${t.punchOk ? 'OK' : 'NON'}`];
       }), { small: true });
       comment(`PP73 pièce 1.3.2 § 4.3 : tirant par couple de pieux A₁ = R (l/2 − b/4)/(h σ̄), R = réaction la plus élevée d'un pieu du couple, à l'ELU (f_su) et à l'ELS (σ̄_s = ${F1(L0s(Ls, code).sigSels)} MPa${isF ? ', fissuration très préjudiciable' : ', 0,8 f_yk'}) ; domaine : bielles inclinées à 45° au moins (h ≥ l/2 − b/4) ; A₁ réparti sur Ø + h_s au droit des pieux ; armatures de répartition A'₁ et longitudinales A₂ ≥ 1/3 de la densité de A₁ ; poinçonnement du pieu d'angle R ≤ (2/3)(h + Ø) h σ₂₈ (σ₂₈ = 2 MPa). La note du Pont de Noé applique au tirant la charge totale de la semelle au lieu de la réaction d'un pieu.`);
+      if (!opts.noFigures) {
+        const Lc = Ls.filter(L => L[code].found.tie).reduce((a, L) => (!a || L[code].found.tie.A1 > a[code].found.tie.A1 ? L : a), null);
+        if (Lc) try { const cr = capRebarSchema(sup, Lc, code); if (cr) B.push(svgBlock(cr, `${lineName(Lc, n)} — plan de ferraillage de la semelle sur deux files de pieux (tirant le plus fort)`)); } catch (e) { /* plan indisponible */ }
+      }
     }
     if (f0.nF >= 3) {
       h2('Semelles sur plusieurs files de pieux — bielles généralisées (PP73 1.3.2 ch. 4)');

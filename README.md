@@ -222,6 +222,12 @@ amortissement effectifs avec itérations sur d_cd (7.5.4, tableau 7.1), rigidit�
 DP / LBDP / UBDP (7.5.2.4, annexe J) et règle des 15 %, vérification des isolateurs à γ_IS d_d (7.6.2, AN : 1,5), capacité de
 rappel (7.7.1), comparaison au pont non isolé et contrôle temporel non linéaire avec les rapports ρ_d, ρ_v ≥ 0,80 (7.5.5(6),
 7.5.6) ; boucle, itérations et animation du tablier sur ses isolateurs.
+Depuis la v0.51 : schémas des fondations tracés à partir des résultats du projet, dans l'onglet Appuis et la note
+(`web/fond_plans.js`) : découpage de Ménard en 16 tranches de B/2 avec le regroupement des modules et les tassements,
+bulbe des contraintes de Boussinesq (formule de Newmark) sous la semelle la plus tassée, plans de ferraillage de la semelle
+superficielle (coupe, vue en plan, nomenclature ; bielles ou section S₁ des consoles), d'un pieu (élévation, ancrage dans la
+semelle, moments du modèle de Winkler, coupe) et de la semelle sur deux files de pieux (bandes de tirants, retours d'ancrage).
+Les barres sont proposées par PSIDA pour couvrir les sections calculées et restent à reprendre sur les plans d'exécution.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

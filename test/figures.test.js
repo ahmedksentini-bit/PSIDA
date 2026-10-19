@@ -54,3 +54,24 @@ test('Chapitre sismique : spectres de réponse, spectre en déplacement, efforts
   for (const b of B.filter(b => b.t === 'math')) assert.ok(!/(^|[^\\])%/.test(b.tex), `% non échappé : ${b.tex}`);
   assert.ok(!B.some(b => b.t === 'math' && /^\s*:/.test(b.tex)), 'deux-points orphelin');
 });
+
+test('Fondations : Ménard, bulbe de Boussinesq et plans de ferraillage tracés à partir des résultats', async () => {
+  const { boussinesqRect, pileBars, pileHoops } = await import('../web/fond_plans.js');
+  // Boussinesq-Newmark : 0,25 q sous le coin d'un grand rectangle, centre d'une semelle 4 × 13 à z = 2 m ≈ 0,81 q
+  assert.ok(Math.abs(boussinesqRect(0, 1e-3, 4, 13) - 1) < 1e-3);
+  assert.ok(Math.abs(boussinesqRect(0, 2, 4, 13) - 0.81) < 0.01);
+  assert.ok(Math.abs(boussinesqRect(2, 1e-3, 4, 1e4) - 0.5) < 1e-2);
+  // pieu Ø 0,80 : minimum 25,1 cm² → 8 HA20 ; cerces 8 cm²/m (deux brins) → HA12 e = 25 ou équivalent plus léger
+  const lb = pileBars(25.1e-4, 0.8); assert.deepEqual([lb.n, lb.phi], [8, 20]);
+  const hp = pileHoops(8e-4, 20); assert.ok(hp.As >= 8e-4 && hp.phi >= 10);
+  for (const found of ['superficielle', 'pieux']) {
+    const st = compute(parseData({ ...formDefaults(), ap_found: found }));
+    for (const ref of ['F61', 'EC']) {
+      const svgs = supportsBlocks(st.supports, ref).filter(b => b.t === 'svg');
+      const caps = svgs.map(b => b.caption).join(' | ');
+      const att = found === 'superficielle' ? ['découpage de Ménard', 'bulbe des contraintes', 'plan de ferraillage de la semelle'] : ['plan de ferraillage d\'un pieu', 'semelle sur deux files de pieux'];
+      for (const k of att) assert.ok(caps.includes(k), `${found}/${ref} : ${k}`);
+      for (const b of svgs) assert.ok(!/NaN|undefined|Infinity/.test(b.svg), `${b.caption} : valeur invalide`);
+    }
+  }
+});
