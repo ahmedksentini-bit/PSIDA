@@ -235,4 +235,30 @@ export interface Projet {
   elastomeres: Elastomeres;
   service: Service;
   options: OptionsCalcul;
+  /** Isolation sismique (EN 1998-2 chapitre 7) : isolateurs sous toutes les lignes d'appui. */
+  isolation?: Isolation;
+}
+
+/** Système d'isolation : un type d'isolateur, le nombre par ligne étant celui des appareils d'appui. */
+export interface Isolation {
+  type: "lrb" | "pendule";
+  /** Appareil à noyau de plomb : force caractéristique Q_d = F_0 (MN) et raideur post-élastique K_d = K_p (MN/m) par isolateur. */
+  Qd: number;
+  Kd: number;
+  /** Rapport K_e/K_p (élastique / post-élastique), 10 par défaut. */
+  rapportKe: number;
+  /** Pendule à friction : rayon de courbure R (m) et coefficient de frottement dynamique μ_d. */
+  R: number;
+  mu: number;
+  /** Capacité de déplacement d_m de chaque isolateur (m). */
+  capacite: number;
+  /** Coefficients de modification λ_U des propriétés limites supérieures (UBDP), sur K_p et F_0 (annexe J). */
+  lambdaKp: number;
+  lambdaF0: number;
+  /** Coefficient γ_IS (7.6.2(1)P ; AN : 1,5). */
+  gammaIS: number;
+  /** Déplacement des isolateurs dû aux actions permanentes, au retrait-fluage et à 50 % de la température (m). */
+  deplacementPermanent: number;
+  /** Le site est à plus de 10 km d'une faille active connue (7.5.3(1)P a). */
+  loinFaille: boolean;
 }

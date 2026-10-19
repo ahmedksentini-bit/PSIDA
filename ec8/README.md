@@ -70,6 +70,10 @@ indéformable) ; chaque pile est un fût non linéaire (courbe de la poussée id
 négative possible par P-Δ) en série avec ses appareils ; lois de Takeda modifiée (décharge k₀ (δy/δmax)^0,5, recharge vers le
 pic opposé) ou bilinéaire cinématique ; différences centrales ; moyenne sur 7 accélérogrammes (4.2.4.3) ; θ_p,E ≤ θ_p,d.
 
+Le **pont isolé** (EN 1998-2 chapitre 7) se décrit par `isolation` { type "lrb" (Qd, Kd en MN et MN/m, rapportKe) ou
+"pendule" (R, mu), capacite, lambdaKp, lambdaF0, gammaIS, deplacementPermanent, loinFaille } ; mode fondamental itératif
+(7.4 à 7.10, tableau 7.1), DP/LBDP/UBDP, vérifications 7.6.2 et 7.7.1, contrôle temporel (7.5.6).
+
 ## Référentiel
 
 Chaque entrée porte :

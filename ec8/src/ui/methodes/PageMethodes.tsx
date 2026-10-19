@@ -13,9 +13,10 @@ import { SchemaChoix } from "./SchemaChoix.tsx";
 import { PageTemporel } from "./PageTemporel.tsx";
 import { PagePushover } from "./PagePushover.tsx";
 import { PageTemporelNL } from "./PageTemporelNL.tsx";
+import { PageIsolation } from "./PageIsolation.tsx";
 
-type SousOnglet = "choix" | "multimodale" | "temporel" | "pushover" | "nonlineaire";
-const SOUS: SousOnglet[] = ["choix", "multimodale", "temporel", "pushover", "nonlineaire"];
+type SousOnglet = "choix" | "multimodale" | "temporel" | "pushover" | "nonlineaire" | "isolation";
+const SOUS: SousOnglet[] = ["choix", "multimodale", "temporel", "pushover", "nonlineaire", "isolation"];
 type Vue = "synthese" | "modes" | "efforts" | "comparaison" | "note";
 
 const f = (v: number, d = 3) => formatNombre(Number(v.toFixed(d)) || 0);
@@ -83,7 +84,8 @@ const METHODES: Methode[] = [
     clause: "EN 1998-2 chapitre 7",
     quand: "Appareils spéciaux (élastomère fretté à fort amortissement, appareils à noyau de plomb, pendules à friction) qui allongent la période et dissipent l'énergie.",
     donne: "Raideur et amortissement effectifs itérés ; mode fondamental (7.5.4), multimodale (7.5.5) ou temporel (7.5.6).",
-    dispo: "a_venir",
+    dispo: "oui",
+    lien: lien("methodes", "isolation"),
   },
 ];
 
@@ -494,6 +496,7 @@ export default function PageMethodes({ projet, sous, modifier }: { projet: Proje
           { id: "temporel", titre: "Temporel linéaire" },
           { id: "pushover", titre: "Poussée progressive" },
           { id: "nonlineaire", titre: "Temporel non linéaire" },
+          { id: "isolation", titre: "Pont isolé" },
         ]}
       />
       <Panneau prefixe="methodes" actif={onglet} className="panneau-onglet">
@@ -501,6 +504,7 @@ export default function PageMethodes({ projet, sous, modifier }: { projet: Proje
         {onglet === "temporel" && <PageTemporel projet={projet} a={a} m={m} r={r} />}
         {onglet === "pushover" && <PagePushover projet={projet} a={a} modifier={modifier} />}
         {onglet === "nonlineaire" && <PageTemporelNL projet={projet} a={a} />}
+        {onglet === "isolation" && <PageIsolation projet={projet} a={a} r={r} modifier={modifier} />}
         {onglet === "multimodale" && (typeof mm === "string" ? <p className="probleme niveau-alerte">Analyse multimodale impossible : {mm}</p> : mm && <PageMultimodale projet={projet} mm={mm} modifier={modifier} />)}
       </Panneau>
     </main>

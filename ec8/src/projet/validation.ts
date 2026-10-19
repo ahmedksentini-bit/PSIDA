@@ -96,6 +96,14 @@ export function valider(p: Projet): Probleme[] {
     if (v !== undefined && !(v > 0)) sortie.push({ niveau: "erreur", cible: "tablier", message: `${nom} du tablier doit être strictement positive (laisser vide pour la valeur par défaut).` });
   }
 
+  // Isolation sismique (variante de l'onglet Méthodes)
+  if (p.isolation) {
+    const i = p.isolation;
+    const ko = (v: number) => !(v > 0);
+    if (i.type === "lrb" ? ko(i.Qd) || ko(i.Kd) || !(i.rapportKe > 1) : ko(i.R) || ko(i.mu)) sortie.push({ niveau: "erreur", cible: "isolation", message: "Isolateurs : paramètres de la loi bilinéaire à saisir (strictement positifs ; K_e/K_p > 1)." });
+    if (ko(i.capacite) || ko(i.gammaIS) || ko(i.lambdaKp) || ko(i.lambdaF0) || i.deplacementPermanent < 0) sortie.push({ niveau: "erreur", cible: "isolation", message: "Isolateurs : capacité, γ_IS et coefficients λ_U strictement positifs, déplacement permanent positif ou nul." });
+  }
+
   // Appuis
   if (appuis.length !== tablier.travees.length + 1) {
     sortie.push({ niveau: "erreur", cible: "appuis", message: `Il faut ${tablier.travees.length + 1} appuis pour ${tablier.travees.length} travée(s) ; ${appuis.length} sont définis.` });

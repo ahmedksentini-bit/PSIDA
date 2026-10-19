@@ -1976,3 +1976,12 @@ tr.mm-actif > * {
 .po-appareil { stroke: var(--texte-2); stroke-width: 3; }
 .table-defilante { overflow-x: auto; }
 .ligne-total th, .ligne-total td { font-weight: 600; border-top: 2px solid var(--texte-2); }
+/* Pont isolé */
+.iso-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px 18px; margin: 12px 0; }
+.iso-champ { display: grid; grid-template-columns: 1fr 7em 4em; align-items: center; gap: 6px; font-size: 0.9rem; }
+.iso-champ input { width: 100%; }
+.iso-unite { color: var(--texte-2); font-size: 0.85rem; }
+.iso-conditions { list-style: none; padding: 0; margin: 8px 0; font-size: 0.9rem; }
+.iso-conditions .ok { color: var(--texte); }
+.iso-conditions .ko { color: #c0392b; font-weight: 600; }
+.iso-isolateur { fill: #f5b041; stroke: var(--texte); stroke-width: 1; }

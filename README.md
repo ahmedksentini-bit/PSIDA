@@ -216,6 +216,12 @@ liberté par direction, fûts non linéaires (courbe de la poussée, second ordr
 d'hystérésis de Takeda modifiée ou bilinéaire, différences centrales, 7 accélérogrammes artificiels et moyenne des réponses
 (§ 4.2.4.3), vérification θ_p,E ≤ θ_p,d, déplacements résiduels, multiplicateur de l'action pour étudier la réserve et
 détection de l'effondrement ; boucles d'hystérésis et animation du pont sous le séisme.
+Depuis la v0.50 : « Pont isolé » (EN 1998-2 chapitre 7) dans l'onglet Méthodes : variante à isolateurs (élastomère à noyau de
+plomb ou pendule à friction) sous toutes les lignes d'appui, loi bilinéaire (7.5.2.3), mode fondamental à rigidité et
+amortissement effectifs avec itérations sur d_cd (7.5.4, tableau 7.1), rigidité composée avec les piles (7.11), propriétés
+DP / LBDP / UBDP (7.5.2.4, annexe J) et règle des 15 %, vérification des isolateurs à γ_IS d_d (7.6.2, AN : 1,5), capacité de
+rappel (7.7.1), comparaison au pont non isolé et contrôle temporel non linéaire avec les rapports ρ_d, ρ_v ≥ 0,80 (7.5.5(6),
+7.5.6) ; boucle, itérations et animation du tablier sur ses isolateurs.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

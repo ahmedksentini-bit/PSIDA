@@ -592,6 +592,86 @@ export const CALCUL_TEMPOREL_NON_LINEAIRE: Regle = {
   note: "PSIDA : tablier indéformable (un degré de liberté par direction), fûts non linéaires (courbe de la poussée progressive idéalisée en bilinéaire) en série avec les appareils, loi de Takeda modifiée ou bilinéaire cinématique, différences centrales, une direction à la fois avec les accélérogrammes artificiels du calcul temporel linéaire.",
 };
 
+export const ISOLATION_BILINEAIRE: Regle = {
+  id: "isolation_bilineaire",
+  type: "regle",
+  etape: "modele",
+  libelle: "Isolateurs : approximation bilinéaire du comportement hystérétique",
+  enonce:
+    "Relation effort-déplacement bilinéaire : raideur élastique K_e, raideur post-élastique K_p, effort à déplacement nul F_0, déplacement de plastification d_y ; énergie dissipée par cycle au déplacement d_d : E_D = 4 F_0 (d_d − d_y). Appareils à noyau de plomb : K_e = K_L + K_R, K_p = K_R. Pendules à friction : K_p = N_Sd/R_b, F_0 = μ_d N_Sd, E_D = 4 μ_d N_Sd d_d.",
+  references: [
+    { source: "NF_EN_1998_2", localisation: "7.5.2.3.2, figure 7.1 ; 7.5.2.3.3(9) ; 7.5.2.3.5", page: "92" },
+  ],
+  statut: "verifie",
+};
+
+export const ISOLATION_MODE_FONDAMENTAL: Regle = {
+  id: "isolation_mode_fondamental",
+  type: "regle",
+  etape: "analyse",
+  libelle: "Pont isolé : analyse spectrale par le mode fondamental",
+  enonce:
+    "Tablier rigide à un degré de liberté : K_eff = Σ K_eff,i (7.4), rigidité composée de l'isolateur et de l'infrastructure (7.11) ; ξ_eff = ΣE_D,i / (2π K_eff d_cd²) (7.5) ; T_eff = 2π √(M_d/K_eff) (7.6) ; η_eff = √(0,10/(0,05 + ξ_eff)) (7.9) ; tableau 7.1 : pour T_C ≤ T_eff < T_D, S_e = 2,5 (T_C/T_eff) η_eff a_g S et d_cd = (T_eff/T_C) d_C, d_C = 0,625/π² a_g S η_eff T_C² (7.8) ; V_d = M_d S_e = K_eff d_cd (7.10) ; itérations sur d_cd jusqu'à ±5 % (7.5.4(4)). Conditions (7.5.3) : site à plus de 10 km d'une faille active, sol A, B, C ou E, ξ_eff ≤ 0,30.",
+  references: [
+    { source: "NF_EN_1998_2", localisation: "7.5.3 et 7.5.4, tableau 7.1", page: "97" },
+  ],
+  statut: "verifie",
+};
+
+export const ISOLATION_VARIABILITE: Regle = {
+  id: "isolation_variabilite",
+  type: "regle",
+  etape: "modele",
+  libelle: "Variabilité des propriétés des isolateurs (UBDP, LBDP)",
+  enonce:
+    "Deux analyses : propriétés limites supérieures (UBDP, efforts maximaux) et inférieures (LBDP, déplacements maximaux) ; UBDP = maxDP_nom · Π λ_U,fi avec λ_U,fi = 1 + (λ_max,fi − 1) ψ_fi (J.4, J.5) ; pour les élastomères et appuis à frottement courants, LBDP = minDP_nom (J.7) ; analyse multimodale ou temporelle sur les DP seulement si d_cd(UBDP) et d_cd(LBDP) restent à ±15 % de d_cd(DP) (7.5.2.4(4)).",
+  references: [
+    { source: "NF_EN_1998_2", localisation: "7.5.2.4", page: "96" },
+    { source: "NF_EN_1998_2", localisation: "Annexe J (J.4) à (J.7), annexe JJ (λ_max)", page: "134" },
+  ],
+  statut: "verifie",
+  note: "Annexe JJ informative au niveau national (AN.9). Les λ_U sont saisis par l'utilisateur (défauts : 1,3 sur K_p et 1,1 sur F_0, élastomère à faible amortissement à T_min = 0 °C, tableau JJ.2).",
+};
+
+export const ISOLATION_VERIFICATIONS: Regle = {
+  id: "isolation_verifications",
+  type: "regle",
+  etape: "verif_appareils_appui",
+  libelle: "Vérification du système d'isolation et de l'infrastructure",
+  enonce:
+    "Déplacements de calcul des isolateurs majorés : d_d,in = γ_IS d_d (7.19), augmentés des déplacements dus aux actions permanentes, au retrait-fluage et à 50 % de l'action thermique ; tous les composants doivent fonctionner à ce déplacement total ; efforts dans l'infrastructure et la superstructure divisés par q ≤ 1,50 (7.6.3(2)), comportement essentiellement élastique.",
+  references: [
+    { source: "NF_EN_1998_2", localisation: "7.6.2 (7.19), 7.6.3", page: "102" },
+    { source: "NF_EN_1998_2_NA", localisation: "7.6.2(1)P : γ_IS = 1,5 (ou 1,0 avec un système de défense d'ultime secours)", page: "12" },
+  ],
+  statut: "verifie",
+};
+
+export const ISOLATION_RAPPEL: Regle = {
+  id: "isolation_rappel",
+  type: "regle",
+  etape: "verif_appareils_appui",
+  libelle: "Capacité de rappel latéral du système d'isolation",
+  enonce:
+    "Le système doit limiter l'accroissement cumulé des déplacements : ΔF_m (augmentation de l'effort entre d_m/2 et d_m) ≥ δ_w W_d d_rm/d_m et d_rm ≤ d_m − δ_d d_d,in (7.24), avec δ_w = 0,015 et δ_d = 0,5 (valeurs recommandées, AN) ; déplacement résiduel d_rm d'un système bilinéaire : tableau 7.2N, d_r = F_0/K_p ; pendule : d_rm = μ_d R_b.",
+  references: [{ source: "NF_EN_1998_2", localisation: "7.7.1, (7.24), tableau 7.2N", page: "105" }],
+  statut: "a_verifier",
+  note: "L'expression (7.24a) est illisible dans la copie numérisée disponible ; la forme ΔF_m ≥ δ_w W_d d_rm/d_m est à confirmer sur le texte de la norme.",
+};
+
+export const ISOLATION_TEMPOREL: Regle = {
+  id: "isolation_temporel",
+  type: "regle",
+  etape: "analyse",
+  libelle: "Pont isolé : analyse multimodale ou temporelle bornée par le mode fondamental",
+  enonce:
+    "Le déplacement du centre de rigidité et l'effort tranchant total issus d'une analyse multimodale ou temporelle (7.5.6(3)) ne doivent pas être inférieurs à 80 % de ceux du mode fondamental : ρ_d = d_d,m/d_d,f ≥ 0,80, ρ_v = V_d,m/V_d,f ≥ 0,80 ; sinon, multiplier les effets par 0,80/ρ.",
+  references: [
+    { source: "NF_EN_1998_2", localisation: "7.5.5(6) et (7), 7.5.6", page: "101" },
+  ],
+  statut: "verifie",
+};
+
 export const ACCELEROGRAMMES_ARTIFICIELS: Regle = {
   id: "accelerogrammes_artificiels",
   type: "regle",
@@ -639,4 +719,10 @@ export const MODELE: EntreeReferentiel[] = [
   CAPACITE_ROTATION,
   DEPLACEMENT_CIBLE_N2,
   CALCUL_TEMPOREL_NON_LINEAIRE,
+  ISOLATION_BILINEAIRE,
+  ISOLATION_MODE_FONDAMENTAL,
+  ISOLATION_VARIABILITE,
+  ISOLATION_VERIFICATIONS,
+  ISOLATION_RAPPEL,
+  ISOLATION_TEMPOREL,
 ];
