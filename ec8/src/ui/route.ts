@@ -1,6 +1,6 @@
 // Navigation par l'adresse : #/<onglet>/<sous-onglet>/<ancre>.
 
-export type OngletPrincipal = "projet" | "action" | "modele" | "analyse" | "verifications" | "referentiel";
+export type OngletPrincipal = "projet" | "action" | "modele" | "analyse" | "methodes" | "verifications" | "referentiel";
 
 export interface Route {
   onglet: OngletPrincipal;
@@ -8,7 +8,7 @@ export interface Route {
   ancre: string | null;
 }
 
-const ONGLETS: OngletPrincipal[] = ["projet", "action", "modele", "analyse", "verifications", "referentiel"];
+const ONGLETS: OngletPrincipal[] = ["projet", "action", "modele", "analyse", "methodes", "verifications", "referentiel"];
 
 export function lireRoute(): Route {
   const [, onglet = "", sous, ancre] = window.location.hash.split("/").map((s) => decodeURIComponent(s));

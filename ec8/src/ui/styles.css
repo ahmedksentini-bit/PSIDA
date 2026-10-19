@@ -1788,3 +1788,158 @@ table.valeurs td.vide {
     padding: 0 8px;
   }
 }
+
+/* --- Méthodes d'analyse : animation des modes et logigramme -------------------------------------- */
+.mm-animation {
+  margin: 8px 0 14px;
+}
+.mm-animation svg {
+  width: 100%;
+  height: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--bord);
+  border-radius: var(--rayon);
+}
+.mm-animation figcaption {
+  font-size: 0.84rem;
+  color: var(--texte-2);
+  margin-top: 6px;
+}
+.mm-animation .amplification label {
+  display: flex;
+  flex: 1 1 260px;
+  align-items: center;
+  gap: 8px;
+}
+.mm-reference {
+  fill: none;
+  stroke: var(--texte-2);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+.mm-reference-plein {
+  fill: none;
+  stroke: var(--texte-2);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+.mm-tablier {
+  fill: none;
+  stroke: var(--serie-1);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+.mm-tablier-plein {
+  fill: var(--serie-1);
+  fill-opacity: 0.35;
+  stroke: var(--serie-1);
+  stroke-width: 2;
+}
+.mm-axe {
+  fill: none;
+  stroke: var(--serie-1);
+  stroke-width: 1.2;
+  stroke-dasharray: 10 4 2 4;
+}
+.mm-fut {
+  fill: none;
+  stroke: var(--serie-2);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mm-appareil {
+  fill: var(--texte);
+}
+.mm-culee {
+  fill: var(--neutre-fond);
+  stroke: var(--texte-2);
+}
+.mm-pile {
+  fill: var(--serie-2);
+  fill-opacity: 0.6;
+  stroke: var(--serie-2);
+}
+.mm-sol {
+  stroke: var(--texte-2);
+  stroke-width: 2;
+}
+.mm-etiquette {
+  font: 600 12px var(--police);
+  fill: var(--texte);
+  text-anchor: middle;
+}
+.mm-legende {
+  font: 12px var(--police);
+  fill: var(--texte-2);
+}
+.mm-liste-modes {
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+tr.mm-actif > * {
+  background: var(--accent-fond);
+}
+.mm-cartes {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 1100px) {
+  .mm-cartes {
+    grid-template-columns: 1fr;
+  }
+}
+.mm-methodes td {
+  min-width: 180px;
+  vertical-align: top;
+  font-size: 0.88rem;
+}
+.schema-choix {
+  width: 100%;
+  max-width: 1000px;
+  height: auto;
+}
+.choix-debut,
+.choix-methode,
+.choix-question,
+.choix-complement {
+  stroke-width: 1.4;
+}
+.choix-debut {
+  fill: var(--neutre-fond);
+  stroke: var(--texte-2);
+}
+.choix-question {
+  fill: var(--alerte-fond);
+  stroke: var(--alerte);
+}
+.choix-methode {
+  fill: var(--accent-fond);
+  stroke: var(--accent);
+}
+.choix-complement {
+  fill: var(--ok-fond);
+  stroke: var(--ok);
+  stroke-dasharray: 5 3;
+}
+.choix-titre {
+  font: 600 13px var(--police);
+  fill: var(--texte);
+  text-anchor: middle;
+}
+.choix-texte {
+  font: 12px var(--police);
+  fill: var(--texte);
+  text-anchor: middle;
+}
+.choix-fleche {
+  fill: none;
+  stroke: var(--texte-2);
+  stroke-width: 1.4;
+}
+.choix-pointe {
+  fill: var(--texte-2);
+}
+.choix-oui-non {
+  font: italic 12px var(--police);
+  fill: var(--texte-2);
+}

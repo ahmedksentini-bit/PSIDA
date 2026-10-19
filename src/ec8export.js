@@ -73,7 +73,7 @@ export function toPontEC8(st, opt = {}) {
     site,
     materiaux: { beton: { classe: betonClasse(sp.mat.fck), fck: sp.mat.fck, masseVolumique: 2.5 }, acier: { fyk: sp.mat.fyk, classeDuctilite: 'B' } },
     tablier: { type: 'dalle_ba', travees: deck.spans.slice(), largeur: width, epaisseur: deck.h, aire: deck.area ?? di.area ?? width * deck.h, superstructures: superstr,
-      debordAbout: (di.overhangs || [0, 0])[0] || 0, chargeTrafic: 0 },
+      debordAbout: (di.overhangs || [0, 0])[0] || 0, chargeTrafic: 0, ...(p.I > 0 ? { inertieVerticale: p.I } : {}) },
     appuis,
     comportement: { qLongitudinal: opt.q?.long ?? 1, qTransversal: opt.q?.trans ?? 1, amortissement: 5, plateauOrigine: true },
     elastomeres: { T0: 10, Tmin: -20, lambdaMaxF1: 1.1, lambdaMaxF2: 1.1, psiFi: 0.7, gammaIS: 1.5, Kf: 0.6 },

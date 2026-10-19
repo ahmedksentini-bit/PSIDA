@@ -1,5 +1,3 @@
-// Moteur de Pont EC8 (sources ec8/, issues du dépôt ahmedksentini-bit/ouvpara) — EN 1998-2, méthode du mode fondamental, guide Cerema 2015.
-// Paquet ES produit par rolldown depuis ec8/psida/moteur.ts (cd ec8 && npm run build:engine) ; ne pas modifier ici.
 //#region src/projet/stockage.ts
 const estObjet = (v) => typeof v === "object" && v !== null;
 /** Contrôle de forme minimal d'un projet importé ; les contrôles de cohérence restent ceux de valider(). */
@@ -90,6 +88,20 @@ function derives(p) {
 		masseLineique,
 		masseTablier: masseLineique * longueur,
 		soumis
+	};
+}
+/** Inerties de flexion du tablier (m⁴) pour l'analyse multimodale, avec l'origine de chaque valeur. */
+function inertiesTablier(p) {
+	const { aire, epaisseur, largeur, inertieVerticale, inertieTransversale } = p.tablier;
+	const sv = typeof inertieVerticale === "number" && inertieVerticale > 0;
+	const st = typeof inertieTransversale === "number" && inertieTransversale > 0;
+	return {
+		verticale: sv ? inertieVerticale : aire * epaisseur ** 2 / 12,
+		transversale: st ? inertieTransversale : aire * largeur ** 2 / 12,
+		saisie: {
+			verticale: sv,
+			transversale: st
+		}
 	};
 }
 //#endregion
@@ -217,6 +229,14 @@ function valider(p) {
 		cible: "tablier",
 		message: "Le débord d'about ne peut pas être négatif."
 	});
+	for (const [cle, nom] of [["inertieVerticale", "L'inertie de flexion verticale"], ["inertieTransversale", "L'inertie de flexion transversale"]]) {
+		const v = tablier[cle];
+		if (v !== void 0 && !(v > 0)) sortie.push({
+			niveau: "erreur",
+			cible: "tablier",
+			message: `${nom} du tablier doit être strictement positive (laisser vide pour la valeur par défaut).`
+		});
+	}
 	if (appuis.length !== tablier.travees.length + 1) sortie.push({
 		niveau: "erreur",
 		cible: "appuis",
@@ -3150,7 +3170,79 @@ const MODELE = [
 	PERIODE_PILE_CONSOLE,
 	SECOND_ORDRE,
 	REACTIONS_VERTICALES,
-	TABLEAU_B_VERTICAL
+	TABLEAU_B_VERTICAL,
+	{
+		id: "analyse_spectrale",
+		type: "regle",
+		etape: "analyse",
+		libelle: "Analyse spectrale multimodale",
+		enonce: "Analyse élastique des réponses maximales de tous les modes significatifs, avec les ordonnées du spectre de calcul ; la réponse globale est une combinaison statistique des contributions modales. Applicable dans tous les cas où une analyse linéaire est autorisée. Modèle linéaire discret, en général spatial.",
+		references: [{
+			source: "NF_EN_1998_2",
+			localisation: "4.2.1.1(1) et (2)P",
+			page: "49"
+		}],
+		statut: "verifie"
+	},
+	{
+		id: "modes_significatifs",
+		type: "regle",
+		etape: "analyse",
+		libelle: "Modes significatifs : 90 % de la masse",
+		enonce: "Tous les modes à contribution importante sont pris en compte : critère satisfait si la somme des masses modales effectives des modes retenus atteint 90 % de la masse totale. Si ce n'est pas le cas après tous les modes de période T ≥ 0,033 s, on peut s'arrêter là à condition que ΣMi/M ≥ 0,70, en multipliant les effets par M/ΣMi.",
+		references: [{
+			source: "NF_EN_1998_2",
+			localisation: "4.2.1.2(1)P à (3)",
+			page: "49"
+		}],
+		statut: "verifie",
+		note: "PSIDA retient les modes dans l'ordre des périodes décroissantes jusqu'à 90 %, y compris des modes « rigides » (T < 0,033 s) quand c'est nécessaire, ce qui satisfait directement (2) sans recourir au facteur M/ΣMi de (3)."
+	},
+	{
+		id: "combinaison_modale",
+		type: "formule",
+		etape: "analyse",
+		libelle: "Combinaison des réponses modales (SRSS ou CQC)",
+		latex: "E = \\sqrt{\\sum_i E_i^2}\\ \\text{(SRSS)}, \\qquad E = \\sqrt{\\sum_i\\sum_j E_i\\,r_{ij}\\,E_j}\\ \\text{(CQC)}, \\qquad r_{ij} = \\dfrac{8\\sqrt{\\xi_i\\xi_j}\\,(\\xi_i + \\rho_{ij}\\xi_j)\\,\\rho_{ij}^{3/2}}{(1-\\rho_{ij}^2)^2 + 4\\xi_i\\xi_j\\rho_{ij}(1+\\rho_{ij}^2) + 4(\\xi_i^2+\\xi_j^2)\\rho_{ij}^2}",
+		variables: [
+			{
+				symbole: "E_i",
+				description: "effet de l'action sismique dans le mode i (signé)",
+				unite: "—"
+			},
+			{
+				symbole: "\\rho_{ij}",
+				description: "rapport des pulsations ωj/ωi (soit Ti/Tj)",
+				unite: "—"
+			},
+			{
+				symbole: "\\xi_i",
+				description: "taux d'amortissement visqueux du mode i",
+				unite: "—"
+			}
+		],
+		conditions: ["SRSS par défaut ; CQC quand deux périodes sont voisines : 0,1/(0,1 + √(ξiξj)) ≤ Ti/Tj ≤ 1 + 10√(ξiξj).", "L'effet est pris avec les deux signes."],
+		references: [{
+			source: "NF_EN_1998_2",
+			localisation: "4.2.1.3(1)P à (3), éq. (4.6) à (4.9)",
+			page: "49-50"
+		}],
+		statut: "verifie"
+	},
+	{
+		id: "modele_dynamique",
+		type: "regle",
+		etape: "modele",
+		libelle: "Modèle dynamique discret de PSIDA (poutres et ressorts)",
+		enonce: "Tablier en poutre (8 éléments par travée, 4 au moins au-delà de 6 travées, masse répartie, inertie verticale A·e²/12 et transversale A·B²/12 par défaut, ou saisies), indéformable axialement en X ; fûts de piles en consoles encastrées en pied (4 éléments, masse répartie) ; lignes d'appareils en ressorts (élastomère), liaisons rigides (fixes, butées) ou absentes (glissants) ; culées en ressorts k_appui ; en Z, appuis verticalement indéformables.",
+		references: [{
+			source: "NF_EN_1998_2",
+			localisation: "4.2.1.1(2)P (modèle linéaire discret)",
+			page: "49"
+		}],
+		statut: "verifie",
+		note: "Choix de modélisation propres à PSIDA ; la norme impose seulement un modèle discret approprié, compatible avec la mécanique et l'idéalisation de l'action sismique."
+	}
 ];
 //#endregion
 //#region src/moteur/analyse.ts
@@ -3511,6 +3603,821 @@ function analyse(p, a, m) {
 			reactions
 		},
 		conditions,
+		combinaisons,
+		note
+	};
+}
+//#endregion
+//#region src/moteur/valeurs-propres.ts
+const zeros = (n, m = n) => Array.from({ length: n }, () => new Array(m).fill(0));
+/** Factorisation de Cholesky : renvoie L triangulaire inférieure telle que A = L Lᵀ. */
+function cholesky(A) {
+	const n = A.length;
+	const L = zeros(n);
+	for (let j = 0; j < n; j++) {
+		const Lj = L[j];
+		let s = A[j][j];
+		for (let k = 0; k < j; k++) s -= Lj[k] * Lj[k];
+		if (!(s > 0)) throw new Error(`Matrice de masse non définie positive (pivot ${j} : ${s}).`);
+		const d = Math.sqrt(s);
+		Lj[j] = d;
+		for (let i = j + 1; i < n; i++) {
+			const Li = L[i];
+			let t = A[i][j];
+			for (let k = 0; k < j; k++) t -= Li[k] * Lj[k];
+			Li[j] = t / d;
+		}
+	}
+	return L;
+}
+/** Valeurs et vecteurs propres d'une matrice symétrique (Jacobi cyclique). Colonnes de V = vecteurs propres. */
+function jacobi(S, tolerance = 1e-12, balayagesMax = 100) {
+	const n = S.length;
+	const A = S.map((l) => l.slice());
+	const V = zeros(n);
+	for (let i = 0; i < n; i++) V[i][i] = 1;
+	const normeHorsDiag = () => {
+		let s = 0;
+		for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) s += A[i][j] ** 2;
+		return Math.sqrt(s);
+	};
+	let normeDiag = 0;
+	for (let i = 0; i < n; i++) normeDiag = Math.max(normeDiag, Math.abs(A[i][i]));
+	for (let b = 0; b < balayagesMax; b++) {
+		if (normeHorsDiag() <= tolerance * Math.max(normeDiag, 1e-300)) break;
+		for (let p = 0; p < n - 1; p++) for (let q = p + 1; q < n; q++) {
+			const apq = A[p][q];
+			if (Math.abs(apq) < 1e-300) continue;
+			const app = A[p][p];
+			const theta = (A[q][q] - app) / (2 * apq);
+			const t = Math.sign(theta || 1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+			const c = 1 / Math.sqrt(t * t + 1), s = t * c;
+			for (let k = 0; k < n; k++) {
+				const akp = A[k][p], akq = A[k][q];
+				A[k][p] = c * akp - s * akq;
+				A[k][q] = s * akp + c * akq;
+			}
+			for (let k = 0; k < n; k++) {
+				const apk = A[p][k], aqk = A[q][k];
+				A[p][k] = c * apk - s * aqk;
+				A[q][k] = s * apk + c * aqk;
+			}
+			for (let k = 0; k < n; k++) {
+				const vkp = V[k][p], vkq = V[k][q];
+				V[k][p] = c * vkp - s * vkq;
+				V[k][q] = s * vkp + c * vkq;
+			}
+		}
+	}
+	return {
+		valeurs: A.map((l, i) => l[i]),
+		V
+	};
+}
+/** Modes propres de K φ = ω² M φ, triés par pulsation croissante (période décroissante). */
+function modesPropres(K, M) {
+	const n = K.length;
+	if (n === 0) return [];
+	const L = cholesky(M);
+	const Linv = zeros(n);
+	for (let c = 0; c < n; c++) for (let i = 0; i < n; i++) {
+		let s = i === c ? 1 : 0;
+		for (let k = 0; k < i; k++) s -= L[i][k] * Linv[k][c];
+		Linv[i][c] = s / L[i][i];
+	}
+	const T = zeros(n);
+	for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+		let s = 0;
+		for (let k = 0; k <= i; k++) s += Linv[i][k] * K[k][j];
+		T[i][j] = s;
+	}
+	const A = zeros(n);
+	for (let i = 0; i < n; i++) for (let j = 0; j <= i; j++) {
+		let s = 0;
+		for (let k = 0; k <= j; k++) s += T[i][k] * Linv[j][k];
+		A[i][j] = s;
+		A[j][i] = s;
+	}
+	const { valeurs, V } = jacobi(A);
+	return valeurs.map((w2, c) => {
+		const y = V.map((l) => l[c]);
+		const phi = new Array(n).fill(0);
+		for (let i = n - 1; i >= 0; i--) {
+			let s = y[i];
+			for (let k = i + 1; k < n; k++) s -= L[k][i] * phi[k];
+			phi[i] = s / L[i][i];
+		}
+		return {
+			omega2: Math.max(w2, 0),
+			phi
+		};
+	}).sort((a, b) => a.omega2 - b.omega2);
+}
+//#endregion
+//#region src/moteur/multimodal.ts
+const T_RIGIDE = .002;
+/** Éléments par travée : 8 jusqu'à 6 travées, puis moins (au moins 4) pour garder un modèle de taille raisonnable. */
+const elementsTravee = (nTravees) => Math.max(4, Math.min(8, Math.round(48 / Math.max(nTravees, 1))));
+const ELEMENTS_PILE = 4;
+/** Matrices de rigidité et de masse cohérente d'un élément de poutre plane (w1, θ1, w2, θ2). */
+function elementPoutre(EI, mu, l) {
+	const a = EI / l ** 3;
+	const k = [
+		[
+			12 * a,
+			6 * l * a,
+			-12 * a,
+			6 * l * a
+		],
+		[
+			6 * l * a,
+			4 * l * l * a,
+			-6 * l * a,
+			2 * l * l * a
+		],
+		[
+			-12 * a,
+			-6 * l * a,
+			12 * a,
+			-6 * l * a
+		],
+		[
+			6 * l * a,
+			2 * l * l * a,
+			-6 * l * a,
+			4 * l * l * a
+		]
+	];
+	const b = mu * l / 420;
+	return {
+		k,
+		m: [
+			[
+				156 * b,
+				22 * l * b,
+				54 * b,
+				-13 * l * b
+			],
+			[
+				22 * l * b,
+				4 * l * l * b,
+				13 * l * b,
+				-3 * l * l * b
+			],
+			[
+				54 * b,
+				13 * l * b,
+				156 * b,
+				-22 * l * b
+			],
+			[
+				-13 * l * b,
+				-3 * l * l * b,
+				-22 * l * b,
+				4 * l * l * b
+			]
+		]
+	};
+}
+/** Construit le modèle dynamique de la direction étudiée. */
+function modeleDynamique(p, m, direction, borne) {
+	const d = derives(p);
+	const E = m.Ecm * 1e3;
+	const rho = p.materiaux.beton.masseVolumique;
+	const muTablier = (m.masses.tablier + m.masses.trafic) / d.longueur;
+	let n = 0;
+	const nouveau = () => n++;
+	const elements = [];
+	const ressorts = [];
+	const r = [];
+	const translation = [];
+	const xs = [0];
+	const net = elementsTravee(p.tablier.travees.length);
+	for (const t of p.tablier.travees) {
+		const x0 = xs.at(-1) ?? 0;
+		for (let k = 1; k <= net; k++) xs.push(x0 + t * k / net);
+	}
+	const ddlTablier = [];
+	let inertiesTab = null;
+	let masseTablierX = 0;
+	if (direction === "x") {
+		const u = nouveau();
+		translation.push(u);
+		xs.forEach(() => ddlTablier.push(u));
+		masseTablierX = muTablier * d.longueur;
+	} else {
+		const I = inertiesTablier(p);
+		inertiesTab = direction === "y" ? {
+			I: I.transversale,
+			saisie: I.saisie.transversale
+		} : {
+			I: I.verticale,
+			saisie: I.saisie.verticale
+		};
+		const rot = [];
+		for (let k = 0; k < xs.length; k++) {
+			const w = nouveau();
+			translation.push(w);
+			ddlTablier.push(w);
+			rot.push(nouveau());
+		}
+		for (let k = 0; k + 1 < xs.length; k++) {
+			const l = (xs[k + 1] ?? 0) - (xs[k] ?? 0);
+			const el = elementPoutre(E * inertiesTab.I, muTablier, l);
+			elements.push({
+				e: {
+					ddl: [
+						ddlTablier[k],
+						rot[k],
+						ddlTablier[k + 1],
+						rot[k + 1]
+					],
+					k: el.k,
+					longueur: l
+				},
+				m: el.m
+			});
+		}
+	}
+	const indicesAppuis = d.positions.map((_, i) => i * net);
+	const piles = [];
+	const appuis = [];
+	const liaisonsRigides = [];
+	const raideurs = direction === "z" ? null : m.directions[direction].appuis;
+	p.appuis.forEach((ap, ia) => {
+		const dT = ddlTablier[indicesAppuis[ia] ?? 0] ?? 0;
+		const x = d.positions[ia] ?? 0;
+		if (direction === "z") {
+			liaisonsRigides.push({
+				i: dT,
+				j: -1
+			});
+			appuis.push({
+				id: ap.id,
+				type: ap.type,
+				x,
+				ressort: null,
+				ddlTablier: dT,
+				ddlTete: -1,
+				rigide: true,
+				kSupport: Infinity,
+				kAppareils: Infinity
+			});
+			return;
+		}
+		const ra = raideurs[ia];
+		const kApp = ra.kAppareils[borne] * 1e3;
+		if (ap.type === "culee") {
+			const kTot = ra.kTotal[borne] * 1e3;
+			const entree = {
+				id: ap.id,
+				type: ap.type,
+				x,
+				ressort: null,
+				ddlTablier: dT,
+				ddlTete: -1,
+				rigide: false,
+				kSupport: ra.kSupport * 1e3,
+				kAppareils: kApp
+			};
+			if (kTot === Infinity) {
+				entree.rigide = true;
+				liaisonsRigides.push({
+					i: dT,
+					j: -1
+				});
+			} else if (kTot > 0) {
+				entree.ressort = {
+					i: dT,
+					j: -1,
+					k: kTot
+				};
+				ressorts.push(entree.ressort);
+			}
+			appuis.push(entree);
+			return;
+		}
+		const pile = ap;
+		const { Ix, Iy, aire } = inerties(pile);
+		const I = direction === "x" ? Ix : Iy;
+		const nf = pile.futs.nombre;
+		const h = pile.futs.hauteur;
+		const EI = nf * E * I;
+		const mu = nf * aire * rho;
+		const z = [0];
+		const ddlW = [-1];
+		const ddlR = [-1];
+		for (let k = 1; k <= ELEMENTS_PILE; k++) {
+			z.push(h * k / ELEMENTS_PILE);
+			const w = nouveau();
+			translation.push(w);
+			ddlW.push(w);
+			ddlR.push(nouveau());
+		}
+		const els = [];
+		for (let k = 0; k < ELEMENTS_PILE; k++) {
+			const l = h / ELEMENTS_PILE;
+			const el = elementPoutre(EI, mu, l);
+			const e = {
+				ddl: [
+					ddlW[k],
+					ddlR[k],
+					ddlW[k + 1],
+					ddlR[k + 1]
+				],
+				k: el.k,
+				longueur: l
+			};
+			els.push(e);
+			elements.push({
+				e,
+				m: el.m
+			});
+		}
+		const tete = ddlW[ELEMENTS_PILE];
+		piles.push({
+			id: ap.id,
+			appui: ia,
+			z,
+			ddl: ddlW,
+			elements: els,
+			masse: mu * h
+		});
+		const entree = {
+			id: ap.id,
+			type: ap.type,
+			x,
+			ressort: null,
+			ddlTablier: dT,
+			ddlTete: tete,
+			rigide: false,
+			kSupport: nf * 3 * E * I / h ** 3,
+			kAppareils: kApp
+		};
+		if (kApp === Infinity) {
+			entree.rigide = true;
+			liaisonsRigides.push({
+				i: dT,
+				j: tete
+			});
+		} else if (kApp > 0) {
+			entree.ressort = {
+				i: dT,
+				j: tete,
+				k: kApp
+			};
+			ressorts.push(entree.ressort);
+		}
+		appuis.push(entree);
+	});
+	const K = zeros(n);
+	const M = zeros(n);
+	for (const { e, m: me } of elements) for (let a = 0; a < 4; a++) {
+		const ia = e.ddl[a];
+		if (ia < 0) continue;
+		for (let b = 0; b < 4; b++) {
+			const ib = e.ddl[b];
+			if (ib < 0) continue;
+			K[ia][ib] += e.k[a][b];
+			M[ia][ib] += me[a][b];
+		}
+	}
+	if (direction === "x") M[0][0] += masseTablierX;
+	for (let i = 0; i < n; i++) r.push(translation.includes(i) ? 1 : 0);
+	let masse = 0;
+	for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) masse += r[i] * M[i][j] * r[j];
+	const kRigide = masse * (2 * Math.PI / T_RIGIDE) ** 2;
+	for (const l of liaisonsRigides) {
+		const s = {
+			i: l.i,
+			j: l.j,
+			k: kRigide
+		};
+		ressorts.push(s);
+		const ap = appuis.find((a) => a.rigide && a.ddlTablier === l.i && (l.j === -1 ? a.ddlTete === -1 : a.ddlTete === l.j) && !a.ressort);
+		if (ap) ap.ressort = s;
+	}
+	for (const s of ressorts) {
+		if (s.i >= 0) K[s.i][s.i] += s.k;
+		if (s.j >= 0) K[s.j][s.j] += s.k;
+		if (s.i >= 0 && s.j >= 0) {
+			K[s.i][s.j] -= s.k;
+			K[s.j][s.i] -= s.k;
+		}
+	}
+	return {
+		direction,
+		borne,
+		n,
+		K,
+		M,
+		r,
+		masse,
+		tablier: {
+			x: xs,
+			ddl: ddlTablier
+		},
+		piles,
+		appuis,
+		kRigide,
+		inerties: inertiesTab
+	};
+}
+/** Coefficient de corrélation CQC (EN 1998-2 éq. 4.9), amortissements ξi, ξj, rapport ρ = ωj/ωi. */
+function correlationCQC(xi, xj, rapport) {
+	const r = rapport;
+	const num = 8 * Math.sqrt(xi * xj) * (xi + r * xj) * r ** 1.5;
+	const den = (1 - r * r) ** 2 + 4 * xi * xj * r * (1 + r * r) + 4 * (xi * xi + xj * xj) * r * r;
+	return den === 0 ? 1 : num / den;
+}
+/** Deux périodes sont « voisines » au sens de l'EN 1998-2 éq. 4.7. */
+function periodesVoisines(Ti, Tj, xi, xj) {
+	return Math.min(Ti, Tj) / Math.max(Ti, Tj) >= .1 / (.1 + Math.sqrt(xi * xj)) - 1e-12;
+}
+function combiner(valeurs, omegas, xi, regle) {
+	if (regle === "SRSS") return Math.sqrt(valeurs.reduce((s, v) => s + v * v, 0));
+	let s = 0;
+	for (let i = 0; i < valeurs.length; i++) for (let j = 0; j < valeurs.length; j++) {
+		const wi = omegas[i], wj = omegas[j];
+		const rho = i === j ? 1 : correlationCQC(xi, xi, wj / wi);
+		s += valeurs[i] * rho * valeurs[j];
+	}
+	return Math.sqrt(Math.max(s, 0));
+}
+/** Réponse spectrale multimodale dans une direction. */
+function reponseDirection(p, a, m, direction, borne) {
+	const md = modeleDynamique(p, m, direction, borne);
+	const spectre = direction === "x" ? a.spectres.calculLong : direction === "y" ? a.spectres.calculTrans : a.spectres.elastiqueV;
+	const q = direction === "x" ? a.q.longitudinal : direction === "y" ? a.q.transversal : 1;
+	const xi = p.comportement.amortissement / 100;
+	const bruts = modesPropres(md.K, md.M);
+	const modes = [];
+	let cumul = 0;
+	const translationsTablier = md.tablier.ddl;
+	bruts.forEach((b, k) => {
+		const omega = Math.sqrt(b.omega2);
+		let gamma = 0;
+		for (let i = 0; i < md.n; i++) {
+			let s = 0;
+			for (let j = 0; j < md.n; j++) s += md.M[i][j] * md.r[j];
+			gamma += b.phi[i] * s;
+		}
+		const signe = gamma < 0 ? -1 : 1;
+		const phi = b.phi.map((v) => v * signe);
+		gamma *= signe;
+		const Meff = gamma * gamma;
+		cumul += Meff;
+		const T = omega > 0 ? 2 * Math.PI / omega : Infinity;
+		const tab = translationsTablier.map((i) => phi[i] ?? 0);
+		const pil = md.piles.map((pl) => pl.ddl.map((i) => i < 0 ? 0 : phi[i] ?? 0));
+		const max = Math.max(1e-300, ...tab.map(Math.abs), ...pil.flat().map(Math.abs));
+		modes.push({
+			numero: k + 1,
+			T,
+			omega,
+			gamma,
+			masseEffective: Meff,
+			part: Meff / md.masse,
+			cumul: cumul / md.masse,
+			Sd: valeur(spectre, Number.isFinite(T) ? T : 10),
+			retenu: false,
+			forme: {
+				tablier: tab.map((v) => v / max),
+				piles: pil.map((l) => l.map((v) => v / max))
+			}
+		});
+		bruts[k].phi = phi;
+	});
+	const alertes = [];
+	const partSouples = modes.filter((x) => x.T >= .033).reduce((s, x) => s + x.part, 0);
+	let retenus = 0;
+	let somme = 0;
+	for (const x of modes) {
+		if (somme >= .9 - 1e-9) break;
+		x.retenu = true;
+		retenus++;
+		somme += x.part;
+	}
+	const facteur = 1;
+	if (partSouples < .9) alertes.push(`Les modes de période ≥ 0,033 s ne mobilisent que ${nombre(100 * partSouples, 1)} % de la masse : ` + (partSouples >= .7 ? `l'EN 1998-2 4.2.1.2(3) admettrait de s'arrêter là en multipliant les effets par M/ΣMi = ${nombre(1 / partSouples, 3)} ; PSIDA complète plutôt par les modes « rigides » (T < 0,033 s), jusqu'à 90 %.` : "moins de 70 % : il faut retenir les modes « rigides » (T < 0,033 s), ce que fait PSIDA, jusqu'à 90 %."));
+	const ret = modes.filter((x) => x.retenu);
+	const voisins = [];
+	for (let i = 0; i < ret.length; i++) for (let j = i + 1; j < ret.length; j++) {
+		const a1 = ret[i], a2 = ret[j];
+		if (a1.part > 1e-4 && a2.part > 1e-4 && Number.isFinite(a1.T) && periodesVoisines(a1.T, a2.T, xi, xi)) voisins.push([a1.numero, a2.numero]);
+	}
+	const regle = voisins.length ? "CQC" : "SRSS";
+	const omegas = ret.map((x) => x.omega);
+	const dominant = ret.reduce((b, x) => x.masseEffective > b.masseEffective ? x : b, ret[0] ?? modes[0]);
+	const T0 = 1.25 * a.TC;
+	const Td = dominant?.T ?? 0;
+	const muD = direction === "z" ? 1 : Td < .033 ? 1 : Td >= T0 ? q : Math.min((q - 1) * (T0 / Td) + 1, 5 * q - 4);
+	const eta = direction === "z" ? 1 : a.eta;
+	const ampD = eta * muD;
+	const deplacements = ret.map((x) => {
+		const phi = bruts[x.numero - 1].phi;
+		const c = x.omega > 0 ? x.gamma * x.Sd / (x.omega * x.omega) : 0;
+		return phi.map((v) => v * c);
+	});
+	const val = (u, i) => i < 0 ? 0 : u[i] ?? 0;
+	const comb = (v) => facteur * combiner(v, omegas, xi, regle);
+	const appuis = md.appuis.map((ap) => {
+		const Fm = deplacements.map((u) => ap.ressort ? ap.ressort.k * (val(u, ap.ressort.i) - val(u, ap.ressort.j)) / 1e3 : 0);
+		const dT = deplacements.map((u) => val(u, ap.ddlTablier));
+		let dTete;
+		let dApp;
+		if (ap.type === "pile" && direction !== "z") {
+			dTete = deplacements.map((u) => val(u, ap.ddlTete));
+			dApp = dT.map((v, k) => v - (dTete[k] ?? 0));
+		} else {
+			dTete = Fm.map((F) => Number.isFinite(ap.kSupport) && ap.kSupport > 0 ? F * 1e3 / ap.kSupport : 0);
+			dApp = Fm.map((F) => Number.isFinite(ap.kAppareils) && ap.kAppareils > 0 ? F * 1e3 / ap.kAppareils : 0);
+		}
+		const sortie = {
+			id: ap.id,
+			type: ap.type,
+			x: ap.x,
+			F: comb(Fm),
+			dTablier: ampD * comb(dT),
+			dTete: ampD * comb(dTete),
+			dAppareils: ampD * comb(dApp),
+			Fmodes: Fm
+		};
+		const pile = md.piles.find((pl) => pl.id === ap.id);
+		if (pile) {
+			const base = pile.elements[0];
+			const efforts = deplacements.map((u) => {
+				const ue = base.ddl.map((i) => val(u, i));
+				const f = base.k.map((l) => l.reduce((s, v, j) => s + v * ue[j], 0));
+				return {
+					V: (f[0] ?? 0) / 1e3,
+					M: (f[1] ?? 0) / 1e3
+				};
+			});
+			sortie.Vpied = comb(efforts.map((e) => e.V));
+			sortie.Mpied = comb(efforts.map((e) => e.M));
+		}
+		return sortie;
+	});
+	const Ftablier = comb(ret.map((_, k) => appuis.reduce((s, ap) => s + (ap.Fmodes[k] ?? 0), 0)));
+	const FtotModes = ret.map((x) => x.masseEffective * x.Sd / 1e3);
+	const FtotalSRSS = facteur * combiner(FtotModes, omegas, xi, "SRSS");
+	const FtotalCQC = facteur * combiner(FtotModes, omegas, xi, "CQC");
+	const massePiles = md.piles.reduce((s, x) => s + x.masse, 0);
+	return {
+		direction,
+		borne,
+		modele: {
+			n: md.n,
+			masse: md.masse,
+			kRigide: md.kRigide,
+			inertie: md.inerties,
+			massePiles
+		},
+		geometrie: {
+			xTablier: md.tablier.x,
+			appuis: md.appuis.map((x) => ({
+				id: x.id,
+				type: x.type,
+				x: x.x,
+				teteCulee: x.type !== "culee" || !Number.isFinite(x.kSupport) || x.kSupport <= 0 ? 0 : x.rigide ? 1 : (x.ressort?.k ?? 0) / x.kSupport
+			})),
+			piles: md.piles.map((pl) => ({
+				id: pl.id,
+				x: md.appuis[pl.appui]?.x ?? 0,
+				z: pl.z
+			}))
+		},
+		modes,
+		retenus,
+		partRetenue: somme,
+		partSouples,
+		facteur,
+		regle,
+		voisins,
+		xi,
+		q,
+		muD,
+		eta,
+		Ftablier,
+		Ftotal: regle === "CQC" ? FtotalCQC : FtotalSRSS,
+		FtotalSRSS,
+		FtotalCQC,
+		appuis,
+		alertes
+	};
+}
+const NOMS = {
+	x: "longitudinale (X)",
+	y: "transversale (Y)",
+	z: "verticale (Z)"
+};
+/** Analyse multimodale complète, comparaison au mode fondamental et note de calcul. */
+function multimodale(p, a, m, mono) {
+	const bornes = ["lbdp", "ubdp"];
+	const dir = (d) => Object.fromEntries(bornes.map((b) => [b, reponseDirection(p, a, m, d, b)]));
+	const directions = {
+		x: dir("x"),
+		y: dir("y"),
+		z: reponseDirection(p, a, m, "z", "lbdp")
+	};
+	const comparaison = ["x", "y"].map((d) => {
+		const mu = directions[d].ubdp, ml = directions[d].lbdp;
+		const mo = mono.directions[d];
+		const T1 = ml.modes.find((x) => x.retenu && x.part > .05)?.T ?? ml.modes[0]?.T ?? 0;
+		return {
+			direction: d,
+			Tmono: mo.lbdp.T,
+			T1,
+			Fmono: mo.ubdp.F,
+			Fmulti: mu.Ftablier,
+			FbaseMulti: mu.Ftotal,
+			appuis: mu.appuis.map((x, i) => ({
+				id: x.id,
+				Fmono: mo.ubdp.appuis[i]?.F ?? 0,
+				Fmulti: x.F
+			}))
+		};
+	});
+	const combinaisons = p.appuis.map((ap, i) => {
+		const Fx = directions.x.ubdp.appuis[i]?.F ?? 0;
+		const Fy = directions.y.ubdp.appuis[i]?.F ?? 0;
+		const Fz = directions.z.appuis[i]?.F ?? 0;
+		return {
+			id: ap.id,
+			cas: [
+				{
+					nom: "X + 0,3 Y + 0,3 Z",
+					Fx,
+					Fy: .3 * Fy,
+					Fz: .3 * Fz
+				},
+				{
+					nom: "0,3 X + Y + 0,3 Z",
+					Fx: .3 * Fx,
+					Fy,
+					Fz: .3 * Fz
+				},
+				{
+					nom: "0,3 X + 0,3 Y + Z",
+					Fx: .3 * Fx,
+					Fy: .3 * Fy,
+					Fz
+				}
+			]
+		};
+	});
+	const note = [];
+	const lignesModele = [];
+	const I = inertiesTablier(p);
+	lignesModele.push({
+		id: "mm_modele",
+		titre: "Modèle dynamique discret",
+		resultat: {
+			symbole: "",
+			valeur: `tablier : ${elementsTravee(p.tablier.travees.length)} éléments de poutre par travée ; piles : ${ELEMENTS_PILE} éléments par fût, encastrés en pied ; masses cohérentes`
+		},
+		references: ["analyse_spectrale", "modele_dynamique"],
+		commentaire: "Liaisons rigides (appareils fixes, butées, culées rigides, appuis en Z) représentées par des ressorts très raides (période propre de 2 ms)."
+	}, {
+		id: "mm_inerties",
+		titre: "Inerties du tablier",
+		formule: "I_V = \\dfrac{A\\,e^2}{12}, \\qquad I_T = \\dfrac{A\\,B^2}{12}\\quad\\text{(par défaut)}",
+		resultat: {
+			symbole: "I_V ;\\ I_T",
+			valeur: `${nombre(I.verticale, 4)} m⁴ ${I.saisie.verticale ? "(saisie)" : "(défaut)"} ; ${nombre(I.transversale, 2)} m⁴ ${I.saisie.transversale ? "(saisie)" : "(défaut)"}`,
+			unite: ""
+		},
+		references: ["modele_dynamique"]
+	}, {
+		id: "mm_equation",
+		titre: "Modes propres",
+		formule: "\\mathbf{K}\\,\\boldsymbol{\\varphi}_k = \\omega_k^2\\,\\mathbf{M}\\,\\boldsymbol{\\varphi}_k,\\quad T_k = \\dfrac{2\\pi}{\\omega_k},\\quad \\Gamma_k = \\boldsymbol{\\varphi}_k^{T}\\mathbf{M}\\,\\mathbf{r},\\quad M_k = \\Gamma_k^2\\ (\\boldsymbol{\\varphi}_k^T\\mathbf{M}\\boldsymbol{\\varphi}_k = 1)",
+		resultat: {
+			symbole: "",
+			valeur: "Cholesky M = L Lᵀ puis Jacobi"
+		},
+		references: ["analyse_spectrale", "modes_significatifs"]
+	});
+	note.push({
+		id: "mm_modele",
+		titre: "Modèle dynamique",
+		lignes: lignesModele
+	});
+	for (const [d, rep] of [
+		["x", directions.x.lbdp],
+		["y", directions.y.lbdp],
+		["z", directions.z]
+	]) {
+		const repU = d === "z" ? directions.z : directions[d].ubdp;
+		const lignes = [];
+		lignes.push({
+			id: `mm_${d}_masse`,
+			titre: `Masse mobilisable du modèle (${NOMS[d]})`,
+			formule: "M = \\mathbf{r}^T\\mathbf{M}\\,\\mathbf{r}",
+			resultat: {
+				symbole: "M",
+				valeur: rep.modele.masse,
+				unite: "t",
+				decimales: 1
+			},
+			references: ["modes_significatifs"],
+			commentaire: `${rep.modele.n} degrés de liberté${rep.modele.massePiles > 0 ? ` ; masse des fûts de piles ${nombre(rep.modele.massePiles, 1)} t (hors pieds encastrés)` : ""}.`
+		});
+		for (const x of rep.modes.filter((k) => k.retenu || k.numero <= 3)) lignes.push({
+			id: `mm_${d}_mode${x.numero}`,
+			titre: `Mode ${x.numero}${x.retenu ? "" : " (non retenu)"}`,
+			application: `T = ${tex(x.T, 3)}\\ \\text{s},\\ M_k = ${tex(x.masseEffective, 1)}\\ \\text{t},\\ S_d = ${tex(x.Sd, 3)}\\ \\text{m/s}^2`,
+			resultat: {
+				symbole: "M_k / M ;\\ \\sum",
+				valeur: `${nombre(100 * x.part, 1)} % ; ${nombre(100 * x.cumul, 1)} %`
+			},
+			references: ["modes_significatifs"]
+		});
+		lignes.push({
+			id: `mm_${d}_critere`,
+			titre: "Modes significatifs : ΣMk ≥ 90 % de M",
+			resultat: {
+				symbole: "\\sum M_k / M",
+				valeur: `${nombre(100 * rep.partRetenue, 1)} % avec ${rep.retenus} mode(s)`
+			},
+			references: ["modes_significatifs"],
+			commentaire: rep.alertes.join(" ") || `Modes de période ≥ 0,033 s : ${nombre(100 * rep.partSouples, 1)} % de la masse.`,
+			niveau: rep.partSouples < .9 ? "info" : void 0
+		});
+		lignes.push({
+			id: `mm_${d}_regle`,
+			titre: "Combinaison des réponses modales",
+			formule: rep.regle === "SRSS" ? "E = \\sqrt{\\sum_k E_k^2}" : "E = \\sqrt{\\sum_i\\sum_j E_i\\,r_{ij}\\,E_j}",
+			resultat: {
+				symbole: "",
+				valeur: rep.regle === "SRSS" ? "SRSS (périodes bien séparées)" : `CQC (périodes voisines : ${rep.voisins.map(([i, j]) => `${i}-${j}`).join(", ")})`
+			},
+			references: ["combinaison_modale"]
+		});
+		if (d !== "z") lignes.push({
+			id: `mm_${d}_Ftab`,
+			titre: "Effort transmis par le tablier aux appuis",
+			formule: "F_{tablier} = \\text{comb}_k \\Big(\\sum_i F_{i,k}\\Big)",
+			resultat: {
+				symbole: "F_{tablier}^{UBDP}",
+				valeur: repU.Ftablier,
+				unite: "MN",
+				decimales: 3
+			},
+			references: ["combinaison_modale"],
+			commentaire: "Grandeur comparable à l'effort F = M·Sd(T) du mode fondamental (masse du tablier seule)."
+		}, {
+			id: `mm_${d}_F`,
+			titre: "Effort total à la base (inertie des fûts comprise)",
+			formule: "F_{base} = \\text{comb}_k\\,(M_k\\,S_d(T_k))",
+			resultat: {
+				symbole: "F_{base}^{UBDP}",
+				valeur: repU.Ftotal,
+				unite: "MN",
+				decimales: 3
+			},
+			references: ["combinaison_modale"],
+			commentaire: `SRSS : ${nombre(repU.FtotalSRSS, 3)} MN ; CQC : ${nombre(repU.FtotalCQC, 3)} MN. μd = ${nombre(rep.muD, 3)} (mode dominant), η = ${nombre(rep.eta, 3)}.`
+		});
+		for (const ap of repU.appuis) {
+			const apL = rep.appuis.find((k) => k.id === ap.id);
+			lignes.push({
+				id: `mm_${d}_${ap.id}`,
+				titre: `${ap.id} — ${d === "z" ? "réaction verticale sismique" : `effort ${d === "x" ? "longitudinal" : "transversal"} transmis par le tablier`}`,
+				resultat: {
+					symbole: `F_{${ap.id}}${d === "z" ? "" : "^{UBDP}"}`,
+					valeur: ap.F,
+					unite: "MN",
+					decimales: 3
+				},
+				references: ["combinaison_modale"],
+				commentaire: d === "z" ? void 0 : `Déplacement du tablier (LBDP) ${nombre((apL?.dTablier ?? 0) * 100, 2)} cm ; distorsion des appareils ${nombre((apL?.dAppareils ?? 0) * 100, 2)} cm` + (ap.Mpied !== void 0 ? ` ; pied de pile : V = ${nombre(ap.Vpied ?? 0, 3)} MN, M = ${nombre(ap.Mpied, 3)} MN·m (UBDP).` : ".")
+			});
+		}
+		note.push({
+			id: `mm_${d}`,
+			titre: `Direction ${NOMS[d]}`,
+			lignes
+		});
+	}
+	const lignesComp = comparaison.map((c) => ({
+		id: `mm_comp_${c.direction}`,
+		titre: `Comparaison au mode fondamental — direction ${NOMS[c.direction]}`,
+		resultat: {
+			symbole: "T_1 ;\\ F",
+			valeur: `T₁ = ${nombre(c.T1, 3)} s (mode fondamental : ${nombre(c.Tmono, 3)} s) ; effort transmis par le tablier ${nombre(c.Fmulti, 3)} MN (mode fondamental : ${nombre(c.Fmono, 3)} MN, écart ${nombre(100 * (c.Fmulti / c.Fmono - 1), 1)} %) ; effort total à la base ${nombre(c.FbaseMulti, 3)} MN`
+		},
+		references: ["tablier_rigide", "combinaison_modale"]
+	}));
+	note.push({
+		id: "mm_comparaison",
+		titre: "Comparaison des méthodes",
+		lignes: lignesComp
+	});
+	return {
+		directions,
+		comparaison,
 		combinaisons,
 		note
 	};
@@ -4265,8 +5172,58 @@ function verifierAppuis(p, a, m, r) {
 }
 //#endregion
 //#region src/moteur/export-efforts.ts
-function exporterEfforts(p, a, r) {
+function exporterEfforts(p, a, r, mm) {
 	const kN = (v) => v * 1e3;
+	if (mm) {
+		const T1 = (d) => mm.comparaison.find((c) => c.direction === d)?.T1 ?? 0;
+		return {
+			format: "pont-ec8-efforts",
+			version: 1,
+			projet: p.nom,
+			unites: {
+				force: "kN",
+				longueur: "m"
+			},
+			q: {
+				x: a.q.longitudinal,
+				y: a.q.transversal
+			},
+			periodes: {
+				x: T1("x"),
+				y: T1("y")
+			},
+			masse: mm.directions.x.lbdp.modele.masse,
+			methode: "multimodale",
+			appuis: p.appuis.map((ap, i) => {
+				const c = mm.combinaisons[i];
+				const lx = mm.directions.x.lbdp.appuis[i], ly = mm.directions.y.lbdp.appuis[i];
+				return {
+					id: ap.id,
+					x: lx?.x ?? 0,
+					type: ap.type,
+					cas: (c?.cas ?? []).map((k) => ({
+						nom: k.nom,
+						Fx: kN(k.Fx),
+						Fy: kN(k.Fy),
+						Fz: kN(k.Fz)
+					})),
+					dTete: {
+						x: lx?.dTete ?? 0,
+						y: ly?.dTete ?? 0
+					},
+					dAppareils: {
+						x: lx?.dAppareils ?? 0,
+						y: ly?.dAppareils ?? 0
+					}
+				};
+			}),
+			remarques: [
+				"Analyse spectrale multimodale (EN 1998-2 4.2.1) : modes jusqu'à 90 % de la masse, combinaison SRSS ou CQC ; efforts horizontaux transmis par le tablier en tête d'appui, propriétés limites supérieures (UBDP), combinaison des directions 100/30/30 (EN 1998-2 4.2.1.4).",
+				"Réactions verticales sismiques issues de l'analyse multimodale verticale (spectre élastique vertical).",
+				"Inertie propre des fûts non comprise dans l'effort en tête : elle figure dans l'effort au pied des piles de l'analyse multimodale."
+			]
+		};
+	}
 	return {
 		format: "pont-ec8-efforts",
 		version: 1,
@@ -4284,6 +5241,7 @@ function exporterEfforts(p, a, r) {
 			y: r.directions.y.lbdp.T
 		},
 		masse: r.M,
+		methode: "mode_fondamental",
 		appuis: p.appuis.map((ap, i) => {
 			const c = r.combinaisons[i];
 			const lx = r.directions.x.lbdp.appuis[i], ly = r.directions.y.lbdp.appuis[i];
@@ -6129,4 +7087,4 @@ const REFERENTIEL = [
 	...VERIFICATIONS
 ];
 //#endregion
-export { REFERENTIEL, SOURCES, actionSismique, analyse, echantillonner as echantillonnerSpectre, exporterEfforts, lireProjet, modele, deplacement as spectreDeplacement, valeur as spectreValeur, valider, verifierAppuis };
+export { REFERENTIEL, SOURCES, actionSismique, analyse, echantillonner as echantillonnerSpectre, exporterEfforts, lireProjet, modele, multimodale, deplacement as spectreDeplacement, valeur as spectreValeur, valider, verifierAppuis };

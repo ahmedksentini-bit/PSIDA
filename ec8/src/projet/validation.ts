@@ -91,6 +91,10 @@ export function valider(p: Projet): Probleme[] {
   }
   if (tablier.superstructures < 0) sortie.push({ niveau: "erreur", cible: "tablier", message: "Le poids des superstructures ne peut pas être négatif." });
   if (tablier.debordAbout < 0) sortie.push({ niveau: "erreur", cible: "tablier", message: "Le débord d'about ne peut pas être négatif." });
+  for (const [cle, nom] of [["inertieVerticale", "L'inertie de flexion verticale"], ["inertieTransversale", "L'inertie de flexion transversale"]] as const) {
+    const v = tablier[cle];
+    if (v !== undefined && !(v > 0)) sortie.push({ niveau: "erreur", cible: "tablier", message: `${nom} du tablier doit être strictement positive (laisser vide pour la valeur par défaut).` });
+  }
 
   // Appuis
   if (appuis.length !== tablier.travees.length + 1) {

@@ -45,6 +45,15 @@ rectangulaires ou circulaires sur semelles, appareils d'appui en élastomère fr
 Fondations supposées infiniment rigides, comme dans l'exemple du guide. Biais, courbure, culées à mur
 de front et fondations sur pieux viendront ensuite.
 
+## Méthodes d'analyse
+
+L'onglet **Méthodes** aide à choisir la méthode (logigramme et tableau des méthodes de l'EN 1998-2, recommandation pour le
+projet) et réalise l'**analyse spectrale multimodale** (EN 1998-2 4.2.1) : modèle discret par direction (tablier en poutre,
+fûts en consoles à masse répartie, appareils et culées en ressorts, liaisons rigides en ressorts de période 2 ms), modes propres
+par Cholesky et Jacobi, modes retenus jusqu'à 90 % de la masse (4.2.1.2), combinaison SRSS ou CQC (4.2.1.3), comparaison au
+mode fondamental et animation des déformées. Inerties du tablier : champs facultatifs `inertieVerticale` et
+`inertieTransversale` (défauts A·e²/12 et A·B²/12). `options.methodeEfforts` choisit la méthode des efforts exportés.
+
 ## Référentiel
 
 Chaque entrée porte :

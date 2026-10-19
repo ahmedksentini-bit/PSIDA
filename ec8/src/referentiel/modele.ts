@@ -454,6 +454,61 @@ export const CULEE_RIGIDE: Regle = {
   statut: "via_guide",
 };
 
+export const ANALYSE_SPECTRALE: Regle = {
+  id: "analyse_spectrale",
+  type: "regle",
+  etape: "analyse",
+  libelle: "Analyse spectrale multimodale",
+  enonce:
+    "Analyse élastique des réponses maximales de tous les modes significatifs, avec les ordonnées du spectre de calcul ; la réponse globale est une combinaison statistique des contributions modales. Applicable dans tous les cas où une analyse linéaire est autorisée. Modèle linéaire discret, en général spatial.",
+  references: [{ source: "NF_EN_1998_2", localisation: "4.2.1.1(1) et (2)P", page: "49" }],
+  statut: "verifie",
+};
+
+export const MODES_SIGNIFICATIFS: Regle = {
+  id: "modes_significatifs",
+  type: "regle",
+  etape: "analyse",
+  libelle: "Modes significatifs : 90 % de la masse",
+  enonce:
+    "Tous les modes à contribution importante sont pris en compte : critère satisfait si la somme des masses modales effectives des modes retenus atteint 90 % de la masse totale. Si ce n'est pas le cas après tous les modes de période T ≥ 0,033 s, on peut s'arrêter là à condition que ΣMi/M ≥ 0,70, en multipliant les effets par M/ΣMi.",
+  references: [{ source: "NF_EN_1998_2", localisation: "4.2.1.2(1)P à (3)", page: "49" }],
+  statut: "verifie",
+  note: "PSIDA retient les modes dans l'ordre des périodes décroissantes jusqu'à 90 %, y compris des modes « rigides » (T < 0,033 s) quand c'est nécessaire, ce qui satisfait directement (2) sans recourir au facteur M/ΣMi de (3).",
+};
+
+export const COMBINAISON_MODALE: Formule = {
+  id: "combinaison_modale",
+  type: "formule",
+  etape: "analyse",
+  libelle: "Combinaison des réponses modales (SRSS ou CQC)",
+  latex:
+    "E = \\sqrt{\\sum_i E_i^2}\\ \\text{(SRSS)}, \\qquad E = \\sqrt{\\sum_i\\sum_j E_i\\,r_{ij}\\,E_j}\\ \\text{(CQC)}, \\qquad r_{ij} = \\dfrac{8\\sqrt{\\xi_i\\xi_j}\\,(\\xi_i + \\rho_{ij}\\xi_j)\\,\\rho_{ij}^{3/2}}{(1-\\rho_{ij}^2)^2 + 4\\xi_i\\xi_j\\rho_{ij}(1+\\rho_{ij}^2) + 4(\\xi_i^2+\\xi_j^2)\\rho_{ij}^2}",
+  variables: [
+    { symbole: "E_i", description: "effet de l'action sismique dans le mode i (signé)", unite: "—" },
+    { symbole: "\\rho_{ij}", description: "rapport des pulsations ωj/ωi (soit Ti/Tj)", unite: "—" },
+    { symbole: "\\xi_i", description: "taux d'amortissement visqueux du mode i", unite: "—" },
+  ],
+  conditions: [
+    "SRSS par défaut ; CQC quand deux périodes sont voisines : 0,1/(0,1 + √(ξiξj)) ≤ Ti/Tj ≤ 1 + 10√(ξiξj).",
+    "L'effet est pris avec les deux signes.",
+  ],
+  references: [{ source: "NF_EN_1998_2", localisation: "4.2.1.3(1)P à (3), éq. (4.6) à (4.9)", page: "49-50" }],
+  statut: "verifie",
+};
+
+export const MODELE_DYNAMIQUE: Regle = {
+  id: "modele_dynamique",
+  type: "regle",
+  etape: "modele",
+  libelle: "Modèle dynamique discret de PSIDA (poutres et ressorts)",
+  enonce:
+    "Tablier en poutre (8 éléments par travée, 4 au moins au-delà de 6 travées, masse répartie, inertie verticale A·e²/12 et transversale A·B²/12 par défaut, ou saisies), indéformable axialement en X ; fûts de piles en consoles encastrées en pied (4 éléments, masse répartie) ; lignes d'appareils en ressorts (élastomère), liaisons rigides (fixes, butées) ou absentes (glissants) ; culées en ressorts k_appui ; en Z, appuis verticalement indéformables.",
+  references: [{ source: "NF_EN_1998_2", localisation: "4.2.1.1(2)P (modèle linéaire discret)", page: "49" }],
+  statut: "verifie",
+  note: "Choix de modélisation propres à PSIDA ; la norme impose seulement un modèle discret approprié, compatible avec la mécanique et l'idéalisation de l'action sismique.",
+};
+
 export const MODELE: EntreeReferentiel[] = [
   ECM,
   TMIN_B,
@@ -479,4 +534,8 @@ export const MODELE: EntreeReferentiel[] = [
   SECOND_ORDRE,
   REACTIONS_VERTICALES,
   TABLEAU_B_VERTICAL,
+  ANALYSE_SPECTRALE,
+  MODES_SIGNIFICATIFS,
+  COMBINAISON_MODALE,
+  MODELE_DYNAMIQUE,
 ];

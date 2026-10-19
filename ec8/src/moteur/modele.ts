@@ -54,7 +54,7 @@ const serie = (...ks: number[]) => inverse(ks.reduce((s, k) => s + inverse(k), 0
 const fmtK = (k: number, d = 2) => (k === Infinity ? "\\infty" : tex(k, d));
 const txtK = (k: number) => (k === Infinity ? "rigide" : `${nombre(k, 2)} MN/m`);
 
-function inerties(appui: Pile): { Ix: number; Iy: number; aire: number } {
+export function inerties(appui: Pile): { Ix: number; Iy: number; aire: number } {
   const { forme, long, trans } = appui.futs;
   if (forme === "circulaire") {
     const I = (Math.PI * long ** 4) / 64;

@@ -256,3 +256,15 @@ export function maquette(p: Projet): Maquette {
     bornes: { min: [min[0], min[1], 0], max: [max[0], max[1], max[2] + dz] },
   };
 }
+
+/** Inerties de flexion du tablier (m⁴) pour l'analyse multimodale, avec l'origine de chaque valeur. */
+export function inertiesTablier(p: Projet): { verticale: number; transversale: number; saisie: { verticale: boolean; transversale: boolean } } {
+  const { aire, epaisseur, largeur, inertieVerticale, inertieTransversale } = p.tablier;
+  const sv = typeof inertieVerticale === "number" && inertieVerticale > 0;
+  const st = typeof inertieTransversale === "number" && inertieTransversale > 0;
+  return {
+    verticale: sv ? inertieVerticale : (aire * epaisseur ** 2) / 12,
+    transversale: st ? inertieTransversale : (aire * largeur ** 2) / 12,
+    saisie: { verticale: sv, transversale: st },
+  };
+}

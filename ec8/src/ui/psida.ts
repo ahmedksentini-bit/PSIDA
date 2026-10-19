@@ -8,6 +8,7 @@ import { actionSismique } from "../moteur/action.ts";
 import { analyse } from "../moteur/analyse.ts";
 import { exporterEfforts } from "../moteur/export-efforts.ts";
 import { modele } from "../moteur/modele.ts";
+import { multimodale } from "../moteur/multimodal.ts";
 import { lireProjet } from "../projet/stockage.ts";
 import type { Projet } from "../projet/types.ts";
 import { valider } from "../projet/validation.ts";
@@ -48,14 +49,17 @@ export function transmettreEfforts(p: Projet): void {
   try {
     const problemes = valider(p);
     const a = actionSismique(p), m = modele(p), r = analyse(p, a, m);
+    const mm = p.options.methodeEfforts === "multimodale" ? multimodale(p, a, m, r) : undefined;
+    const T1 = (d: "x" | "y") => mm?.comparaison.find((c) => c.direction === d)?.T1 ?? r.directions[d].lbdp.T;
     envoyer({
       type: "efforts",
       nom: p.nom,
       travees: p.tablier.travees,
       projet: structuredClone(p),
-      efforts: exporterEfforts(p, a, r),
-      T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T },
-      F: { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 },
+      efforts: exporterEfforts(p, a, r, mm),
+      methode: mm ? "multimodale" : "mode_fondamental",
+      T: { x: T1("x"), y: T1("y") },
+      F: mm ? { x: mm.directions.x.ubdp.Ftablier * 1000, y: mm.directions.y.ubdp.Ftablier * 1000 } : { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 },
       M: r.M,
       q: { long: p.comportement.qLongitudinal, trans: p.comportement.qTransversal },
       site: { zone: p.site.zone, categorie: p.site.categorie, classeSol: p.site.classeSol },

@@ -50,6 +50,10 @@ export interface Tablier {
   debordAbout: number;
   /** Charges de trafic réparties, valeur caractéristique sur toute la longueur (kN/m), pour la part ψ2,1. */
   chargeTrafic: number;
+  /** Inertie de flexion verticale (axe transversal), m⁴ ; par défaut A·e²/12 (section rectangulaire équivalente). Analyse multimodale. */
+  inertieVerticale?: number;
+  /** Inertie de flexion transversale (axe vertical), m⁴ ; par défaut A·B²/12. Analyse multimodale. */
+  inertieTransversale?: number;
 }
 
 export interface AppareilsElastomere {
@@ -210,6 +214,8 @@ export interface Service {
 export interface OptionsCalcul {
   /** Accélération de la pesanteur pour convertir poids et masses (m/s²). */
   g: number;
+  /** Méthode dont les efforts par appui sont exportés vers PSIDA (défaut : mode fondamental). */
+  methodeEfforts?: "mode_fondamental" | "multimodale";
 }
 
 export interface Projet {

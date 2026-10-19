@@ -196,6 +196,12 @@ encorbellement, épure d'arrêt des barres, nappe inférieure, et six schémas d
 modèle de Winkler, frottement négatif, bielles) ; un clic les agrandit (flèches pour passer d'un schéma à l'autre,
 Échap pour fermer). Dans les notes d'appuis, les deux schémas d'un appui sont tracés à la même échelle et alignés en bas.
 Le contrôle de l'entraxe des pieux dans une file utilise la longueur réelle de la semelle (longueur du voile + 1 m aux piles).
+Depuis la v0.46 : onglet « Méthodes » du calcul sismique (Pont EC8). « Choisir la méthode » : logigramme, tableau des méthodes
+de l'EN 1998-2 et recommandation pour le projet. « Analyse multimodale » (EN 1998-2 § 4.2.1) : modèle poutres et ressorts par
+direction (tablier, fûts en consoles à masse répartie, appareils, culées ; appuis indéformables en Z), modes propres (Cholesky +
+Jacobi), masses effectives jusqu'à 90 %, combinaison SRSS ou CQC (éq. 4.6 à 4.9), efforts en tête et en pied d'appui, réactions
+verticales, comparaison au mode fondamental et déformées animées. Les efforts transmis aux appuis peuvent venir de l'une ou
+l'autre méthode ; la note sismique compare toujours les deux. L'inertie de la section du tablier est transmise à Pont EC8.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

@@ -6,6 +6,7 @@
 import type { Projet } from "../projet/types.ts";
 import type { ActionSismique } from "./action.ts";
 import type { Analyse } from "./analyse.ts";
+import type { Multimodale } from "./multimodal.ts";
 
 export interface CasEfforts {
   nom: string;
@@ -36,12 +37,44 @@ export interface ExportEfforts {
   q: { x: number; y: number };
   periodes: { x: number; y: number };
   masse: number;
+  /** Méthode d'analyse dont viennent les efforts. */
+  methode?: "mode_fondamental" | "multimodale";
   appuis: EffortsAppui[];
   remarques: string[];
 }
 
-export function exporterEfforts(p: Projet, a: ActionSismique, r: Analyse): ExportEfforts {
+export function exporterEfforts(p: Projet, a: ActionSismique, r: Analyse, mm?: Multimodale): ExportEfforts {
   const kN = (v: number) => v * 1000;
+  if (mm) {
+    const T1 = (d: "x" | "y") => mm.comparaison.find((c) => c.direction === d)?.T1 ?? 0;
+    return {
+      format: "pont-ec8-efforts",
+      version: 1,
+      projet: p.nom,
+      unites: { force: "kN", longueur: "m" },
+      q: { x: a.q.longitudinal, y: a.q.transversal },
+      periodes: { x: T1("x"), y: T1("y") },
+      masse: mm.directions.x.lbdp.modele.masse,
+      methode: "multimodale",
+      appuis: p.appuis.map((ap, i) => {
+        const c = mm.combinaisons[i];
+        const lx = mm.directions.x.lbdp.appuis[i], ly = mm.directions.y.lbdp.appuis[i];
+        return {
+          id: ap.id,
+          x: lx?.x ?? 0,
+          type: ap.type,
+          cas: (c?.cas ?? []).map((k) => ({ nom: k.nom, Fx: kN(k.Fx), Fy: kN(k.Fy), Fz: kN(k.Fz) })),
+          dTete: { x: lx?.dTete ?? 0, y: ly?.dTete ?? 0 },
+          dAppareils: { x: lx?.dAppareils ?? 0, y: ly?.dAppareils ?? 0 },
+        };
+      }),
+      remarques: [
+        "Analyse spectrale multimodale (EN 1998-2 4.2.1) : modes jusqu'à 90 % de la masse, combinaison SRSS ou CQC ; efforts horizontaux transmis par le tablier en tête d'appui, propriétés limites supérieures (UBDP), combinaison des directions 100/30/30 (EN 1998-2 4.2.1.4).",
+        "Réactions verticales sismiques issues de l'analyse multimodale verticale (spectre élastique vertical).",
+        "Inertie propre des fûts non comprise dans l'effort en tête : elle figure dans l'effort au pied des piles de l'analyse multimodale.",
+      ],
+    };
+  }
   return {
     format: "pont-ec8-efforts",
     version: 1,
@@ -50,6 +83,7 @@ export function exporterEfforts(p: Projet, a: ActionSismique, r: Analyse): Expor
     q: { x: a.q.longitudinal, y: a.q.transversal },
     periodes: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T },
     masse: r.M,
+    methode: "mode_fondamental",
     appuis: p.appuis.map((ap, i) => {
       const c = r.combinaisons[i];
       const lx = r.directions.x.lbdp.appuis[i], ly = r.directions.y.lbdp.appuis[i];

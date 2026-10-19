@@ -53,7 +53,7 @@ export function seismicBlocks(seisme) {
   const p = EC8.lireProjet(JSON.parse(JSON.stringify(seisme.projet)));
   const a = EC8.actionSismique(p), m = EC8.modele(p), r = EC8.analyse(p, a, m), v = EC8.verifierAppuis(p, a, m, r);
   const problemes = EC8.valider(p);
-  B.push({ t: 'p', text: `Projet « ${p.nom} » (${seisme.source === 'onglet' ? 'onglet « Calcul sismique », projet éventuellement modifié par l\'utilisateur' : 'calcul automatique sur le projet PSIDA'}) : ${p.tablier.travees.length} travée(s) de ${p.tablier.travees.join(' + ')} m, zone ${p.site.zone}, catégorie d'importance ${p.site.categorie}, sol de classe ${p.site.classeSol}, q = ${nb(p.comportement.qLongitudinal, 2)} (longitudinal) / ${nb(p.comportement.qTransversal, 2)} (transversal). Méthode du mode fondamental (EN 1998-2 § 4.2.2), propriétés limites des élastomères (LBDP / UBDP), combinaison des directions 100/30/30.` });
+  B.push({ t: 'p', text: `Projet « ${p.nom} » (${seisme.source === 'onglet' ? 'onglet « Calcul sismique », projet éventuellement modifié par l\'utilisateur' : 'calcul automatique sur le projet PSIDA'}) : ${p.tablier.travees.length} travée(s) de ${p.tablier.travees.join(' + ')} m, zone ${p.site.zone}, catégorie d'importance ${p.site.categorie}, sol de classe ${p.site.classeSol}, q = ${nb(p.comportement.qLongitudinal, 2)} (longitudinal) / ${nb(p.comportement.qTransversal, 2)} (transversal). ${p.options && p.options.methodeEfforts === 'multimodale' ? 'Analyse multimodale (EN 1998-2 § 4.2.1), le mode fondamental (§ 4.2.2) servant de comparaison' : 'Méthode du mode fondamental (EN 1998-2 § 4.2.2)'}, propriétés limites des élastomères (LBDP / UBDP), combinaison des directions 100/30/30.` });
   B.push({ t: 'table', head: ['Direction', 'K LBDP / UBDP [MN/m]', 'T LBDP / UBDP [s]', 'F UBDP [kN]', 'd_E LBDP [cm]'], rows: ['x', 'y'].map(dk => {
     const d = r.directions[dk];
     return [dk === 'x' ? 'Longitudinale (X)' : 'Transversale (Y)', `${nb(d.lbdp.K, 2)} / ${nb(d.ubdp.K, 2)}`, `${nb(d.lbdp.T, 3)} / ${nb(d.ubdp.T, 3)}`, nb(d.ubdp.F * 1000, 0), nb((d.lbdp.dE ?? NaN) * 100, 2)];
@@ -83,6 +83,13 @@ export function seismicBlocks(seisme) {
   sectionBlocks(B, a.note, 'Action sismique');
   sectionBlocks(B, m.note, 'Modèle');
   sectionBlocks(B, r.note, 'Analyse');
+  // Analyse multimodale (EN 1998-2 § 4.2.1) : comparaison systématique au mode fondamental ; note complète si ses efforts sont retenus.
+  try {
+    const mm = EC8.multimodale(p, a, m, r), retenue = p.options && p.options.methodeEfforts === 'multimodale';
+    B.push({ t: 'h2', text: `Analyse multimodale (EN 1998-2 § 4.2.1)${retenue ? ' — méthode retenue pour les efforts' : ' — contrôle du mode fondamental'}` });
+    B.push({ t: 'table', head: ['Direction', 'T mode fondamental [s]', 'T₁ multimodale [s]', 'F tablier, mode fondamental UBDP [kN]', 'F tablier, multimodale UBDP [kN]', 'Écart'], rows: mm.comparaison.map(c => [c.direction === 'x' ? 'Longitudinale (X)' : 'Transversale (Y)', nb(c.Tmono, 3), nb(c.T1, 3), nb(c.Fmono * 1000, 0), nb(c.Fmulti * 1000, 0), `${nb(Math.round(1000 * (c.Fmulti / c.Fmono - 1)) / 10 || 0, 1)} %`]) });
+    if (retenue) sectionBlocks(B, mm.note, 'Multimodale');
+  } catch (e) { B.push({ t: 'comment', text: `Analyse multimodale indisponible : ${e.message}` }); }
   sectionBlocks(B, v.note, 'Vérifications');
   B.push({ t: 'h2', text: 'Synthèse des vérifications (appareils d\'appui, repos, joints)' });
   B.push({ t: 'table', head: ['Appui', 'Critère', 'Valeur', 'Limite', 'État'], rows: v.criteres.map(c => [c.appui || '—', c.libelle, `${nb(c.valeur, 3)}${c.unite ? ' ' + c.unite : ''}`, c.limite === undefined || c.limite === null ? '—' : `${nb(c.limite, 3)}${c.unite ? ' ' + c.unite : ''}`, ETAT[c.etat] || String(c.etat)]), small: true });

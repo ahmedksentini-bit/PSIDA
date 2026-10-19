@@ -11,12 +11,14 @@ const PageAction = lazy(() => import("./action/PageAction.tsx"));
 const PageModele = lazy(() => import("./modele/PageModele.tsx"));
 const PageAnalyse = lazy(() => import("./analyse/PageAnalyse.tsx"));
 const PageVerifications = lazy(() => import("./verifications/PageVerifications.tsx"));
+const PageMethodes = lazy(() => import("./methodes/PageMethodes.tsx"));
 
 const ONGLETS: { id: OngletPrincipal; titre: string }[] = [
   { id: "projet", titre: "Projet" },
   { id: "action", titre: "Action sismique" },
   { id: "modele", titre: "Modèle" },
   { id: "analyse", titre: "Analyse" },
+  { id: "methodes", titre: "Méthodes" },
   { id: "verifications", titre: "Vérifications" },
   { id: "referentiel", titre: "Référentiel" },
 ];
@@ -80,6 +82,11 @@ export function App() {
       {route.onglet === "analyse" && (
         <Suspense fallback={<main className="page">Chargement…</main>}>
           <PageAnalyse projet={projet} sous={route.sous} />
+        </Suspense>
+      )}
+      {route.onglet === "methodes" && (
+        <Suspense fallback={<main className="page">Chargement…</main>}>
+          <PageMethodes projet={projet} modifier={modifier} sous={route.sous} />
         </Suspense>
       )}
       {route.onglet === "verifications" && (
