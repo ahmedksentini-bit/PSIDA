@@ -191,6 +191,11 @@ Depuis la v0.44 : boutons « Ouvrir » et « Enregistrer » à côté de « Calc
 un fichier .json qui contient toutes les données de tous les onglets et, s'il y en a, les efforts reçus de l'onglet Calcul
 sismique ; à l'ouverture, les champs absents d'un fichier plus ancien prennent leur valeur par défaut et le calcul est relancé.
 Le lien partageable conserve désormais toutes les cases à cocher (frottement négatif, séisme, phase de chantier…).
+Depuis la v0.45 : miniatures de schémas de principe dans le formulaire (repères, biais, appareil d'appui, tête d'appui,
+encorbellement, épure d'arrêt des barres, nappe inférieure, et six schémas de pieux : groupe, inclinaison, procédés,
+modèle de Winkler, frottement négatif, bielles) ; un clic les agrandit (flèches pour passer d'un schéma à l'autre,
+Échap pour fermer). Dans les notes d'appuis, les deux schémas d'un appui sont tracés à la même échelle et alignés en bas.
+Le contrôle de l'entraxe des pieux dans une file utilise la longueur réelle de la semelle (longueur du voile + 1 m aux piles).
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

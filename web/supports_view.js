@@ -5,7 +5,7 @@
  */
 import { profilPressio } from '../src/vendor/fond-figures.js';
 import { seismicBlocks } from './seismic_note.js';
-import { svgBlock, supportSchema, distributionChart, sideBySide, pileProfileCharts, footingPressureChart, barChart } from './note_figures.js';
+import { svgBlock, supportSchema, distributionChart, sideBySide, pairWidth, pileProfileCharts, footingPressureChart, barChart } from './note_figures.js';
 
 /** Figure du sondage (bureau de calcul fond.ksr-infra.org) : essais, ou à défaut valeurs de couche en escalier. */
 export function profileFigure(pr, bandes = []) {
@@ -124,7 +124,7 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
     if (!opts.noFigures) {
       // schémas des piles en rivière (PHE, fond affouillé, semelle, pieux dégagés) et efforts hydrodynamiques
       const sch = []; for (const { L } of wat) { try { sch.push({ L, svg: supportSchema(sup, L, code) }); } catch (er) { /* schéma indisponible */ } }
-      for (let q = 0; q < sch.length; q += 2) { const a1 = sch[q], a2 = sch[q + 1]; B.push(svgBlock(sideBySide(a2 ? [a1.svg, a2.svg] : [a1.svg], 10, 760), `${lineName(a1.L, n)}${a2 ? ` et ${lineName(a2.L, n)}` : ''} en crue : plus hautes eaux, affouillement total, fondation`)); }
+      for (let q = 0; q < sch.length; q += 2) { const a1 = sch[q], a2 = sch[q + 1]; B.push(svgBlock(sideBySide(a2 ? [a1.svg, a2.svg] : [a1.svg], null, 10, pairWidth(sch.map(x => x.svg))), `${lineName(a1.L, n)}${a2 ? ` et ${lineName(a2.L, n)}` : ''} en crue : plus hautes eaux, affouillement total, fondation`)); }
       try { B.push(svgBlock(barChart({ cats: wat.map(({ L }) => lineName(L, n)), ylabel: 'F [kN] ; y_s [m]×100', series: [{ libelle: 'courant F_wa [kN]', values: wat.map(({ w }) => w.cur.F), couleur: '#0369a1' }, { libelle: 'embâcles F_deb [kN]', values: wat.map(({ w }) => w.deb.F), couleur: '#b45309' }, { libelle: 'affouillement total ×100 [m]', values: wat.map(({ w }) => 100 * w.dAff), couleur: '#b91c1c' }] }), 'Piles en rivière : poussée du courant, embâcles et profondeur d\'affouillement')); } catch (er) { /* figure indisponible */ }
     }
   }
@@ -146,7 +146,7 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
       h2('Schémas des appuis (à l\'échelle)');
       for (let k = 0; k < sch.length; k += 2) {
         const a1 = sch[k], a2 = sch[k + 1];
-        B.push(svgBlock(sideBySide(a2 ? [a1.svg, a2.svg] : [a1.svg], 10, 760), a2 ? `${lineName(a1.L, n)} et ${lineName(a2.L, n)} : fût, chevêtre, semelle, pieux, terrain et niveaux d'eau` : `${lineName(a1.L, n)} : fût, chevêtre, semelle, pieux, terrain et niveaux d'eau`));
+        B.push(svgBlock(sideBySide(a2 ? [a1.svg, a2.svg] : [a1.svg], null, 10, pairWidth(sch.map(x => x.svg))), a2 ? `${lineName(a1.L, n)} et ${lineName(a2.L, n)} : fût, chevêtre, semelle, pieux, terrain et niveaux d'eau` : `${lineName(a1.L, n)} : fût, chevêtre, semelle, pieux, terrain et niveaux d'eau`));
       }
     }
   }
@@ -230,7 +230,7 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
       table(['Ligne', 'V_qp [kN] ; q\' [kPa]', 'σ\'_v0 = γ D [kPa] ; q\' − σ\'_v0', 'E₁ ; E₂ ; E₃,₅ ; E₆,₈ ; E₉,₁₆ [MPa]', 'E_d [MPa] ; α', 'λ_c ; λ_d', 's_c + s_d = s_f [mm]', 'θ = M_qp/K_θ [mrad] ; Δs bord [mm]'], Ls.map(L => { const t = L[code].found.settle; if (!t || t.error) return [lineName(L, n), '-', '-', '-', '-', '-', t && t.error ? t.error : '-', '-']; return [lineName(L, n), `${F0(t.q * L[code].found.B * L[code].found.L)} ; ${F1(t.q)}`, `${F1(t.sigmaV0)} ; ${F1(t.dq)}`, [t.E1, t.E2, t.E35, t.E68, t.E916].map(F1).join(' ; '), `${F1(t.Ed)} ; ${F2(t.alpha)}`, `${F2(t.lc)} ; ${F2(t.ld)}`, `${F1(t.sc)} + ${F1(t.sd)} = ${F1(t.s)}`, `${F2(t.theta * 1000)} ; ${F1(t.dTilt)}`]; }), { small: true });
       comment(`Tassement final sous charges quasi permanentes (part soutenue de la combinaison ELS la plus chargée, hors crue) par la méthode pressiométrique de Ménard (${isF ? 'Fascicule 62 titre V annexe F.2' : 'NF P 94-261 annexe H'}) : s_c = α (q' − σ'_v0) λ_c B/(9 E_c), s_d = 2 (q' − σ'_v0) B₀ (λ_d B/B₀)^α/(9 E_d), B₀ = 0,6 m, E_c = E₁, E_d ${isF ? '4/E_d = 1/E₁ + 1/(0,85 E₂) + 1/E₃,₅ + 1/(2,5 E₆,₈) + 1/(2,5 E₉,₁₆)' : '1/E_d = 0,25/E₁ + 0,3/E₂ + 0,25/E₃,₅ + 0,1/E₆,₈ + 0,1/E₉,₁₆'}, E_i moyenne harmonique de E_M sur la tranche i d'épaisseur B/2. Le tassement différentiel entre lignes d'appui est à reporter dans le calcul du tablier (dénivellations d'appui).`);
     }
-    if (!opts.noFigures) { const fp = Ls.map(L => { try { return footingPressureChart(L, code); } catch (e) { return null; } }).filter(Boolean); for (let k = 0; k < fp.length; k += 2) B.push(fp[k + 1] ? svgBlock(sideBySide(fp[k].svg, fp[k + 1].svg), `${fp[k].caption} ; ${fp[k + 1].caption}`) : fp[k]); }
+    if (!opts.noFigures) { const fp = Ls.map(L => { try { return footingPressureChart(L, code); } catch (e) { return null; } }).filter(Boolean); for (let k = 0; k < fp.length; k += 2) B.push(fp[k + 1] ? svgBlock(sideBySide(fp[k].svg, fp[k + 1].svg), `${fp[k].caption} ; ${fp[k + 1].caption}`) : svgBlock(sideBySide([fp[k].svg], null, 10, pairWidth(fp.map(x => x.svg))), fp[k].caption)); }
   } else {
     table(['Ligne', 'Pieux', 'k Ménard en tête [kN/m³]', 'N max / min ELU [kN]', 'N max ELS [kN]', 'M max ; T max pieu ELU [kN·m ; kN]', 'Portance ELU / ELS', 'Groupe C_e ; taux', 'A_s pieu [cm²]', 'Effort tranchant'], Ls.map(L => {
       const f = L[code].found, el = f.rows.filter(r => r.ls === 'ELU'), mm = Math.max(...el.map(r => r.Mmax)), sh = f.shear.ELU;

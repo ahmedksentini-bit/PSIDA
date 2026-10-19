@@ -467,7 +467,7 @@ async function saveProject() {
   const form = $('#f');
   const spans = String(form.spans.value || '').split(/[,;\s]+/).filter(Boolean).join('-');
   const name = projName || `projet-psida-${spans || 'ouvrage'}.json`;
-  const file = { format: PROJ_FORMAT, version: '0.44', date: new Date().toISOString(), data: formSnapshot(form) };
+  const file = { format: PROJ_FORMAT, version: '0.45', date: new Date().toISOString(), data: formSnapshot(form) };
   if (ec8Data) file.ec8 = ec8Data;
   const txt = JSON.stringify(file, null, 1);
   if (window.showSaveFilePicker) { // Chrome, Edge : choix du nom et du dossier
@@ -502,6 +502,32 @@ document.addEventListener('keydown', ev => { // Ctrl+S, Ctrl+O
   const k = ev.key.toLowerCase();
   if (k === 's') { ev.preventDefault(); saveProject(); } else if (k === 'o') { ev.preventDefault(); $('#file-open').click(); }
 });
+
+// --- schémas explicatifs : miniatures (button.thumb[data-zoom]) agrandies dans une boîte de dialogue ---
+{
+  const dlg = $('#zoom'); let group = [], cur = 0;
+  const show = i => {
+    cur = (i + group.length) % group.length; const t = group[cur];
+    $('#zoom-img').src = t.dataset.zoom; $('#zoom-img').alt = t.querySelector('img')?.alt || '';
+    $('#zoom-cap').textContent = t.dataset.cap || ''; $('#zoom-count').textContent = group.length > 1 ? `${cur + 1} / ${group.length}` : '';
+    $('#zoom-prev').hidden = $('#zoom-next').hidden = group.length < 2;
+  };
+  document.addEventListener('click', ev => {
+    const t = ev.target.closest && ev.target.closest('button.thumb[data-zoom]');
+    if (!t || !dlg) return;
+    ev.preventDefault();
+    const box = t.closest('.thumbs'); group = box ? [...box.querySelectorAll('button.thumb[data-zoom]')] : [t];
+    show(group.indexOf(t)); if (!dlg.open) dlg.showModal();
+  });
+  if (dlg) {
+    $('#zoom-close').addEventListener('click', () => dlg.close());
+    $('#zoom-prev').addEventListener('click', () => show(cur - 1));
+    $('#zoom-next').addEventListener('click', () => show(cur + 1));
+    $('#zoom-img').addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', ev => { if (ev.target === dlg) dlg.close(); });   // clic sur le fond
+    dlg.addEventListener('keydown', ev => { if (ev.key === 'ArrowLeft') show(cur - 1); else if (ev.key === 'ArrowRight') show(cur + 1); });
+  }
+}
 if (hashToForm($('#f'))) $('#f').requestSubmit();
 $('#case-select').addEventListener('change', () => state && renderCase(state));
 $('#surface-which').addEventListener('change', () => state && renderCase(state));
@@ -518,7 +544,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.44', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = await buildReport({ ...state, version: '0.45', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -555,7 +581,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.44', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.45', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -611,7 +637,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.44', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.45', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));

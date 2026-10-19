@@ -122,8 +122,10 @@ export function supportSchema(sup, L, code = 'EC') {
   const zTop = -(Hf + hc + hGG) + (De - hs), zBot = De + Lp + 1;
   const xHalf = Math.max(B, onP ? (F.nFiles - 1) * F.sPile + F.pileD + Lp * Math.tan(Math.max(0, ...(F.incl || [0])) * Math.PI / 180) : B) / 2 + 2;
   // échelle fixée par la hauteur ; largeur adaptée au dessin (les schémas étroits se placent côte à côte)
-  const Hpx = 420, m = { l: 30, r: 150, t: 24, b: 20 };
-  const sc = Math.min(300 / (2 * xHalf), (Hpx - m.t - m.b) / (zBot - zTop)), W = Math.max(330, Math.ceil(m.l + m.r + 2 * xHalf * sc));
+  // hauteur ajustée au dessin (sans bande vide sous le terrain) ; échelle commune tant que la largeur gouverne
+  const Hmax = 420, m = { l: 30, r: 150, t: 24, b: 20 };
+  const sc = Math.min(300 / (2 * xHalf), (Hmax - m.t - m.b) / (zBot - zTop)), W = Math.max(330, Math.ceil(m.l + m.r + 2 * xHalf * sc));
+  const Hpx = Math.ceil(m.t + m.b + (zBot - zTop) * sc);
   const X = x => m.l + (x + xHalf) * sc, Y = z => m.t + (z - zTop) * sc;
   const conc = '#cbd5e1', st = COULEURS.trait;
   return svg({ largeur: W, hauteur: Hpx, titre: `Schéma ${L.kind === 'culee' ? 'de la culée C' : 'de la pile P'}${L.i}`, contenu: () => {
@@ -182,14 +184,22 @@ export function distributionChart(sup, code = 'EC') {
     { libelle: 'part du freinage [%]', values: dist.braking(1).map(v => 100 * v), couleur: PAL[1] }] });
 }
 
-/** SVG côte à côte dans un seul SVG (convertible en image pour la note Word) ; largeur totale au moins minW (centré). */
+/** Largeur d'une paire de figures (les deux plus larges + l'intervalle) : une figure seule, centrée sur cette largeur,
+ *  garde la même échelle que les paires voisines. */
+export function pairWidth(list, gap = 10) {
+  const w = list.map(s => +((String(s).match(/viewBox="0 0 ([\d.]+)/) || [])[1] || 340)).sort((x, y) => y - x);
+  return (w[0] || 0) + (w[1] ?? w[0] ?? 0) + gap;
+}
+
+/** SVG côte à côte dans un seul SVG (convertible en image pour la note Word) ; largeur totale au moins minW (centré).
+ *  Appel : sideBySide(svgA, svgB) ou sideBySide([svg…], null, gap, minW). */
 export function sideBySide(a, b, gap = 10, minW = 0) {
   const list = (Array.isArray(a) ? a : [a, b]).filter(Boolean);
   const dim = s => { const m = s.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/); return m ? [+m[1], +m[2]] : [340, 380]; };
   const ds = list.map(dim), H = Math.max(...ds.map(d => d[1]));
   const wSum = ds.reduce((t, d) => t + d[0], 0) + gap * (list.length - 1), Wt = Math.max(wSum, minW);
   let x = (Wt - wSum) / 2, body = '';
-  list.forEach((s, k) => { body += s.replace(/^<svg /, `<svg x="${x}" y="0" width="${ds[k][0]}" height="${ds[k][1]}" `); x += ds[k][0] + gap; });
+  list.forEach((s, k) => { body += s.replace(/^<svg /, `<svg x="${x}" y="${H - ds[k][1]}" width="${ds[k][0]}" height="${ds[k][1]}" `); x += ds[k][0] + gap; }); // alignées en bas (même terrain naturel)
   return `<svg viewBox="0 0 ${Wt} ${H}" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
 }
 

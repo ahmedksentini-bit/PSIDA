@@ -60,7 +60,8 @@ export function externalSeismic(ext, nL, spans = null) {
 /**
  * Dispositions géométriques minimales du dossier pilote PP73 (pièces 1.1.2, 1.1.3, 1.2.3, 1.3.2) : avertissements.
  */
-export function geometryWarnings(sp, end, width) {
+/** @param {number} [Lfoot] longueur de la semelle le long de la ligne d'appui (défaut : largeur + 1 m) */
+export function geometryWarnings(sp, end, width, Lfoot = width + 1) {
   const W = [], F = sp.found, P = sp.pile, C = sp.culee;
   const col = end ? C.type !== 'remblayee' : P.type === 'colonnes';
   const D = end ? C.D : P.D, hc = end ? C.hc : P.hc, lc = end ? C.lc : P.lc;
@@ -69,7 +70,7 @@ export function geometryWarnings(sp, end, width) {
   if (F.type === 'superficielle' && F.B < 1.5 - 1e-9) W.push(`semelle B = ${F.B} m < 1,50 m (PP73 1.1.2)`);
   if (F.type !== 'superficielle') {
     if (F.nFiles === 1 && F.pileD < 0.60 - 1e-9) W.push(`file unique de pieux Ø ${F.pileD} m < 0,60 m (PP73 : 0,80 m conseillé)`);
-    const s = F.nFiles > 1 ? Math.min(F.sPile, (width + 1) / Math.max(1, F.nPile)) : (width + 1) / Math.max(1, F.nPile);
+    const s = F.nFiles > 1 ? Math.min(F.sPile, Lfoot / Math.max(1, F.nPile)) : Lfoot / Math.max(1, F.nPile);
     if (s < 3 * F.pileD - 1e-9) W.push(`entraxe des pieux ${s.toFixed(2)} m < 3 Ø (PP73 1.2.3, effet de groupe)`);
     if (F.nFiles > 1 && F.B < 4.5 * F.pileD - 1e-9) W.push(`semelle sur pieux B = ${F.B} m < 4,5 Ø (PP73 1.2.3)`);
   }
@@ -715,7 +716,7 @@ export function computeSupports(st, input = {}) {
       per[code] = { base, shaft: shaftRes, ...extra, found, brg, headChk };
     }
     out.BAEL = per.BAEL; out.EC = per.EC;
-    out.warnings = geometryWarnings(sp, end, width);
+    out.warnings = geometryWarnings(sp, end, width, Lfoot(i));
     if (jointAt(i)) out.warnings.push(`pile de joint : réactions du tablier adjacent prises égales à r_G = ${J.rG ?? 1}, r_Q = ${J.rQ ?? 1}, r_H = ${J.rH ?? 1} fois celles du tablier étudié (géométrie de pile commune aux autres piles)${sp.seisme.actif ? ' ; le calcul sismique (Pont EC8) traite encore cette ligne comme une culée' : ''}`);
     const hv = Math.max(0, ...(per.EC.found.rows || per.EC.found.checks || []).filter(r => r.ls === 'ELU' && !r.vide).map(r => Math.abs(r.H) / Math.max(1e-9, r.V)));
     if (sp.found.type !== 'superficielle' && hv > 0.20) out.warnings.push(`H/V = ${hv.toFixed(2)} > 0,20 à l'ELU : envisager des pieux inclinés (PP73 1.1.3 § 2.2.2.7)`);
