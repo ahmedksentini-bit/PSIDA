@@ -5753,19 +5753,34 @@ function gamma0(etaK) {
 }
 /**
 * Effets sismiques de calcul pour les fondations (EN 1998-2 5.8.2) dans une direction, à partir des efforts AEd en tête
-* (MN). q ≤ 1,5 ou pont isolé : AEd × q (5.8.2(2)P). q > 1,5 : effort tranchant de capacité des piles
-* V_C = γ0 n M_Rd / L (annexe G.2, (G.3) avec M_E = V_E L pour un fût en console), plafonné à q V_E (5.3(2)) ;
-* culées : AEd × ΣV_C / ΣV_E (G.4), même plafond.
+* (MN). q ≤ 1,5 ou pont isolé : AEd × q (5.8.2(2)P). q > 1,5 : dimensionnement en capacité (5.8.2(3)P, 5.3) —
+*  · piles : V_C = γ0 n M_Rd / L (annexe G.2, (G.3) avec M_E = V_E L pour un fût en console) ;
+*  · appareils en élastomère (5.3(8)P) : un élément sans rotule plastique qui reprend l'effort des appareils est dimensionné
+*    pour l'effort des appareils à leur déformation maximale (déplacement de calcul du tablier), raideur accrue de 30 % :
+*    V_b = 1,3 K_b d_b. Les culées sur élastomères reçoivent V_b ; une pile ne peut recevoir plus que V_b (min(V_C ; V_b)) ;
+*  · culées sans élastomère : AEd × ΣV_C / ΣV_E (G.4) ;
+*  le tout borné par V_E et q·V_E (5.3(2)).
+* @param dApp déformation de calcul des appareils par appui (m, propriétés inférieures, η μ_d inclus)
 */
-function effetsFondations(p, m, direction, q, VE, isole) {
+function effetsFondations(p, m, direction, q, VE, isole, dApp = []) {
 	if (isole || q <= 1.5) return VE.map((v) => ({
 		regle: q === 1 ? "AEd" : "q_fois_AEd",
 		VE: v,
 		VC: q * v
 	}));
+	const borne = (x, v) => Math.min(Math.max(x, v), q * v);
+	const Vb = p.appuis.map((_, i) => {
+		const k = m.directions[direction].appuis[i]?.kAppareils.lbdp ?? Infinity, d = dApp[i] ?? 0;
+		return m.elastomeres && Number.isFinite(k) && k > 0 && d > 0 ? 1.3 * k * d : void 0;
+	});
 	const det = p.appuis.map((ap, i) => {
-		const v = VE[i] ?? 0;
-		if (ap.type !== "pile") return {
+		const v = VE[i] ?? 0, vb = Vb[i];
+		if (ap.type !== "pile") return vb !== void 0 ? {
+			regle: "appareils",
+			VE: v,
+			VC: borne(vb, v),
+			Vappareils: vb
+		} : {
 			regle: "capacite",
 			VE: v,
 			VC: NaN
@@ -5778,12 +5793,13 @@ function effetsFondations(p, m, direction, q, VE, isole) {
 		}).aire * p.materiaux.beton.fck);
 		const g0 = gamma0(etaK);
 		const VC = g0 * c.nFuts * c.MRd / c.L;
-		const Vcap = Math.min(Math.max(VC, v), q * v);
+		const brut = vb !== void 0 ? Math.min(VC, vb) : VC;
 		return {
-			regle: VC >= q * v ? "capacite_plafonnee" : "capacite",
+			regle: brut >= q * v ? "capacite_plafonnee" : vb !== void 0 && vb < VC ? "appareils" : "capacite",
 			VE: v,
-			VC: Vcap,
+			VC: borne(brut, v),
 			VCbrut: VC,
+			...vb !== void 0 ? { Vappareils: vb } : {},
 			MRd: c.MRd * 1e3,
 			gamma0: g0,
 			etaK,
@@ -5795,7 +5811,7 @@ function effetsFondations(p, m, direction, q, VE, isole) {
 	const sE = piles.reduce((s, d) => s + d.VE, 0), sC = piles.reduce((s, d) => s + d.VC, 0);
 	const ratio = sE > 0 ? Math.min(sC / sE, q) : q;
 	det.forEach((d, i) => {
-		if (p.appuis[i].type !== "pile") {
+		if (p.appuis[i].type !== "pile" && d.regle !== "appareils") {
 			d.VC = ratio * d.VE;
 			d.regle = ratio >= q - 1e-9 ? "capacite_plafonnee" : "capacite";
 		}
@@ -5918,7 +5934,7 @@ function baseMethode(p, a, r, s, methode) {
 		]
 	};
 }
-const LIB_REGLE = (q, isole, d) => isole ? "pont isolé : effets de l'analyse avec q = 1 (5.8.2(2)P)" : q <= 1.5 ? `ductilité limitée (q = ${q.toFixed(2).replace(".", ",")} ≤ 1,5) : AEd × q, soit les effets pour q = 1 (5.8.2(2)P)` : d.every((x) => x.regle === "capacite_plafonnee") ? `comportement ductile (q = ${q.toFixed(2).replace(".", ",")}) : capacité des piles, plafonnée partout à q·AEd (5.3(2))` : `comportement ductile (q = ${q.toFixed(2).replace(".", ",")}) : dimensionnement en capacité des piles, γ0 M_Rd (5.3, 5.8.2(3)P, annexe G.2)`;
+const LIB_REGLE = (q, isole, d) => isole ? "pont isolé : effets de l'analyse avec q = 1 (5.8.2(2)P)" : q <= 1.5 ? `ductilité limitée (q = ${q.toFixed(2).replace(".", ",")} ≤ 1,5) : AEd × q, soit les effets pour q = 1 (5.8.2(2)P)` : `comportement ductile (q = ${q.toFixed(2).replace(".", ",")}) : dimensionnement en capacité (5.8.2(3)P) — ${[d.some((x) => x.MRd !== void 0) ? "piles γ0 M_Rd (5.3, annexe G.2)" : "", d.some((x) => x.Vappareils !== void 0) ? "effort des appareils en élastomère à leur déformation de calcul, raideur + 30 % (5.3(8)P)" : ""].filter(Boolean).join(" ; ")}${d.every((x) => x.regle === "capacite_plafonnee") ? ", plafonné partout à q·AEd (5.3(2))" : ", borné par AEd et q·AEd (5.3(2))"}`;
 function exporterEfforts(p, a, r, sources, methodeDemandee) {
 	const kN = (v) => v * 1e3;
 	const s = sources && "combinaisons" in sources ? { multimodale: sources } : sources ?? {};
@@ -5928,8 +5944,8 @@ function exporterEfforts(p, a, r, sources, methodeDemandee) {
 	const remarques = [...b.remarques];
 	try {
 		const m = modele(p);
-		fx = effetsFondations(p, m, "x", b.q.x, b.Fx, isole);
-		fy = effetsFondations(p, m, "y", b.q.y, b.Fy, isole);
+		fx = effetsFondations(p, m, "x", b.q.x, b.Fx, isole, b.dApp.map((d) => d.x));
+		fy = effetsFondations(p, m, "y", b.q.y, b.Fy, isole, b.dApp.map((d) => d.y));
 	} catch (e) {
 		remarques.push(`Effets pour les fondations non calculés : ${e instanceof Error ? e.message : String(e)}.`);
 	}
@@ -5939,7 +5955,8 @@ function exporterEfforts(p, a, r, sources, methodeDemandee) {
 		...d,
 		VE: kN(d.VE),
 		VC: kN(d.VC),
-		...d.VCbrut !== void 0 ? { VCbrut: kN(d.VCbrut) } : {}
+		...d.VCbrut !== void 0 ? { VCbrut: kN(d.VCbrut) } : {},
+		...d.Vappareils !== void 0 ? { Vappareils: kN(d.Vappareils) } : {}
 	} : {
 		regle: "AEd",
 		VE: 0,
@@ -5970,12 +5987,12 @@ function exporterEfforts(p, a, r, sources, methodeDemandee) {
 						{
 							nom: "X + 0,3 Y + 0,3 Z (fondations)",
 							Fx: kN(cx.VC),
-							Fy: .3 * kN(cy.regle.startsWith("capacite") ? Fy : cy.VC),
+							Fy: .3 * kN(cy.regle.startsWith("capacite") || cy.regle === "appareils" ? Fy : cy.VC),
 							Fz: .3 * kN(Fz)
 						},
 						{
 							nom: "0,3 X + Y + 0,3 Z (fondations)",
-							Fx: .3 * kN(cx.regle.startsWith("capacite") ? Fx : cx.VC),
+							Fx: .3 * kN(cx.regle.startsWith("capacite") || cx.regle === "appareils" ? Fx : cx.VC),
 							Fy: kN(cy.VC),
 							Fz: .3 * kN(Fz)
 						},

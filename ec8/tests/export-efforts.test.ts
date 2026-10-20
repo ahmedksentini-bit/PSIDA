@@ -54,6 +54,16 @@ test("méthodes d'efforts : multimodale, temporel linéaire, pont isolé, et eff
   const VE = pd.appuis.map((_, i) => rd.directions.x.ubdp.appuis[i]!.F);
   const det = effetsFondations(pd, md, "x", ad.q.longitudinal, VE, false);
   det.forEach((d, i) => { assert.ok(d.VC >= d.VE - 1e-12 && d.VC <= ad.q.longitudinal * d.VE + 1e-12, `${i}`); if (pd.appuis[i]!.type === "pile") assert.ok(d.MRd! > 0 && d.gamma0! >= 1.35); });
+  // 5.3(8)P : appareils en élastomère, V_b = 1,3 K_b d_b ; culées sur élastomères : V_b ; piles : min(V_C ; V_b)
+  const dApp = pd.appuis.map((_, i) => rd.directions.x.lbdp.appuis[i]!.dAppareils);
+  const d8 = effetsFondations(pd, md, "x", ad.q.longitudinal, VE, false, dApp);
+  d8.forEach((d, i) => {
+    const k = md.directions.x.appuis[i]!.kAppareils.lbdp;
+    if (!md.elastomeres || !Number.isFinite(k) || dApp[i]! <= 0) return;
+    assert.ok(Math.abs(d.Vappareils! - 1.3 * k * dApp[i]!) < 1e-12);
+    const attendu = pd.appuis[i]!.type === "pile" ? Math.min(d.VCbrut!, d.Vappareils!) : d.Vappareils!;
+    assert.ok(Math.abs(d.VC - Math.min(Math.max(attendu, d.VE), ad.q.longitudinal * d.VE)) < 1e-12, `${i}`);
+  });
   assert.equal(gamma0(0.05), 1.35);
   assert.ok(Math.abs(gamma0(0.3) - 1.35 * 1.08) < 1e-12);
 });

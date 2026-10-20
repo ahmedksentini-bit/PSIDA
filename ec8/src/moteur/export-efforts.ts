@@ -27,7 +27,7 @@ export interface CasEfforts {
 
 /** Détail du passage AEd → effets pour les fondations, dans une direction (kN, kN·m). */
 export interface DetailCapacite {
-  regle: "q_fois_AEd" | "capacite" | "capacite_plafonnee" | "AEd";
+  regle: "q_fois_AEd" | "capacite" | "capacite_plafonnee" | "AEd" | "appareils";
   VE: number;
   VC: number;
   /** Pile : résistance de calcul en flexion d'un fût en pied, sous l'effort normal sismique (kN·m). */
@@ -38,6 +38,8 @@ export interface DetailCapacite {
   L?: number;
   /** Effort de capacité brut γ0 n M_Rd / L, avant les bornes V_E et q·V_E (kN). */
   VCbrut?: number;
+  /** Effort transmis par les appareils en élastomère à leur déformation de calcul, raideur + 30 % (5.3(8)P, kN). */
+  Vappareils?: number;
 }
 
 export interface EffortsAppui {
@@ -103,28 +105,39 @@ export function gamma0(etaK: number): number {
 
 /**
  * Effets sismiques de calcul pour les fondations (EN 1998-2 5.8.2) dans une direction, à partir des efforts AEd en tête
- * (MN). q ≤ 1,5 ou pont isolé : AEd × q (5.8.2(2)P). q > 1,5 : effort tranchant de capacité des piles
- * V_C = γ0 n M_Rd / L (annexe G.2, (G.3) avec M_E = V_E L pour un fût en console), plafonné à q V_E (5.3(2)) ;
- * culées : AEd × ΣV_C / ΣV_E (G.4), même plafond.
+ * (MN). q ≤ 1,5 ou pont isolé : AEd × q (5.8.2(2)P). q > 1,5 : dimensionnement en capacité (5.8.2(3)P, 5.3) —
+ *  · piles : V_C = γ0 n M_Rd / L (annexe G.2, (G.3) avec M_E = V_E L pour un fût en console) ;
+ *  · appareils en élastomère (5.3(8)P) : un élément sans rotule plastique qui reprend l'effort des appareils est dimensionné
+ *    pour l'effort des appareils à leur déformation maximale (déplacement de calcul du tablier), raideur accrue de 30 % :
+ *    V_b = 1,3 K_b d_b. Les culées sur élastomères reçoivent V_b ; une pile ne peut recevoir plus que V_b (min(V_C ; V_b)) ;
+ *  · culées sans élastomère : AEd × ΣV_C / ΣV_E (G.4) ;
+ *  le tout borné par V_E et q·V_E (5.3(2)).
+ * @param dApp déformation de calcul des appareils par appui (m, propriétés inférieures, η μ_d inclus)
  */
-export function effetsFondations(p: Projet, m: Modele, direction: "x" | "y", q: number, VE: number[], isole: boolean): DetailCapacite[] {
+export function effetsFondations(p: Projet, m: Modele, direction: "x" | "y", q: number, VE: number[], isole: boolean, dApp: number[] = []): DetailCapacite[] {
   if (isole || q <= 1.5) return VE.map((v) => ({ regle: q === 1 ? "AEd" : "q_fois_AEd", VE: v, VC: q * v }));
+  const borne = (x: number, v: number) => Math.min(Math.max(x, v), q * v);
+  const Vb = p.appuis.map((_, i) => {
+    const k = m.directions[direction].appuis[i]?.kAppareils.lbdp ?? Infinity, d = dApp[i] ?? 0;
+    return m.elastomeres && Number.isFinite(k) && k > 0 && d > 0 ? 1.3 * k * d : undefined;
+  });
   const det: DetailCapacite[] = p.appuis.map((ap, i) => {
-    const v = VE[i] ?? 0;
-    if (ap.type !== "pile") return { regle: "capacite", VE: v, VC: NaN };
+    const v = VE[i] ?? 0, vb = Vb[i];
+    if (ap.type !== "pile") return vb !== undefined ? { regle: "appareils", VE: v, VC: borne(vb, v), Vappareils: vb } : { regle: "capacite", VE: v, VC: NaN };
     const pile = ap as Pile;
     const c = capacitePile(p, m, pile, direction, reactionPermanente(p, i, m.masses.M));
     const etaK = c.N / (inerties({ ...pile, facteurInertie: 1 }).aire * p.materiaux.beton.fck);
     const g0 = gamma0(etaK);
     const VC = (g0 * c.nFuts * c.MRd) / c.L;
-    const Vcap = Math.min(Math.max(VC, v), q * v);
-    return { regle: VC >= q * v ? "capacite_plafonnee" : "capacite", VE: v, VC: Vcap, VCbrut: VC, MRd: c.MRd * 1000, gamma0: g0, etaK, nFuts: c.nFuts, L: c.L };
+    const brut = vb !== undefined ? Math.min(VC, vb) : VC;
+    const regle: DetailCapacite["regle"] = brut >= q * v ? "capacite_plafonnee" : vb !== undefined && vb < VC ? "appareils" : "capacite";
+    return { regle, VE: v, VC: borne(brut, v), VCbrut: VC, ...(vb !== undefined ? { Vappareils: vb } : {}), MRd: c.MRd * 1000, gamma0: g0, etaK, nFuts: c.nFuts, L: c.L };
   });
   const piles = det.filter((_, i) => p.appuis[i]!.type === "pile");
   const sE = piles.reduce((s, d) => s + d.VE, 0), sC = piles.reduce((s, d) => s + d.VC, 0);
   const ratio = sE > 0 ? Math.min(sC / sE, q) : q;
   det.forEach((d, i) => {
-    if (p.appuis[i]!.type !== "pile") { d.VC = ratio * d.VE; d.regle = ratio >= q - 1e-9 ? "capacite_plafonnee" : "capacite"; }
+    if (p.appuis[i]!.type !== "pile" && d.regle !== "appareils") { d.VC = ratio * d.VE; d.regle = ratio >= q - 1e-9 ? "capacite_plafonnee" : "capacite"; }
   });
   return det;
 }
@@ -193,8 +206,10 @@ function baseMethode(p: Projet, a: ActionSismique, r: Analyse, s: SourcesEfforts
 const LIB_REGLE = (q: number, isole: boolean, d: DetailCapacite[]) =>
   isole ? "pont isolé : effets de l'analyse avec q = 1 (5.8.2(2)P)"
     : q <= 1.5 ? `ductilité limitée (q = ${q.toFixed(2).replace(".", ",")} ≤ 1,5) : AEd × q, soit les effets pour q = 1 (5.8.2(2)P)`
-      : d.every((x) => x.regle === "capacite_plafonnee") ? `comportement ductile (q = ${q.toFixed(2).replace(".", ",")}) : capacité des piles, plafonnée partout à q·AEd (5.3(2))`
-        : `comportement ductile (q = ${q.toFixed(2).replace(".", ",")}) : dimensionnement en capacité des piles, γ0 M_Rd (5.3, 5.8.2(3)P, annexe G.2)`;
+      : `comportement ductile (q = ${q.toFixed(2).replace(".", ",")}) : dimensionnement en capacité (5.8.2(3)P) — ${[
+        d.some((x) => x.MRd !== undefined) ? "piles γ0 M_Rd (5.3, annexe G.2)" : "",
+        d.some((x) => x.Vappareils !== undefined) ? "effort des appareils en élastomère à leur déformation de calcul, raideur + 30 % (5.3(8)P)" : "",
+      ].filter(Boolean).join(" ; ")}${d.every((x) => x.regle === "capacite_plafonnee") ? ", plafonné partout à q·AEd (5.3(2))" : ", borné par AEd et q·AEd (5.3(2))"}`;
 
 export function exporterEfforts(p: Projet, a: ActionSismique, r: Analyse, sources?: Multimodale | SourcesEfforts, methodeDemandee?: MethodeEfforts): ExportEfforts {
   const kN = (v: number) => v * 1000;
@@ -206,15 +221,15 @@ export function exporterEfforts(p: Projet, a: ActionSismique, r: Analyse, source
   const remarques = [...b.remarques];
   try {
     const m = construireModele(p);
-    fx = effetsFondations(p, m, "x", b.q.x, b.Fx, isole);
-    fy = effetsFondations(p, m, "y", b.q.y, b.Fy, isole);
+    fx = effetsFondations(p, m, "x", b.q.x, b.Fx, isole, b.dApp.map((d) => d.x));
+    fy = effetsFondations(p, m, "y", b.q.y, b.Fy, isole, b.dApp.map((d) => d.y));
   } catch (e) {
     remarques.push(`Effets pour les fondations non calculés : ${e instanceof Error ? e.message : String(e)}.`);
   }
   const insuff = fx.concat(fy).some((d) => d.VCbrut !== undefined && d.VCbrut < d.VE - 1e-9);
   if (insuff) remarques.push("Capacité γ0 M_Rd / L inférieure à l'effort de calcul pour au moins une pile : la section d'acier des fûts est insuffisante ; l'effort de calcul est retenu pour les fondations.");
   if (fx.length) remarques.push(`Fondations (EN 1998-2 5.8.2) — X : ${LIB_REGLE(b.q.x, isole, fx)} ; Y : ${LIB_REGLE(b.q.y, isole, fy)}. Réactions verticales inchangées.`);
-  const det = (d: DetailCapacite | undefined): DetailCapacite => (d ? { ...d, VE: kN(d.VE), VC: kN(d.VC), ...(d.VCbrut !== undefined ? { VCbrut: kN(d.VCbrut) } : {}) } : { regle: "AEd", VE: 0, VC: 0 });
+  const det = (d: DetailCapacite | undefined): DetailCapacite => (d ? { ...d, VE: kN(d.VE), VC: kN(d.VC), ...(d.VCbrut !== undefined ? { VCbrut: kN(d.VCbrut) } : {}), ...(d.Vappareils !== undefined ? { Vappareils: kN(d.Vappareils) } : {}) } : { regle: "AEd", VE: 0, VC: 0 });
   return {
     format: "pont-ec8-efforts",
     version: 1,
@@ -236,8 +251,8 @@ export function exporterEfforts(p: Projet, a: ActionSismique, r: Analyse, source
           // capacité : calculée séparément dans chaque direction (5.3(6)), les autres composantes étant celles de l'action de calcul
           // composante orthogonale : action de calcul (capacité, 5.3(3)) ou action × q (5.8.2(2)P)
           casFondations: [
-            { nom: "X + 0,3 Y + 0,3 Z (fondations)", Fx: kN(cx.VC), Fy: 0.3 * kN(cy.regle.startsWith("capacite") ? Fy : cy.VC), Fz: 0.3 * kN(Fz) },
-            { nom: "0,3 X + Y + 0,3 Z (fondations)", Fx: 0.3 * kN(cx.regle.startsWith("capacite") ? Fx : cx.VC), Fy: kN(cy.VC), Fz: 0.3 * kN(Fz) },
+            { nom: "X + 0,3 Y + 0,3 Z (fondations)", Fx: kN(cx.VC), Fy: 0.3 * kN(cy.regle.startsWith("capacite") || cy.regle === "appareils" ? Fy : cy.VC), Fz: 0.3 * kN(Fz) },
+            { nom: "0,3 X + Y + 0,3 Z (fondations)", Fx: 0.3 * kN(cx.regle.startsWith("capacite") || cx.regle === "appareils" ? Fx : cx.VC), Fy: kN(cy.VC), Fz: 0.3 * kN(Fz) },
             { nom: "0,3 X + 0,3 Y + Z (fondations)", Fx: 0.3 * kN(cx.VC), Fy: 0.3 * kN(cy.VC), Fz: kN(Fz) },
           ],
           capacite: { x: det(cx), y: det(cy) },

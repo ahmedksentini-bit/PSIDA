@@ -78,7 +78,8 @@ Le **pont isolé** (EN 1998-2 chapitre 7) se décrit par `isolation` { type "lrb
 `multimodale`, `temporel_lineaire` (moyenne de 7 accélérogrammes, maximum en deçà) ou `pont_isole` (UBDP par ligne, q = 1).
 Chaque appui reçoit en plus `casFondations` et `capacite`, les effets pour les fondations de l'EN 1998-2 5.8.2 : A_Ed × q si
 q ≤ 1,5 ou pont isolé ; sinon dimensionnement en capacité des piles, V_C = γ0 n M_Rd/L (5.3, annexe G.2, γ0 = 1,35 majoré si
-η_k > 0,1), borné par V_E et q·V_E (5.3(2)), culées au prorata ΣV_C/ΣV_E (G.4). PSIDA applique ces cas aux fondations
+η_k > 0,1), borné par V_E et q·V_E (5.3(2)), culées au prorata ΣV_C/ΣV_E (G.4) ; appareils en élastomère (5.3(8)P) :
+V_b = 1,3 K_b d_b (déformation de calcul des appareils, raideur + 30 %) pour les culées, min(V_C ; V_b) pour les piles. PSIDA applique ces cas aux fondations
 seulement ; les fûts restent dimensionnés sous A_Ed.
 
 ## Référentiel

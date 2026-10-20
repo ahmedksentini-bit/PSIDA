@@ -239,7 +239,8 @@ courants parallèles à la ligne d'appui est placé, intercalé au même espacem
 Depuis la v0.53 : l'onglet « Calcul sismique » transmet aux appuis les efforts de la méthode choisie (mode fondamental,
 multimodale, temporel linéaire ou pont isolé) et, pour les fondations seules, les effets de l'EN 1998-2 5.8.2 (A_Ed × q en
 ductilité limitée et pour un pont isolé, dimensionnement en capacité des piles γ0 M_Rd au-delà, plafonné à q·A_Ed) ; la note
-des appuis donne la méthode et le passage V_E → V par appui.
+des appuis donne la méthode et le passage V_E → V par appui. v0.53.1 : appareils en élastomère (EN 1998-2 5.3(8)P),
+V_b = 1,3 K_b d_b pour les culées et min(V_C ; V_b) pour les piles.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et
