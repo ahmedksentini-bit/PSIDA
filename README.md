@@ -228,7 +228,7 @@ bulbe des contraintes de Boussinesq (formule de Newmark) sous la semelle la plus
 superficielle (coupe, vue en plan, nomenclature ; bielles ou section S₁ des consoles), d'un pieu (élévation, ancrage dans la
 semelle, moments du modèle de Winkler, coupe) et de la semelle sur deux files de pieux (bandes de tirants, retours d'ancrage).
 Les barres sont proposées par PSIDA pour couvrir les sections calculées et restent à reprendre sur les plans d'exécution.
-Depuis la v0.52 : aciers des chevêtres incorporés (guide PSIDP-EL annexe 4) dans le plan de ferraillage — barres parallèles
+Depuis la v0.52 : aciers des chevêtres incorporés (guide PSIDP-EL annexe 4) dans le plan de ferraillage (repères numérotés après ceux de la dalle courante, v0.52.1) — barres parallèles
 à la ligne d'appui par bande (①, ②, ③ en face supérieure ; ①', ②' en face inférieure), en complément des transversaux
 courants, avec repères dans la nomenclature et tracé sur les coupes sur appui ; bandeau « résultats périmés » dès qu'une donnée
 change après un calcul, ou que l'onglet « Calcul sismique » envoie des efforts différents de ceux du dernier calcul, avec un

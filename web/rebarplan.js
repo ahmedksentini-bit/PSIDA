@@ -74,7 +74,8 @@ export function longitudinalRebarSVG(deck, plan) {
 /** Coupe transversale à l'abscisse x : barres longitudinales (points) et transversales (traits). */
 export function crossRebarSVG(deck, plan, x, title) {
   const chev = (plan.chevMarks || []).filter(m => Math.abs(deck.beam.x0[m.support] - x) < 1e-6);
-  const W = 1100, H = chev.length ? 272 : 250;
+  const onPier = deck.beam.x0.slice(1, -1).some(xa => Math.abs(xa - x) < 1e-6);
+  const W = 1100, H = 250 + (onPier ? 16 : 0) + (chev.length ? 22 : 0);
   const b = deck.b, h = deck.h, m = { l: 60, r: 60 }, sc = (W - m.l - m.r) / (2 * b);
   const sy = y => m.l + (y + b) * sc, hPx = Math.max(40, Math.min(90, h * sc * 1.6)), yT = 90, yB = yT + hPx;
   const c = 0.03 * hPx / h + 6;
@@ -112,10 +113,11 @@ export function crossRebarSVG(deck, plan, x, title) {
   s += `<text x="${m.l}" y="${yB + 30}" fill="${COL.inf}">Nappe inférieure : ${botF ? bubbleTxt(botF) : '—'}${botR ? ` + ${bubbleTxt(botR)} intercalés` : ''} = ${fr(AsBot * 1e4, 1)} cm²/m${tInf ? ` ; transversaux ${bubbleTxt(tInf)}` : ''}</text>`;
   if (chev.length) {
     const t = ms => ms.map(m => `${m.band} ${bubbleTxt(m)}`).join(', ');
-    s += `<text x="${m.l}" y="${yB + 66}" fill="${COL.chev}" font-weight="600">Chevêtre incorporé (en complément des transversaux) — sup. : ${cs.length ? t(cs) : '—'} ; inf. : ${ci.length ? t(ci) : '—'}</text>`;
+    s += `<text x="${m.l}" y="${yB + (onPier ? 82 : 66)}" fill="${COL.chev}" font-weight="600">Chevêtre incorporé (en complément des transversaux) — sup. : ${cs.length ? t(cs) : '—'} ; inf. : ${ci.length ? t(ci) : '—'}</text>`;
   }
   const lapNote = deck.beam.x0.slice(1, -1).some(xa => Math.abs(xa - x) < 1e-6) ? ' Sur appui intermédiaire : recouvrement des filantes inférieures des deux travées (une seule nappe représentée).' : '';
-  s += `<text x="${m.l}" y="${yB + 48}" opacity="0.75">${lapNote ? lapNote.trim() + ' ' : ''}Section à x = ${fr(x)} m ; cadres de chaînage des bords libres sur une largeur h ; enrobage à l'axe ${fr(plan.c * 100, 1)} cm (schématique).</text>`;
+  s += `<text x="${m.l}" y="${yB + 48}" opacity="0.75">Section à x = ${fr(x)} m ; cadres de chaînage des bords libres sur une largeur h ; enrobage à l'axe ${fr(plan.c * 100, 1)} cm (schématique).</text>`;
+  if (lapNote) s += `<text x="${m.l}" y="${yB + 64}" opacity="0.75">${lapNote.trim()}</text>`;
   return s + `</svg>`;
 }
 const bubbleTxt = mk => `(${mk.mark}) HA${mk.phi} e=${fr(mk.s * 100, 1)}`;

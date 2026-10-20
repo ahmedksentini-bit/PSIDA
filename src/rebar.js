@@ -205,7 +205,25 @@ export function rebarPlan({ deck, design, trans = null, opt = {} }) {
     });
   }
 
-  // ---------------- chevêtres incorporés (guide PSIDP-EL, annexe 4 § 6.2) : barres parallèles à la ligne d'appui, en
+  // ---------------- cadres de chaînage des bords libres (guide § 3.4.5 : ≥ 5 cm²/m) et épingles d'effort tranchant
+  const Ltot = xEnd - xStart;
+  const cad = chooseBars(5e-4, { phiMin: 10, phiMax: 14, sMax: 0.25 });
+  const cadLen = 2 * (h - 2 * c) + 2 * Math.max(h - 2 * c, 0.3) + 2 * 10 * cad.phi / 1000;
+  add({ face: 'bord', dir: 'cadre', role: 'chaînage', phi: cad.phi, s: cad.s, len: cadLen, pieces: 1, totalLen: cadLen, count: 2 * (Math.floor(Ltot / cad.s) + 1), label: 'Cadres de chaînage des bords libres', note: `largeur h = ${h.toFixed(2)} m le long de chaque bord libre, ${(cad.As * 1e4).toFixed(1)} cm²/m ≥ 5 (guide § 3.4.5)` });
+  const shearZones = [];
+  let cur = null;
+  design.shear.forEach((v, i) => { if (v.AswS > 1e-9) { if (!cur) cur = { x1: xs[i], x2: xs[i], A: v.AswS }; cur.x2 = xs[i]; cur.A = Math.max(cur.A, v.AswS); } else if (cur) { shearZones.push(cur); cur = null; } });
+  if (cur) shearZones.push(cur);
+  const stirrups = shearZones.map(z => {
+    const phi = z.A > 12e-4 ? 12 : 10, a = areaOf(phi);
+    let st = Math.min(Math.sqrt(a / z.A), 0.75 * d, 0.40); st = Math.floor(st / 0.025) * 0.025 || 0.10;
+    const len = h - 2 * c + 2 * 10 * phi / 1000;
+    const zx1 = z.x1 - d / 2, zx2 = z.x2 + d / 2;
+    const count = Math.ceil((zx2 - zx1) / st) * Math.ceil(width / st);
+    return add({ face: 'âme', dir: 'vertical', role: 'épingles', phi, s: st, x1: zx1, x2: zx2, len, pieces: 1, totalLen: len, count, label: `Épingles d'effort tranchant x ∈ [${zx1.toFixed(1)} ; ${zx2.toFixed(1)}]`, note: `A_sw/s requis ${(z.A * 1e4).toFixed(1)} cm²/m², maille ${(st * 100).toFixed(1)} × ${(st * 100).toFixed(1)} cm (≤ 0,75 d)` });
+  });
+
+  // ---------------- chevêtres incorporés, repères numérotés après ceux de la dalle courante (guide PSIDP-EL, annexe 4 § 6.2) : barres parallèles à la ligne d'appui, en
   // complément des transversaux courants, dans des bandes centrées sur la ligne (① centrale, ② zone, ③ extensions ;
   // ①', ②' en face inférieure), chaque bande comptée hors de la précédente ; aux culées, bande limitée au bout de la dalle
   const chevMarks = [];
@@ -231,24 +249,6 @@ export function rebarPlan({ deck, design, trans = null, opt = {} }) {
       });
     }
   }
-
-  // ---------------- cadres de chaînage des bords libres (guide § 3.4.5 : ≥ 5 cm²/m) et épingles d'effort tranchant
-  const Ltot = xEnd - xStart;
-  const cad = chooseBars(5e-4, { phiMin: 10, phiMax: 14, sMax: 0.25 });
-  const cadLen = 2 * (h - 2 * c) + 2 * Math.max(h - 2 * c, 0.3) + 2 * 10 * cad.phi / 1000;
-  add({ face: 'bord', dir: 'cadre', role: 'chaînage', phi: cad.phi, s: cad.s, len: cadLen, pieces: 1, totalLen: cadLen, count: 2 * (Math.floor(Ltot / cad.s) + 1), label: 'Cadres de chaînage des bords libres', note: `largeur h = ${h.toFixed(2)} m le long de chaque bord libre, ${(cad.As * 1e4).toFixed(1)} cm²/m ≥ 5 (guide § 3.4.5)` });
-  const shearZones = [];
-  let cur = null;
-  design.shear.forEach((v, i) => { if (v.AswS > 1e-9) { if (!cur) cur = { x1: xs[i], x2: xs[i], A: v.AswS }; cur.x2 = xs[i]; cur.A = Math.max(cur.A, v.AswS); } else if (cur) { shearZones.push(cur); cur = null; } });
-  if (cur) shearZones.push(cur);
-  const stirrups = shearZones.map(z => {
-    const phi = z.A > 12e-4 ? 12 : 10, a = areaOf(phi);
-    let st = Math.min(Math.sqrt(a / z.A), 0.75 * d, 0.40); st = Math.floor(st / 0.025) * 0.025 || 0.10;
-    const len = h - 2 * c + 2 * 10 * phi / 1000;
-    const zx1 = z.x1 - d / 2, zx2 = z.x2 + d / 2;
-    const count = Math.ceil((zx2 - zx1) / st) * Math.ceil(width / st);
-    return add({ face: 'âme', dir: 'vertical', role: 'épingles', phi, s: st, x1: zx1, x2: zx2, len, pieces: 1, totalLen: len, count, label: `Épingles d'effort tranchant x ∈ [${zx1.toFixed(1)} ; ${zx2.toFixed(1)}]`, note: `A_sw/s requis ${(z.A * 1e4).toFixed(1)} cm²/m², maille ${(st * 100).toFixed(1)} × ${(st * 100).toFixed(1)} cm (≤ 0,75 d)` });
-  });
 
   // ---------------- contrôle A_s mis en place ≥ requis (épure non décalée et décalée)
   const check = xs.map((x, i) => ({ x, reqBot: design.envBot[i], reqTop: design.envTop[i], shBot: bot[i], shTop: top[i], provBot: providedBot(x), provTop: providedTop(x) }));
