@@ -11,6 +11,7 @@ import { TransverseModel } from './transverse.js';
 import { aideConception } from './conception.js';
 import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations, parseDesignation } from './bearings.js';
 import { chevetresEC } from './chevetre.js';
+import { woodArmer, woodArmerTous, transversalPlaque, chevetresPlaque, reactionsAppareils, renfortsAppareils } from './plate/design.js';
 import { raideurAppareil } from './plate/deck.js';
 import { parseAxles, vehicleEnvelope, provisionalProfile, ANNEX_A_VEHICLES, dynLM3 } from './vehicles.js';
 import { zonage } from './zonage.js';
@@ -216,7 +217,7 @@ export function compute(p) {
     const st0 = compute({ ...p, methodeTablier: 'guyon' });
     const kv = st0.bearings.rows.map(r => (r.sel ? raideurAppareil(r.sel.bd, r.sel.n) : Infinity));
     const st = compute({ ...p, deckInput: { ...p.deckInput, plaque: { nb: st0.bearings.nb, kv, E: p.E || 34000, psi: p.concept.psi || 100 } } });
-    st.guyon = { perm: st0.perm, ec: st0.ec, f61: st0.f61, design: st0.design, rebar: st0.rebar, bearings: st0.bearings };
+    st.guyon = { perm: st0.perm, ec: st0.ec, f61: st0.f61, design: st0.design, transDesign: st0.transDesign, trans: st0.trans, rebar: st0.rebar, bearings: st0.bearings, chevetres: st0.chevetres };
     st.dt += st0.dt;
     return st;
   }
@@ -228,18 +229,25 @@ export function compute(p) {
   const f61 = deck.fascicule61({ nRetenue: p.nRetenue, classe: p.classe, mil: p.mil });
   const thermal = p.withTherm ? deck.thermal({ dTheat: p.dT[0], dTcool: p.dT[1], E: p.E, I: p.I }) : null;
   const settle = p.withTherm ? deck.settlements({ delta: p.delta, E: p.E, I: p.I, phi: p.phiFluage }) : null;
+  // plaque : dimensionnement sur les moments de Wood-Armer (m_x ± |m_xy|, m_y ± |m_xy|)
+  const PL = deck.plaque;
+  const permD = PL ? woodArmer(perm) : perm, ecD = PL ? woodArmerTous(ec) : ec, f61D = PL ? woodArmerTous(f61) : f61;
   const design = {
-    EC: designEC(deck, perm, ec, { ...p.mat, thermal, settle }),
-    F61: designBAEL(deck, perm, f61, { ...p.mat, thermal, settle }),
+    EC: designEC(deck, permD, ecD, { ...p.mat, thermal, settle }),
+    F61: designBAEL(deck, permD, f61D, { ...p.mat, thermal, settle }),
   };
+  // plaque : pointes de moment au droit des appareils des piles reprises par des renforts locaux (annexe 4 § 7)
+  if (PL) { renfortsAppareils(deck, design.EC); renfortsAppareils(deck, design.F61); }
   const tm = new TransverseModel(deck, { tRev: p.mat.tRev, nHarm: 15, I: p.I });
-  const trans = tm.run({ alpha: EC_ALPHA[p.alpha], f61opt: { nRetenue: p.nRetenue, classe: p.classe, mil: p.mil }, thermal, settle });
+  const transG = tm.run({ alpha: EC_ALPHA[p.alpha], f61opt: { nRetenue: p.nRetenue, classe: p.classe, mil: p.mil }, thermal, settle });
+  // plaque : flexion transversale de la travée courante lue sur la plaque (m_y de Wood-Armer), Guyon pour ν·m_x thermique
+  const trans = PL ? transversalPlaque(deck, permD, ecD, f61D, transG) : transG;
   // Fascicule 61 / BAEL : pratique SETRA — dalle droite équivalente au biais mécanique (PSI-DA 68, PSIDA.EL, PSIDP.EL) et,
   // en fissuration peu nuisible, ELU avec ν = 0 (béton fissuré) ; l'Eurocode suit CHAMOA (pas de transformation, ν de la dalle)
   const runF = nu => new TransverseModel(deck, { tRev: p.mat.tRev, nHarm: 15, I: p.I, nu, skewEquivalent: true }).run({ alpha: EC_ALPHA[p.alpha], f61opt: { nRetenue: p.nRetenue, classe: p.classe, mil: p.mil }, thermal, settle });
   const skewed = (p.concept.psi || 100) < 100;
-  const transF = skewed ? runF(deck.nu) : trans;
-  const transELU = p.mat.fissuration === 'peu nuisible' && deck.nu > 0 ? runF(0) : null;
+  const transF = skewed && !PL ? runF(deck.nu) : trans;
+  const transELU = !PL && p.mat.fissuration === 'peu nuisible' && deck.nu > 0 ? runF(0) : null;
   const skewOpt = { psi: p.concept.psi, I: p.I, transversePerpendicular: p.concept.transversePerpendicular };
   const transDesign = {
     EC: designTransverseEC(deck, trans, design.EC, { ...p.mat, phi: p.mat.phiT, phiLong: p.mat.phi, ...skewOpt }),
@@ -267,6 +275,12 @@ export function compute(p) {
   const bearings = designBearings({ deck, beamComb: design.EC.beam, EI, nPerLine: p.concept.nBearings, xFixed: p.concept.xFixed, epsSlow: p.concept.epsSlow, dT: p.concept.dTu, alphaQ1: ec.alpha.aQ[0], alphaq1: ec.alpha.aq1, ineq, rot: rotQ ? { perm: rotPerm, traffic: rotQ } : null,
     impose: p.concept.bearingEnd || p.concept.bearingPier ? { end: p.concept.bearingEnd, pier: p.concept.bearingPier } : null });
   bearings.rotPerm = rotPerm; bearings.EI = EI;
+  if (PL) {
+    // plaque : réaction de l'appareil le plus chargé lue sur la plaque (au lieu des coefficients d'inégalité PSI-DA 68)
+    const ra = reactionsAppareils(deck, perm, ec, design.EC.beam);
+    bearings.plaque = ra;
+    bearings.rows.forEach((r, i) => { r.PSIDA = { Pmax: r.Pmax, kCP: r.kCP, kQ: r.kQ }; r.Pmax = ra[i].Pmax; r.Rk = ra[i].Rk; r.kCP = ra[i].kCP; r.kQ = ra[i].kQ; });
+  }
   const cases = [
     { id: 'TS', label: 'LM1 – TS', res: ec.TS, ref: 'EC' }, { id: 'UDL', label: 'LM1 – UDL', res: ec.UDL, ref: 'EC' },
     { id: 'LM1', label: 'LM1 (TS + UDL)', res: ec.LM1, ref: 'EC' }, { id: 'gr1a', label: 'gr1a (LM1 + trottoirs 3 kN/m²)', res: ec.gr1a, ref: 'EC' },
@@ -278,7 +292,8 @@ export function compute(p) {
   ];
   for (let k = cases.length - 1; k >= 0; k--) if (!cases[k].res) cases.splice(k, 1);
   if (thermal) cases.push({ id: 'therm', label: 'Gradient thermique (±)', res: { ...thermal, Vmax: thermal.Vmax, Vmin: thermal.Vmin }, ref: 'EC' }, { id: 'settle', label: 'Tassements aléatoires (±)', res: settle, ref: 'EC' });
-  const chevetres = chevetresEC({ deck, perm, ec, n: bearings.nb, psi: p.concept.psi, cover: p.mat.c, phi: p.mat.phiT, fck: p.mat.fck, fyk: p.mat.fyk });
+  const chev0 = chevetresEC({ deck, perm, ec, n: bearings.nb, psi: p.concept.psi, cover: p.mat.c, phi: p.mat.phiT, fck: p.mat.fck, fyk: p.mat.fyk });
+  const chevetres = PL && PL.M.nb === bearings.nb ? chevetresPlaque(chev0, { deck, perm: permD, ec: ecD, fck: p.mat.fck, fyk: p.mat.fyk }) : chev0;
   const concept = aideConception(conceptInput(p), { deck, perm, design: design.EC, transDesign: transDesign.EC });
   const extra = computeExtra(p, deck, perm, ec, thermal, settle, design.EC, bearings);
   // plan de ferraillage sur l'enveloppe des profils (définitif, chantier, LM3)
@@ -306,7 +321,7 @@ export function compute(p) {
   }
   let supports = null, supportsError = null;
   try { supports = computeSupports({ p, deck, perm, f61, ec, bearings, psidp, thermal }, p.supports); } catch (e) { supportsError = e.message; }
-  return { psidp, psidpError, supports, supportsError, rebar, rebarError, p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transF, transELU, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
+  return { psidp, psidpError, supports, supportsError, rebar, rebarError, p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transG, transF, transELU, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
 }
 
 /** Aide à la conception seule : géométrie, charges permanentes et règles du guide (quelques dixièmes de seconde). */

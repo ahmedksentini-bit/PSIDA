@@ -185,6 +185,16 @@ export function rebarPlan({ deck, design, trans = null, opt = {} }) {
       label: `Renforts supérieurs sur P${i}`, note: `intercalés ; ${(x0[i] - r1).toFixed(2)} m côté travée ${i} et ${(r2 - x0[i]).toFixed(2)} m côté travée ${i + 1} (épure décalée + l_bd = ${ar.lbd.toFixed(2)} m)` });
     supTop.push({ i, pk, renfort: m });
   }
+  // plaque : renforcements locaux au droit des appareils des piles (guide PSIDP-EL, annexe 4 § 7.2), sur la largeur de
+  // la bande ① centrée sur chaque appareil, ± 0,2 L de part et d'autre de la ligne d'appui (+ l_bd)
+  const locMarks = [];
+  for (const ra of design.renfortsAppareils || []) {
+    const b = chooseBars(ra.As, { phiMin: 12, phiMax: 25, sMax: 0.20, sMin: 0.10 });
+    const an = anchT(b.phi), x1 = ra.x1 - an.lbd, x2 = ra.x2 + an.lbd, pc = pieces(x2 - x1, an.l0, Lmax);
+    const per = Math.max(2, Math.floor(ra.width / b.s + 1e-9) + 1);
+    locMarks.push(add({ face: 'sup', dir: 'long', role: 'renfort appareils', support: ra.support, phi: b.phi, s: b.s, x1, x2, len: x2 - x1, pieces: pc.n, totalLen: pc.total, count: per * ra.yb.length, yb: ra.yb, width: ra.width,
+      label: `Renforts locaux au droit des appareils de P${ra.support}`, note: `pointe de moment (plaque) : ${(ra.As * 1e4).toFixed(1)} cm²/m au-delà du courant, ${per} barres sur ${ra.width.toFixed(2)} m centrés sur chacun des ${ra.yb.length} appareils (annexe 4 § 7.2 du guide PSIDP-EL)`, req: ra.As, provided: b.As }));
+  }
   const providedTop = x => (x >= filTop.x1 && x <= filTop.x2 ? areaOf(filTop.phi) / filTop.s : 0) + supTop.reduce((a, t) => a + (t.renfort && x >= t.renfort.x1 && x <= t.renfort.x2 ? areaOf(t.renfort.phi) / t.renfort.s : 0), 0);
   const providedBot = x => spansBot.reduce((a, sp) => a + sp.provided(x), 0);
 
@@ -270,5 +280,5 @@ export function rebarPlan({ deck, design, trans = null, opt = {} }) {
   const deficits = check.filter(r => r.provBot + 1e-7 < Math.max(r.reqBot, r.shBot) || r.provTop + 1e-7 < Math.max(r.reqTop, r.shTop));
   const totalMass = marks.reduce((a, m) => a + m.mass, 0);
   const volume = deck.area * (deck.beam.Ltot + aL + aR);
-  return { c, marks, spansBot, filTop, supTop, transMarks, chevMarks, chevBands, stirrups, check, deficits, totalMass, volume, ratio: totalMass / volume, al, sMaxPeak, sMaxMain, xStart, xEnd };
+  return { c, marks, spansBot, filTop, supTop, locMarks, transMarks, chevMarks, chevBands, stirrups, check, deficits, totalMass, volume, ratio: totalMass / volume, al, sMaxPeak, sMaxMain, xStart, xEnd };
 }

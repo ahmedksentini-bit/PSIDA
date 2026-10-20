@@ -45,7 +45,39 @@ export function plaqueTablier(deck, { h = 0.25, E = 34000, nu = deck.nu ?? 0.2, 
   const appuis = x0.flatMap((x, i) => yb.map((y, k) => ({ x, y, k: kLigne(i), ligne: i, rang: k })));
   const P = new PlaqueDF({ xs, ys, D: (_, y) => Dy(y), nu, appuis });
   const iSec = secs.map(x => P.plusProche(xs, x)), jFib = deck.ys.map(y => P.plusProche(ys, y));
-  return { P, deck, xs, ys, yb, a, nb, iSec, jFib, E, nu, h };
+  const M = { P, deck, xs, ys, yb, a, nb, iSec, jFib, E, nu, h };
+  M.bandes = bandesChevetre(M);
+  return M;
+}
+
+/**
+ * Bandes de ferraillage des chevêtres incorporés (annexe 4 du guide PSIDP-EL, § 6.2) sur chaque ligne d'appui : face
+ * supérieure ①, ②, ③ centrées sur chaque appareil, face inférieure ①′, ②′ centrées entre deux appareils. Largeurs du
+ * guide : ① 2/3·max(c, a, e), ② max(2c, a, e), ③ 2·max(a, e, c), ①′ 2/3·max(a, e), ②′ 2·max(a, e).
+ * Poids des nœuds de la grille pour la moyenne sur [y1, y2] (longueur tributaire dans la bande / largeur).
+ */
+export function bandesChevetre(M) {
+  const { yb, ys, deck } = M, b = deck.b, n = yb.length;
+  const a = n > 1 ? yb[1] - yb[0] : 2 * b, c = b - yb[n - 1];
+  const e = n > 3 ? yb[2] - yb[1] : a, big = Math.max(c, a, e), ae = Math.max(a, e);
+  const larg = { top: [2 / 3 * big, Math.max(2 * c, a, e), 2 * big], bot: [2 / 3 * ae, 2 * ae] };
+  const out = [];
+  const poids = (y1, y2) => {
+    const w = [];
+    for (let j = 0; j < ys.length; j++) {
+      const lo = j > 0 ? (ys[j - 1] + ys[j]) / 2 : ys[0], hi = j < ys.length - 1 ? (ys[j] + ys[j + 1]) / 2 : ys[ys.length - 1];
+      const l = Math.min(hi, y2) - Math.max(lo, y1);
+      if (l > 1e-9) w.push([j, l / (y2 - y1)]);
+    }
+    return w;
+  };
+  for (const [face, centres] of [['top', yb], ['bot', yb.slice(1).map((y, k) => (y + yb[k]) / 2)]]) {
+    larg[face].forEach((w, rang) => centres.forEach(yc => {
+      const y1 = Math.max(-b, yc - w / 2), y2 = Math.min(b, yc + w / 2);
+      out.push({ face, rang, yc, y1, y2, largeur: w, poids: poids(y1, y2) });
+    }));
+  }
+  return { bandes: out, a, c, e };
 }
 
 /** Résultats d'un cas de charge aux sections × fibres de la poutre, réactions par appareil et par ligne. */
@@ -62,7 +94,9 @@ export function resultats(M, w) {
   const nL = deck.beam.x0.length;
   const R = Array.from({ length: nL }, (_, i) => reac.filter(r => r.ligne === i).reduce((s, r) => s + r.R, 0));
   const Rapp = Array.from({ length: nL }, (_, i) => reac.filter(r => r.ligne === i).sort((u, v) => u.rang - v.rang).map(r => r.R));
-  return { mx, my, mxy, Mtot, R, Rapp, w, champ: m, xs, ys };
+  // moyennes de m_y et m_xy sur les bandes de chevêtre de chaque ligne d'appui
+  const B = M.bandes ? deck.beam.x0.map(x => { const i = P.plusProche(xs, x); return M.bandes.bandes.map(bd => ({ my: bd.poids.reduce((t, [j, w]) => t + w * m.my[P.idx(i, j)], 0), mxy: bd.poids.reduce((t, [j, w]) => t + w * m.mxy[P.idx(i, j)], 0) })); }) : null;
+  return { mx, my, mxy, Mtot, R, Rapp, B, w, champ: m, xs, ys };
 }
 
 /**
@@ -90,5 +124,6 @@ export function permanentPlaque(M, files = null) {
     return { ...f, total: F.reduce((s, v) => s + v, 0), ...resultats(M, w) };
   });
   const somme = k => fichiers.reduce((acc, f) => acc.map((row, s) => (Array.isArray(row) ? row.map((v, i) => v + f[k][s][i]) : row + f[k][s])), fichiers[0][k].map(row => (Array.isArray(row) ? row.map(() => 0) : 0)));
-  return { fichiers, mx: somme('mx'), my: somme('my'), mxy: somme('mxy'), Mtot: somme('Mtot'), R: somme('R'), Rapp: somme('Rapp') };
+  const B = fichiers[0].B ? fichiers[0].B.map((row, i) => row.map((_, k) => ({ my: fichiers.reduce((t, f) => t + f.B[i][k].my, 0), mxy: fichiers.reduce((t, f) => t + f.B[i][k].mxy, 0) }))) : null;
+  return { fichiers, mx: somme('mx'), my: somme('my'), mxy: somme('mxy'), Mtot: somme('Mtot'), R: somme('R'), Rapp: somme('Rapp'), B };
 }

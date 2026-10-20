@@ -8,6 +8,7 @@ import { formDefaults } from '../tools/formdefaults.mjs';
 import { parseData, compute } from '../src/pipeline.js';
 import { SlabDeck } from '../src/analysis.js';
 import { EC_ALPHA } from '../src/loads_ec.js';
+import { woodArmer } from '../src/plate/design.js';
 
 test('Cholesky bande : système de Poisson 1D', () => {
   const n = 50, K = new BandSPD(n, 1), f = new Float64Array(n).fill(1);
@@ -114,4 +115,35 @@ test('Plaque, trafic LM1 de l\'exemple : symétrie, pointes sur appareils, cohé
   // sur pile, m_x négatif concentré au droit des appareils (fibres ±4,5 m) plus qu'entre eux (±3 m)
   const s1 = secs.findIndex(s => Math.abs(s.x - P.beam.x0[1]) < 1e-6), j45 = ys.findIndex(y => Math.abs(y - 4.5) < 1e-6), j3 = ys.findIndex(y => Math.abs(y - 3) < 1e-6);
   if (j45 >= 0 && j3 >= 0) assert.ok(e.mxMin[s1][j45] < e.mxMin[s1][j3]);
+});
+
+test('Wood-Armer : m_x* = m_x ± |m_xy|, m_y* = m_y ± |m_xy| (règle de base, majorante)', () => {
+  const r = { mxMax: [[10, 0]], mxMin: [[-5, -20]], myMax: [[3, 1]], myMin: [[-1, -2]], mxyMax: [[4, 1]], mxyMin: [[-6, -1]] };
+  const w = woodArmer(r);
+  assert.deepEqual(w.mxMax, [[16, 1]]); assert.deepEqual(w.mxMin, [[-11, -21]]);
+  assert.deepEqual(w.myMax, [[9, 2]]); assert.deepEqual(w.myMin, [[-7, -3]]);
+  // règle corrigée (m_y* < 0 → m_y* = 0, m_x* = m_x + m_xy²/|m_y|) jamais plus défavorable que la règle de base
+  for (const [mx, my, mxy] of [[100, -80, 30], [50, -10, 5], [10, -100, 60]]) if (my + Math.abs(mxy) < 0) assert.ok(mx + mxy * mxy / Math.abs(my) <= mx + Math.abs(mxy));
+});
+
+test('Calcul complet en plaque : dimensionnement, chevêtres proches de l\'annexe 4 sur piles, appareils, plan de ferraillage', () => {
+  const p = parseData(formDefaults());
+  const st = compute({ ...p, methodeTablier: 'plaque' }), G = st.guyon;
+  assert.ok(st.deck.plaque && !st.rebarError && !st.supportsError, st.rebarError || st.supportsError);
+  assert.ok(st.rebar.deficits.length <= G.rebar.deficits.length);
+  // aciers inférieurs longitudinaux : du même ordre que Guyon-Massonnet (CHAMOA)
+  const r = Math.max(...st.design.EC.envBot) / Math.max(...G.design.EC.envBot);
+  assert.ok(r > 0.9 && r < 1.2, `As inf plaque / Guyon = ${r}`);
+  // pointes sur appareils des piles reprises par renforts locaux (annexe 4 § 7)
+  assert.ok(st.design.EC.renfortsAppareils.length === st.deck.spans.length - 1 && st.rebar.locMarks.length === st.deck.spans.length - 1);
+  // chevêtres de pile : bande ① de la plaque à ± 15 % du moment local du guide (règles calées sur MRB)
+  for (const cv of st.chevetres.slice(1, -1)) {
+    const g = Math.max(cv.annexe4.mc, cv.annexe4.me_neg);
+    assert.ok(Math.abs(cv.bands.top[0].m / g - 1) < 0.15, `P${cv.i} : ${cv.bands.top[0].m} / ${g}`);
+    assert.ok(Math.abs(cv.R2 / cv.annexe4.R2 - 1) < 0.1);
+  }
+  // appareil le plus chargé ≥ réaction caractéristique lue sur la plaque
+  st.bearings.rows.forEach((row, i) => assert.ok(row.Pmax >= Math.max(...st.bearings.plaque[i].Rk) - 1e-6));
+  // flexion transversale : lue sur la plaque, mêmes ordres de grandeur que Guyon
+  st.transDesign.EC.spans.forEach((sp, j) => assert.ok(sp.bot.As / G.transDesign.EC.spans[j].bot.As > 0.8 && sp.bot.As / G.transDesign.EC.spans[j].bot.As < 1.5));
 });

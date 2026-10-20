@@ -27,7 +27,7 @@ import { EC_ALPHA, notionalLanes, lm1, lm2, TS_GEOM, FOOTWAY } from './loads_ec.
 import { classePont, voiesF61, chargeA, BC, BT, MC120, D240, TROTTOIR, deltaDyn, maxAxleLoadOnLength, maxStripTrainLoad } from './loads_f61.js';
 
 /** Champs à deux indices des résultats (section × fibre ; ligne × appareil pour Rapp). */
-const CLES_2D = ['mxMax', 'mxMin', 'myMax', 'myMin', 'mxyMax', 'mxyMin', 'RappMax', 'RappMin'];
+const CLES_2D = ['mxMax', 'mxMin', 'myMax', 'myMin', 'mxyMax', 'mxyMin', 'RappMax', 'RappMin', 'BmyMax', 'BmyMin', 'BmxyMax', 'BmxyMin'];
 
 /** Permutations d'un tableau (petites tailles). */
 function permutations(arr) {
@@ -170,12 +170,14 @@ export class SlabDeck {
       // plaque : m_x réel (au lieu de K·M/2b), m_y, m_xy et réactions par appareil, chaque composante entre k_min et k_max
       const pr = permanentPlaque(this.plaque.M, files);
       const z2 = () => Array.from({ length: nS }, () => this.ys.map(() => 0));
-      const ext = { my: z2(), mxy: z2(), myMax: z2(), myMin: z2(), mxyMax: z2(), mxyMin: z2(), Rapp: pr.Rapp, RappMax: pr.Rapp.map(r => r.map(() => 0)), RappMin: pr.Rapp.map(r => r.map(() => 0)) };
+      const zB = () => pr.B.map(r => r.map(() => 0));
+      const ext = { my: z2(), mxy: z2(), myMax: z2(), myMin: z2(), mxyMax: z2(), mxyMin: z2(), Rapp: pr.Rapp, RappMax: pr.Rapp.map(r => r.map(() => 0)), RappMin: pr.Rapp.map(r => r.map(() => 0)), BmyMax: zB(), BmyMin: zB(), BmxyMax: zB(), BmxyMin: zB() };
       for (const row of mx) row.fill(0); for (const row of mxMax) row.fill(0); for (const row of mxMin) row.fill(0);
       for (const f of pr.fichiers) {
         const add = (src, nom, nMax, nMin) => src.forEach((row, s) => row.forEach((v, i) => { (nom ? ext[nom] : mx)[s][i] += v; (nMax === 'mx' ? mxMax : ext[nMax])[s][i] += Math.max(f.kmin * v, f.kmax * v); (nMin === 'mx' ? mxMin : ext[nMin])[s][i] += Math.min(f.kmin * v, f.kmax * v); }));
         add(f.mx, null, 'mx', 'mx'); add(f.my, 'my', 'myMax', 'myMin'); add(f.mxy, 'mxy', 'mxyMax', 'mxyMin');
         f.Rapp.forEach((r, i) => r.forEach((v, k) => { ext.RappMax[i][k] += Math.max(f.kmin * v, f.kmax * v); ext.RappMin[i][k] += Math.min(f.kmin * v, f.kmax * v); }));
+        f.B.forEach((r, i) => r.forEach((v, k) => { for (const g of ['my', 'mxy']) { ext[`B${g}Max`][i][k] += Math.max(f.kmin * v[g], f.kmax * v[g]); ext[`B${g}Min`][i][k] += Math.min(f.kmin * v[g], f.kmax * v[g]); } }));
       }
       return { files, gTotal, M, Vm, Vp, R, mx, Mmax, Mmin, Rmax, Rmin, mxMax, mxMin, ...ext, plaque: true };
     }
@@ -306,7 +308,8 @@ export class SlabDeck {
       const mxMax = Array.from({ length: nS }, () => this.ys.map(() => 0));
       const mxMin = Array.from({ length: nS }, () => this.ys.map(() => 0));
       const PL = this.plaque, z2 = () => Array.from({ length: nS }, () => this.ys.map(() => 0));
-      const extra = PL ? { myMax: z2(), myMin: z2(), mxyMax: z2(), mxyMin: z2(), RappMax: this.beam.x0.map(() => new Array(PL.M.nb).fill(0)), RappMin: this.beam.x0.map(() => new Array(PL.M.nb).fill(0)) } : null;
+      const zB = () => this.beam.x0.map(() => PL.M.bandes.bandes.map(() => 0));
+      const extra = PL ? { myMax: z2(), myMin: z2(), mxyMax: z2(), mxyMin: z2(), RappMax: this.beam.x0.map(() => new Array(PL.M.nb).fill(0)), RappMin: this.beam.x0.map(() => new Array(PL.M.nb).fill(0)), BmyMax: zB(), BmyMin: zB(), BmxyMax: zB(), BmxyMin: zB() } : null;
       for (const f of files) {
         const env = this._beamEnvelopes(f);
         if (PL) {
@@ -328,7 +331,8 @@ export class SlabDeck {
           }
           for (let k = PL.nM; k < PL.cibles.length; k++) {
             const c = PL.cibles[k], e = pe[k], d = delta ? dR(c.ligne) : 1;
-            extra.RappMax[c.ligne][c.rang] += Math.max(e.max * d, e.min * d, 0); extra.RappMin[c.ligne][c.rang] += Math.min(e.max * d, e.min * d, 0);
+            if (c.g === 'R') { extra.RappMax[c.ligne][c.rang] += Math.max(e.max * d, e.min * d, 0); extra.RappMin[c.ligne][c.rang] += Math.min(e.max * d, e.min * d, 0); }
+            else { const nm = c.g.slice(1); extra[`B${nm}Max`][c.ligne][c.kb] += Math.max(e.max * d, e.min * d, 0); extra[`B${nm}Min`][c.ligne][c.kb] += Math.min(e.max * d, e.min * d, 0); }
           }
         }
         for (let i = 0; i < nSup; i++) { const d = delta ? dR(i) : 1; Tmax[i] += env.T[i].max * d; Tmin[i] += env.T[i].min * d; }
@@ -601,9 +605,9 @@ export class SlabDeck {
       return delta[sec.span];
     };
     for (const k of ['Mmax', 'Mmin', 'Vmax', 'Vmin']) out[k] = out[k].map((v, s) => v * dAt(s));
-    for (const k of CLES_2D) if (out[k] && !k.startsWith('Rapp')) out[k] = out[k].map((row, s) => row.map(v => v * dAt(s)));
+    for (const k of CLES_2D) if (out[k] && !k.startsWith('Rapp') && k[0] !== 'B') out[k] = out[k].map((row, s) => row.map(v => v * dAt(s)));
     const dMax = Math.max(...delta);
-    for (const k of ['RappMax', 'RappMin']) if (out[k]) out[k] = out[k].map(row => row.map(v => v * dMax));
+    for (const k of ['RappMax', 'RappMin', 'BmyMax', 'BmyMin', 'BmxyMax', 'BmxyMin']) if (out[k]) out[k] = out[k].map(row => row.map(v => v * dMax));
     out.Rmax = out.Rmax.map(v => v * dMax); out.Rmin = out.Rmin.map(v => v * dMax);
     out.delta = delta;
     return out;

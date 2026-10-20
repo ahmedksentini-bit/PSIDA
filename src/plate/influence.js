@@ -29,6 +29,9 @@ export class InfluencePlaque {
     for (const g of GRANDEURS) for (let s = 0; s < this.nS; s++) for (let f = 0; f < this.nF; f++) this.cibles.push({ g, s, f, i: iSec[s], j: jFib[f] });
     this.nM = this.cibles.length;
     for (const [k, a] of P.appuis.entries()) this.cibles.push({ g: 'R', ligne: a.ligne, rang: a.rang, k });
+    // moyennes de m_y et m_xy sur les bandes de chevêtre (ligne d'appui × bande)
+    this.nB0 = this.cibles.length;
+    deck.beam.x0.forEach((x, ligne) => { const i = P.plusProche(P.xs, x); this.M.bandes.bandes.forEach((bd, kb) => { for (const g of ['my', 'mxy']) this.cibles.push({ g: 'B' + g, ligne, kb, i, poids: bd.poids }); }); });
     this._eta = new Array(this.cibles.length);
     this._lignes = new Map();
     this._env = new Map();
@@ -42,6 +45,7 @@ export class InfluencePlaque {
     const { P } = this.M, c = this.cibles[k];
     let v;
     if (c.g === 'R') { v = new Float64Array(P.n); const a = P.appuis[c.k]; v[P.idx(a.i, a.j)] = a.kEff; }
+    else if (c.g[0] === 'B') { v = new Float64Array(P.n); for (const [j, w] of c.poids) { const u = P.vecteurGrandeur(c.i, j, c.g.slice(1)); for (let p = 0; p < v.length; p++) if (u[p]) v[p] += w * u[p]; } }
     else v = P.vecteurGrandeur(c.i, c.j, c.g);
     return (this._eta[k] = Float32Array.from(P.resoudre(v)));
   }
