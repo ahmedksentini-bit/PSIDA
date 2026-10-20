@@ -12,7 +12,7 @@ import { NoteCalcul, References } from "../note/NoteCalcul.tsx";
 import { TableValidation } from "../note/TableValidation.tsx";
 import { Onglets, Panneau } from "../Onglets.tsx";
 import { aller } from "../route.ts";
-import { integreDansPsida } from "../psida.ts";
+import { integreDansPsida, sourcesEfforts } from "../psida.ts";
 
 const Vue3D = lazy(() => import("../projet/Vue3D.tsx"));
 
@@ -301,8 +301,8 @@ export default function PageAnalyse({ projet, sous }: { projet: Projet; sous: st
           {projet.nom} — Tx = {f(r.directions.x.lbdp.T)} s, Ty = {f(r.directions.y.lbdp.T)} s ; Fx = {f(r.directions.x.ubdp.F)} MN, Fy = {f(r.directions.y.ubdp.F)} MN
         </p>
         <p>
-          <button type="button" className="bouton-secondaire" onClick={() => telechargerEfforts(exporterEfforts(projet, a, r))}>
-            Exporter les efforts par appui (PSIDA)
+          <button type="button" className="bouton-secondaire" onClick={() => { try { const { methode, sources } = sourcesEfforts(projet, a, m, r); telechargerEfforts(exporterEfforts(projet, a, r, sources, methode)); } catch (e) { window.alert(e instanceof Error ? e.message : String(e)); } }}>
+            Exporter les efforts par appui (PSIDA, méthode choisie dans l'onglet Méthodes)
           </button>{" "}
           {integreDansPsida()
             ? "Dans PSIDA, ces efforts sont transmis automatiquement : bouton « Utiliser ces efforts dans Appuis et fondations » au-dessus."

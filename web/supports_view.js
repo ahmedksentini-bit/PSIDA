@@ -79,7 +79,9 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
   }
 
   if (sup.seisme) {
-    h2(`Séisme — EN 1998-2, méthode du mode fondamental (${sup.seisme.source === 'onglet' ? 'onglet « Calcul sismique » : Pont EC8 complet' : 'moteur de Pont EC8, projet PSIDA'})`);
+    { const ML = { mode_fondamental: 'méthode du mode fondamental', multimodale: 'analyse multimodale', temporel_lineaire: 'calcul temporel linéaire', pont_isole: 'pont isolé (chapitre 7)' };
+      const meth = sup.seisme.efforts && sup.seisme.efforts.methode ? ML[sup.seisme.efforts.methode] || sup.seisme.efforts.methode : 'méthode du mode fondamental';
+      h2(`Séisme — EN 1998-2, ${meth} (${sup.seisme.source === 'onglet' ? 'onglet « Calcul sismique » : Pont EC8 complet' : 'moteur de Pont EC8, projet PSIDA'})`); }
     if (sup.seisme.error) para(`Calcul sismique impossible : ${sup.seisme.error}`);
     else {
       const sz = sup.seisme.site || sup.sp.ec8, qq = sup.seisme.q || sup.sp.seisme.q;
@@ -89,6 +91,13 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
         ['Coefficient de comportement q', F2(qq.long), F2(qq.trans)],
       ]);
       table(['Ligne', 'X + 0,3 Y + 0,3 Z : F_x / F_y / F_z [kN]', '0,3 X + Y + 0,3 Z', '0,3 X + 0,3 Y + Z', 'Déplacement tête / appareils X [cm]'], sup.seisme.efforts.appuis.map((a, i) => [lineName(Ls[i], n), ...a.cas.map(k => `${F0(k.Fx)} / ${F0(k.Fy)} / ${F0(k.Fz)}`), `${F2(a.dTete.x * 100)} / ${F2(a.dAppareils.x * 100)}`]), { small: true });
+      const ef = sup.seisme.efforts;
+      if (ef.appuis.some(a => a.capacite)) {
+        const RG = { AEd: 'A_Ed', q_fois_AEd: 'q·A_Ed', capacite: 'capacité', capacite_plafonnee: 'q·A_Ed (plafond)' };
+        const dc = d => (d ? `${F0(d.VE)} → ${F0(d.VC)} (${RG[d.regle] || d.regle}${d.MRd ? ` ; γ0 = ${F2(d.gamma0)}, n M_Rd = ${F0(d.nFuts * d.MRd)} kN·m, capacité brute ${F0(d.VCbrut)}` : ''})` : '—');
+        table(['Ligne', 'Fondations X : V_E → V [kN]', 'Fondations Y : V_E → V [kN]'], ef.appuis.map((a, i) => [lineName(Ls[i], n), dc(a.capacite && a.capacite.x), dc(a.capacite && a.capacite.y)]), { small: true });
+        comment(`Efforts pour les fondations (EN 1998-2 5.8.2), combinés 100/30/30 comme A_Ed et appliqués en tête d'appui, uniquement dans les vérifications des fondations (les fûts restent dimensionnés sous A_Ed) — X : ${ef.fondations ? ef.fondations.x : '—'} ; Y : ${ef.fondations ? ef.fondations.y : '—'}. Capacité (annexe G.2, (G.3)) : V_C = γ0 n M_Rd/L, M_Rd résistance de calcul en flexion d'un fût en pied sous l'effort normal permanent (armatures transmises par PSIDA), γ0 = 1,35 (valeur recommandée, 5.3(4)) majoré de 1 + 2(η_k − 0,1)² si η_k > 0,1 ; borné inférieurement par V_E et supérieurement par q V_E (5.3(2)) ; culées : A_Ed × ΣV_C/ΣV_E (G.4).`);
+      }
       comment(`Zone ${sz.zone}, catégorie d'importance ${sz.categorie}, sol de classe ${sz.classeSol} (arrêté du 26 octobre 2011, NF EN 1998-1/NA et 1998-2/NA) ; masse ${F0(sup.seisme.M)} t ; tablier rigide, efforts répartis selon les raideurs (appareils et fûts), propriétés limites des élastomères, combinaison des directions 100/30/30, réactions verticales forfaitaires (guide Cerema « Ponts en zone sismique », 2015). Combinaison sismique G + ψ₂,₁ Q + A_Ed (ψ₂,₁ = 0), matériaux en situation accidentelle (γ_b = 1,15 BAEL / γ_c = 1,2 EC2, γ_s = 1,0), portance des fondations ELU accidentel. Non pris en compte : inertie propre des fûts, surpoussée dynamique des terres sur les culées (Mononobe-Okabe), dispositions de ductilité ; la note sismique complète (appareils, repos d'appui, joints) s'obtient dans Pont EC8 par l'export du projet.${sup.seisme.problemes.length ? ' Alertes de Pont EC8 : ' + sup.seisme.problemes.map(p => `${p.cible} : ${p.message}`).join(' ; ') : ''}`);
     }
   }
@@ -155,7 +164,7 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
   const rows = [];
   for (const L of Ls) {
     const r = L[code];
-    const pick = ls => { const bs = r.base.filter(b => b.ls === ls); const nmax = bs.reduce((a, b) => (b.Nb > a.Nb ? b : a), bs[0]); const mmax = bs.reduce((a, b) => (Math.abs(b.Mb) > Math.abs(a.Mb) ? b : a), bs[0]); return { nmax, mmax }; };
+    const pick = ls => { const bs = r.base.filter(b => b.ls === ls && !b.fond); const nmax = bs.reduce((a, b) => (b.Nb > a.Nb ? b : a), bs[0]); const mmax = bs.reduce((a, b) => (Math.abs(b.Mb) > Math.abs(a.Mb) ? b : a), bs[0]); return { nmax, mmax }; };
     for (const ls of ['ELU', 'ELS', 'ACC']) {
       if (!r.base.some(b => b.ls === ls)) continue;
       const { nmax, mmax } = pick(ls);

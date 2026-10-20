@@ -323,7 +323,7 @@ export interface Pushover {
   remarques: string[];
 }
 
-function reactionPermanente(p: Projet, i: number, M: number): number {
+export function reactionPermanente(p: Projet, i: number, M: number): number {
   const ap = p.appuis[i]!;
   if (ap.chargesPermanentes) return (ap.chargesPermanentes.Nmax + ap.chargesPermanentes.Nmin) / 2;
   const t = p.tablier.travees;

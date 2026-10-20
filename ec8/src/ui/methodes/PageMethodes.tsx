@@ -3,7 +3,7 @@ import { actionSismique } from "../../moteur/action.ts";
 import { analyse, type Analyse } from "../../moteur/analyse.ts";
 import { modele, type Borne } from "../../moteur/modele.ts";
 import { multimodale, type DirectionMM, type Multimodale, type ReponseDirectionMM } from "../../moteur/multimodal.ts";
-import type { Projet } from "../../projet/types.ts";
+import type { MethodeEfforts, Projet } from "../../projet/types.ts";
 import { formatNombre } from "../format.ts";
 import { NoteCalcul, References } from "../note/NoteCalcul.tsx";
 import { Onglets, Panneau } from "../Onglets.tsx";
@@ -179,8 +179,40 @@ function SelecteurBorne({ borne, setBorne }: { borne: Borne; setBorne: (b: Borne
 
 const rep = (mm: Multimodale, d: DirectionMM, b: Borne): ReponseDirectionMM => (d === "z" ? mm.directions.z : mm.directions[d][b]);
 
-function SyntheseMM({ mm, projet, modifier }: { mm: Multimodale; projet: Projet; modifier: (f: (p: Projet) => void) => void }) {
+const METHODES_EFFORTS: { id: MethodeEfforts; titre: string }[] = [
+  { id: "mode_fondamental", titre: "Mode fondamental" },
+  { id: "multimodale", titre: "Multimodale" },
+  { id: "temporel_lineaire", titre: "Temporel linéaire" },
+  { id: "pont_isole", titre: "Pont isolé" },
+];
+
+/** Méthode dont les efforts partent vers PSIDA (« Appuis et fondations ») et dans le fichier exporté. */
+function ChoixEfforts({ projet, modifier }: { projet: Projet; modifier: (f: (p: Projet) => void) => void }) {
   const choix = projet.options.methodeEfforts ?? "mode_fondamental";
+  const q = { x: projet.comportement.qLongitudinal, y: projet.comportement.qTransversal };
+  const regle = (v: number) => (choix === "pont_isole" ? "effets avec q = 1" : v <= 1.5 ? `AEd × q (q = ${f(v, 2)})` : `dimensionnement en capacité des piles, γ0 M_Rd, plafonné à q·AEd (q = ${f(v, 2)})`);
+  return (
+    <section className="carte-plate choix-efforts">
+      <h2>Efforts transmis à PSIDA</h2>
+      <div className="segments" role="group" aria-label="Méthode des efforts exportés">
+        {METHODES_EFFORTS.map((x) => (
+          <button key={x.id} type="button" aria-pressed={choix === x.id} disabled={x.id === "pont_isole" && !projet.isolation}
+            title={x.id === "pont_isole" && !projet.isolation ? "Définir d'abord une variante isolée (sous-onglet Pont isolé)" : undefined}
+            onClick={() => modifier((p) => { p.options.methodeEfforts = x.id; })}>
+            {x.titre}
+          </button>
+        ))}
+      </div>
+      <p className="aide-bloc">
+        Efforts par appui (UBDP, combinaisons 100/30/30) envoyés vers « Appuis et fondations » de PSIDA et dans le fichier exporté. Fûts et appareils : effets de l'action
+        de calcul AEd. Fondations (EN 1998-2 5.8.2) : en X, {regle(q.x)} ; en Y, {regle(q.y)}. La poussée progressive et le temporel non linéaire servent de vérification
+        et ne transmettent pas d'efforts.{choix === "temporel_lineaire" ? " Le calcul temporel (quelques secondes) est refait à chaque modification du projet." : ""}
+      </p>
+    </section>
+  );
+}
+
+function SyntheseMM({ mm }: { mm: Multimodale }) {
   return (
     <div className="analyse-synthese">
       <div className="cartes-directions mm-cartes">
@@ -217,20 +249,6 @@ function SyntheseMM({ mm, projet, modifier }: { mm: Multimodale; projet: Projet;
           );
         })}
       </div>
-      <section className="carte-plate">
-        <h2>Efforts transmis à PSIDA</h2>
-        <div className="segments" role="group" aria-label="Méthode des efforts exportés">
-          {(["mode_fondamental", "multimodale"] as const).map((m) => (
-            <button key={m} type="button" aria-pressed={choix === m} onClick={() => modifier((p) => { p.options.methodeEfforts = m; })}>
-              {m === "mode_fondamental" ? "Mode fondamental" : "Multimodale"}
-            </button>
-          ))}
-        </div>
-        <p className="aide-bloc">
-          Méthode dont les efforts par appui (combinaisons 100/30/30, UBDP) partent vers « Appuis et fondations » de PSIDA et dans le fichier exporté. Le mode
-          fondamental reste la valeur par défaut, comme dans le guide Cerema.
-        </p>
-      </section>
       <References ids={["analyse_spectrale", "modes_significatifs", "combinaison_modale", "modele_dynamique"]} />
     </div>
   );
@@ -438,7 +456,7 @@ function Comparaison({ mm }: { mm: Multimodale }) {
   );
 }
 
-function PageMultimodale({ projet, mm, modifier }: { projet: Projet; mm: Multimodale; modifier: (f: (p: Projet) => void) => void }) {
+function PageMultimodale({ projet, mm }: { projet: Projet; mm: Multimodale }) {
   const [vue, setVue] = useState<Vue>("synthese");
   return (
     <>
@@ -456,7 +474,7 @@ function PageMultimodale({ projet, mm, modifier }: { projet: Projet; mm: Multimo
         ]}
       />
       <Panneau prefixe="mm" actif={vue} className="panneau-onglet">
-        {vue === "synthese" && <SyntheseMM mm={mm} projet={projet} modifier={modifier} />}
+        {vue === "synthese" && <SyntheseMM mm={mm} />}
         {vue === "modes" && <Modes mm={mm} projet={projet} />}
         {vue === "efforts" && <EffortsMM mm={mm} />}
         {vue === "comparaison" && <Comparaison mm={mm} />}
@@ -485,6 +503,7 @@ export default function PageMethodes({ projet, sous, modifier }: { projet: Proje
         <h1>Méthodes d'analyse</h1>
         <p>Choisir la méthode selon le pont, puis la comparer au mode fondamental.</p>
       </header>
+      <ChoixEfforts projet={projet} modifier={modifier} />
       <Onglets<SousOnglet>
         libelle="Méthodes"
         prefixe="methodes"
@@ -505,7 +524,7 @@ export default function PageMethodes({ projet, sous, modifier }: { projet: Proje
         {onglet === "pushover" && <PagePushover projet={projet} a={a} modifier={modifier} />}
         {onglet === "nonlineaire" && <PageTemporelNL projet={projet} a={a} />}
         {onglet === "isolation" && <PageIsolation projet={projet} a={a} r={r} modifier={modifier} />}
-        {onglet === "multimodale" && (typeof mm === "string" ? <p className="probleme niveau-alerte">Analyse multimodale impossible : {mm}</p> : mm && <PageMultimodale projet={projet} mm={mm} modifier={modifier} />)}
+        {onglet === "multimodale" && (typeof mm === "string" ? <p className="probleme niveau-alerte">Analyse multimodale impossible : {mm}</p> : mm && <PageMultimodale projet={projet} mm={mm} />)}
       </Panneau>
     </main>
   );

@@ -6,11 +6,16 @@
 
 import { actionSismique } from "../moteur/action.ts";
 import { analyse } from "../moteur/analyse.ts";
-import { exporterEfforts } from "../moteur/export-efforts.ts";
+import { exporterEfforts, type SourcesEfforts } from "../moteur/export-efforts.ts";
+import { pontIsole } from "../moteur/isolation.ts";
+import { temporelLineaire, type Temporel } from "../moteur/temporel.ts";
+import type { ActionSismique } from "../moteur/action.ts";
+import type { Analyse } from "../moteur/analyse.ts";
+import type { Modele } from "../moteur/modele.ts";
 import { modele } from "../moteur/modele.ts";
 import { multimodale } from "../moteur/multimodal.ts";
 import { lireProjet } from "../projet/stockage.ts";
-import type { Projet } from "../projet/types.ts";
+import type { MethodeEfforts, Projet } from "../projet/types.ts";
 import { valider } from "../projet/validation.ts";
 
 export const integreDansPsida = (): boolean => {
@@ -43,24 +48,43 @@ export function ecouterPsida(remplacer: (p: Projet) => void, surErreur: (m: stri
   return () => window.removeEventListener("message", surMessage);
 }
 
+// Calcul temporel linéaire (≈ 2 s) : gardé tant que le projet ne change pas.
+let cacheTemporel: { cle: string; t: Temporel } | null = null;
+
+/** Sources de la méthode d'efforts choisie (projet.options.methodeEfforts). */
+export function sourcesEfforts(p: Projet, a: ActionSismique, m: Modele, r: Analyse): { methode: MethodeEfforts; sources: SourcesEfforts } {
+  const methode = p.options.methodeEfforts ?? "mode_fondamental";
+  if (methode === "multimodale") return { methode, sources: { multimodale: multimodale(p, a, m, r) } };
+  if (methode === "temporel_lineaire") {
+    const cle = JSON.stringify({ ...p, nom: "" });
+    if (!cacheTemporel || cacheTemporel.cle !== cle) cacheTemporel = { cle, t: temporelLineaire(p, a, m, r) };
+    return { methode, sources: { temporel: cacheTemporel.t } };
+  }
+  if (methode === "pont_isole") {
+    if (!p.isolation) throw new Error("méthode « Pont isolé » choisie pour les efforts, mais aucune isolation n'est définie (onglet Méthodes, Pont isolé)");
+    return { methode, sources: { isole: { x: pontIsole(p, a, p.isolation, "x"), y: pontIsole(p, a, p.isolation, "y") } } };
+  }
+  return { methode: "mode_fondamental", sources: {} };
+}
+
 /** Calcule et transmet à PSIDA les efforts sismiques par appui du projet courant. */
 export function transmettreEfforts(p: Projet): void {
   if (!integreDansPsida()) return;
   try {
     const problemes = valider(p);
     const a = actionSismique(p), m = modele(p), r = analyse(p, a, m);
-    const mm = p.options.methodeEfforts === "multimodale" ? multimodale(p, a, m, r) : undefined;
-    const T1 = (d: "x" | "y") => mm?.comparaison.find((c) => c.direction === d)?.T1 ?? r.directions[d].lbdp.T;
+    const { methode, sources } = sourcesEfforts(p, a, m, r);
+    const e = exporterEfforts(p, a, r, sources, methode);
     envoyer({
       type: "efforts",
       nom: p.nom,
       travees: p.tablier.travees,
       projet: structuredClone(p),
-      efforts: exporterEfforts(p, a, r, mm),
-      methode: mm ? "multimodale" : "mode_fondamental",
-      T: { x: T1("x"), y: T1("y") },
-      F: mm ? { x: mm.directions.x.ubdp.Ftablier * 1000, y: mm.directions.y.ubdp.Ftablier * 1000 } : { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 },
-      M: r.M,
+      efforts: e,
+      methode,
+      T: e.periodes,
+      F: { x: e.appuis.reduce((t, ap) => t + (ap.cas[0]?.Fx ?? 0), 0), y: e.appuis.reduce((t, ap) => t + (ap.cas[1]?.Fy ?? 0), 0) },
+      M: e.masse,
       q: { long: p.comportement.qLongitudinal, trans: p.comportement.qTransversal },
       site: { zone: p.site.zone, categorie: p.site.categorie, classeSol: p.site.classeSol },
       problemes: problemes.map((x) => ({ cible: x.cible, message: x.message })),

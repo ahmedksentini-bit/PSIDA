@@ -1985,3 +1985,11 @@ tr.mm-actif > * {
 .iso-conditions .ok { color: var(--texte); }
 .iso-conditions .ko { color: #c0392b; font-weight: 600; }
 .iso-isolateur { fill: #f5b041; stroke: var(--texte); stroke-width: 1; }
+
+.segments button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.choix-efforts {
+  margin-bottom: 1rem;
+}

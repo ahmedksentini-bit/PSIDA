@@ -20,3 +20,40 @@ test("export des efforts par appui pour PSIDA : kN, un enregistrement par appui,
   const somme = e.appuis.reduce((s, ap) => s + ap.cas[0]!.Fx, 0);
   assert.ok(Math.abs(somme - 1000 * r.directions.x.ubdp.F) < 1e-6);
 });
+
+test("méthodes d'efforts : multimodale, temporel linéaire, pont isolé, et effets pour les fondations (EN 1998-2 5.8.2)", async () => {
+  const { multimodale } = await import("../src/moteur/multimodal.ts");
+  const { pontIsole, ISOLATION_DEFAUT } = await import("../src/moteur/isolation.ts");
+  const { temporelLineaire } = await import("../src/moteur/temporel.ts");
+  const { effetsFondations, gamma0 } = await import("../src/moteur/export-efforts.ts");
+  const p = EXEMPLE_PONT_DALLE;
+  const a = actionSismique(p), m = modele(p), r = analyse(p, a, m);
+  // multimodale : appel historique (4e argument = résultat multimodal)
+  const mm = multimodale(p, a, m, r);
+  const e1 = exporterEfforts(p, a, r, mm);
+  assert.equal(e1.methode, "multimodale");
+  // pont isolé : efforts UBDP par ligne, q = 1 ; fondations = AEd
+  const iso = { x: pontIsole(p, a, ISOLATION_DEFAUT, "x"), y: pontIsole(p, a, ISOLATION_DEFAUT, "y") };
+  const e2 = exporterEfforts(p, a, r, { isole: iso }, "pont_isole");
+  assert.equal(e2.methode, "pont_isole");
+  e2.appuis.forEach((ap, i) => {
+    assert.ok(Math.abs(ap.cas[0]!.Fx - 1000 * iso.x.UBDP.lignes[i]!.F) < 1e-9);
+    assert.ok(Math.abs(ap.casFondations![0]!.Fx - ap.cas[0]!.Fx) < 1e-9, "isolé : fondations = AEd (q = 1)");
+  });
+  // temporel linéaire : moyennes sur 7 accélérogrammes (réduit pour le test : 3 accélérogrammes → maximum)
+  const th = temporelLineaire(p, a, m, r, { nombre: 3, dt: 0.01, montee: 2, stationnaire: 8, descente: 6, graine: 1998, iterations: 4 });
+  const e3 = exporterEfforts(p, a, r, { temporel: th }, "temporel_lineaire");
+  e3.appuis.forEach((ap, i) => assert.ok(Math.abs(ap.cas[0]!.Fx - 1000 * th.directions.x.ubdp.moyennes[i]!.Fmax) < 1e-9));
+  // ductilité limitée : fondations = AEd × q
+  const e0 = exporterEfforts(p, a, r);
+  const qx = a.q.longitudinal;
+  if (qx <= 1.5) e0.appuis.forEach((ap) => assert.ok(Math.abs(ap.casFondations![0]!.Fx - qx * ap.cas[0]!.Fx) < 1e-6));
+  // comportement ductile : capacité des piles bornée par V_E et q·V_E ; culées au prorata (G.4)
+  const pd = structuredClone(p); pd.comportement.qLongitudinal = 3; pd.comportement.qTransversal = 3;
+  const ad = actionSismique(pd), md = modele(pd), rd = analyse(pd, ad, md);
+  const VE = pd.appuis.map((_, i) => rd.directions.x.ubdp.appuis[i]!.F);
+  const det = effetsFondations(pd, md, "x", ad.q.longitudinal, VE, false);
+  det.forEach((d, i) => { assert.ok(d.VC >= d.VE - 1e-12 && d.VC <= ad.q.longitudinal * d.VE + 1e-12, `${i}`); if (pd.appuis[i]!.type === "pile") assert.ok(d.MRd! > 0 && d.gamma0! >= 1.35); });
+  assert.equal(gamma0(0.05), 1.35);
+  assert.ok(Math.abs(gamma0(0.3) - 1.35 * 1.08) < 1e-12);
+});

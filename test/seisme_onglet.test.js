@@ -16,11 +16,17 @@ test('Efforts de l\'onglet sismique : reprise, contrôle des lignes et des trav�
   const S = compute(p).supports;
   assert.equal(S.seisme.source, 'onglet');
   const acc = S.lines[1].EC.base.filter(b => b.ls === 'ACC');
-  assert.equal(acc.length, 6, '3 cas × (±Z)');
+  assert.equal(acc.filter(b => !b.fond).length, 6, '3 cas A_Ed × (±Z)');
+  // EN 1998-2 5.8.2 : 3 cas × (±Z) réservés aux fondations (q ≤ 1,5 : A_Ed × q)
+  const fo = acc.filter(b => b.fond);
+  assert.equal(fo.length, 6);
+  const q = S.seisme.efforts.q, a0 = acc.find(b => !b.fond && /^ACC séisme X/.test(b.label)), f0 = fo.find(b => /^ACC séisme X/.test(b.label));
+  assert.ok(Math.abs(f0.H - q.x * a0.H) < 1e-6, `${f0.H} / ${q.x} × ${a0.H}`);
   assert.match(externalSeismic(null, 4).error, /aucun effort/);
   assert.match(externalSeismic(msg, 5).error, /lignes d'appui/);
   assert.match(externalSeismic({ ...msg, travees: [20, 20, 20] }, auto.xs.length, spans).error, /travées/);
   const { supportsNote, blocksToHTML } = await import('../web/supports_view.js');
-  assert.ok(blocksToHTML(supportsNote(S, { ref: 'EC', spans }).blocks).includes('Pont EC8 complet'));
+  const html = blocksToHTML(supportsNote(S, { ref: 'EC', spans }).blocks);
+  assert.ok(html.includes('Pont EC8 complet') && html.includes('5.8.2'));
   assert.equal(typeof seismicActions, 'function');
 });

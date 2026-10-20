@@ -236,6 +236,10 @@ bouton de relance.
 v0.52.2 : chevêtres incorporés lus sur le texte de l'annexe 4 (§ 6.2.1 et 6.2.2) : les sections des bandes sont des minimums
 « au moins », en enveloppe avec le ferraillage courant en travée (et non en cumul) ; seul le complément aux transversaux
 courants parallèles à la ligne d'appui est placé, intercalé au même espacement.
+Depuis la v0.53 : l'onglet « Calcul sismique » transmet aux appuis les efforts de la méthode choisie (mode fondamental,
+multimodale, temporel linéaire ou pont isolé) et, pour les fondations seules, les effets de l'EN 1998-2 5.8.2 (A_Ed × q en
+ductilité limitée et pour un pont isolé, dimensionnement en capacité des piles γ0 M_Rd au-delà, plafonné à q·A_Ed) ; la note
+des appuis donne la méthode et le passage V_E → V par appui.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

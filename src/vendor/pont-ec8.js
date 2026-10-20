@@ -4273,7 +4273,7 @@ function correlationCQC(xi, xj, rapport) {
 function periodesVoisines(Ti, Tj, xi, xj) {
 	return Math.min(Ti, Tj) / Math.max(Ti, Tj) >= .1 / (.1 + Math.sqrt(xi * xj)) - 1e-12;
 }
-function combiner(valeurs, omegas, xi, regle) {
+function combiner$1(valeurs, omegas, xi, regle) {
 	if (regle === "SRSS") return Math.sqrt(valeurs.reduce((s, v) => s + v * v, 0));
 	let s = 0;
 	for (let i = 0; i < valeurs.length; i++) for (let j = 0; j < valeurs.length; j++) {
@@ -4389,7 +4389,7 @@ function reponseDirection(p, a, m, direction, borne) {
 		const c = x.omega > 0 ? x.gamma * x.Sd / (x.omega * x.omega) : 0;
 		return phi.map((v) => v * c);
 	});
-	const comb = (v) => facteur * combiner(v, omegas, xi, regle);
+	const comb = (v) => facteur * combiner$1(v, omegas, xi, regle);
 	const parMode = deplacements.map((u) => grandeursAppuis(md, u));
 	const appuis = md.appuis.map((ap, ia) => {
 		const g = parMode.map((gm) => gm[ia]);
@@ -4412,8 +4412,8 @@ function reponseDirection(p, a, m, direction, borne) {
 	});
 	const Ftablier = comb(ret.map((_, k) => appuis.reduce((s, ap) => s + (ap.Fmodes[k] ?? 0), 0)));
 	const FtotModes = ret.map((x) => x.masseEffective * x.Sd / 1e3);
-	const FtotalSRSS = facteur * combiner(FtotModes, omegas, xi, "SRSS");
-	const FtotalCQC = facteur * combiner(FtotModes, omegas, xi, "CQC");
+	const FtotalSRSS = facteur * combiner$1(FtotModes, omegas, xi, "SRSS");
+	const FtotalCQC = facteur * combiner$1(FtotModes, omegas, xi, "CQC");
 	const massePiles = md.piles.reduce((s, x) => s + x.masse, 0);
 	return {
 		direction,
@@ -5422,52 +5422,414 @@ function verifierAppuis(p, a, m, r) {
 	};
 }
 //#endregion
+//#region src/moteur/pushover.ts
+const EPS_UK = {
+	A: .025,
+	B: .05,
+	C: .075
+};
+/** Matériaux probables (EN 1998-2 E.2), béton confiné si ρw > 0 (E.1 à E.10, α = 1). */
+function materiauxProbables(fck, fyk, classe, rhoW = 0, Ecm) {
+	const fcm = fck + 8;
+	const Ec = Ecm ?? 22e3 * (fcm / 10) ** .3;
+	const fym = 1.15 * fyk, ftm = 1.2 * fyk, epsSu = EPS_UK[classe];
+	if (rhoW > 0) {
+		const sl = rhoW * fym;
+		const fcc = fcm * (2.254 * Math.sqrt(1 + 7.94 * sl / fcm) - 2 * sl / fcm - 1.254);
+		return {
+			fcm,
+			Ec,
+			fcc,
+			epsC1: .002 * (1 + 5 * (fcc / fcm - 1)),
+			epsCu: .004 + 2.8 * rhoW * fym * epsSu / fcc,
+			confine: true,
+			fym,
+			ftm,
+			Es: 2e5,
+			epsSu
+		};
+	}
+	return {
+		fcm,
+		Ec,
+		fcc: fcm,
+		epsC1: .002,
+		epsCu: .0035,
+		confine: false,
+		fym,
+		ftm,
+		Es: 2e5,
+		epsSu
+	};
+}
+/** Matériaux de calcul (MRd, annexe C) : fcd = fck/1,5, fyd = fyk/1,15, sans écrouissage. */
+function materiauxCalcul(fck, fyk, Ecm) {
+	return {
+		fcm: fck / 1.5,
+		Ec: Ecm,
+		fcc: fck / 1.5,
+		epsC1: .002,
+		epsCu: .0035,
+		confine: false,
+		fym: fyk / 1.15,
+		ftm: fyk / 1.15,
+		Es: 2e5,
+		epsSu: .05
+	};
+}
+/** Contrainte du béton (compression positive), loi de Mander (EN 1998-2 E.1). */
+function sigmaBeton(eps, m) {
+	if (eps <= 0) return 0;
+	const x = eps / m.epsC1;
+	const Esec = m.fcc / m.epsC1;
+	const r = m.Ec / Math.max(m.Ec - Esec, 1e-9);
+	return m.fcc * x * r / (r - 1 + x ** r);
+}
+/** Contrainte de l'acier (signe de la déformation), élastique puis écrouissage linéaire jusqu'à εsu. */
+function sigmaAcier(eps, m) {
+	const a = Math.abs(eps);
+	const ey = m.fym / m.Es;
+	const s = a <= ey ? m.Es * a : m.fym + (m.ftm - m.fym) * Math.min(a - ey, m.epsSu - ey) / Math.max(m.epsSu - ey, 1e-9);
+	return Math.sign(eps) * s;
+}
+function fibres(s) {
+	const beton = [];
+	const acier = [];
+	const n = 80;
+	if (s.forme === "rectangulaire") {
+		for (let i = 0; i < n; i++) {
+			const y = -s.h / 2 + (i + .5) * s.h / n;
+			beton.push({
+				y,
+				A: s.b * s.h / n
+			});
+		}
+		const ys = s.h / 2 - s.enrobage - s.db / 2;
+		acier.push({
+			y: ys,
+			A: s.As / 2
+		}, {
+			y: -ys,
+			A: s.As / 2
+		});
+		return {
+			beton,
+			acier,
+			ymax: s.h / 2,
+			ys,
+			d: s.h / 2 + ys
+		};
+	}
+	const R = s.h / 2;
+	for (let i = 0; i < n; i++) {
+		const y = -R + (i + .5) * s.h / n;
+		beton.push({
+			y,
+			A: 2 * Math.sqrt(Math.max(R * R - y * y, 0)) * (s.h / n)
+		});
+	}
+	const Rs = R - s.enrobage - s.db / 2;
+	const nb = 20;
+	for (let k = 0; k < nb; k++) acier.push({
+		y: Rs * Math.cos(2 * Math.PI * k / nb),
+		A: s.As / nb
+	});
+	return {
+		beton,
+		acier,
+		ymax: R,
+		ys: Rs,
+		d: R + Rs
+	};
+}
+/** Courbe moment-courbure sous l'effort normal N (MN, compression positive). */
+function momentCourbure(s, m, N) {
+	const f = fibres(s);
+	const efforts = (e0, phi) => {
+		let Fx = 0, M = 0;
+		for (const c of f.beton) {
+			const sg = sigmaBeton(e0 + phi * c.y, m);
+			Fx += sg * c.A;
+			M += sg * c.A * c.y;
+		}
+		for (const a of f.acier) {
+			const sg = sigmaAcier(e0 + phi * a.y, m);
+			Fx += sg * a.A;
+			M += sg * a.A * a.y;
+		}
+		return {
+			Fx,
+			M
+		};
+	};
+	const equilibre = (phi) => {
+		let lo = -.08, hi = m.epsCu + .01;
+		for (let k = 0; k < 70; k++) {
+			const mid = (lo + hi) / 2;
+			if (efforts(mid, phi).Fx > N) hi = mid;
+			else lo = mid;
+		}
+		const e0 = (lo + hi) / 2;
+		return {
+			e0,
+			M: efforts(e0, phi).M,
+			epsC: e0 + phi * f.ymax,
+			epsS: e0 - phi * f.ys
+		};
+	};
+	const ey = m.fym / m.Es;
+	const points = [{
+		phi: 0,
+		M: 0,
+		epsC: equilibre(0).epsC,
+		epsS: equilibre(0).epsS
+	}];
+	let premiere = null;
+	let ultime = null;
+	const dphi = 2e-5 / f.d * 2;
+	let phi = 0;
+	for (let k = 0; k < 4e3 && !ultime; k++) {
+		phi += k < 200 ? dphi : dphi * 4;
+		const r = equilibre(phi);
+		if (!premiere && -r.epsS >= ey) {
+			const p0 = points.at(-1);
+			const t = (ey + p0.epsS) / (p0.epsS - r.epsS || 1);
+			premiere = {
+				phi: p0.phi + t * (phi - p0.phi),
+				M: p0.M + t * (r.M - p0.M)
+			};
+		}
+		if (r.epsC >= m.epsCu || -r.epsS >= m.epsSu) {
+			const p0 = points.at(-1);
+			const cause = r.epsC >= m.epsCu ? "béton" : "acier";
+			const t = cause === "béton" ? (m.epsCu - p0.epsC) / (r.epsC - p0.epsC || 1) : (m.epsSu + p0.epsS) / (p0.epsS - r.epsS || 1);
+			const pu = {
+				phi: p0.phi + t * (phi - p0.phi),
+				M: p0.M + t * (r.M - p0.M)
+			};
+			points.push({
+				...pu,
+				epsC: cause === "béton" ? m.epsCu : p0.epsC + t * (r.epsC - p0.epsC),
+				epsS: cause === "acier" ? -m.epsSu : p0.epsS + t * (r.epsS - p0.epsS)
+			});
+			ultime = {
+				...pu,
+				cause
+			};
+			break;
+		}
+		points.push({
+			phi,
+			M: r.M,
+			epsC: r.epsC,
+			epsS: r.epsS
+		});
+	}
+	if (!premiere) premiere = {
+		phi: points.at(-1).phi,
+		M: points.at(-1).M
+	};
+	if (!ultime) ultime = {
+		phi: points.at(-1).phi,
+		M: points.at(-1).M,
+		cause: "béton"
+	};
+	const K = premiere.M / premiere.phi;
+	let aire = 0;
+	for (let i = 1; i < points.length; i++) aire += (points[i].M + points[i - 1].M) / 2 * (points[i].phi - points[i - 1].phi);
+	const { phi: pu, M: Mu } = ultime;
+	let lo = 0, hi = Math.max(Mu, premiere.M) * 1.5;
+	for (let k = 0; k < 80; k++) {
+		const My = (lo + hi) / 2;
+		const py = My / K;
+		if ((py >= pu ? Mu * pu / 2 : My * py / 2 + (pu - py) * ((My + Mu) / 2)) > aire) hi = My;
+		else lo = My;
+	}
+	const My = (lo + hi) / 2;
+	return {
+		points,
+		premiere,
+		ultime,
+		phiY: Math.min(My / K, pu),
+		My,
+		d: f.d
+	};
+}
+/** Courbe de capacité d'une pile (fûts en console) dans une direction. */
+function capacitePile(p, m, pile, direction, Nperm) {
+	const { forme, long, trans, nombre: nf, hauteur: L } = pile.futs;
+	const { aire, Ix, Iy } = inerties({
+		...pile,
+		facteurInertie: 1
+	});
+	const arm = pile.armatures;
+	const As = arm ? arm.As / 1e4 : .01 * aire;
+	const db = arm ? arm.db / 1e3 : .025;
+	const section = {
+		forme,
+		h: forme === "circulaire" ? long : direction === "x" ? long : trans,
+		b: forme === "circulaire" ? long : direction === "x" ? trans : long,
+		As,
+		db,
+		enrobage: arm?.enrobage ?? .05
+	};
+	const fyk = p.materiaux.acier.fyk, fck = p.materiaux.beton.fck;
+	const mat = materiauxProbables(fck, fyk, p.materiaux.acier.classeDuctilite, arm?.rhoW ?? 0, m.Ecm);
+	const poidsFut = aire * L * p.materiaux.beton.masseVolumique * p.options.g / 1e3;
+	const N = Nperm / nf + poidsFut;
+	const mphi = momentCourbure(section, mat, N);
+	const MRd = Math.max(...momentCourbure(section, materiauxCalcul(fck, fyk, m.Ecm), N).points.map((x) => x.M));
+	const Lp = .1 * L + .015 * fyk * db;
+	const alphaS = L / mphi.d;
+	const thetaY = mphi.phiY * L / 3;
+	const thetaPu = (mphi.ultime.phi - mphi.phiY) * Lp * (1 - Lp / (2 * L));
+	const thetaPd = thetaPu * (alphaS >= 3 ? 1 : Math.sqrt(alphaS / 3)) / 1.4;
+	const deltaY = mphi.phiY * L * L / 3;
+	const EIeff = mphi.My / mphi.phiY;
+	const courbe = mphi.points.map((pt) => {
+		const delta = pt.phi <= mphi.phiY ? pt.M / EIeff * L * L / 3 : deltaY + (pt.phi - mphi.phiY) * Lp * (L - Lp / 2);
+		return {
+			delta,
+			V: nf * (pt.M - N * delta) / L,
+			phi: pt.phi
+		};
+	});
+	const deltaPd = deltaY + thetaPd * L;
+	const Iun = direction === "x" ? Ix : Iy;
+	const Jeff = 1.2 * MRd / (m.Ecm * mphi.phiY);
+	return {
+		id: pile.id,
+		direction,
+		nFuts: nf,
+		L,
+		N,
+		section,
+		mphi,
+		MRd,
+		Lp,
+		alphaS,
+		thetaY,
+		thetaPu,
+		thetaPd,
+		deltaY,
+		courbe,
+		deltaPd,
+		facteurInertie: Math.min(1, Jeff / Iun),
+		armaturesParDefaut: !arm
+	};
+}
+function reactionPermanente(p, i, M) {
+	const ap = p.appuis[i];
+	if (ap.chargesPermanentes) return (ap.chargesPermanentes.Nmax + ap.chargesPermanentes.Nmin) / 2;
+	const t = p.tablier.travees;
+	const L = (i > 0 ? t[i - 1] ?? 0 : 0) / 2 + (i < t.length ? t[i] ?? 0 : 0) / 2;
+	return M * p.options.g * L / derives(p).longueur / 1e3;
+}
+//#endregion
 //#region src/moteur/export-efforts.ts
-function exporterEfforts(p, a, r, mm) {
-	const kN = (v) => v * 1e3;
-	if (mm) {
+const combiner = (Fx, Fy, Fz) => [
+	{
+		nom: "X + 0,3 Y + 0,3 Z",
+		Fx,
+		Fy: .3 * Fy,
+		Fz: .3 * Fz
+	},
+	{
+		nom: "0,3 X + Y + 0,3 Z",
+		Fx: .3 * Fx,
+		Fy,
+		Fz: .3 * Fz
+	},
+	{
+		nom: "0,3 X + 0,3 Y + Z",
+		Fx: .3 * Fx,
+		Fy: .3 * Fy,
+		Fz
+	}
+];
+/** Coefficient de sur-résistance γ0 des éléments en béton (EN 1998-2 5.3(4), valeur recommandée 1,35), majoré si ηk > 0,1. */
+function gamma0(etaK) {
+	return 1.35 * (etaK > .1 ? 1 + 2 * (etaK - .1) ** 2 : 1);
+}
+/**
+* Effets sismiques de calcul pour les fondations (EN 1998-2 5.8.2) dans une direction, à partir des efforts AEd en tête
+* (MN). q ≤ 1,5 ou pont isolé : AEd × q (5.8.2(2)P). q > 1,5 : effort tranchant de capacité des piles
+* V_C = γ0 n M_Rd / L (annexe G.2, (G.3) avec M_E = V_E L pour un fût en console), plafonné à q V_E (5.3(2)) ;
+* culées : AEd × ΣV_C / ΣV_E (G.4), même plafond.
+*/
+function effetsFondations(p, m, direction, q, VE, isole) {
+	if (isole || q <= 1.5) return VE.map((v) => ({
+		regle: q === 1 ? "AEd" : "q_fois_AEd",
+		VE: v,
+		VC: q * v
+	}));
+	const det = p.appuis.map((ap, i) => {
+		const v = VE[i] ?? 0;
+		if (ap.type !== "pile") return {
+			regle: "capacite",
+			VE: v,
+			VC: NaN
+		};
+		const pile = ap;
+		const c = capacitePile(p, m, pile, direction, reactionPermanente(p, i, m.masses.M));
+		const etaK = c.N / (inerties({
+			...pile,
+			facteurInertie: 1
+		}).aire * p.materiaux.beton.fck);
+		const g0 = gamma0(etaK);
+		const VC = g0 * c.nFuts * c.MRd / c.L;
+		const Vcap = Math.min(Math.max(VC, v), q * v);
+		return {
+			regle: VC >= q * v ? "capacite_plafonnee" : "capacite",
+			VE: v,
+			VC: Vcap,
+			VCbrut: VC,
+			MRd: c.MRd * 1e3,
+			gamma0: g0,
+			etaK,
+			nFuts: c.nFuts,
+			L: c.L
+		};
+	});
+	const piles = det.filter((_, i) => p.appuis[i].type === "pile");
+	const sE = piles.reduce((s, d) => s + d.VE, 0), sC = piles.reduce((s, d) => s + d.VC, 0);
+	const ratio = sE > 0 ? Math.min(sC / sE, q) : q;
+	det.forEach((d, i) => {
+		if (p.appuis[i].type !== "pile") {
+			d.VC = ratio * d.VE;
+			d.regle = ratio >= q - 1e-9 ? "capacite_plafonnee" : "capacite";
+		}
+	});
+	return det;
+}
+function baseMethode(p, a, r, s, methode) {
+	const Fz = p.appuis.map((_, i) => r.combinaisons[i]?.cas[2]?.Fz ?? 0);
+	const qAe = {
+		x: a.q.longitudinal,
+		y: a.q.transversal
+	};
+	if (methode === "multimodale" && s.multimodale) {
+		const mm = s.multimodale;
 		const T1 = (d) => mm.comparaison.find((c) => c.direction === d)?.T1 ?? 0;
 		return {
-			format: "pont-ec8-efforts",
-			version: 1,
-			projet: p.nom,
-			unites: {
-				force: "kN",
-				longueur: "m"
-			},
-			q: {
-				x: a.q.longitudinal,
-				y: a.q.transversal
-			},
-			periodes: {
+			Fx: mm.combinaisons.map((c) => c.cas[0]?.Fx ?? 0),
+			Fy: mm.combinaisons.map((c) => c.cas[1]?.Fy ?? 0),
+			Fz: mm.combinaisons.map((c) => c.cas[2]?.Fz ?? 0),
+			dTete: p.appuis.map((_, i) => ({
+				x: mm.directions.x.lbdp.appuis[i]?.dTete ?? 0,
+				y: mm.directions.y.lbdp.appuis[i]?.dTete ?? 0
+			})),
+			dApp: p.appuis.map((_, i) => ({
+				x: mm.directions.x.lbdp.appuis[i]?.dAppareils ?? 0,
+				y: mm.directions.y.lbdp.appuis[i]?.dAppareils ?? 0
+			})),
+			q: qAe,
+			T: {
 				x: T1("x"),
 				y: T1("y")
 			},
-			masse: mm.directions.x.lbdp.modele.masse,
-			methode: "multimodale",
-			appuis: p.appuis.map((ap, i) => {
-				const c = mm.combinaisons[i];
-				const lx = mm.directions.x.lbdp.appuis[i], ly = mm.directions.y.lbdp.appuis[i];
-				return {
-					id: ap.id,
-					x: lx?.x ?? 0,
-					type: ap.type,
-					cas: (c?.cas ?? []).map((k) => ({
-						nom: k.nom,
-						Fx: kN(k.Fx),
-						Fy: kN(k.Fy),
-						Fz: kN(k.Fz)
-					})),
-					dTete: {
-						x: lx?.dTete ?? 0,
-						y: ly?.dTete ?? 0
-					},
-					dAppareils: {
-						x: lx?.dAppareils ?? 0,
-						y: ly?.dAppareils ?? 0
-					}
-				};
-			}),
+			M: mm.directions.x.lbdp.modele.masse,
+			methode,
 			remarques: [
 				"Analyse spectrale multimodale (EN 1998-2 4.2.1) : modes jusqu'à 90 % de la masse, combinaison SRSS ou CQC ; efforts horizontaux transmis par le tablier en tête d'appui, propriétés limites supérieures (UBDP), combinaison des directions 100/30/30 (EN 1998-2 4.2.1.4).",
 				"Réactions verticales sismiques issues de l'analyse multimodale verticale (spectre élastique vertical).",
@@ -5475,6 +5837,114 @@ function exporterEfforts(p, a, r, mm) {
 			]
 		};
 	}
+	if (methode === "temporel_lineaire" && s.temporel) {
+		const t = s.temporel, nAcc = t.jeux.x.accelerogrammes.length;
+		const val = (mo) => nAcc >= 7 ? mo.F : mo.Fmax;
+		const T1 = (d) => t.directions[d].lbdp.modes.reduce((b, x) => x.part > b.part ? x : b, t.directions[d].lbdp.modes[0]).T;
+		return {
+			Fx: t.directions.x.ubdp.moyennes.map(val),
+			Fy: t.directions.y.ubdp.moyennes.map(val),
+			Fz: t.directions.z.moyennes.map(val),
+			dTete: p.appuis.map((_, i) => ({
+				x: (t.directions.x.lbdp.moyennes[i]?.dTablier ?? 0) - (t.directions.x.lbdp.moyennes[i]?.dAppareils ?? 0),
+				y: (t.directions.y.lbdp.moyennes[i]?.dTablier ?? 0) - (t.directions.y.lbdp.moyennes[i]?.dAppareils ?? 0)
+			})),
+			dApp: p.appuis.map((_, i) => ({
+				x: t.directions.x.lbdp.moyennes[i]?.dAppareils ?? 0,
+				y: t.directions.y.lbdp.moyennes[i]?.dAppareils ?? 0
+			})),
+			q: qAe,
+			T: {
+				x: T1("x"),
+				y: T1("y")
+			},
+			M: r.M,
+			methode,
+			remarques: [`Calcul temporel linéaire (EN 1998-2 4.2.3) : ${nAcc} accélérogrammes artificiels par direction, ${nAcc >= 7 ? "moyenne des extrêmes (au moins 7 accélérogrammes)" : "maximum des extrêmes (moins de 7 accélérogrammes)"}, efforts divisés par q ; propriétés limites supérieures (UBDP) pour les efforts, inférieures (LBDP) pour les déplacements ; combinaison des directions 100/30/30.`, "Réactions verticales : réponse temporelle verticale (spectre élastique vertical)."]
+		};
+	}
+	if (methode === "pont_isole" && s.isole) {
+		const { x, y } = s.isole;
+		const ligne = (pi, i) => pi.UBDP.lignes[i];
+		const lb = (pi, i) => pi.LBDP.lignes[i];
+		return {
+			Fx: p.appuis.map((_, i) => ligne(x, i)?.F ?? 0),
+			Fy: p.appuis.map((_, i) => ligne(y, i)?.F ?? 0),
+			Fz,
+			dTete: p.appuis.map((_, i) => ({
+				x: lb(x, i)?.ds ?? 0,
+				y: lb(y, i)?.ds ?? 0
+			})),
+			dApp: p.appuis.map((_, i) => ({
+				x: lb(x, i)?.db ?? 0,
+				y: lb(y, i)?.db ?? 0
+			})),
+			q: {
+				x: 1,
+				y: 1
+			},
+			T: {
+				x: x.LBDP.Teff,
+				y: y.LBDP.Teff
+			},
+			M: x.DP.Md,
+			methode,
+			remarques: ["Pont isolé (EN 1998-2 chapitre 7), méthode du mode fondamental à rigidité et amortissement effectifs : efforts par ligne d'appui avec les propriétés de calcul supérieures (UBDP), déplacements des isolateurs et des têtes d'appui avec les propriétés inférieures (LBDP) ; spectre élastique réduit par η_eff (q = 1) ; combinaison des directions 100/30/30.", "Réactions verticales sismiques forfaitaires (guide Cerema 2015), comme pour le pont sans isolation."]
+		};
+	}
+	return {
+		Fx: p.appuis.map((_, i) => r.directions.x.ubdp.appuis[i]?.F ?? 0),
+		Fy: p.appuis.map((_, i) => r.directions.y.ubdp.appuis[i]?.F ?? 0),
+		Fz,
+		dTete: p.appuis.map((_, i) => ({
+			x: r.directions.x.lbdp.appuis[i]?.dTete ?? 0,
+			y: r.directions.y.lbdp.appuis[i]?.dTete ?? 0
+		})),
+		dApp: p.appuis.map((_, i) => ({
+			x: r.directions.x.lbdp.appuis[i]?.dAppareils ?? 0,
+			y: r.directions.y.lbdp.appuis[i]?.dAppareils ?? 0
+		})),
+		q: qAe,
+		T: {
+			x: r.directions.x.lbdp.T,
+			y: r.directions.y.lbdp.T
+		},
+		M: r.M,
+		methode: "mode_fondamental",
+		remarques: [
+			"Efforts horizontaux transmis par le tablier en tête d'appui, propriétés limites supérieures (UBDP), combinaison des directions 100/30/30 (EN 1998-2 4.2.1.4).",
+			"Réactions verticales sismiques forfaitaires (guide Cerema 2015) ; nulles si la méthode n'est pas applicable.",
+			"Inertie propre des fûts non comprise : à ajouter au pied des appuis si elle n'est pas négligeable."
+		]
+	};
+}
+const LIB_REGLE = (q, isole, d) => isole ? "pont isolé : effets de l'analyse avec q = 1 (5.8.2(2)P)" : q <= 1.5 ? `ductilité limitée (q = ${q.toFixed(2).replace(".", ",")} ≤ 1,5) : AEd × q, soit les effets pour q = 1 (5.8.2(2)P)` : d.every((x) => x.regle === "capacite_plafonnee") ? `comportement ductile (q = ${q.toFixed(2).replace(".", ",")}) : capacité des piles, plafonnée partout à q·AEd (5.3(2))` : `comportement ductile (q = ${q.toFixed(2).replace(".", ",")}) : dimensionnement en capacité des piles, γ0 M_Rd (5.3, 5.8.2(3)P, annexe G.2)`;
+function exporterEfforts(p, a, r, sources, methodeDemandee) {
+	const kN = (v) => v * 1e3;
+	const s = sources && "combinaisons" in sources ? { multimodale: sources } : sources ?? {};
+	const b = baseMethode(p, a, r, s, methodeDemandee ?? (s.multimodale ? "multimodale" : s.temporel ? "temporel_lineaire" : s.isole ? "pont_isole" : "mode_fondamental"));
+	const isole = b.methode === "pont_isole";
+	let fx = [], fy = [];
+	const remarques = [...b.remarques];
+	try {
+		const m = modele(p);
+		fx = effetsFondations(p, m, "x", b.q.x, b.Fx, isole);
+		fy = effetsFondations(p, m, "y", b.q.y, b.Fy, isole);
+	} catch (e) {
+		remarques.push(`Effets pour les fondations non calculés : ${e instanceof Error ? e.message : String(e)}.`);
+	}
+	if (fx.concat(fy).some((d) => d.VCbrut !== void 0 && d.VCbrut < d.VE - 1e-9)) remarques.push("Capacité γ0 M_Rd / L inférieure à l'effort de calcul pour au moins une pile : la section d'acier des fûts est insuffisante ; l'effort de calcul est retenu pour les fondations.");
+	if (fx.length) remarques.push(`Fondations (EN 1998-2 5.8.2) — X : ${LIB_REGLE(b.q.x, isole, fx)} ; Y : ${LIB_REGLE(b.q.y, isole, fy)}. Réactions verticales inchangées.`);
+	const det = (d) => d ? {
+		...d,
+		VE: kN(d.VE),
+		VC: kN(d.VC),
+		...d.VCbrut !== void 0 ? { VCbrut: kN(d.VCbrut) } : {}
+	} : {
+		regle: "AEd",
+		VE: 0,
+		VC: 0
+	};
 	return {
 		format: "pont-ec8-efforts",
 		version: 1,
@@ -5483,44 +5953,59 @@ function exporterEfforts(p, a, r, mm) {
 			force: "kN",
 			longueur: "m"
 		},
-		q: {
-			x: a.q.longitudinal,
-			y: a.q.transversal
-		},
-		periodes: {
-			x: r.directions.x.lbdp.T,
-			y: r.directions.y.lbdp.T
-		},
-		masse: r.M,
-		methode: "mode_fondamental",
+		q: b.q,
+		periodes: b.T,
+		masse: b.M,
+		methode: b.methode,
 		appuis: p.appuis.map((ap, i) => {
-			const c = r.combinaisons[i];
-			const lx = r.directions.x.lbdp.appuis[i], ly = r.directions.y.lbdp.appuis[i];
+			const Fx = b.Fx[i] ?? 0, Fy = b.Fy[i] ?? 0, Fz = b.Fz[i] ?? 0;
+			const cx = fx[i], cy = fy[i];
 			return {
 				id: ap.id,
-				x: lx?.x ?? 0,
+				x: r.directions.x.lbdp.appuis[i]?.x ?? 0,
 				type: ap.type,
-				cas: (c?.cas ?? []).map((k) => ({
-					nom: k.nom,
-					Fx: kN(k.Fx),
-					Fy: kN(k.Fy),
-					Fz: kN(k.Fz)
-				})),
-				dTete: {
-					x: lx?.dTete ?? 0,
-					y: ly?.dTete ?? 0
+				cas: combiner(kN(Fx), kN(Fy), kN(Fz)),
+				...cx && cy ? {
+					casFondations: [
+						{
+							nom: "X + 0,3 Y + 0,3 Z (fondations)",
+							Fx: kN(cx.VC),
+							Fy: .3 * kN(cy.regle.startsWith("capacite") ? Fy : cy.VC),
+							Fz: .3 * kN(Fz)
+						},
+						{
+							nom: "0,3 X + Y + 0,3 Z (fondations)",
+							Fx: .3 * kN(cx.regle.startsWith("capacite") ? Fx : cx.VC),
+							Fy: kN(cy.VC),
+							Fz: .3 * kN(Fz)
+						},
+						{
+							nom: "0,3 X + 0,3 Y + Z (fondations)",
+							Fx: .3 * kN(cx.VC),
+							Fy: .3 * kN(cy.VC),
+							Fz: kN(Fz)
+						}
+					],
+					capacite: {
+						x: det(cx),
+						y: det(cy)
+					}
+				} : {},
+				dTete: b.dTete[i] ?? {
+					x: 0,
+					y: 0
 				},
-				dAppareils: {
-					x: lx?.dAppareils ?? 0,
-					y: ly?.dAppareils ?? 0
+				dAppareils: b.dApp[i] ?? {
+					x: 0,
+					y: 0
 				}
 			};
 		}),
-		remarques: [
-			"Efforts horizontaux transmis par le tablier en tête d'appui, propriétés limites supérieures (UBDP), combinaison des directions 100/30/30 (EN 1998-2 4.2.1.4).",
-			"Réactions verticales sismiques forfaitaires (guide Cerema 2015) ; nulles si la méthode n'est pas applicable.",
-			"Inertie propre des fûts non comprise : à ajouter au pied des appuis si elle n'est pas négligeable."
-		]
+		...fx.length ? { fondations: {
+			x: LIB_REGLE(b.q.x, isole, fx),
+			y: LIB_REGLE(b.q.y, isole, fy)
+		} } : {},
+		remarques
 	};
 }
 const APPUIS = [

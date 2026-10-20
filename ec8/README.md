@@ -74,6 +74,13 @@ Le **pont isolé** (EN 1998-2 chapitre 7) se décrit par `isolation` { type "lrb
 "pendule" (R, mu), capacite, lambdaKp, lambdaF0, gammaIS, deplacementPermanent, loinFaille } ; mode fondamental itératif
 (7.4 à 7.10, tableau 7.1), DP/LBDP/UBDP, vérifications 7.6.2 et 7.7.1, contrôle temporel (7.5.6).
 
+**Efforts transmis à PSIDA** (`options.methodeEfforts`, carte en tête de l'onglet Méthodes) : `mode_fondamental` (défaut),
+`multimodale`, `temporel_lineaire` (moyenne de 7 accélérogrammes, maximum en deçà) ou `pont_isole` (UBDP par ligne, q = 1).
+Chaque appui reçoit en plus `casFondations` et `capacite`, les effets pour les fondations de l'EN 1998-2 5.8.2 : A_Ed × q si
+q ≤ 1,5 ou pont isolé ; sinon dimensionnement en capacité des piles, V_C = γ0 n M_Rd/L (5.3, annexe G.2, γ0 = 1,35 majoré si
+η_k > 0,1), borné par V_E et q·V_E (5.3(2)), culées au prorata ΣV_C/ΣV_E (G.4). PSIDA applique ces cas aux fondations
+seulement ; les fûts restent dimensionnés sous A_Ed.
+
 ## Référentiel
 
 Chaque entrée porte :

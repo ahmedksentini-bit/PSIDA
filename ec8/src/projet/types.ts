@@ -215,11 +215,14 @@ export interface Service {
   alpha: number;
 }
 
+/** Méthodes dont les efforts par appui peuvent partir vers PSIDA. */
+export type MethodeEfforts = "mode_fondamental" | "multimodale" | "temporel_lineaire" | "pont_isole";
+
 export interface OptionsCalcul {
   /** Accélération de la pesanteur pour convertir poids et masses (m/s²). */
   g: number;
   /** Méthode dont les efforts par appui sont exportés vers PSIDA (défaut : mode fondamental). */
-  methodeEfforts?: "mode_fondamental" | "multimodale";
+  methodeEfforts?: MethodeEfforts;
 }
 
 export interface Projet {

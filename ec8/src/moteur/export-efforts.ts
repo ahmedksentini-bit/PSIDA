@@ -1,12 +1,19 @@
 // Export des efforts sismiques par appui pour le dimensionnement des appuis et fondations
 // dans PSIDA (psida.ksr-infra.org, carte « Appuis et fondations ») : combinaison sismique
 // G + ψ2,1 Q + AEd (EN 1990 6.4.3.4), avec AEd = efforts en tête d'appui transmis par le tablier.
+// Quatre méthodes peuvent fournir AEd : mode fondamental, multimodale, temporel linéaire, pont isolé.
+// Pour les fondations, un second jeu d'efforts suit l'EN 1998-2 5.8.2 : effets × q (ductilité limitée, q ≤ 1,5,
+// et ponts isolés) ou effets du dimensionnement en capacité des piles (5.3, annexe G.2), plafonnés à q·AEd (5.3(2)).
 // Unités du fichier : kN, m.
 
-import type { Projet } from "../projet/types.ts";
+import type { MethodeEfforts, Pile, Projet } from "../projet/types.ts";
 import type { ActionSismique } from "./action.ts";
 import type { Analyse } from "./analyse.ts";
+import type { PontIsole } from "./isolation.ts";
+import { inerties, modele as construireModele, type Modele } from "./modele.ts";
 import type { Multimodale } from "./multimodal.ts";
+import { capacitePile, reactionPermanente } from "./pushover.ts";
+import type { Temporel } from "./temporel.ts";
 
 export interface CasEfforts {
   nom: string;
@@ -18,11 +25,29 @@ export interface CasEfforts {
   Fz: number;
 }
 
+/** Détail du passage AEd → effets pour les fondations, dans une direction (kN, kN·m). */
+export interface DetailCapacite {
+  regle: "q_fois_AEd" | "capacite" | "capacite_plafonnee" | "AEd";
+  VE: number;
+  VC: number;
+  /** Pile : résistance de calcul en flexion d'un fût en pied, sous l'effort normal sismique (kN·m). */
+  MRd?: number;
+  gamma0?: number;
+  etaK?: number;
+  nFuts?: number;
+  L?: number;
+  /** Effort de capacité brut γ0 n M_Rd / L, avant les bornes V_E et q·V_E (kN). */
+  VCbrut?: number;
+}
+
 export interface EffortsAppui {
   id: string;
   x: number;
   type: "pile" | "culee";
   cas: CasEfforts[];
+  /** Effets de calcul pour les fondations (EN 1998-2 5.8.2), mêmes combinaisons 100/30/30. */
+  casFondations?: CasEfforts[];
+  capacite?: { x: DetailCapacite; y: DetailCapacite };
   /** Déplacement sismique de la tête d'appui (m), propriétés inférieures (LBDP). */
   dTete: { x: number; y: number };
   /** Distorsion sismique des appareils d'appui (m), LBDP. */
@@ -38,36 +63,83 @@ export interface ExportEfforts {
   periodes: { x: number; y: number };
   masse: number;
   /** Méthode d'analyse dont viennent les efforts. */
-  methode?: "mode_fondamental" | "multimodale";
+  methode?: MethodeEfforts;
   appuis: EffortsAppui[];
+  /** Règle retenue pour les fondations dans chaque direction (EN 1998-2 5.8.2). */
+  fondations?: { x: string; y: string };
   remarques: string[];
 }
 
-export function exporterEfforts(p: Projet, a: ActionSismique, r: Analyse, mm?: Multimodale): ExportEfforts {
-  const kN = (v: number) => v * 1000;
-  if (mm) {
+/** Sources facultatives des méthodes autres que le mode fondamental. */
+export interface SourcesEfforts {
+  multimodale?: Multimodale;
+  temporel?: Temporel;
+  isole?: { x: PontIsole; y: PontIsole };
+}
+
+interface Base {
+  Fx: number[];
+  Fy: number[];
+  Fz: number[];
+  dTete: { x: number; y: number }[];
+  dApp: { x: number; y: number }[];
+  q: { x: number; y: number };
+  T: { x: number; y: number };
+  M: number;
+  methode: MethodeEfforts;
+  remarques: string[];
+}
+
+const combiner = (Fx: number, Fy: number, Fz: number): CasEfforts[] => [
+  { nom: "X + 0,3 Y + 0,3 Z", Fx, Fy: 0.3 * Fy, Fz: 0.3 * Fz },
+  { nom: "0,3 X + Y + 0,3 Z", Fx: 0.3 * Fx, Fy, Fz: 0.3 * Fz },
+  { nom: "0,3 X + 0,3 Y + Z", Fx: 0.3 * Fx, Fy: 0.3 * Fy, Fz },
+];
+
+/** Coefficient de sur-résistance γ0 des éléments en béton (EN 1998-2 5.3(4), valeur recommandée 1,35), majoré si ηk > 0,1. */
+export function gamma0(etaK: number): number {
+  return 1.35 * (etaK > 0.1 ? 1 + 2 * (etaK - 0.1) ** 2 : 1);
+}
+
+/**
+ * Effets sismiques de calcul pour les fondations (EN 1998-2 5.8.2) dans une direction, à partir des efforts AEd en tête
+ * (MN). q ≤ 1,5 ou pont isolé : AEd × q (5.8.2(2)P). q > 1,5 : effort tranchant de capacité des piles
+ * V_C = γ0 n M_Rd / L (annexe G.2, (G.3) avec M_E = V_E L pour un fût en console), plafonné à q V_E (5.3(2)) ;
+ * culées : AEd × ΣV_C / ΣV_E (G.4), même plafond.
+ */
+export function effetsFondations(p: Projet, m: Modele, direction: "x" | "y", q: number, VE: number[], isole: boolean): DetailCapacite[] {
+  if (isole || q <= 1.5) return VE.map((v) => ({ regle: q === 1 ? "AEd" : "q_fois_AEd", VE: v, VC: q * v }));
+  const det: DetailCapacite[] = p.appuis.map((ap, i) => {
+    const v = VE[i] ?? 0;
+    if (ap.type !== "pile") return { regle: "capacite", VE: v, VC: NaN };
+    const pile = ap as Pile;
+    const c = capacitePile(p, m, pile, direction, reactionPermanente(p, i, m.masses.M));
+    const etaK = c.N / (inerties({ ...pile, facteurInertie: 1 }).aire * p.materiaux.beton.fck);
+    const g0 = gamma0(etaK);
+    const VC = (g0 * c.nFuts * c.MRd) / c.L;
+    const Vcap = Math.min(Math.max(VC, v), q * v);
+    return { regle: VC >= q * v ? "capacite_plafonnee" : "capacite", VE: v, VC: Vcap, VCbrut: VC, MRd: c.MRd * 1000, gamma0: g0, etaK, nFuts: c.nFuts, L: c.L };
+  });
+  const piles = det.filter((_, i) => p.appuis[i]!.type === "pile");
+  const sE = piles.reduce((s, d) => s + d.VE, 0), sC = piles.reduce((s, d) => s + d.VC, 0);
+  const ratio = sE > 0 ? Math.min(sC / sE, q) : q;
+  det.forEach((d, i) => {
+    if (p.appuis[i]!.type !== "pile") { d.VC = ratio * d.VE; d.regle = ratio >= q - 1e-9 ? "capacite_plafonnee" : "capacite"; }
+  });
+  return det;
+}
+
+function baseMethode(p: Projet, a: ActionSismique, r: Analyse, s: SourcesEfforts, methode: MethodeEfforts): Base {
+  const Fz = p.appuis.map((_, i) => r.combinaisons[i]?.cas[2]?.Fz ?? 0);
+  const qAe = { x: a.q.longitudinal, y: a.q.transversal };
+  if (methode === "multimodale" && s.multimodale) {
+    const mm = s.multimodale;
     const T1 = (d: "x" | "y") => mm.comparaison.find((c) => c.direction === d)?.T1 ?? 0;
     return {
-      format: "pont-ec8-efforts",
-      version: 1,
-      projet: p.nom,
-      unites: { force: "kN", longueur: "m" },
-      q: { x: a.q.longitudinal, y: a.q.transversal },
-      periodes: { x: T1("x"), y: T1("y") },
-      masse: mm.directions.x.lbdp.modele.masse,
-      methode: "multimodale",
-      appuis: p.appuis.map((ap, i) => {
-        const c = mm.combinaisons[i];
-        const lx = mm.directions.x.lbdp.appuis[i], ly = mm.directions.y.lbdp.appuis[i];
-        return {
-          id: ap.id,
-          x: lx?.x ?? 0,
-          type: ap.type,
-          cas: (c?.cas ?? []).map((k) => ({ nom: k.nom, Fx: kN(k.Fx), Fy: kN(k.Fy), Fz: kN(k.Fz) })),
-          dTete: { x: lx?.dTete ?? 0, y: ly?.dTete ?? 0 },
-          dAppareils: { x: lx?.dAppareils ?? 0, y: ly?.dAppareils ?? 0 },
-        };
-      }),
+      Fx: mm.combinaisons.map((c) => c.cas[0]?.Fx ?? 0), Fy: mm.combinaisons.map((c) => c.cas[1]?.Fy ?? 0), Fz: mm.combinaisons.map((c) => c.cas[2]?.Fz ?? 0),
+      dTete: p.appuis.map((_, i) => ({ x: mm.directions.x.lbdp.appuis[i]?.dTete ?? 0, y: mm.directions.y.lbdp.appuis[i]?.dTete ?? 0 })),
+      dApp: p.appuis.map((_, i) => ({ x: mm.directions.x.lbdp.appuis[i]?.dAppareils ?? 0, y: mm.directions.y.lbdp.appuis[i]?.dAppareils ?? 0 })),
+      q: qAe, T: { x: T1("x"), y: T1("y") }, M: mm.directions.x.lbdp.modele.masse, methode,
       remarques: [
         "Analyse spectrale multimodale (EN 1998-2 4.2.1) : modes jusqu'à 90 % de la masse, combinaison SRSS ou CQC ; efforts horizontaux transmis par le tablier en tête d'appui, propriétés limites supérieures (UBDP), combinaison des directions 100/30/30 (EN 1998-2 4.2.1.4).",
         "Réactions verticales sismiques issues de l'analyse multimodale verticale (spectre élastique vertical).",
@@ -75,32 +147,107 @@ export function exporterEfforts(p: Projet, a: ActionSismique, r: Analyse, mm?: M
       ],
     };
   }
+  if (methode === "temporel_lineaire" && s.temporel) {
+    const t = s.temporel, nAcc = t.jeux.x.accelerogrammes.length;
+    const val = (mo: { F: number; Fmax: number }) => (nAcc >= 7 ? mo.F : mo.Fmax);
+    const T1 = (d: "x" | "y") => t.directions[d].lbdp.modes.reduce((b, x) => (x.part > b.part ? x : b), t.directions[d].lbdp.modes[0]!).T;
+    return {
+      Fx: t.directions.x.ubdp.moyennes.map(val), Fy: t.directions.y.ubdp.moyennes.map(val), Fz: t.directions.z.moyennes.map(val),
+      dTete: p.appuis.map((_, i) => ({ x: (t.directions.x.lbdp.moyennes[i]?.dTablier ?? 0) - (t.directions.x.lbdp.moyennes[i]?.dAppareils ?? 0), y: (t.directions.y.lbdp.moyennes[i]?.dTablier ?? 0) - (t.directions.y.lbdp.moyennes[i]?.dAppareils ?? 0) })),
+      dApp: p.appuis.map((_, i) => ({ x: t.directions.x.lbdp.moyennes[i]?.dAppareils ?? 0, y: t.directions.y.lbdp.moyennes[i]?.dAppareils ?? 0 })),
+      q: qAe, T: { x: T1("x"), y: T1("y") }, M: r.M, methode,
+      remarques: [
+        `Calcul temporel linéaire (EN 1998-2 4.2.3) : ${nAcc} accélérogrammes artificiels par direction, ${nAcc >= 7 ? "moyenne des extrêmes (au moins 7 accélérogrammes)" : "maximum des extrêmes (moins de 7 accélérogrammes)"}, efforts divisés par q ; propriétés limites supérieures (UBDP) pour les efforts, inférieures (LBDP) pour les déplacements ; combinaison des directions 100/30/30.`,
+        "Réactions verticales : réponse temporelle verticale (spectre élastique vertical).",
+      ],
+    };
+  }
+  if (methode === "pont_isole" && s.isole) {
+    const { x, y } = s.isole;
+    const ligne = (pi: PontIsole, i: number) => pi.UBDP.lignes[i];
+    const lb = (pi: PontIsole, i: number) => pi.LBDP.lignes[i];
+    return {
+      Fx: p.appuis.map((_, i) => ligne(x, i)?.F ?? 0), Fy: p.appuis.map((_, i) => ligne(y, i)?.F ?? 0), Fz,
+      dTete: p.appuis.map((_, i) => ({ x: lb(x, i)?.ds ?? 0, y: lb(y, i)?.ds ?? 0 })),
+      dApp: p.appuis.map((_, i) => ({ x: lb(x, i)?.db ?? 0, y: lb(y, i)?.db ?? 0 })),
+      q: { x: 1, y: 1 }, T: { x: x.LBDP.Teff, y: y.LBDP.Teff }, M: x.DP.Md, methode,
+      remarques: [
+        "Pont isolé (EN 1998-2 chapitre 7), méthode du mode fondamental à rigidité et amortissement effectifs : efforts par ligne d'appui avec les propriétés de calcul supérieures (UBDP), déplacements des isolateurs et des têtes d'appui avec les propriétés inférieures (LBDP) ; spectre élastique réduit par η_eff (q = 1) ; combinaison des directions 100/30/30.",
+        "Réactions verticales sismiques forfaitaires (guide Cerema 2015), comme pour le pont sans isolation.",
+      ],
+    };
+  }
   return {
-    format: "pont-ec8-efforts",
-    version: 1,
-    projet: p.nom,
-    unites: { force: "kN", longueur: "m" },
-    q: { x: a.q.longitudinal, y: a.q.transversal },
-    periodes: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T },
-    masse: r.M,
-    methode: "mode_fondamental",
-    appuis: p.appuis.map((ap, i) => {
-      const c = r.combinaisons[i];
-      const lx = r.directions.x.lbdp.appuis[i], ly = r.directions.y.lbdp.appuis[i];
-      return {
-        id: ap.id,
-        x: lx?.x ?? 0,
-        type: ap.type,
-        cas: (c?.cas ?? []).map((k) => ({ nom: k.nom, Fx: kN(k.Fx), Fy: kN(k.Fy), Fz: kN(k.Fz) })),
-        dTete: { x: lx?.dTete ?? 0, y: ly?.dTete ?? 0 },
-        dAppareils: { x: lx?.dAppareils ?? 0, y: ly?.dAppareils ?? 0 },
-      };
-    }),
+    Fx: p.appuis.map((_, i) => r.directions.x.ubdp.appuis[i]?.F ?? 0), Fy: p.appuis.map((_, i) => r.directions.y.ubdp.appuis[i]?.F ?? 0), Fz,
+    dTete: p.appuis.map((_, i) => ({ x: r.directions.x.lbdp.appuis[i]?.dTete ?? 0, y: r.directions.y.lbdp.appuis[i]?.dTete ?? 0 })),
+    dApp: p.appuis.map((_, i) => ({ x: r.directions.x.lbdp.appuis[i]?.dAppareils ?? 0, y: r.directions.y.lbdp.appuis[i]?.dAppareils ?? 0 })),
+    q: qAe, T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T }, M: r.M, methode: "mode_fondamental",
     remarques: [
       "Efforts horizontaux transmis par le tablier en tête d'appui, propriétés limites supérieures (UBDP), combinaison des directions 100/30/30 (EN 1998-2 4.2.1.4).",
       "Réactions verticales sismiques forfaitaires (guide Cerema 2015) ; nulles si la méthode n'est pas applicable.",
       "Inertie propre des fûts non comprise : à ajouter au pied des appuis si elle n'est pas négligeable.",
     ],
+  };
+}
+
+const LIB_REGLE = (q: number, isole: boolean, d: DetailCapacite[]) =>
+  isole ? "pont isolé : effets de l'analyse avec q = 1 (5.8.2(2)P)"
+    : q <= 1.5 ? `ductilité limitée (q = ${q.toFixed(2).replace(".", ",")} ≤ 1,5) : AEd × q, soit les effets pour q = 1 (5.8.2(2)P)`
+      : d.every((x) => x.regle === "capacite_plafonnee") ? `comportement ductile (q = ${q.toFixed(2).replace(".", ",")}) : capacité des piles, plafonnée partout à q·AEd (5.3(2))`
+        : `comportement ductile (q = ${q.toFixed(2).replace(".", ",")}) : dimensionnement en capacité des piles, γ0 M_Rd (5.3, 5.8.2(3)P, annexe G.2)`;
+
+export function exporterEfforts(p: Projet, a: ActionSismique, r: Analyse, sources?: Multimodale | SourcesEfforts, methodeDemandee?: MethodeEfforts): ExportEfforts {
+  const kN = (v: number) => v * 1000;
+  const s: SourcesEfforts = sources && "combinaisons" in sources ? { multimodale: sources } : (sources as SourcesEfforts) ?? {};
+  const methode: MethodeEfforts = methodeDemandee ?? (s.multimodale ? "multimodale" : s.temporel ? "temporel_lineaire" : s.isole ? "pont_isole" : "mode_fondamental");
+  const b = baseMethode(p, a, r, s, methode);
+  const isole = b.methode === "pont_isole";
+  let fx: DetailCapacite[] = [], fy: DetailCapacite[] = [];
+  const remarques = [...b.remarques];
+  try {
+    const m = construireModele(p);
+    fx = effetsFondations(p, m, "x", b.q.x, b.Fx, isole);
+    fy = effetsFondations(p, m, "y", b.q.y, b.Fy, isole);
+  } catch (e) {
+    remarques.push(`Effets pour les fondations non calculés : ${e instanceof Error ? e.message : String(e)}.`);
+  }
+  const insuff = fx.concat(fy).some((d) => d.VCbrut !== undefined && d.VCbrut < d.VE - 1e-9);
+  if (insuff) remarques.push("Capacité γ0 M_Rd / L inférieure à l'effort de calcul pour au moins une pile : la section d'acier des fûts est insuffisante ; l'effort de calcul est retenu pour les fondations.");
+  if (fx.length) remarques.push(`Fondations (EN 1998-2 5.8.2) — X : ${LIB_REGLE(b.q.x, isole, fx)} ; Y : ${LIB_REGLE(b.q.y, isole, fy)}. Réactions verticales inchangées.`);
+  const det = (d: DetailCapacite | undefined): DetailCapacite => (d ? { ...d, VE: kN(d.VE), VC: kN(d.VC), ...(d.VCbrut !== undefined ? { VCbrut: kN(d.VCbrut) } : {}) } : { regle: "AEd", VE: 0, VC: 0 });
+  return {
+    format: "pont-ec8-efforts",
+    version: 1,
+    projet: p.nom,
+    unites: { force: "kN", longueur: "m" },
+    q: b.q,
+    periodes: b.T,
+    masse: b.M,
+    methode: b.methode,
+    appuis: p.appuis.map((ap, i) => {
+      const Fx = b.Fx[i] ?? 0, Fy = b.Fy[i] ?? 0, Fz = b.Fz[i] ?? 0;
+      const cx = fx[i], cy = fy[i];
+      return {
+        id: ap.id,
+        x: r.directions.x.lbdp.appuis[i]?.x ?? 0,
+        type: ap.type,
+        cas: combiner(kN(Fx), kN(Fy), kN(Fz)),
+        ...(cx && cy ? {
+          // capacité : calculée séparément dans chaque direction (5.3(6)), les autres composantes étant celles de l'action de calcul
+          // composante orthogonale : action de calcul (capacité, 5.3(3)) ou action × q (5.8.2(2)P)
+          casFondations: [
+            { nom: "X + 0,3 Y + 0,3 Z (fondations)", Fx: kN(cx.VC), Fy: 0.3 * kN(cy.regle.startsWith("capacite") ? Fy : cy.VC), Fz: 0.3 * kN(Fz) },
+            { nom: "0,3 X + Y + 0,3 Z (fondations)", Fx: 0.3 * kN(cx.regle.startsWith("capacite") ? Fx : cx.VC), Fy: kN(cy.VC), Fz: 0.3 * kN(Fz) },
+            { nom: "0,3 X + 0,3 Y + Z (fondations)", Fx: 0.3 * kN(cx.VC), Fy: 0.3 * kN(cy.VC), Fz: kN(Fz) },
+          ],
+          capacite: { x: det(cx), y: det(cy) },
+        } : {}),
+        dTete: b.dTete[i] ?? { x: 0, y: 0 },
+        dAppareils: b.dApp[i] ?? { x: 0, y: 0 },
+      };
+    }),
+    ...(fx.length ? { fondations: { x: LIB_REGLE(b.q.x, isole, fx), y: LIB_REGLE(b.q.y, isole, fy) } } : {}),
+    remarques,
   };
 }
 

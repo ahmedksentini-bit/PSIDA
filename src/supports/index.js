@@ -253,6 +253,11 @@ export function computeSupports(st, input = {}) {
       for (const k of seisme.efforts.appuis[i].cas) for (const sgn of [1, -1]) {
         out.push({ label: `ACC séisme ${k.nom} ${sgn > 0 ? '(+Z)' : '(−Z)'}`, ls: 'ACC', acc: true, N: (sgn > 0 ? Gmax(i) : Gmin(i)) + sgn * Math.abs(k.Fz), H: Math.abs(k.Fx), Hy: Math.abs(k.Fy), Nsus: Gmax(i), Ninst: 0, Hsus: 0, Hinst: Math.abs(k.Fx) });
       }
+      // fondations seules (EN 1998-2 5.8.2) : effets × q (ductilité limitée, pont isolé) ou dimensionnement en capacité des
+      // piles ; non repris pour les fûts, dimensionnés sous A_Ed
+      for (const k of seisme.efforts.appuis[i].casFondations || []) for (const sgn of [1, -1]) {
+        out.push({ label: `ACC séisme ${k.nom} ${sgn > 0 ? '(+Z)' : '(−Z)'}`, ls: 'ACC', acc: true, fond: true, N: (sgn > 0 ? Gmax(i) : Gmin(i)) + sgn * Math.abs(k.Fz), H: Math.abs(k.Fx), Hy: Math.abs(k.Fy), Nsus: Gmax(i), Ninst: 0, Hsus: 0, Hinst: Math.abs(k.Fx) });
+      }
     }
     if (!isEnd(i)) {
       // chocs : G + A_d + ψ1,1 Q (EN 1990 6.4.3.3, ψ1 TS 0,75 / UDL 0,4) ; F appliqué au fût (non transmis par le tablier)
@@ -428,7 +433,7 @@ export function computeSupports(st, input = {}) {
           return { ...cb, Nb: cb.N + g * (Wchev + Wfut) - (wt ? wt.U : 0), Mb: cb.H * arm + Mimp, Mimp, Myb: (cb.Hy || 0) * arm + (wt ? wt.M : 0), Hb: cb.H + (cb.imp ? cb.imp.F : 0), Hyb: (cb.Hy || 0) + (wt ? wt.F : 0) };
         });
         const shape = col ? { D: P.D, c: c + 0.01, nBars: 12 } : { b: Lv, h: bBot, c: c + 0.01, ...(bTop !== bBot ? { hBuck: bMin } : {}) };
-        shaftRes = designShaft({ shape, code, fck, fyk, Hf, combos: base.filter(b => b.ls !== 'ELS').map(b => ({ label: b.label, N: b.Nb, M: b.Mb - b.Mimp, Mloc: b.Mimp, My: b.Myb, acc: !!b.acc })), n: col ? P.nCol : 1 });
+        shaftRes = designShaft({ shape, code, fck, fyk, Hf, combos: base.filter(b => b.ls !== 'ELS' && !b.fond).map(b => ({ label: b.label, N: b.Nb, M: b.Mb - b.Mimp, Mloc: b.Mimp, My: b.Myb, acc: !!b.acc })), n: col ? P.nCol : 1 });
         if (col && P.hc > 0) {
           const nb = bearings.nb, pitch = bearingSpacing({ width, psi: st.p.concept.psi, n: nb });
           const ys = Array.from({ length: nb }, (_, k) => width / 2 + (k - (nb - 1) / 2) * pitch);
@@ -457,7 +462,7 @@ export function computeSupports(st, input = {}) {
         base.push(...videCombos({ W: Wtop + Wwall + Wret, ep, code }));
         extra.earth = { ...ep, K: app ? ep.i : KA, Htot: Hm + hGG, mode: app ? 'partie haute (PP73 § 3.1.3.1)' : rem ? 'mur de front' : 'colonnes, largeur fictive min(3D ; entraxe)' };
         const shape = rem ? { b: 1, h: C.em, c: c + 0.01 } : { D: C.D, c: c + 0.01, nBars: 12 };
-        shaftRes = designShaft({ shape, code, fck, fyk, Hf: Hm, combos: base.filter(b => b.ls !== 'ELS').map(b => ({ label: b.label, N: b.Nb, M: b.Mb, My: (b.Hy || 0) * Hm, acc: !!b.acc })), n: rem ? width : C.nCol, pileCulee: !rem, strip: rem });
+        shaftRes = designShaft({ shape, code, fck, fyk, Hf: Hm, combos: base.filter(b => b.ls !== 'ELS' && !b.fond).map(b => ({ label: b.label, N: b.Nb, M: b.Mb, My: (b.Hy || 0) * Hm, acc: !!b.acc })), n: rem ? width : C.nCol, pileCulee: !rem, strip: rem });
         const gg = gardeGreve({ h: hGG, K: KA, gamma: soil.gamma, dalleSurGG: !!C.dalle });
         const ggAs = (requiredSteelNM({ b: 1, h: gg.e, c }, { code, fck, fyk }, 0, gg.ELU).As ?? NaN) / 2;
         // face avant : moment de sens opposé M' = −3,2 t·m/m (PP73 1.3.2 § 2.3.3, sollicitation du 1er genre → ELU × 1,6/1,2)
