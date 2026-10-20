@@ -273,7 +273,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
   }
   if (chevetres) {
     table(['Ligne', 'd [m]', 'ζ TS / UDL', 'R rive / centre ELU [kN]', 'm_c⁻ / m_e⁻ / m_e⁺ [kN·m/m]', 'Sup. ① / ② / ③ [cm²/m]', 'Inf. ①\' / ②\' [cm²/m]'], chevetres.map(r => [`${r.i === 0 || r.i === chevetres.length - 1 ? 'Culée C' : 'Pile P'}${r.i}`, F2(r.d), r.zetas.map(F2).join(' / '), `${F0(r.R1)} / ${F0(r.R2)}`, `${F0(r.mc)} / ${F0(r.me_neg)} / ${F0(r.me_pos)}`, r.bands.top.map(b => CM(b.As)).join(' / '), r.bands.bot.map(b => CM(b.As)).join(' / ')]));
-    comment('Annexe 4 du guide PSIDP-EL : charges de type 1 (réparties) et de type 2 (proches de la ligne d\'appui, part ζ), réactions des appareils de rive et central, moments du chevêtre par poutre continue sur les appareils et moments locaux m_c⁻ = M_c⁻/(1,5 c), m_e = 1,5 M_e/e ; bandes ① 2/3·max(c, a, e), ② max(2c, a, e), ③ 2·max(a, e, c) ; ELU 1,35 G + 1,35 LM1.');
+    comment('Annexe 4 du guide PSIDP-EL : charges de type 1 (réparties) et de type 2 (proches de la ligne d\'appui, part ζ), réactions des appareils de rive et central, moments du chevêtre par poutre continue sur les appareils et moments locaux m_c⁻ = M_c⁻/(1,5 c), m_e = 1,5 M_e/e ; bandes ① 2/3·max(c, a, e), ② max(2c, a, e), ③ 2·max(a, e, c), ①\' 2/3·max(a, e), ②\' 2·max(a, e) ; sections minimales en enveloppe avec le ferraillage courant en travée (§ 6.2), complément éventuel dans la nomenclature ; ELU 1,35 G + 1,35 LM1.');
   }
 
   // ---------------------------------------------------------------------------------------------------------- 13

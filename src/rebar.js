@@ -223,28 +223,43 @@ export function rebarPlan({ deck, design, trans = null, opt = {} }) {
     return add({ face: 'âme', dir: 'vertical', role: 'épingles', phi, s: st, x1: zx1, x2: zx2, len, pieces: 1, totalLen: len, count, label: `Épingles d'effort tranchant x ∈ [${zx1.toFixed(1)} ; ${zx2.toFixed(1)}]`, note: `A_sw/s requis ${(z.A * 1e4).toFixed(1)} cm²/m², maille ${(st * 100).toFixed(1)} × ${(st * 100).toFixed(1)} cm (≤ 0,75 d)` });
   });
 
-  // ---------------- chevêtres incorporés, repères numérotés après ceux de la dalle courante (guide PSIDP-EL, annexe 4 § 6.2) : barres parallèles à la ligne d'appui, en
-  // complément des transversaux courants, dans des bandes centrées sur la ligne (① centrale, ② zone, ③ extensions ;
-  // ①', ②' en face inférieure), chaque bande comptée hors de la précédente ; aux culées, bande limitée au bout de la dalle
-  const chevMarks = [];
+  // ---------------- chevêtres incorporés, repères numérotés après ceux de la dalle courante (guide PSIDP-EL, annexe 4
+  // § 6.2) : dans chaque bande centrée sur la ligne d'appui (① 2/3 max(c ; a ; e), ② reste de max(2c ; a ; e), ③ reste de
+  // 2 max(a ; e ; c) ; ①' 2/3 max(a ; e), ②' reste de 2 max(a ; e)), la section d'aciers parallèles à la ligne d'appui
+  // est AU MOINS celle du moment de la bande — enveloppe avec le ferraillage courant en travée (§ 6.2.1 et 6.2.2), et non
+  // cumul. Les transversaux courants sont prolongés ; on ne place que le complément, intercalé (même espacement si
+  // possible). Aux culées, bande limitée au bout de la dalle. Transversaux courants non parallèles aux lignes d'appui
+  // (biais, perpendiculaires aux bords libres) : non comptés.
+  const chevMarks = [], chevBands = [];
+  const transParallel = !trans || !trans.skew || trans.skew.psi2 < 100 || (trans.skew.psi ?? 100) >= 100 - 1e-9; // ψ₂ = 100 gr sur pont biais : ⊥ bords libres
   if (chevetres) for (const cv of chevetres) {
     const i = cv.i, end = i === 0 || i === n, name = end ? `C${i}` : `P${i}`;
     const beyond = i === 0 ? aL : i === n ? aR : Infinity; // dalle disponible au-delà de la ligne d'appui
     for (const [face, bands, keys] of [['sup', cv.bands.top, ['①', '②', '③']], ['inf', cv.bands.bot, ['①\'', '②\'']]]) {
+      // transversaux courants de la face au droit de la ligne : les plus faibles des travées adjacentes
+      const adj = transMarks.filter(t => t.face === face && (t.span === i - 1 || t.span === i));
+      const cour = transParallel && adj.length ? adj.reduce((m, t) => (!m || t.provided < m.provided ? t : m), null) : null;
+      const Acour = cour ? cour.provided : 0;
       let wPrev = 0;
       bands.forEach((bd, k) => {
         const w = Math.max(bd.width, wPrev), half0 = wPrev / 2, half1 = w / 2;
         wPrev = w;
-        if (!(bd.As > 1e-9) || half1 - half0 < 1e-6) return;
+        if (half1 - half0 < 1e-6) return;
         const avail = (h0, h1) => Math.max(0, Math.min(h1, beyond - cEnd) - Math.min(h0, beyond - cEnd));
         const ring = (half1 - half0) + avail(half0, half1); // côté travée + côté about (limité au bout de dalle)
         if (ring < 1e-6) return;
-        const b = chooseBars(bd.As, { phiMin: 12, phiMax: 25, sMax: 0.25, sMin: 0.10 });
+        const req = bd.As || 0, need = Math.max(0, req - Acour);
+        const info = { support: i, face, band: keys[k], req, courant: cour, Acour, width: w, mark: null };
+        chevBands.push(info);
+        if (need <= 1e-9) return;
+        let b = cour ? chooseBars(need, { phiMin: 10, phiMax: 25, sMax: cour.s, sMin: cour.s }) : null;
+        if (!b || b.insufficient) b = chooseBars(need, { phiMin: 12, phiMax: 25, sMax: 0.25, sMin: 0.10 });
         const count = Math.max(k === 0 ? 2 : 1, Math.round(ring / b.s) + (k === 0 ? 1 : 0));
         const len = cv.B - 2 * c + 2 * 10 * b.phi / 1000;
         const m = add({ face, dir: 'trans', role: 'chevêtre', support: i, band: keys[k], phi: b.phi, s: b.s, x1: deck.beam.x0[i] - half1, x2: deck.beam.x0[i] + Math.min(half1, beyond), len, pieces: 1, totalLen: len, count,
-          label: `Chevêtre incorporé ${name} — bande ${keys[k]} ${face === 'sup' ? 'supérieure' : 'inférieure'}`, req: bd.As, provided: b.As,
-          note: `${bd.label} : ${(bd.As * 1e4).toFixed(1)} cm²/m requis, largeur ${half0 > 0 ? `${(2 * half0).toFixed(2)} à ` : ''}${w.toFixed(2)} m centrée sur la ligne d'appui${end ? ' (limitée au bout de dalle)' : ''} ; parallèles à la ligne d'appui, en complément des transversaux courants ; retours 10φ` });
+          label: `Chevêtre incorporé ${name} — bande ${keys[k]} ${face === 'sup' ? 'supérieure' : 'inférieure'}`, req, need, provided: b.As + Acour, Acour,
+          note: `${bd.label} : ${(req * 1e4).toFixed(1)} cm²/m au moins (annexe 4 § 6.2), dont ${(Acour * 1e4).toFixed(1)} par les transversaux courants${cour ? ` (${cour.mark})` : ''} : complément ${(need * 1e4).toFixed(1)} cm²/m ; largeur ${half0 > 0 ? `${(2 * half0).toFixed(2)} à ` : ''}${w.toFixed(2)} m centrée sur la ligne d'appui${end ? ' (limitée au bout de dalle)' : ''} ; parallèles à la ligne d'appui, intercalés ; retours 10φ` });
+        info.mark = m;
         chevMarks.push(m);
       });
     }
@@ -255,5 +270,5 @@ export function rebarPlan({ deck, design, trans = null, opt = {} }) {
   const deficits = check.filter(r => r.provBot + 1e-7 < Math.max(r.reqBot, r.shBot) || r.provTop + 1e-7 < Math.max(r.reqTop, r.shTop));
   const totalMass = marks.reduce((a, m) => a + m.mass, 0);
   const volume = deck.area * (deck.beam.Ltot + aL + aR);
-  return { c, marks, spansBot, filTop, supTop, transMarks, chevMarks, stirrups, check, deficits, totalMass, volume, ratio: totalMass / volume, al, sMaxPeak, sMaxMain, xStart, xEnd };
+  return { c, marks, spansBot, filTop, supTop, transMarks, chevMarks, chevBands, stirrups, check, deficits, totalMass, volume, ratio: totalMass / volume, al, sMaxPeak, sMaxMain, xStart, xEnd };
 }

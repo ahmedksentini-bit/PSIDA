@@ -233,6 +233,9 @@ Depuis la v0.52 : aciers des chevêtres incorporés (guide PSIDP-EL annexe 4) da
 courants, avec repères dans la nomenclature et tracé sur les coupes sur appui ; bandeau « résultats périmés » dès qu'une donnée
 change après un calcul, ou que l'onglet « Calcul sismique » envoie des efforts différents de ceux du dernier calcul, avec un
 bouton de relance.
+v0.52.2 : chevêtres incorporés lus sur le texte de l'annexe 4 (§ 6.2.1 et 6.2.2) : les sections des bandes sont des minimums
+« au moins », en enveloppe avec le ferraillage courant en travée (et non en cumul) ; seul le complément aux transversaux
+courants parallèles à la ligne d'appui est placé, intercalé au même espacement.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

@@ -119,12 +119,12 @@ function bearingsTable(st) {
 
 function chevetresTable(st) {
   const cm = v => (v * 1e4).toFixed(1), f0 = v => v.toFixed(0), f2 = v => v.toFixed(2);
-  let h = `<h3>Chevêtres incorporés et réaction par appareil (annexe 4 du guide PSIDP-EL)</h3><p class="small">ELU fondamental 1,35 G + 1,35 LM1. Ligne d'appui de longueur B = 2b/sin ψ, ${st.chevetres[0].n} appareils à a = ${f2(st.chevetres[0].a)} m (le long de la ligne), consoles c = ${f2(st.chevetres[0].c)} m. Charges de type 1 (permanentes et trafic éloigné) réparties comme une charge uniforme, de type 2 (trafic à moins de d de la ligne) comme sur une poutre sur appuis : d = max[a + c ; (a + e)/2 ; min(B/2 ; L)], ζ_UDL = (d/L)(2 − d/L), ζ_TS = (1 − d/2L)·P_d/S_q. Moments du chevêtre par poutre continue sur les appareils (consoles c), moments locaux m_c⁻ = M_c⁻/(1,5 c), m_e = 1,5 M_e/e ; ferraillage par bandes (§ 6.2) en plus du ferraillage courant de la dalle, d = ${f2(st.chevetres[0].dEff)} m. Culées : adaptation de la règle (L = about + demi-travée de rive).</p>
+  let h = `<h3>Chevêtres incorporés et réaction par appareil (annexe 4 du guide PSIDP-EL)</h3><p class="small">ELU fondamental 1,35 G + 1,35 LM1. Ligne d'appui de longueur B = 2b/sin ψ, ${st.chevetres[0].n} appareils à a = ${f2(st.chevetres[0].a)} m (le long de la ligne), consoles c = ${f2(st.chevetres[0].c)} m. Charges de type 1 (permanentes et trafic éloigné) réparties comme une charge uniforme, de type 2 (trafic à moins de d de la ligne) comme sur une poutre sur appuis : d = max[a + c ; (a + e)/2 ; min(B/2 ; L)], ζ_UDL = (d/L)(2 − d/L), ζ_TS = (1 − d/2L)·P_d/S_q. Moments du chevêtre par poutre continue sur les appareils (consoles c), moments locaux m_c⁻ = M_c⁻/(1,5 c), m_e = 1,5 M_e/e ; ferraillage par bandes (§ 6.2), section minimale en enveloppe avec le ferraillage courant de la dalle, d = ${f2(st.chevetres[0].dEff)} m. Culées : adaptation de la règle (L = about + demi-travée de rive).</p>
   <table><thead><tr><th>Ligne</th><th>L [m]</th><th>d [m]</th><th>ζ TS / UDL</th><th>R rive / centre ELU [kN]</th><th>R moyen [kN]</th><th>M_c⁻ / M_e⁻ / M_e⁺ [kN·m]</th><th>m_c⁻ / m_e⁻ / m_e⁺ [kN·m/m]</th><th>Face sup. ① / ② / ③ [cm²/m]</th><th>Face inf. ①' / ②' [cm²/m]</th></tr></thead><tbody>`;
   for (const r of st.chevetres) {
     h += `<tr><td>${r.i === 0 || r.i === st.chevetres.length - 1 ? 'Culée C' : 'Pile P'}${r.i}</td><td>${f2(r.L)}</td><td>${f2(r.d)}</td><td>${r.zetas.map(f2).join(' / ')}</td><td>${f0(r.R1)} / ${f0(r.R2)}</td><td>${f0(r.Rmoy)}</td><td>${f0(r.Mc)} / ${f0(r.Me_neg)} / ${f0(r.Me_pos)}</td><td>${f0(r.mc)} / ${f0(r.me_neg)} / ${f0(r.me_pos)}</td><td>${r.bands.top.map((b, k) => `${'①②③'[k]} ${cm(b.As)} <span class="small">(${f2(b.width)} m)</span>`).join('<br>')}</td><td>${r.bands.bot.map((b, k) => `${'①②'[k]}' ${cm(b.As)} <span class="small">(${f2(b.width)} m)</span>`).join('<br>')}</td></tr>`;
   }
-  return h + `</tbody></table><p class="small">Largeurs des bandes mesurées perpendiculairement à la ligne d'appui, centrées sur elle : ① 2/3·max(c, a, e), ② max(2c, a, e), ③ 2·max(a, e, c) (face supérieure) ; ①' 2/3·max(a, e), ②' 2·max(a, e) (face inférieure). Valeurs à cumuler avec le ferraillage courant en travée au-delà des bandes ① (guide PSIDP-EL, annexe 4, § 6.2). Les barres correspondantes (parallèles à la ligne d'appui, en complément des transversaux courants) figurent dans la nomenclature et sur les coupes sur appui de l'onglet Ferraillage.</p>`;
+  return h + `</tbody></table><p class="small">Largeurs des bandes mesurées perpendiculairement à la ligne d'appui, centrées sur elle : ① 2/3·max(c, a, e), ② max(2c, a, e), ③ 2·max(a, e, c) (face supérieure) ; ①' 2/3·max(a, e), ②' 2·max(a, e) (face inférieure). Sections minimales à mettre en place dans chaque bande, en enveloppe avec le ferraillage courant en travée (guide PSIDP-EL, annexe 4, § 6.2 : « au moins » ; bandes ③ et ②' : enveloppe de la section en travée et de celle du tiers du moment). Les transversaux courants comptent ; le complément éventuel, parallèle à la ligne d'appui, figure dans la nomenclature et sur les coupes sur appui de l'onglet Ferraillage.</p>`;
 }
 
 async function runThicknessSearch() {
@@ -487,7 +487,7 @@ async function saveProject() {
   const form = $('#f');
   const spans = String(form.spans.value || '').split(/[,;\s]+/).filter(Boolean).join('-');
   const name = projName || `projet-psida-${spans || 'ouvrage'}.json`;
-  const file = { format: PROJ_FORMAT, version: '0.52.1', date: new Date().toISOString(), data: formSnapshot(form) };
+  const file = { format: PROJ_FORMAT, version: '0.52.2', date: new Date().toISOString(), data: formSnapshot(form) };
   if (ec8Data) file.ec8 = ec8Data;
   const txt = JSON.stringify(file, null, 1);
   if (window.showSaveFilePicker) { // Chrome, Edge : choix du nom et du dossier
@@ -564,7 +564,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.52.1', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = await buildReport({ ...state, version: '0.52.2', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -601,7 +601,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.52.1', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.52.2', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -657,7 +657,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.52.1', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.52.2', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));

@@ -73,9 +73,10 @@ export function longitudinalRebarSVG(deck, plan) {
 
 /** Coupe transversale à l'abscisse x : barres longitudinales (points) et transversales (traits). */
 export function crossRebarSVG(deck, plan, x, title) {
-  const chev = (plan.chevMarks || []).filter(m => Math.abs(deck.beam.x0[m.support] - x) < 1e-6);
+  const onLine = q => Math.abs(deck.beam.x0[q.support] - x) < 1e-6;
+  const chev = (plan.chevMarks || []).filter(onLine), chevB = (plan.chevBands || []).filter(onLine);
   const onPier = deck.beam.x0.slice(1, -1).some(xa => Math.abs(xa - x) < 1e-6);
-  const W = 1100, H = 250 + (onPier ? 16 : 0) + (chev.length ? 22 : 0);
+  const W = 1100, H = 250 + (onPier ? 16 : 0) + (chevB.length ? 22 : 0);
   const b = deck.b, h = deck.h, m = { l: 60, r: 60 }, sc = (W - m.l - m.r) / (2 * b);
   const sy = y => m.l + (y + b) * sc, hPx = Math.max(40, Math.min(90, h * sc * 1.6)), yT = 90, yB = yT + hPx;
   const c = 0.03 * hPx / h + 6;
@@ -111,9 +112,10 @@ export function crossRebarSVG(deck, plan, x, title) {
   const AsTop = areaOf(topF.phi) / topF.s + (topR ? areaOf(topR.phi) / topR.s : 0), AsBot = botF ? areaOf(botF.phi) / botF.s + (botR ? areaOf(botR.phi) / botR.s : 0) : 0;
   s += `<text x="${m.l}" y="${yT - 30}" fill="${COL.sup}">Nappe supérieure : ${bubbleTxt(topF)}${topR ? ` + ${bubbleTxt(topR)} intercalés` : ''} = ${fr(AsTop * 1e4, 1)} cm²/m${tSup ? ` ; transversaux ${bubbleTxt(tSup)}` : ''}</text>`;
   s += `<text x="${m.l}" y="${yB + 30}" fill="${COL.inf}">Nappe inférieure : ${botF ? bubbleTxt(botF) : '—'}${botR ? ` + ${bubbleTxt(botR)} intercalés` : ''} = ${fr(AsBot * 1e4, 1)} cm²/m${tInf ? ` ; transversaux ${bubbleTxt(tInf)}` : ''}</text>`;
-  if (chev.length) {
-    const t = ms => ms.map(m => `${m.band} ${bubbleTxt(m)}`).join(', ');
-    s += `<text x="${m.l}" y="${yB + (onPier ? 82 : 66)}" fill="${COL.chev}" font-weight="600">Chevêtre incorporé (en complément des transversaux) — sup. : ${cs.length ? t(cs) : '—'} ; inf. : ${ci.length ? t(ci) : '—'}</text>`;
+  if (chevB.length) {
+    const comp = chevB.filter(q => q.mark), ok = chevB.filter(q => !q.mark).map(q => q.band);
+    const t1 = comp.map(q => `${q.band} ${bubbleTxt(q.mark)} en complément${q.courant ? ` de (${q.courant.mark})` : ''}`).join(', ');
+    s += `<text x="${m.l}" y="${yB + (onPier ? 82 : 66)}" fill="${COL.chev}" font-weight="600">Chevêtre incorporé (annexe 4 § 6.2, enveloppe avec les transversaux) — ${t1 || 'aucun complément'}${ok.length ? ` ; ${ok.join(' ')} : transversaux courants suffisants` : ''}</text>`;
   }
   const lapNote = deck.beam.x0.slice(1, -1).some(xa => Math.abs(xa - x) < 1e-6) ? ' Sur appui intermédiaire : recouvrement des filantes inférieures des deux travées (une seule nappe représentée).' : '';
   s += `<text x="${m.l}" y="${yB + 48}" opacity="0.75">Section à x = ${fr(x)} m ; cadres de chaînage des bords libres sur une largeur h ; enrobage à l'axe ${fr(plan.c * 100, 1)} cm (schématique).</text>`;

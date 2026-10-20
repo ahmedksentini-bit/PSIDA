@@ -79,10 +79,12 @@ test('Fondations : Ménard, bulbe de Boussinesq et plans de ferraillage tracés 
 test('Chevêtres incorporés : barres par bande dans la nomenclature et sur la coupe sur appui', async () => {
   const { crossRebarSVG } = await import('../web/rebarplan.js');
   const st = compute(parseData(formDefaults()));
-  const ch = st.rebar.chevMarks;
-  assert.ok(ch.length >= 2 * st.chevetres.length, 'au moins deux bandes par ligne d\'appui');
-  for (const m of ch) { assert.ok(m.provided + 1e-9 >= m.req, `${m.label} : ${m.provided} < ${m.req}`); assert.ok(m.count >= 1 && m.len > 0); }
-  assert.ok(st.rebar.marks.includes(ch[0]), 'repères de chevêtre dans la nomenclature');
+  const ch = st.rebar.chevMarks, cb = st.rebar.chevBands;
+  assert.equal(cb.length, 5 * st.chevetres.length, 'cinq bandes par ligne d\'appui');
+  // annexe 4 § 6.2 : section « au moins » égale à celle de la bande, en enveloppe avec les transversaux courants
+  for (const q of cb) assert.ok(q.Acour + (q.mark ? q.mark.As ?? (q.mark.provided - q.Acour) : 0) + 1e-9 >= q.req, `${q.support} ${q.band}`);
+  for (const m of ch) { assert.ok(m.provided + 1e-9 >= m.req && m.count >= 1 && m.len > 0, m.label); assert.ok(st.rebar.marks.includes(m)); }
+  assert.ok(ch.length >= 1, 'au moins un complément sur pile');
   const s = crossRebarSVG(st.deck, st.rebar, st.deck.beam.x0[1], 'Coupe — appui P1');
   assert.ok(s.includes('Chevêtre incorporé') && !/NaN|undefined/.test(s));
   assert.ok(!crossRebarSVG(st.deck, st.rebar, st.deck.beam.x0[0] + st.deck.spans[0] / 2, 'mi-travée').includes('Chevêtre incorporé'));
