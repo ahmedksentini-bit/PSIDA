@@ -97,7 +97,7 @@ function pieces(len, l0, Lmax = 12) {
  * @param {{fck,fyk,phiLong,phiTrans,cEnd}} [p.opt]
  */
 export function rebarPlan({ deck, design, trans = null, opt = {} }) {
-  const { fck = 35, fyk = 500, phiLong = 20, phiTrans = 16, cEnd = 0.05, Lmax = 12 } = opt;
+  const { fck = 35, fyk = 500, phiLong = 20, phiTrans = 16, cEnd = 0.05, Lmax = 12, chevetres = null } = opt;
   const h = deck.h, d = design.d, c = design.c, width = 2 * deck.b;
   const secs = deck.beam.sections, xs = secs.map(s => s.x), x0 = deck.beam.x0, n = deck.spans.length;
   const [aL, aR] = deck.g.overhangs || [0, 0];
@@ -205,6 +205,33 @@ export function rebarPlan({ deck, design, trans = null, opt = {} }) {
     });
   }
 
+  // ---------------- chevêtres incorporés (guide PSIDP-EL, annexe 4 § 6.2) : barres parallèles à la ligne d'appui, en
+  // complément des transversaux courants, dans des bandes centrées sur la ligne (① centrale, ② zone, ③ extensions ;
+  // ①', ②' en face inférieure), chaque bande comptée hors de la précédente ; aux culées, bande limitée au bout de la dalle
+  const chevMarks = [];
+  if (chevetres) for (const cv of chevetres) {
+    const i = cv.i, end = i === 0 || i === n, name = end ? `C${i}` : `P${i}`;
+    const beyond = i === 0 ? aL : i === n ? aR : Infinity; // dalle disponible au-delà de la ligne d'appui
+    for (const [face, bands, keys] of [['sup', cv.bands.top, ['①', '②', '③']], ['inf', cv.bands.bot, ['①\'', '②\'']]]) {
+      let wPrev = 0;
+      bands.forEach((bd, k) => {
+        const w = Math.max(bd.width, wPrev), half0 = wPrev / 2, half1 = w / 2;
+        wPrev = w;
+        if (!(bd.As > 1e-9) || half1 - half0 < 1e-6) return;
+        const avail = (h0, h1) => Math.max(0, Math.min(h1, beyond - cEnd) - Math.min(h0, beyond - cEnd));
+        const ring = (half1 - half0) + avail(half0, half1); // côté travée + côté about (limité au bout de dalle)
+        if (ring < 1e-6) return;
+        const b = chooseBars(bd.As, { phiMin: 12, phiMax: 25, sMax: 0.25, sMin: 0.10 });
+        const count = Math.max(k === 0 ? 2 : 1, Math.round(ring / b.s) + (k === 0 ? 1 : 0));
+        const len = cv.B - 2 * c + 2 * 10 * b.phi / 1000;
+        const m = add({ face, dir: 'trans', role: 'chevêtre', support: i, band: keys[k], phi: b.phi, s: b.s, x1: deck.beam.x0[i] - half1, x2: deck.beam.x0[i] + Math.min(half1, beyond), len, pieces: 1, totalLen: len, count,
+          label: `Chevêtre incorporé ${name} — bande ${keys[k]} ${face === 'sup' ? 'supérieure' : 'inférieure'}`, req: bd.As, provided: b.As,
+          note: `${bd.label} : ${(bd.As * 1e4).toFixed(1)} cm²/m requis, largeur ${half0 > 0 ? `${(2 * half0).toFixed(2)} à ` : ''}${w.toFixed(2)} m centrée sur la ligne d'appui${end ? ' (limitée au bout de dalle)' : ''} ; parallèles à la ligne d'appui, en complément des transversaux courants ; retours 10φ` });
+        chevMarks.push(m);
+      });
+    }
+  }
+
   // ---------------- cadres de chaînage des bords libres (guide § 3.4.5 : ≥ 5 cm²/m) et épingles d'effort tranchant
   const Ltot = xEnd - xStart;
   const cad = chooseBars(5e-4, { phiMin: 10, phiMax: 14, sMax: 0.25 });
@@ -228,5 +255,5 @@ export function rebarPlan({ deck, design, trans = null, opt = {} }) {
   const deficits = check.filter(r => r.provBot + 1e-7 < Math.max(r.reqBot, r.shBot) || r.provTop + 1e-7 < Math.max(r.reqTop, r.shTop));
   const totalMass = marks.reduce((a, m) => a + m.mass, 0);
   const volume = deck.area * (deck.beam.Ltot + aL + aR);
-  return { c, marks, spansBot, filTop, supTop, transMarks, stirrups, check, deficits, totalMass, volume, ratio: totalMass / volume, al, sMaxPeak, sMaxMain, xStart, xEnd };
+  return { c, marks, spansBot, filTop, supTop, transMarks, chevMarks, stirrups, check, deficits, totalMass, volume, ratio: totalMass / volume, al, sMaxPeak, sMaxMain, xStart, xEnd };
 }

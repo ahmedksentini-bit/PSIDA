@@ -52,7 +52,19 @@ let state = null, lastSearch = null;
 function parseForm(form) { const p = parseData(Object.fromEntries(new FormData(form).entries())); withEC8(p.supports); return p; }
 // --- onglet « Calcul sismique » (Pont EC8 en iframe) : efforts reçus, envoi du projet ---
 let ec8Data = null, ec8Pending = null;
-function withEC8(sup) { if (sup && sup.seisme) sup.seisme.externe = ec8Data; return sup; }
+let ec8Used = null; // efforts sismiques (JSON) repris par le dernier calcul
+function withEC8(sup) { if (sup && sup.seisme) sup.seisme.externe = ec8Data; ec8Used = ec8Data ? JSON.stringify(ec8Data.efforts) : null; return sup; }
+
+// --- résultats périmés : bandeau dès qu'une donnée change après un calcul, ou que de nouveaux efforts sismiques arrivent ---
+function markStale(msg) {
+  if (!state) return;
+  const el = $('#stale'); if (!el) return;
+  // structure créée une fois : la recréer pendant un clic (blur → change) ferait perdre ce clic
+  if (!el.querySelector('[data-stale-run]')) el.innerHTML = '<span data-stale-msg></span><button type="button" data-stale-run>Relancer le calcul</button>';
+  el.querySelector('[data-stale-msg]').textContent = msg;
+  el.hidden = false;
+}
+function clearStale() { const el = $('#stale'); if (el) el.hidden = true; }
 
 const badge = lv => `<span class="badge ${lv}">${lv === 'ok' ? 'OK' : lv === 'warn' ? 'ATTENTION' : 'INFO'}</span>`;
 
@@ -112,7 +124,7 @@ function chevetresTable(st) {
   for (const r of st.chevetres) {
     h += `<tr><td>${r.i === 0 || r.i === st.chevetres.length - 1 ? 'Culée C' : 'Pile P'}${r.i}</td><td>${f2(r.L)}</td><td>${f2(r.d)}</td><td>${r.zetas.map(f2).join(' / ')}</td><td>${f0(r.R1)} / ${f0(r.R2)}</td><td>${f0(r.Rmoy)}</td><td>${f0(r.Mc)} / ${f0(r.Me_neg)} / ${f0(r.Me_pos)}</td><td>${f0(r.mc)} / ${f0(r.me_neg)} / ${f0(r.me_pos)}</td><td>${r.bands.top.map((b, k) => `${'①②③'[k]} ${cm(b.As)} <span class="small">(${f2(b.width)} m)</span>`).join('<br>')}</td><td>${r.bands.bot.map((b, k) => `${'①②'[k]}' ${cm(b.As)} <span class="small">(${f2(b.width)} m)</span>`).join('<br>')}</td></tr>`;
   }
-  return h + `</tbody></table><p class="small">Largeurs des bandes mesurées perpendiculairement à la ligne d'appui, centrées sur elle : ① 2/3·max(c, a, e), ② max(2c, a, e), ③ 2·max(a, e, c) (face supérieure) ; ①' 2/3·max(a, e), ②' 2·max(a, e) (face inférieure). Valeurs à cumuler avec le ferraillage courant en travée au-delà des bandes ① (guide PSIDP-EL, annexe 4, § 6.2).</p>`;
+  return h + `</tbody></table><p class="small">Largeurs des bandes mesurées perpendiculairement à la ligne d'appui, centrées sur elle : ① 2/3·max(c, a, e), ② max(2c, a, e), ③ 2·max(a, e, c) (face supérieure) ; ①' 2/3·max(a, e), ②' 2·max(a, e) (face inférieure). Valeurs à cumuler avec le ferraillage courant en travée au-delà des bandes ① (guide PSIDP-EL, annexe 4, § 6.2). Les barres correspondantes (parallèles à la ligne d'appui, en complément des transversaux courants) figurent dans la nomenclature et sur les coupes sur appui de l'onglet Ferraillage.</p>`;
 }
 
 async function runThicknessSearch() {
@@ -428,6 +440,14 @@ let schemeTimer = null;
 const scheduleScheme = () => { clearTimeout(schemeTimer); schemeTimer = setTimeout(renderScheme, 150); };
 $('#f').addEventListener('input', scheduleScheme);
 $('#f').addEventListener('change', scheduleScheme);
+// toute donnée nommée du formulaire (hors indice de danger, recalculé en direct) rend les résultats périmés
+const onDataEdit = ev => { const t = ev.target; if (t && t.name && !t.closest('#tab-retenue')) markStale('Données modifiées depuis le dernier calcul : les résultats affichés ne sont plus à jour.'); };
+$('#f').addEventListener('input', onDataEdit);
+$('#f').addEventListener('change', onDataEdit);
+$('#stale').addEventListener('click', ev => {
+  if (!ev.target.closest('[data-stale-run]')) return;
+  if (state && state.standalone) $('#btn-standalone').click(); else $('#f').requestSubmit($('#btn-calc'));
+});
 enhanceForm($('#f')); // saisie valeur par valeur des champs multi-valeurs (avant la lecture d'un lien partagé)
 applyHelp($('#f'), $('#help-list'));
 renderScheme();
@@ -436,12 +456,12 @@ $('#f').addEventListener('submit', ev => {
   ev.preventDefault();
   setMode('full');
   if (T.current() === 'projet' || T.current() === 'conception') goTab('tablier');
-  try { state = compute(parseForm(ev.target)); renderStatic(state); $('#error').textContent = ''; formToHash(ev.target); goTab(T.current()); }
+  try { state = compute(parseForm(ev.target)); renderStatic(state); clearStale(); $('#error').textContent = ''; formToHash(ev.target); goTab(T.current()); }
   catch (e) { $('#error').textContent = e.stack || String(e); }
 });
 $('#btn-concept').addEventListener('click', () => {
   setMode('concept'); goTab('conception');
-  try { state = computeConceptOnly(parseForm($('#f'))); $('#hsearch').innerHTML = ''; renderConception(state); $('#error').textContent = ''; formToHash($('#f')); }
+  try { state = computeConceptOnly(parseForm($('#f'))); $('#hsearch').innerHTML = ''; renderConception(state); clearStale(); $('#error').textContent = ''; formToHash($('#f')); }
   catch (e) { $('#error').textContent = e.stack || String(e); }
   $('#concept-card').scrollIntoView({ behavior: 'smooth' });
 });
@@ -467,7 +487,7 @@ async function saveProject() {
   const form = $('#f');
   const spans = String(form.spans.value || '').split(/[,;\s]+/).filter(Boolean).join('-');
   const name = projName || `projet-psida-${spans || 'ouvrage'}.json`;
-  const file = { format: PROJ_FORMAT, version: '0.51', date: new Date().toISOString(), data: formSnapshot(form) };
+  const file = { format: PROJ_FORMAT, version: '0.52', date: new Date().toISOString(), data: formSnapshot(form) };
   if (ec8Data) file.ec8 = ec8Data;
   const txt = JSON.stringify(file, null, 1);
   if (window.showSaveFilePicker) { // Chrome, Edge : choix du nom et du dossier
@@ -537,14 +557,14 @@ $('#design-ref').addEventListener('change', () => state && renderDesign(state));
 // (conception seule, appuis seuls, poutres), le calcul complet est relancé à partir du formulaire.
 function ensureFull() {
   if (state && state.design && !state.conceptOnly) return true;
-  try { setMode('full'); state = compute(parseForm($('#f'))); renderStatic(state); $('#error').textContent = ''; return true; }
+  try { setMode('full'); state = compute(parseForm($('#f'))); renderStatic(state); clearStale(); $('#error').textContent = ''; return true; }
   catch (e) { $('#error').textContent = 'Calcul complet impossible : ' + (e.stack || String(e)); return false; }
 }
 $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.51', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = await buildReport({ ...state, version: '0.52', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -581,7 +601,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.51', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.52', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -632,12 +652,12 @@ $('#btn-standalone').addEventListener('click', () => {
   setMode('supports'); goTab('appuis');
   try {
     const d = Object.fromEntries(new FormData($('#f')).entries());
-    state = computeStandalone(parseStandalone(d), withEC8(parseSupports(d)));
+    state = computeStandalone(parseStandalone(d), withEC8(parseSupports(d))); clearStale();
     renderSupports(state); $('#error').textContent = '';
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.51', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.52', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));
@@ -707,7 +727,12 @@ function ec8Status() {
 window.addEventListener('message', ev => {
   if (ev.origin !== location.origin || !ev.data || ev.data.source !== 'pont-ec8') return;
   if (ev.data.type === 'pret' && ec8Pending) { const p = ec8Pending; ec8Pending = null; ec8Post(p); }
-  else if (ev.data.type === 'efforts') { ec8Data = ev.data; ec8Status(); }
+  else if (ev.data.type === 'efforts') {
+    ec8Data = ev.data; ec8Status();
+    const f = $('#f');
+    if (state && f.ap_seisme && f.ap_seisme.checked && f.ap_seismeSrc && f.ap_seismeSrc.value === 'onglet' && JSON.stringify(ev.data.efforts) !== ec8Used)
+      markStale('Nouveaux efforts reçus de l\'onglet « Calcul sismique » : relancer le calcul pour les reporter dans les appuis et fondations.');
+  }
   else if (ev.data.type === 'erreur') { $('#ec8-status').textContent = 'Pont EC8 : ' + ev.data.message; }
 });
 $('#btn-ec8-send').addEventListener('click', () => {

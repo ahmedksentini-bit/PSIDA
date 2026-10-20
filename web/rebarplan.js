@@ -6,7 +6,7 @@ import { areaOf, massPerM } from '../src/rebar.js';
 
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const fr = (v, d = 2) => Number(v).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: d });
-const COL = { inf: 'var(--acc, #0b5fa5)', sup: 'var(--warn, #c8552b)', renf: '#2a8f6a', stir: '#8a4fb8' };
+const COL = { inf: 'var(--acc, #0b5fa5)', sup: 'var(--warn, #c8552b)', renf: '#2a8f6a', stir: '#8a4fb8', chev: '#b45309' };
 
 function bubble(x, y, n, color) {
   return `<circle cx="${x}" cy="${y}" r="9" fill="var(--card, #fff)" stroke="${color}" stroke-width="1.4"/><text x="${x}" y="${y + 4}" text-anchor="middle" font-size="11" font-weight="700" fill="${color}">${n}</text>`;
@@ -73,7 +73,8 @@ export function longitudinalRebarSVG(deck, plan) {
 
 /** Coupe transversale à l'abscisse x : barres longitudinales (points) et transversales (traits). */
 export function crossRebarSVG(deck, plan, x, title) {
-  const W = 1100, H = 250;
+  const chev = (plan.chevMarks || []).filter(m => Math.abs(deck.beam.x0[m.support] - x) < 1e-6);
+  const W = 1100, H = chev.length ? 272 : 250;
   const b = deck.b, h = deck.h, m = { l: 60, r: 60 }, sc = (W - m.l - m.r) / (2 * b);
   const sy = y => m.l + (y + b) * sc, hPx = Math.max(40, Math.min(90, h * sc * 1.6)), yT = 90, yB = yT + hPx;
   const c = 0.03 * hPx / h + 6;
@@ -98,6 +99,10 @@ export function crossRebarSVG(deck, plan, x, title) {
   const tInf = plan.transMarks.find(t => t.span === j && t.face === 'inf'), tSup = plan.transMarks.find(t => t.span === j && t.face === 'sup');
   if (tSup) s += `<line x1="${sy(-b) + 4}" y1="${yT + c + 5}" x2="${sy(b) - 4}" y2="${yT + c + 5}" stroke="${COL.sup}" stroke-width="1.2" stroke-dasharray="6 2"/>`;
   if (tInf) { const pts = []; for (let k = 0; k <= 60; k++) { const yy = -b + 0.04 + (2 * b - 0.08) * k / 60; pts.push(`${sy(yy)},${Math.min(yB - c - 5, underside(yy) - c - 5)}`); } s += `<polyline points="${pts.join(' ')}" fill="none" stroke="${COL.inf}" stroke-width="1.2" stroke-dasharray="6 2"/>`; }
+  // chevêtre incorporé (section sur une ligne d'appui) : barres parallèles à la ligne d'appui, vues sur toute leur longueur
+  const cs = chev.filter(m => m.face === 'sup'), ci = chev.filter(m => m.face === 'inf');
+  if (cs.length) s += `<line x1="${sy(-b) + 4}" y1="${yT + c + 9}" x2="${sy(b) - 4}" y2="${yT + c + 9}" stroke="${COL.chev}" stroke-width="2.4"/>`;
+  if (ci.length) { const pts = []; for (let k = 0; k <= 60; k++) { const yy = -b + 0.04 + (2 * b - 0.08) * k / 60; pts.push(`${sy(yy)},${Math.min(yB - c - 9, underside(yy) - c - 9)}`); } s += `<polyline points="${pts.join(' ')}" fill="none" stroke="${COL.chev}" stroke-width="2.4"/>`; }
   s += dots(topF, yT + c, COL.sup, 0);
   if (topR) s += dots(topR, yT + c, COL.renf, topR.s / 2);
   if (botF) s += dots(botF, yB - c, COL.inf, 0);
@@ -105,6 +110,10 @@ export function crossRebarSVG(deck, plan, x, title) {
   const AsTop = areaOf(topF.phi) / topF.s + (topR ? areaOf(topR.phi) / topR.s : 0), AsBot = botF ? areaOf(botF.phi) / botF.s + (botR ? areaOf(botR.phi) / botR.s : 0) : 0;
   s += `<text x="${m.l}" y="${yT - 30}" fill="${COL.sup}">Nappe supérieure : ${bubbleTxt(topF)}${topR ? ` + ${bubbleTxt(topR)} intercalés` : ''} = ${fr(AsTop * 1e4, 1)} cm²/m${tSup ? ` ; transversaux ${bubbleTxt(tSup)}` : ''}</text>`;
   s += `<text x="${m.l}" y="${yB + 30}" fill="${COL.inf}">Nappe inférieure : ${botF ? bubbleTxt(botF) : '—'}${botR ? ` + ${bubbleTxt(botR)} intercalés` : ''} = ${fr(AsBot * 1e4, 1)} cm²/m${tInf ? ` ; transversaux ${bubbleTxt(tInf)}` : ''}</text>`;
+  if (chev.length) {
+    const t = ms => ms.map(m => `${m.band} ${bubbleTxt(m)}`).join(', ');
+    s += `<text x="${m.l}" y="${yB + 66}" fill="${COL.chev}" font-weight="600">Chevêtre incorporé (en complément des transversaux) — sup. : ${cs.length ? t(cs) : '—'} ; inf. : ${ci.length ? t(ci) : '—'}</text>`;
+  }
   const lapNote = deck.beam.x0.slice(1, -1).some(xa => Math.abs(xa - x) < 1e-6) ? ' Sur appui intermédiaire : recouvrement des filantes inférieures des deux travées (une seule nappe représentée).' : '';
   s += `<text x="${m.l}" y="${yB + 48}" opacity="0.75">${lapNote ? lapNote.trim() + ' ' : ''}Section à x = ${fr(x)} m ; cadres de chaînage des bords libres sur une largeur h ; enrobage à l'axe ${fr(plan.c * 100, 1)} cm (schématique).</text>`;
   return s + `</svg>`;

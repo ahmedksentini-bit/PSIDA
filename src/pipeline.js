@@ -282,7 +282,7 @@ export function compute(p) {
   }
   // plan de ferraillage BA : impossible quand aucune disposition de barres ne suffit (dalle à précontraindre, travées longues)
   let rebar = null, rebarError = null;
-  try { rebar = rebarPlan({ deck, design: env, trans: transDesign.EC, opt: { fck: p.mat.fck, fyk: p.mat.fyk, phiLong: Math.round(p.mat.phi * 1000), phiTrans: Math.round(p.mat.phiT * 1000) } }); rebar.governing = governing; }
+  try { rebar = rebarPlan({ deck, design: env, trans: transDesign.EC, opt: { fck: p.mat.fck, fyk: p.mat.fyk, phiLong: Math.round(p.mat.phi * 1000), phiTrans: Math.round(p.mat.phiT * 1000), chevetres } }); rebar.governing = governing; }
   catch (e) { rebarError = `plan de ferraillage BA impossible (${e.message}) : sections d'acier hors des dispositions courantes — dalle à précontraindre ou à épaissir`; }
   let psidp = null, psidpError = null;
   if (p.bp && p.bp.actif) {
