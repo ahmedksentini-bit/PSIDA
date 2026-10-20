@@ -5949,7 +5949,9 @@ function exporterEfforts(p, a, r, sources, methodeDemandee) {
 	} catch (e) {
 		remarques.push(`Effets pour les fondations non calculés : ${e instanceof Error ? e.message : String(e)}.`);
 	}
-	if (fx.concat(fy).some((d) => d.VCbrut !== void 0 && d.VCbrut < d.VE - 1e-9)) remarques.push("Capacité γ0 M_Rd / L inférieure à l'effort de calcul pour au moins une pile : la section d'acier des fûts est insuffisante ; l'effort de calcul est retenu pour les fondations.");
+	const insuff = fx.concat(fy).some((d) => d.VCbrut !== void 0 && d.VCbrut < d.VE - 1e-9);
+	if (fx.concat(fy).some((d) => d.MRd !== void 0) && p.appuis.some((ap) => ap.type === "pile" && !ap.armatures)) remarques.push("Armatures des fûts non transmises pour au moins une pile : M_Rd calculé avec 1 % de la section (barres de 25 mm, enrobage 5 cm) ; envoyer le projet depuis PSIDA après le calcul des appuis pour reprendre les aciers dimensionnés.");
+	if (insuff) remarques.push("Capacité γ0 M_Rd / L inférieure à l'effort de calcul pour au moins une pile : la section d'acier des fûts est insuffisante ; l'effort de calcul est retenu pour les fondations.");
 	if (fx.length) remarques.push(`Fondations (EN 1998-2 5.8.2) — X : ${LIB_REGLE(b.q.x, isole, fx)} ; Y : ${LIB_REGLE(b.q.y, isole, fy)}. Réactions verticales inchangées.`);
 	const det = (d) => d ? {
 		...d,
