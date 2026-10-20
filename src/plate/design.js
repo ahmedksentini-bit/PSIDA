@@ -62,7 +62,8 @@ export function transversalPlaque(deck, perm, ec, f61, transG, { f1 = 0.2, f2 = 
 
 /**
  * Chevêtres incorporés à partir de la plaque : bandes de l'annexe 4 du guide PSIDP-EL (§ 6.2 ; largeurs de
- * bandesChevetre), dont le moment est la moyenne de m_y sur la largeur de la bande, lue directement sur la plaque
+ * bandesChevetre), dont le moment est la moyenne de m_y sur la bande (① pleine, ② et ③ en anneaux autour de la
+ * précédente, comme dans le plan de ferraillage), lue directement sur la plaque
  * (surface d'influence de la moyenne, donc enveloppe exacte de la moyenne), avec Wood-Armer (± |m_xy| moyen) ;
  * ELU 1,35 G + 1,35 gr1a. Réactions des appareils lues sur la plaque (même combinaison).
  * Face supérieure : bandes centrées sur chaque appareil (on retient le plus défavorable) ; face inférieure : bandes

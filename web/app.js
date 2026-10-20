@@ -11,6 +11,7 @@ import { buildNote, noteToHTML, noteToDocx } from './note.js';
 import { aideConception, rechercheEpaisseur } from '../src/conception.js';
 import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations } from '../src/bearings.js';
 import { chevetresEC } from '../src/chevetre.js';
+import { renderPlaque } from './plaque_view.js';
 import { applyHelp, readGeometry, elevationInputSVG, crossSectionInputSVG, planSVG, summaryHTML, zoningPlanSVG } from './schema.js';
 import { parseAxles, vehicleEnvelope, provisionalProfile, ANNEX_A_VEHICLES, dynLM3 } from '../src/vehicles.js';
 import { designSingleActionEC } from '../src/design.js';
@@ -121,6 +122,7 @@ function chevetresTable(st) {
   const cm = v => (v * 1e4).toFixed(1), f0 = v => v.toFixed(0), f2 = v => v.toFixed(2);
   let h = `<h3>Chevêtres incorporés et réaction par appareil (annexe 4 du guide PSIDP-EL)</h3><p class="small">ELU fondamental 1,35 G + 1,35 LM1. Ligne d'appui de longueur B = 2b/sin ψ, ${st.chevetres[0].n} appareils à a = ${f2(st.chevetres[0].a)} m (le long de la ligne), consoles c = ${f2(st.chevetres[0].c)} m. Charges de type 1 (permanentes et trafic éloigné) réparties comme une charge uniforme, de type 2 (trafic à moins de d de la ligne) comme sur une poutre sur appuis : d = max[a + c ; (a + e)/2 ; min(B/2 ; L)], ζ_UDL = (d/L)(2 − d/L), ζ_TS = (1 − d/2L)·P_d/S_q. Moments du chevêtre par poutre continue sur les appareils (consoles c), moments locaux m_c⁻ = M_c⁻/(1,5 c), m_e = 1,5 M_e/e ; ferraillage par bandes (§ 6.2), section minimale en enveloppe avec le ferraillage courant de la dalle, d = ${f2(st.chevetres[0].dEff)} m. Culées : adaptation de la règle (L = about + demi-travée de rive).</p>
   <table><thead><tr><th>Ligne</th><th>L [m]</th><th>d [m]</th><th>ζ TS / UDL</th><th>R rive / centre ELU [kN]</th><th>R moyen [kN]</th><th>M_c⁻ / M_e⁻ / M_e⁺ [kN·m]</th><th>m_c⁻ / m_e⁻ / m_e⁺ [kN·m/m]</th><th>Face sup. ① / ② / ③ [cm²/m]</th><th>Face inf. ①' / ②' [cm²/m]</th></tr></thead><tbody>`;
+  if (st.chevetres[0].plaque) h += `<p class="small"><span class="badge ok">PLAQUE</span> Tablier calculé en plaque : réactions R et moments des bandes lus sur la plaque (moyenne de m_y de Wood-Armer sur chaque bande, ① pleine, ② et ③ en anneaux, ELU 1,35 G + 1,35 gr1a) ; d et ζ restent ceux du guide, pour mémoire (valeurs du guide dans l'onglet Tablier, comparaison).</p>`;
   for (const r of st.chevetres) {
     h += `<tr><td>${r.i === 0 || r.i === st.chevetres.length - 1 ? 'Culée C' : 'Pile P'}${r.i}</td><td>${f2(r.L)}</td><td>${f2(r.d)}</td><td>${r.zetas.map(f2).join(' / ')}</td><td>${f0(r.R1)} / ${f0(r.R2)}</td><td>${f0(r.Rmoy)}</td><td>${f0(r.Mc)} / ${f0(r.Me_neg)} / ${f0(r.Me_pos)}</td><td>${f0(r.mc)} / ${f0(r.me_neg)} / ${f0(r.me_pos)}</td><td>${r.bands.top.map((b, k) => `${'①②③'[k]} ${cm(b.As)} <span class="small">(${f2(b.width)} m)</span>`).join('<br>')}</td><td>${r.bands.bot.map((b, k) => `${'①②'[k]}' ${cm(b.As)} <span class="small">(${f2(b.width)} m)</span>`).join('<br>')}</td></tr>`;
   }
@@ -223,6 +225,7 @@ function renderStatic(st) {
   $('#tables').innerHTML = h;
   $('#trans-span').innerHTML = deck.spans.map((L, j) => `<option value="${j}">Travée ${j + 1} (${L} m)</option>`).join('');
   renderConception(st); renderCase(st); renderSection(st); renderDesign(st); renderTransverse(st); renderExtra(st); renderRebar(st); renderSupports(st); renderPrecontrainte(st);
+  try { renderPlaque(st); } catch (e) { const el = document.getElementById('plaque-info'); if (el) el.textContent = 'Affichage de la plaque impossible : ' + e.message; }
 }
 
 function renderPrecontrainte(st) {
@@ -452,12 +455,22 @@ enhanceForm($('#f')); // saisie valeur par valeur des champs multi-valeurs (avan
 applyHelp($('#f'), $('#help-list'));
 renderScheme();
 
-$('#f').addEventListener('submit', ev => {
+// calcul en plaque (≈ 30 s, fil principal) : bandeau d'attente affiché avant de bloquer la page
+function busy(on) {
+  let el = document.getElementById('busy');
+  if (!el) { el = document.createElement('div'); el.id = 'busy'; el.className = 'busy'; el.innerHTML = '<div><strong>Calcul du tablier en plaque…</strong><br><span class="small">surfaces d\'influence et enveloppes de trafic (environ 30 s ; la page ne répond pas pendant le calcul)</span></div>'; document.body.appendChild(el); }
+  el.hidden = !on;
+}
+const afterPaint = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 0))));
+$('#f').addEventListener('submit', async ev => {
   ev.preventDefault();
   setMode('full');
   if (T.current() === 'projet' || T.current() === 'conception') goTab('tablier');
-  try { state = compute(parseForm(ev.target)); renderStatic(state); clearStale(); $('#error').textContent = ''; formToHash(ev.target); goTab(T.current()); }
+  const p = parseForm(ev.target), plaque = p.methodeTablier === 'plaque';
+  if (plaque) { busy(true); await afterPaint(); }
+  try { state = compute(p); renderStatic(state); clearStale(); $('#error').textContent = ''; formToHash(ev.target); goTab(T.current()); }
   catch (e) { $('#error').textContent = e.stack || String(e); }
+  finally { if (plaque) busy(false); }
 });
 $('#btn-concept').addEventListener('click', () => {
   setMode('concept'); goTab('conception');
@@ -487,7 +500,7 @@ async function saveProject() {
   const form = $('#f');
   const spans = String(form.spans.value || '').split(/[,;\s]+/).filter(Boolean).join('-');
   const name = projName || `projet-psida-${spans || 'ouvrage'}.json`;
-  const file = { format: PROJ_FORMAT, version: '0.53.1', date: new Date().toISOString(), data: formSnapshot(form) };
+  const file = { format: PROJ_FORMAT, version: '0.54', date: new Date().toISOString(), data: formSnapshot(form) };
   if (ec8Data) file.ec8 = ec8Data;
   const txt = JSON.stringify(file, null, 1);
   if (window.showSaveFilePicker) { // Chrome, Edge : choix du nom et du dossier
@@ -564,7 +577,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.53.1', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = await buildReport({ ...state, version: '0.54', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -601,7 +614,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.53.1', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.54', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -657,7 +670,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.53.1', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.54', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));

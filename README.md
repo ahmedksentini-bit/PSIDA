@@ -241,6 +241,13 @@ multimodale, temporel linéaire ou pont isolé) et, pour les fondations seules, 
 ductilité limitée et pour un pont isolé, dimensionnement en capacité des piles γ0 M_Rd au-delà, plafonné à q·A_Ed) ; la note
 des appuis donne la méthode et le passage V_E → V par appui. v0.53.1 : appareils en élastomère (EN 1998-2 5.3(8)P),
 V_b = 1,3 K_b d_b pour les culées et min(V_C ; V_b) pour les piles.
+v0.54 : méthode de calcul du tablier au choix (onglet Projet) — Guyon-Massonnet (par défaut, CHAMOA / PSIDA) ou **plaque
+par différences finies** : dalle de Kirchhoff réelle (chanfreins, abouts, bords libres), appuyée sur ses appareils en
+élastomère (ressorts), surfaces d'influence par réciprocité de Maxwell-Betti, mêmes convois et arrangements que la poutre ;
+dimensionnement sur les moments de Wood-Armer, flexion transversale lue sur la plaque, chevêtres par moyennes de m_y sur
+les bandes de l'annexe 4 du guide PSIDP-EL, réaction de chaque appareil, renforts locaux au droit des appareils des piles
+(annexe 4 § 7) ; comparaison avec Guyon dans l'onglet Tablier. Validée sur les solutions exactes de Lévy et de Navier.
+Ouvrage droit seulement ; ≈ 30 s de calcul.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

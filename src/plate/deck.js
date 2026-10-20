@@ -62,20 +62,34 @@ export function bandesChevetre(M) {
   const e = n > 3 ? yb[2] - yb[1] : a, big = Math.max(c, a, e), ae = Math.max(a, e);
   const larg = { top: [2 / 3 * big, Math.max(2 * c, a, e), 2 * big], bot: [2 / 3 * ae, 2 * ae] };
   const out = [];
-  const poids = (y1, y2) => {
-    const w = [];
+  // poids des nœuds pour la moyenne sur une réunion d'intervalles (longueur tributaire dans les intervalles / longueur totale)
+  const poids = ivs => {
+    const tot = ivs.reduce((t, [u, v]) => t + Math.max(0, v - u), 0), w = [];
+    if (tot < 1e-9) return w;
     for (let j = 0; j < ys.length; j++) {
       const lo = j > 0 ? (ys[j - 1] + ys[j]) / 2 : ys[0], hi = j < ys.length - 1 ? (ys[j] + ys[j + 1]) / 2 : ys[ys.length - 1];
-      const l = Math.min(hi, y2) - Math.max(lo, y1);
-      if (l > 1e-9) w.push([j, l / (y2 - y1)]);
+      const l = ivs.reduce((t, [u, v]) => t + Math.max(0, Math.min(hi, v) - Math.max(lo, u)), 0);
+      if (l > 1e-9) w.push([j, l / tot]);
     }
     return w;
   };
+  const clip = ([u, v]) => [Math.max(-b, u), Math.min(b, v)];
+  // bandes emboîtées (guide : ② = « reste de » max(2c, a, e), ③ = reste de 2·max(a, e, c)) : la bande de rang k ≥ 1 est
+  // l'anneau compris entre la largeur de rang k − 1 et la sienne, comme dans le plan de ferraillage
+  // l'anneau exclut aussi les bandes de rang 0 de tous les appareils (resp. intervalles) de la ligne, armées par leurs
+  // propres aciers : sans cela la pointe d'un appareil voisin serait comptée dans l'anneau de l'appareil considéré
+  const moins = (ivs, trous) => trous.reduce((acc, [p, q]) => acc.flatMap(([u, v]) => (q <= u || p >= v ? [[u, v]] : [[u, Math.min(v, p)], [Math.max(u, q), v]].filter(([x, y]) => y - x > 1e-9))), ivs);
   for (const [face, centres] of [['top', yb], ['bot', yb.slice(1).map((y, k) => (y + yb[k]) / 2)]]) {
-    larg[face].forEach((w, rang) => centres.forEach(yc => {
-      const y1 = Math.max(-b, yc - w / 2), y2 = Math.min(b, yc + w / 2);
-      out.push({ face, rang, yc, y1, y2, largeur: w, poids: poids(y1, y2) });
-    }));
+    let wPrev = 0;
+    const w0f = larg[face][0], trous = centres.map(t => [t - w0f / 2, t + w0f / 2]);
+    larg[face].forEach((w0, rang) => {
+      const w = Math.max(w0, wPrev), wIn = wPrev;
+      centres.forEach(yc => {
+        const ivs = (wIn > 0 ? moins([[yc - w / 2, yc + w / 2]], [[yc - wIn / 2, yc + wIn / 2], ...trous]) : [[yc - w / 2, yc + w / 2]]).map(clip);
+        out.push({ face, rang, yc, y1: Math.max(-b, yc - w / 2), y2: Math.min(b, yc + w / 2), largeur: w, interieur: wIn, poids: poids(ivs) });
+      });
+      wPrev = w;
+    });
   }
   return { bandes: out, a, c, e };
 }

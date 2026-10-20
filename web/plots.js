@@ -184,3 +184,4 @@ export function abaquePlot(div, spans, ab, k = 1, abaques) {
   }
   Plotly.newPlot(div, data, baseLayout(title, xTitle, 'épaisseur h [m]', { hovermode: 'closest', legend: { orientation: 'v', x: 1.02, y: 1 }, margin: { l: 60, r: 120, t: 40, b: 50 } }), CONFIG);
 }
+export { theme, baseLayout, PALETTE };

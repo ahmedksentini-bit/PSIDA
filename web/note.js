@@ -68,7 +68,10 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
     ['Dalle : largeur 2b ; épaisseur h [m]', `${F3(2 * deck.b)} ; ${F3(deck.h)}`],
     ['Aire S [m²] ; inertie I [m⁴]', `${F3(deck.area)} ; ${F(I, 5)}`],
   ]);
-  comment('La dalle est remplacée par un rectangle équivalent de largeur 2b et d\'inertie I (Guyon-Massonnet, dalle isotrope). Les portées sont les portées biaises mesurées suivant l\'axe longitudinal ; le biais n\'est pris en compte que par le biais mécanique (flexion transversale, directions d\'aciers).');
+  if (deck.plaque) {
+    const PM = deck.plaque.M, PP = PM.P;
+    comment(`Méthode de calcul du tablier : plaque de Kirchhoff par différences finies (au lieu de Guyon-Massonnet). Dalle réelle d'épaisseur variable (chanfreins), abouts compris, bords libres sur les quatre côtés, appuyée sur ${PM.nb} appareils par ligne (entraxe ${F2(PM.a)} m) modélisés en ressorts verticaux (raideur de l'élastomère fretté retenu au premier passage, guide Sétra 2007) ; grille de ${PP.nx} × ${PP.ny} nœuds, pas ≤ ${F2(PM.h)} m ; E = ${F0(PM.E)} MPa, ν = ${PM.nu}. Effets du trafic par surfaces d'influence (réciprocité de Maxwell-Betti) réduites, pour chaque position transversale des files, à une ligne d'influence longitudinale soumise aux mêmes convois que le modèle poutre. Dimensionnement sur les moments de Wood-Armer m_x ± |m_xy|, m_y ± |m_xy| (règle de base, majorante ; enveloppes non concomitantes). Le moment total M de la poutre sert aux contrôles d'équilibre, à l'effort tranchant et aux rotations d'appui ; gradient thermique et tassements restent traités par le modèle poutre.`);
+  } else comment('La dalle est remplacée par un rectangle équivalent de largeur 2b et d\'inertie I (Guyon-Massonnet, dalle isotrope). Les portées sont les portées biaises mesurées suivant l\'axe longitudinal ; le biais n\'est pris en compte que par le biais mécanique (flexion transversale, directions d\'aciers).');
   figs(DF.data);
   h2('Matériaux');
   if (isF) table(['Béton', 'Valeur', 'Acier', 'Valeur'], [
@@ -239,6 +242,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
   h1('Flexion transversale', isF ? 10 : 9);
   const tz = isF ? st.transDesign.F61 : st.transDesign.EC, tr = isF ? (st.transF || st.trans) : st.trans;
   comment(isF ? `Dalle isostatique équivalente de portée L_eq, bords libres, séries de Fourier ; ${psi < 100 ? 'dalle droite équivalente au biais mécanique (largeur 2b/sin φ, portée L_eq·sin φ) ; ' : ''}charges locales diffusées jusqu'au feuillet moyen ; trottoirs à 4,5 kN/m² ; ${st.transELU ? 'ELU avec ν = 0 (fissuration peu nuisible), ELS avec ν = ' + deck.nu : 'ν = ' + deck.nu} ; moments dans la direction des aciers transversaux par l'annexe 12A (biais).` : `Dalle isostatique équivalente (CHAMOA) : portée L_eq, bords libres, ν = ${deck.nu}, séries de Fourier, charges diffusées jusqu'au feuillet moyen ; moments dans la direction des aciers par l'annexe 12A du BPEL si biais.`);
+  if (deck.plaque) comment(`Tablier en plaque : les moments m_y ci-dessous sont lus sur la plaque (enveloppes aux fibres sur les sections de la travée courante, de ${F2(tr.plaque ? tr.plaque.f1 : 0.2)} L à ${F2(tr.plaque ? tr.plaque.f2 : 0.8)} L, Wood-Armer m_y ± |m_xy| inclus) ; les zones d'appui relèvent des chevêtres incorporés. La colonne L_eq est conservée pour mémoire ; le couplage ν·m_x du gradient thermique reste celui de Guyon-Massonnet.`);
   for (const sp of tz.spans) {
     const t = tr.spans[sp.j];
     h2(`Travée ${sp.j + 1} (L_eq = ${F2(t.L)} m) — moments m_y [kN·m/m]`);
@@ -267,13 +271,15 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
   h1('Appareils d\'appui et chevêtres incorporés', isF ? 12 : 11);
   if (bearings) {
     const k = bearings.ineq;
-    if (k) para(`Coefficients d'inégalité de répartition de la réaction entre appareils d'une même ligne (PSI-DA 68 § 2.4.2, note PSIDP.EL p. 52) : charge permanente ${F3(k.CP)}, A / UDL ${F3(k.A)}, B / TS ${F3(k.B)}${k.Mc ? `, Mc120 ${F3(k.Mc)}` : ''} ; entraxe × sin ψ = ${F2(k.e)} m.`);
+    if (bearings.plaque) para(`Tablier en plaque : réaction de l'appareil le plus chargé lue sur la plaque (G + max(gr1a ; gr1b), ELS caractéristique, plus la part des autres actions répartie également). Coefficients d'inégalité équivalents (appareil le plus chargé / moyenne de la ligne), repris par les appuis : ${bearings.rows.map(r => `ligne ${r.i} : G ${F2(r.kCP)}, trafic ${F2(r.kQ)}${r.PSIDA ? ` (PSI-DA 68 : ${F2(r.PSIDA.kCP)} ; ${F2(r.PSIDA.kQ)})` : ''}`).join(' ; ')}.`);
+    else if (k) para(`Coefficients d'inégalité de répartition de la réaction entre appareils d'une même ligne (PSI-DA 68 § 2.4.2, note PSIDP.EL p. 52) : charge permanente ${F3(k.CP)}, A / UDL ${F3(k.A)}, B / TS ${F3(k.B)}${k.Mc ? `, Mc120 ${F3(k.Mc)}` : ''} ; entraxe × sin ψ = ${F2(k.e)} m.`);
     table(['Ligne', 'R max / min [kN]', 'P max appareil [kN]', 'u_g [mm]', 'α [mrad]', 'Appareil (a×b×n(t+ts))', 'σ / σ_lim [MPa]', 'u_g/T ; total'], bearings.rows.map(r => [`${r.i === 0 || r.i === bearings.rows.length - 1 ? 'Culée C' : 'Pile P'}${r.i}`, `${F0(r.Rmax)} / ${F0(r.Rmin)}`, F0(r.Pmax), F1(r.ug * 1000), F1(r.alpha * 1000), r.sel ? r.sel.label : 'hors gamme standard', r.sel ? `${F1(r.sel.sig)} / ${F1(r.sel.sigLim)}` : '—', r.sel ? `${F2(r.sel.dist1)} ; ${F2(r.sel.dist2)}` : '—']));
     comment(`Élastomère fretté, règles du bulletin technique n° 4 (guide SETRA 1989 § 3.6) : σ ≤ min(15 MPa ; G·ab/(t(a + b))), u_g/T ≤ 0,5, u_g/T + H/(G₂ab) ≤ 0,7, T ≤ a/5, t·T ≥ α a²/3 ; ${bearings.nb} appareils par ligne ; freinage ${F0(bearings.H)} kN ; rotations sous charges permanentes (module différé) et sous trafic (lignes d'influence de rotation).`);
   }
   if (chevetres) {
     table(['Ligne', 'd [m]', 'ζ TS / UDL', 'R rive / centre ELU [kN]', 'm_c⁻ / m_e⁻ / m_e⁺ [kN·m/m]', 'Sup. ① / ② / ③ [cm²/m]', 'Inf. ①\' / ②\' [cm²/m]'], chevetres.map(r => [`${r.i === 0 || r.i === chevetres.length - 1 ? 'Culée C' : 'Pile P'}${r.i}`, F2(r.d), r.zetas.map(F2).join(' / '), `${F0(r.R1)} / ${F0(r.R2)}`, `${F0(r.mc)} / ${F0(r.me_neg)} / ${F0(r.me_pos)}`, r.bands.top.map(b => CM(b.As)).join(' / '), r.bands.bot.map(b => CM(b.As)).join(' / ')]));
-    comment('Annexe 4 du guide PSIDP-EL : charges de type 1 (réparties) et de type 2 (proches de la ligne d\'appui, part ζ), réactions des appareils de rive et central, moments du chevêtre par poutre continue sur les appareils et moments locaux m_c⁻ = M_c⁻/(1,5 c), m_e = 1,5 M_e/e ; bandes ① 2/3·max(c, a, e), ② max(2c, a, e), ③ 2·max(a, e, c), ①\' 2/3·max(a, e), ②\' 2·max(a, e) ; sections minimales en enveloppe avec le ferraillage courant en travée (§ 6.2), complément éventuel dans la nomenclature ; ELU 1,35 G + 1,35 LM1.');
+    if (chevetres[0].plaque) comment('Tablier en plaque : R et moments des bandes lus sur la plaque — moment de chaque bande = moyenne de m_y (Wood-Armer, ± |m_xy| moyen) sur la bande (① pleine, ② et ③ en anneaux autour de la précédente), par sa propre surface d\'influence, ELU 1,35 G + 1,35 gr1a ; mêmes largeurs de bandes que l\'annexe 4 ; d et ζ du guide pour mémoire. Les colonnes m_c⁻ / m_e⁻ donnent la bande ① supérieure, m_e⁺ la bande ①\' inférieure. Valeurs de l\'annexe 4 pour comparaison : ' + chevetres.map(r => `ligne ${r.i} ${F0(Math.max(r.annexe4.mc, r.annexe4.me_neg))} / ${F0(r.annexe4.me_pos)} kN·m/m`).join(' ; ') + '.');
+    else comment('Annexe 4 du guide PSIDP-EL : charges de type 1 (réparties) et de type 2 (proches de la ligne d\'appui, part ζ), réactions des appareils de rive et central, moments du chevêtre par poutre continue sur les appareils et moments locaux m_c⁻ = M_c⁻/(1,5 c), m_e = 1,5 M_e/e ; bandes ① 2/3·max(c, a, e), ② max(2c, a, e), ③ 2·max(a, e, c), ①\' 2/3·max(a, e), ②\' 2·max(a, e) ; sections minimales en enveloppe avec le ferraillage courant en travée (§ 6.2), complément éventuel dans la nomenclature ; ELU 1,35 G + 1,35 LM1.');
   }
 
   // ---------------------------------------------------------------------------------------------------------- 13
@@ -281,6 +287,8 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
   if (rebar && rebar.marks) {
     h1('Nomenclature des aciers', isF ? 13 : 12);
     table(['Repère', 'Désignation', 'φ [mm]', 'Espacement [m]', 'Longueur unitaire [m]', 'Nombre', 'Masse [kg]'], rebar.marks.map(m => [String(m.mark), m.label, String(m.phi), m.s ? F2(m.s) : '—', F2(m.len), String(m.count), F0(m.mass)]), { small: true });
+    const RA = (design.EC && design.EC.renfortsAppareils) || [];
+    if (RA.length) comment(`Pointes de moment longitudinal au droit des appareils des piles (guide PSIDP-EL, annexe 4 § 7) : sur ± 0,2 L de part et d'autre de la ligne d'appui, le ferraillage supérieur courant est dimensionné au plus grand de la moyenne sur la largeur et des fibres hors bandes ① (${RA.map(r => `P${r.support} : ${CM(r.uniforme)} cm²/m au lieu de ${CM(r.pic)}`).join(' ; ')}) ; la pointe est reprise par des renforts locaux de ${RA.map(r => CM(r.As)).join(' / ')} cm²/m sur ${F2(RA[0].width)} m centrés sur chaque appareil (§ 7.2).`);
     para(`Masse totale d'aciers : ${F0(rebar.totalMass)} kg pour ${F1(rebar.volume)} m³ de béton, soit ${F0(rebar.ratio)} kg/m³.`);
   }
 
