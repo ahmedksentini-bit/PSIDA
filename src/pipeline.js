@@ -11,6 +11,7 @@ import { TransverseModel } from './transverse.js';
 import { aideConception } from './conception.js';
 import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations, parseDesignation } from './bearings.js';
 import { chevetresEC } from './chevetre.js';
+import { raideurAppareil } from './plate/deck.js';
 import { parseAxles, vehicleEnvelope, provisionalProfile, ANNEX_A_VEHICLES, dynLM3 } from './vehicles.js';
 import { zonage } from './zonage.js';
 import { cantileverMoments, cantileverDesign } from './cantilever.js';
@@ -209,6 +210,16 @@ export function conceptInput(p) {
 }
 
 export function compute(p) {
+  // méthode « plaque » : un premier calcul (Guyon-Massonnet) choisit les appareils d'appui, dont la raideur verticale
+  // sert d'appui élastique à la plaque ; le calcul est ensuite repris en entier avec la plaque
+  if (p.methodeTablier === 'plaque' && !p.deckInput.plaque) {
+    const st0 = compute({ ...p, methodeTablier: 'guyon' });
+    const kv = st0.bearings.rows.map(r => (r.sel ? raideurAppareil(r.sel.bd, r.sel.n) : Infinity));
+    const st = compute({ ...p, deckInput: { ...p.deckInput, plaque: { nb: st0.bearings.nb, kv, E: p.E || 34000, psi: p.concept.psi || 100 } } });
+    st.guyon = { perm: st0.perm, ec: st0.ec, f61: st0.f61, design: st0.design, rebar: st0.rebar, bearings: st0.bearings };
+    st.dt += st0.dt;
+    return st;
+  }
   const t0 = performance.now();
   const deck = new SlabDeck(p.deckInput);
   const keys = deck.keySections();

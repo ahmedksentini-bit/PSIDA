@@ -235,6 +235,53 @@ export class ContinuousBeam {
     return vlo + t * (vhi - vlo);
   }
 
+  /** Échantillons de la ligne d'influence aux abscisses x0 + i·step (i = 0…n−1), parcours séquentiel (ilAt identique). */
+  _samples(il, x0, n, step) {
+    // table (indice, t) des abscisses, indépendante de la ligne : mise en cache par (x0, n, step)
+    const key = `${x0}|${n}|${step}`;
+    this._sampCache ||= new Map();
+    let T = this._sampCache.get(key);
+    if (!T) {
+      const xs = this.xs, lo = new Int32Array(n), t = new Float64Array(n), exact = new Int8Array(n);
+      for (let i = 0; i < n; i++) {
+        const x = x0 + i * step;
+        if (x < this.xMin || x > this.xMax) { lo[i] = -1; continue; }
+        let a = 0, b = xs.length - 1;
+        while (b - a > 1) { const mid = (a + b) >> 1; if (xs[mid] <= x) a = mid; else b = mid; }
+        lo[i] = a;
+        if (xs[b] === xs[a]) { t[i] = 0; exact[i] = 2; } else { t[i] = (x - xs[a]) / (xs[b] - xs[a]); if (x === xs[a]) exact[i] = 1; }
+      }
+      T = { lo, t, exact };
+      if (this._sampCache.size > 64) this._sampCache.clear();
+      this._sampCache.set(key, T);
+    }
+    const g = new Float64Array(n), J = il.jump, { lo, t, exact } = T;
+    for (let i = 0; i < n; i++) {
+      const a = lo[i];
+      if (a < 0) continue;
+      if (exact[i] === 2) { g[i] = il[a]; continue; }
+      if (J && exact[i] === 1 && a === J.p) { g[i] = il[a]; continue; }
+      const vlo = J && a === J.p ? J.right : il[a], vhi = J && a + 1 === J.p ? J.left : il[a + 1];
+      g[i] = vlo + t[i] * (vhi - vlo);
+    }
+    return g;
+  }
+
+  /** Primitive cumulée C(x) = ∫_{xMin}^{x} il (exacte pour la ligne linéaire par morceaux) : fonction x → C(x). */
+  _primitive(il) {
+    const xs = this.xs, n = xs.length, J = il.jump, C = new Float64Array(n);
+    const left = p => (J && p === J.p ? J.right : il[p]), right = p => (J && p === J.p ? J.left : il[p]);
+    for (let p = 0; p < n - 1; p++) C[p + 1] = C[p] + 0.5 * (left(p) + right(p + 1)) * (xs[p + 1] - xs[p]);
+    return x => {
+      if (x <= xs[0]) return 0;
+      if (x >= xs[n - 1]) return C[n - 1];
+      let lo = 0, hi = n - 1;
+      while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (xs[mid] <= x) lo = mid; else hi = mid; }
+      const a1 = left(lo), a2 = right(hi), t = (x - xs[lo]) / (xs[hi] - xs[lo]), v = a1 + t * (a2 - a1);
+      return C[lo] + 0.5 * (a1 + v) * (x - xs[lo]);
+    };
+  }
+
   /**
    * Intégrale de la ligne d'influence sur [xa, xb], avec option de ne retenir que
    * la partie positive (sign=+1) ou négative (sign=-1) — zones défavorables.
@@ -360,10 +407,15 @@ export class ContinuousBeam {
   axleEnvelope(il, axles, { step = 0.05 } = {}) {
     const dmax = Math.max(...axles.map(a => a.d));
     let max = -Infinity, min = Infinity, xmax = 0, xmin = 0, dirMax = 1, dirMin = 1;
+    // positions x = x0 + i·step ; essieux à des multiples du pas : échantillons de la ligne, sinon ilAt
+    const x0 = this.xMin - dmax, n = Math.floor((this.xMax + dmax + 1e-9 - x0) / step) + 1;
+    const ks = axles.map(a => { const k = Math.round(a.d / step); return Math.abs(k * step - a.d) < 1e-9 ? k : null; });
+    const kMax = Math.max(0, ...ks.filter(k => k !== null)), g = this._samples(il, x0 - kMax * step, n + 2 * kMax, step);
     for (const dir of [1, -1]) {
-      for (let x = this.xMin - dmax; x <= this.xMax + dmax + 1e-9; x += step) {
+      for (let i = 0; i < n; i++) {
+        const x = x0 + i * step;
         let v = 0;
-        for (const ax of axles) v += ax.P * this.ilAt(il, x + dir * ax.d);
+        for (let a = 0; a < axles.length; a++) v += axles[a].P * (ks[a] !== null ? g[i + kMax + dir * ks[a]] : this.ilAt(il, x + dir * axles[a].d));
         if (v > max) { max = v; xmax = x; dirMax = dir; }
         if (v < min) { min = v; xmin = x; dirMin = dir; }
       }
@@ -378,24 +430,28 @@ export class ContinuousBeam {
    */
   _trainDP(f, off, nVeh) {
     const n = f.length, out = {};
-    for (const sgn of [1, -1]) {
-      const levels = [];
-      let b = Float64Array.from(f, v => sgn * v);
-      for (let i = n - 2; i >= 0; i--) b[i] = Math.max(b[i], b[i + 1]);
-      levels.push(b);
+    // niveaux : L_k[i] = meilleur effet de k véhicules dont le premier est en position ≥ i (pas ≥ off entre véhicules)
+    const levels = Array.from({ length: nVeh }, () => new Float64Array(n));
+    for (let si = 0; si < 2; si++) {
+      const sgn = si === 0 ? 1 : -1;
+      const b = levels[0];
+      b[n - 1] = sgn * f[n - 1];
+      for (let i = n - 2; i >= 0; i--) { const v = sgn * f[i]; b[i] = v > b[i + 1] ? v : b[i + 1]; }
       for (let k = 2; k <= nVeh; k++) {
-        const prev = levels[k - 2], nb = new Float64Array(n);
-        for (let i = n - 1; i >= 0; i--) nb[i] = Math.max(sgn * f[i] + (i + off < n ? prev[i + off] : 0), i + 1 < n ? nb[i + 1] : -Infinity);
-        levels.push(nb);
+        const prev = levels[k - 2], nb = levels[k - 1];
+        for (let i = n - 1; i >= 0; i--) {
+          const v = sgn * f[i] + (i + off < n ? prev[i + off] : 0), r = i + 1 < n ? nb[i + 1] : -Infinity;
+          nb[i] = v > r ? v : r;
+        }
       }
       // reconstruction des positions
       const pos = []; let i = 0;
       for (let k = nVeh; k >= 1 && i < n; k--) {
-        const lev = levels[k - 1], target = lev[i];
+        const target = levels[k - 1][i], tol = 1e-9 * (1 + Math.abs(target)), pl = k > 1 ? levels[k - 2] : null;
         let q = i;
         while (q < n) {
-          const here = sgn * f[q] + (k > 1 ? (q + off < n ? levels[k - 2][q + off] : 0) : 0);
-          if (Math.abs(here - target) < 1e-9 * (1 + Math.abs(target))) break;
+          const here = sgn * f[q] + (pl ? (q + off < n ? pl[q + off] : 0) : 0);
+          if (Math.abs(here - target) < tol) break;
           q++;
         }
         if (q >= n) break;
@@ -419,8 +475,10 @@ export class ContinuousBeam {
     const off = Math.round(pitch / step);
     let res = { max: -Infinity, min: Infinity, partsMax: null, partsMin: null };
     for (const dir of [1, -1]) {
+      const ks = axles.map(a => { const k = Math.round(a.d / step); return Math.abs(k * step - a.d) < 1e-9 ? k : null; });
+      const kMax = Math.max(0, ...ks.filter(k => k !== null)), g = this._samples(il, x0 - kMax * step, n + 2 * kMax, step);
       const f = new Float64Array(n);
-      for (let i = 0; i < n; i++) { const x = x0 + i * step; let v = 0; for (const ax of axles) v += ax.P * this.ilAt(il, x + dir * ax.d); f[i] = v; }
+      for (let i = 0; i < n; i++) { const x = x0 + i * step; let v = 0; for (let a = 0; a < axles.length; a++) v += axles[a].P * (ks[a] !== null ? g[i + kMax + dir * ks[a]] : this.ilAt(il, x + dir * axles[a].d)); f[i] = v; }
       const dp = this._trainDP(f, off, nVeh);
       const partsOf = pos => pos.reduce((acc, i) => { const pp = this._axleParts(il, axles, x0 + i * step, dir); return acc.map((v, j) => v + pp[j]); }, new Array(this.n).fill(0));
       if (dp.max.v > res.max) { res.max = dp.max.v; res.partsMax = partsOf(dp.max.pos); res.posMax = dp.max.pos.map(i => x0 + i * step); res.dirMax = dir; }
@@ -435,8 +493,10 @@ export class ContinuousBeam {
    */
   stripEnvelope(il, q, len, { step = 0.05 } = {}) {
     let max = -Infinity, min = Infinity, xmax = 0, xmin = 0;
+    const C = this._primitive(il);
     for (let x = this.xMin - len; x <= this.xMax + 1e-9; x += step) {
-      const v = q * this.integrateIL(il, Math.max(this.xMin, x), Math.min(this.xMax, x + len), 0);
+      const a = Math.max(this.xMin, x), b = Math.min(this.xMax, x + len);
+      const v = b > a ? q * (C(b) - C(a)) : 0;
       if (v > max) { max = v; xmax = x; }
       if (v < min) { min = v; xmin = x; }
     }
@@ -454,8 +514,8 @@ export class ContinuousBeam {
     const ext = len + pitch, x0 = this.xMin - ext;
     const n = Math.ceil((this.xMax - this.xMin + 2 * ext) / step) + 1;
     const off = Math.round(pitch / step);
-    const f = new Float64Array(n);
-    for (let i = 0; i < n; i++) { const x = x0 + i * step; const a = Math.max(this.xMin, x), b = Math.min(this.xMax, x + len); f[i] = b > a ? q * this.integrateIL(il, a, b, 0) : 0; }
+    const f = new Float64Array(n), C = this._primitive(il);
+    for (let i = 0; i < n; i++) { const x = x0 + i * step; const a = Math.max(this.xMin, x), b = Math.min(this.xMax, x + len); f[i] = b > a ? q * (C(b) - C(a)) : 0; }
     const dp = this._trainDP(f, off, nv);
     const partsOf = pos => pos.reduce((acc, i) => { const x = x0 + i * step; const a = Math.max(this.xMin, x), b = Math.min(this.xMax, x + len); const pp = b > a ? this.integrateByspan(il, a, b) : new Array(this.n).fill(0); return acc.map((v, j) => v + q * pp[j]); }, new Array(this.n).fill(0));
     return { max: dp.max.v, min: dp.min.v, partsMax: partsOf(dp.max.pos), partsMin: partsOf(dp.min.pos), posMax: dp.max.pos.map(i => x0 + i * step), posMin: dp.min.pos.map(i => x0 + i * step) };

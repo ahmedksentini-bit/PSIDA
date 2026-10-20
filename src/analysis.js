@@ -21,8 +21,13 @@
 import { ContinuousBeam } from './beam.js';
 import { mechanicalSkew } from './skew.js';
 import { coefKFunction, coefKBand } from './guyon.js';
+import { InfluencePlaque, GRANDEURS } from './plate/influence.js';
+import { permanentPlaque } from './plate/deck.js';
 import { EC_ALPHA, notionalLanes, lm1, lm2, TS_GEOM, FOOTWAY } from './loads_ec.js';
 import { classePont, voiesF61, chargeA, BC, BT, MC120, D240, TROTTOIR, deltaDyn, maxAxleLoadOnLength, maxStripTrainLoad } from './loads_f61.js';
+
+/** Champs à deux indices des résultats (section × fibre ; ligne × appareil pour Rapp). */
+const CLES_2D = ['mxMax', 'mxMin', 'myMax', 'myMin', 'mxyMax', 'mxyMin', 'RappMax', 'RappMin'];
 
 /** Permutations d'un tableau (petites tailles). */
 function permutations(arr) {
@@ -79,6 +84,9 @@ export class SlabDeck {
     this.laneStep = g.laneStep || 0.5;
     this._Kcache = new Map();
     this._envCache = new Map();
+    // méthode « plaque » (différences finies) : g.plaque = { nb, kv, E, h } — m_x, m_y, m_xy et réactions par appareil
+    // tirés des surfaces d'influence de la dalle continue sur ses appareils, au lieu de Guyon-Massonnet
+    this.plaque = g.plaque ? new InfluencePlaque(this, g.plaque) : null;
   }
 
   /** Portée équivalente associée à une section (H3). */
@@ -158,6 +166,19 @@ export class SlabDeck {
       }
       r.R.forEach((v, i) => { R[i] += v; Rmax[i] += Math.max(f.kmin * v, f.kmax * v); Rmin[i] += Math.min(f.kmin * v, f.kmax * v); });
     }
+    if (this.plaque) {
+      // plaque : m_x réel (au lieu de K·M/2b), m_y, m_xy et réactions par appareil, chaque composante entre k_min et k_max
+      const pr = permanentPlaque(this.plaque.M, files);
+      const z2 = () => Array.from({ length: nS }, () => this.ys.map(() => 0));
+      const ext = { my: z2(), mxy: z2(), myMax: z2(), myMin: z2(), mxyMax: z2(), mxyMin: z2(), Rapp: pr.Rapp, RappMax: pr.Rapp.map(r => r.map(() => 0)), RappMin: pr.Rapp.map(r => r.map(() => 0)) };
+      for (const row of mx) row.fill(0); for (const row of mxMax) row.fill(0); for (const row of mxMin) row.fill(0);
+      for (const f of pr.fichiers) {
+        const add = (src, nom, nMax, nMin) => src.forEach((row, s) => row.forEach((v, i) => { (nom ? ext[nom] : mx)[s][i] += v; (nMax === 'mx' ? mxMax : ext[nMax])[s][i] += Math.max(f.kmin * v, f.kmax * v); (nMin === 'mx' ? mxMin : ext[nMin])[s][i] += Math.min(f.kmin * v, f.kmax * v); }));
+        add(f.mx, null, 'mx', 'mx'); add(f.my, 'my', 'myMax', 'myMin'); add(f.mxy, 'mxy', 'mxyMax', 'mxyMin');
+        f.Rapp.forEach((r, i) => r.forEach((v, k) => { ext.RappMax[i][k] += Math.max(f.kmin * v, f.kmax * v); ext.RappMin[i][k] += Math.min(f.kmin * v, f.kmax * v); }));
+      }
+      return { files, gTotal, M, Vm, Vp, R, mx, Mmax, Mmin, Rmax, Rmin, mxMax, mxMin, ...ext, plaque: true };
+    }
     return { files, gTotal, M, Vm, Vp, R, mx, Mmax, Mmin, Rmax, Rmin, mxMax, mxMin };
   }
 
@@ -214,19 +235,26 @@ export class SlabDeck {
   // ---------------------------------------------------------------------------
 
   /** Enveloppes de poutre (M, V, R) d'une file, mises en cache par signature longitudinale. */
+  /** Signature longitudinale d'une file (contenu de charge, sans la position transversale). */
+  _sig(f) { return f.kind + '|' + (f.kind === 'axles' ? JSON.stringify(f.axles) : f.kind === 'train' ? JSON.stringify([f.axles, f.nVeh, f.pitch]) : f.kind === 'strip' || f.kind === 'stripTrain' ? `${f.q}|${f.len}|${f.pitch || ''}` : f.kind === 'spanwise' ? f.sigL : f.q); }
+
+  /** Enveloppe longitudinale d'une file sur une ligne d'influence (positions de charge de la poutre). */
+  _envOf(f, il) {
+    const bm = this.beam, step = this._pasEnv || 0.05;
+    if (f.kind === 'udl') return { ...bm.udlEnvelope(il, f.q), ...bm.udlEnvelopeParts(il, f.q) };
+    if (f.kind === 'stripTrain') return bm.stripTrainEnvelope(il, f.q, f.len, { pitch: f.pitch, nVeh: f.nVeh, step });
+    if (f.kind === 'axles') return bm.axleEnvelope(il, f.axles, { step });
+    if (f.kind === 'train') return bm.trainEnvelope(il, f.axles, { nVeh: f.nVeh, pitch: f.pitch, step });
+    if (f.kind === 'strip') return bm.stripEnvelope(il, f.q, f.len, { step });
+    if (f.kind === 'spanwise') return bm.spanwiseEnvelope(il, f.qOfL);
+    throw new Error('kind inconnu ' + f.kind);
+  }
+
   _beamEnvelopes(f) {
     const sig = f.kind + '|' + (f.kind === 'axles' ? JSON.stringify(f.axles) : f.kind === 'train' ? JSON.stringify([f.axles, f.nVeh, f.pitch]) : f.kind === 'strip' || f.kind === 'stripTrain' ? `${f.q}|${f.len}|${f.pitch || ''}` : f.kind === 'spanwise' ? f.sigL : f.q);
     if (this._envCache.has(sig)) return this._envCache.get(sig);
     const bm = this.beam;
-    const envOf = il => {
-      if (f.kind === 'udl') return { ...bm.udlEnvelope(il, f.q), ...bm.udlEnvelopeParts(il, f.q) };
-      if (f.kind === 'stripTrain') return bm.stripTrainEnvelope(il, f.q, f.len, { pitch: f.pitch, nVeh: f.nVeh });
-      if (f.kind === 'axles') return bm.axleEnvelope(il, f.axles);
-      if (f.kind === 'train') return bm.trainEnvelope(il, f.axles, { nVeh: f.nVeh, pitch: f.pitch });
-      if (f.kind === 'strip') return bm.stripEnvelope(il, f.q, f.len);
-      if (f.kind === 'spanwise') return bm.spanwiseEnvelope(il, f.qOfL);
-      throw new Error('kind inconnu ' + f.kind);
-    };
+    const envOf = il => this._envOf(f, il);
     const M = bm.sections.map((_, s) => envOf(bm.ILM[s]));
     const V = bm.sections.map((_, s) => {
       const a = envOf(bm.ILVm[s]), c = envOf(bm.ILVp[s]);
@@ -277,8 +305,32 @@ export class SlabDeck {
       const Rmax = new Array(nSup).fill(0), Rmin = new Array(nSup).fill(0), Tmax = new Array(nSup).fill(0), Tmin = new Array(nSup).fill(0);
       const mxMax = Array.from({ length: nS }, () => this.ys.map(() => 0));
       const mxMin = Array.from({ length: nS }, () => this.ys.map(() => 0));
+      const PL = this.plaque, z2 = () => Array.from({ length: nS }, () => this.ys.map(() => 0));
+      const extra = PL ? { myMax: z2(), myMin: z2(), mxyMax: z2(), mxyMin: z2(), RappMax: this.beam.x0.map(() => new Array(PL.M.nb).fill(0)), RappMin: this.beam.x0.map(() => new Array(PL.M.nb).fill(0)) } : null;
       for (const f of files) {
         const env = this._beamEnvelopes(f);
+        if (PL) {
+          // plaque : m_x, m_y, m_xy de la file aux sections × fibres, réactions par appareil
+          const pe = PL.enveloppesFile(f, il => { this._pasEnv = PL.pas; try { return this._envOf(f, il); } finally { this._pasEnv = null; } }, this._sig(f));
+          const val = (e, s, mom) => {
+            if (perSpan && e.partsMax && e.partsMin) {
+              const sd = (parts, fac) => parts.reduce((a, v, j) => a + dSp[j] * (fac ? mF[j] : 1) * v, 0);
+              return [sd(e.partsMax, mom), sd(e.partsMin, mom)];
+            }
+            const d = dAt(s); return [e.max * d, e.min * d];
+          };
+          for (const g of GRANDEURS) {
+            const [kMax, kMin] = g === 'mx' ? [mxMax, mxMin] : g === 'my' ? [extra.myMax, extra.myMin] : [extra.mxyMax, extra.mxyMin];
+            for (let s = 0; s < nS; s++) for (let iy = 0; iy < this.ys.length; iy++) {
+              const [a, c] = val(pe[PL.indice(g, s, iy)], s, g === 'mx');
+              kMax[s][iy] += Math.max(a, c, 0); kMin[s][iy] += Math.min(a, c, 0);
+            }
+          }
+          for (let k = PL.nM; k < PL.cibles.length; k++) {
+            const c = PL.cibles[k], e = pe[k], d = delta ? dR(c.ligne) : 1;
+            extra.RappMax[c.ligne][c.rang] += Math.max(e.max * d, e.min * d, 0); extra.RappMin[c.ligne][c.rang] += Math.min(e.max * d, e.min * d, 0);
+          }
+        }
         for (let i = 0; i < nSup; i++) { const d = delta ? dR(i) : 1; Tmax[i] += env.T[i].max * d; Tmin[i] += env.T[i].min * d; }
         for (let s = 0; s < nS; s++) {
           const em = env.M[s], ev = env.V[s];
@@ -292,7 +344,7 @@ export class SlabDeck {
             const d = dAt(s);
             Mmax[s] += em.max * d; Mmin[s] += em.min * d; Vmax[s] += ev.max * d; Vmin[s] += ev.min * d;
           }
-          for (const t of f.tracks) {
+          if (!PL) for (const t of f.tracks) {
             const k2 = t.share / (2 * this.b);
             if (useParts) {
               const Ks = this.spans.map((_, j) => this.Kbar(this.Leq[j], t.e1, t.e2));
@@ -313,7 +365,7 @@ export class SlabDeck {
         }
         for (let i = 0; i < nSup; i++) { const d = delta ? dR(i) : 1; Rmax[i] += env.R[i].max * d; Rmin[i] += env.R[i].min * d; }
       }
-      const r = { Mmax, Mmin, Vmax, Vmin, Rmax, Rmin, Tmax, Tmin, mxMax, mxMin };
+      const r = { Mmax, Mmin, Vmax, Vmin, Rmax, Rmin, Tmax, Tmin, mxMax, mxMin, ...(extra || {}) };
       out = out ? SlabDeck.envelopeOf([out, r]) : r;
     }
     out = out || this.evaluateArrangements([[]]);
@@ -330,8 +382,7 @@ export class SlabDeck {
     for (const r of results.slice(1)) {
       for (const k of ['Mmax', 'Vmax', 'Rmax', 'Tmax']) if (out[k] && r[k]) out[k] = out[k].map((v, i) => Math.max(v, r[k][i]));
       for (const k of ['Mmin', 'Vmin', 'Rmin', 'Tmin']) if (out[k] && r[k]) out[k] = out[k].map((v, i) => Math.min(v, r[k][i]));
-      out.mxMax = out.mxMax.map((row, s) => row.map((v, i) => Math.max(v, r.mxMax[s][i])));
-      out.mxMin = out.mxMin.map((row, s) => row.map((v, i) => Math.min(v, r.mxMin[s][i])));
+      for (const k of CLES_2D) if (out[k] && r[k]) out[k] = out[k].map((row, s) => row.map((v, i) => (k.endsWith('Max') ? Math.max(v, r[k][s][i]) : Math.min(v, r[k][s][i]))));
     }
     return out;
   }
@@ -341,8 +392,7 @@ export class SlabDeck {
     const out = JSON.parse(JSON.stringify(results[0]));
     for (const r of results.slice(1)) {
       for (const k of ['Mmax', 'Mmin', 'Vmax', 'Vmin', 'Rmax', 'Rmin', 'Tmax', 'Tmin']) if (out[k] && r[k]) out[k] = out[k].map((v, i) => v + r[k][i]);
-      out.mxMax = out.mxMax.map((row, s) => row.map((v, i) => v + r.mxMax[s][i]));
-      out.mxMin = out.mxMin.map((row, s) => row.map((v, i) => v + r.mxMin[s][i]));
+      for (const k of CLES_2D) if (out[k] && r[k]) out[k] = out[k].map((row, s) => row.map((v, i) => v + r[k][s][i]));
     }
     return out;
   }
@@ -351,7 +401,7 @@ export class SlabDeck {
   static scale(res, k) {
     const out = JSON.parse(JSON.stringify(res));
     for (const key of ['Mmax', 'Mmin', 'Vmax', 'Vmin', 'Rmax', 'Rmin', 'Tmax', 'Tmin']) if (out[key]) out[key] = out[key].map(v => v * k);
-    out.mxMax = out.mxMax.map(row => row.map(v => v * k)); out.mxMin = out.mxMin.map(row => row.map(v => v * k));
+    for (const key of CLES_2D) if (out[key]) out[key] = out[key].map(row => row.map(v => v * k));
     return out;
   }
 
@@ -551,9 +601,9 @@ export class SlabDeck {
       return delta[sec.span];
     };
     for (const k of ['Mmax', 'Mmin', 'Vmax', 'Vmin']) out[k] = out[k].map((v, s) => v * dAt(s));
-    out.mxMax = out.mxMax.map((row, s) => row.map(v => v * dAt(s)));
-    out.mxMin = out.mxMin.map((row, s) => row.map(v => v * dAt(s)));
+    for (const k of CLES_2D) if (out[k] && !k.startsWith('Rapp')) out[k] = out[k].map((row, s) => row.map(v => v * dAt(s)));
     const dMax = Math.max(...delta);
+    for (const k of ['RappMax', 'RappMin']) if (out[k]) out[k] = out[k].map(row => row.map(v => v * dMax));
     out.Rmax = out.Rmax.map(v => v * dMax); out.Rmin = out.Rmin.map(v => v * dMax);
     out.delta = delta;
     return out;
