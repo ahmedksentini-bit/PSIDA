@@ -9,6 +9,7 @@
  */
 import { PlaqueDF, grille } from './fd.js';
 import { PlaqueEF } from './fe.js';
+import { deltaDevers } from '../devers.js';
 
 /**
  * Repère des armatures : aciers longitudinaux suivant x, aciers transversaux faisant l'angle α avec x (α = ψ pour des
@@ -34,10 +35,10 @@ export function raideurAppareil(bd, n, { G = 0.9, Eb = 2000, cLat = 0.005 } = {}
 
 /** Épaisseur de la dalle à l'ordonnée y (chanfreins linéaires sur la joue, cf. deck.g.chamfer). */
 export function epaisseur(deck, y) {
-  const h = deck.h, ch = deck.g.chamfer, b = deck.b;
-  if (!ch || !(ch.hEdge < h) || !(ch.joue > 0)) return h;
+  const h = deck.h, ch = deck.g.chamfer, b = deck.b, dh = deck.g.devers && deck.g.devers.mode === 'dalle' ? deltaDevers(deck.g.devers, y) : 0;
+  if (!ch || !(ch.hEdge < h) || !(ch.joue > 0)) return h + dh;
   const d = b - Math.abs(y);
-  return d >= ch.joue ? h : ch.hEdge + (h - ch.hEdge) * Math.max(0, d) / ch.joue;
+  return (d >= ch.joue ? h : ch.hEdge + (h - ch.hEdge) * Math.max(0, d) / ch.joue) + dh;   // dévers rattrapé par la dalle : h(y) = h + Δ(y)
 }
 
 /**

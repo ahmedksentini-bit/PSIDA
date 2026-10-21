@@ -26,7 +26,7 @@ export function horizontalDistribution(lines) {
   const sum = a => a.reduce((s, v) => s + v, 0);
   const x0 = { inst: sum(K.inst.map((k, i) => k * lines[i].x)) / sum(K.inst), diff: sum(K.diff.map((k, i) => k * lines[i].x)) / sum(K.diff) };
   return {
-    K, x0,
+    K, x0, lines,
     braking: H => K.inst.map(k => k * H / sum(K.inst)),
     /**
      * ε > 0 raccourcissement du tablier (retrait, fluage, refroidissement) ; kind 'diff' (lent) ou 'inst' (rapide).

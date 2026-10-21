@@ -262,6 +262,10 @@ dessus et sous-face de semelle, pointe des pieux), type de fondation et largeur 
 de culées, épaisseurs et encastrements des semelles, longueurs des pieux en découlent ligne par ligne (fondations mixtes
 semelles / pieux possibles) ; dévers en toit ou unique et hauteur des bossages sous chaque appareil ; coupes longitudinale
 et transversale en direct ; tableau dans la note des appuis ; export Pont EC8 avec les hauteurs propres à chaque pile.
+v0.58 : dévers transversal (onglet Projet : en toit ou unique, rattrapé par la dalle inclinée, par la dalle à sous-face
+horizontale — aire, inertie et aciers par fibre avec l'épaisseur locale, épaisseur variable dans la plaque — ou par le
+revêtement — supplément de charge en bandes) ; plan de nivellement : composante du poids le long de la pente du profil en
+long (action permanente répartie entre les appuis, distorsion lente des appareils), plus hautes eaux et lit par pile.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

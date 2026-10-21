@@ -5,7 +5,7 @@ import { formDefaults } from '../tools/formdefaults.mjs';
 import { parseData, compute } from '../src/pipeline.js';
 import { toPontEC8 } from '../src/ec8export.js';
 
-const cotes = { niv_actif: 'on', niv_zCh: '105.00; 105.40; 105.80; 106.20', niv_zTN: '100.0; 98.5; 96.5; 101.0', niv_zDS: '100.5; 98.0; 95.5; 101.2', niv_zSS: '99.5; 97.0; 94.3; 100.2', niv_zPP: ';; 80; ', niv_type: ';; pieux; ', niv_B: '; 3.5; ; ', niv_devers: '2.5', niv_profil: 'toit', niv_hBos: '0.10' };
+const cotes = { niv_actif: 'on', niv_zCh: '105.00; 105.40; 105.80; 106.20', niv_zTN: '100.0; 98.5; 96.5; 101.0', niv_zDS: '100.5; 98.0; 95.5; 101.2', niv_zSS: '99.5; 97.0; 94.3; 100.2', niv_zPP: ';; 80; ', niv_type: ';; pieux; ', niv_B: '; 3.5; ; ', devers: '2.5', devProfil: 'toit', devMode: 'inclinee', niv_hBos: '0.10' };
 
 test('Cotes → dimensions par ligne, reprises par le calcul des appuis', () => {
   const d = { ...formDefaults(), ...cotes }, st = compute(parseData(d));
@@ -35,4 +35,23 @@ test('Sans plan de nivellement : résultats inchangés', () => {
   const a = compute(parseData(formDefaults())), b = compute(parseData({ ...formDefaults(), niv_zCh: '1;2;3;4' }));
   assert.equal(a.supports.lines[1].EC.found.worstV, b.supports.lines[1].EC.found.worstV);
   assert.equal(b.supports.niv.actif, false);
+});
+
+test('Pente du profil en long : composante G·sin α répartie entre les appuis, appareils plus déformés', () => {
+  const plat = { ...formDefaults(), ...cotes, niv_zCh: '105; 105; 105; 105' }, pente = { ...plat, niv_zCh: '105.00; 105.56; 106.28; 106.84' };   // 4 %
+  const A = compute(parseData(plat)), B = compute(parseData(pente));
+  assert.equal(A.supports.pente, null);
+  const P = B.supports.pente, L = B.deck.spans, g = B.perm.gTotal;
+  const Hth = L.reduce((a, Lj, j) => a + g * Lj * Math.sin(Math.atan(P.sl[j])), 0);
+  assert.ok(Math.abs(P.H - Hth) < 1e-6 && Math.abs(P.sl[0] - 0.04) < 1e-9);
+  assert.ok(Math.abs(P.E.reduce((a, v) => a + v, 0) - P.H) < 1e-6);
+  // déplacement lent des appareils augmenté sur une ligne
+  assert.ok(B.supports.lines.some((l, i) => (l.EC.brg?.vRF ?? 0) > (A.supports.lines[i].EC.brg?.vRF ?? 0) + 1e-6));
+});
+
+test('Niveaux d\'eau par appui : la pile entre dans l\'eau avec ses cotes de PHE et de lit', () => {
+  const d = { ...formDefaults(), ...cotes, ap_eau: 'on', niv_zPHE: '; 101.0; ; ', niv_zLit: '; 98.5; ; ' };
+  const st = compute(parseData(d)), W = st.supports.water;
+  assert.ok(W[1] && !W[2], 'P1 dans l\'eau, P2 hors de l\'eau');
+  assert.ok(Math.abs(st.supports.niv.lignes[1].hEau - 2.5) < 1e-9 && Math.abs(st.supports.niv.lignes[1].dBed - 0.5) < 1e-9);
 });

@@ -8,7 +8,7 @@ import { nivellement } from '../src/supports/nivellement.js';
 
 const CHAMPS = [
   ['zCh', 'Chaussée à l\'axe (profil en long)'], ['zTN', 'Terrain naturel'], ['zDS', 'Dessus de semelle'], ['zSS', 'Sous-face de semelle'],
-  ['zPP', 'Pointe des pieux'], ['type', 'Type de fondation'], ['B', 'Largeur de semelle B [m]'],
+  ['zPP', 'Pointe des pieux'], ['zPHE', 'Plus hautes eaux (PHE)'], ['zLit', 'Lit du cours d\'eau'], ['type', 'Type de fondation'], ['B', 'Largeur de semelle B [m]'],
 ];
 const f2 = v => (Number.isFinite(v) ? v.toFixed(2) : '');
 const fr = v => (Number.isFinite(v) ? v.toFixed(2).replace('.', ',') : '–');
@@ -21,7 +21,7 @@ function ecrireListe(form, k, arr) { form.elements['niv_' + k].value = arr.join(
 function contexte(form, state) {
   const p = parseData(Object.fromEntries(new FormData(form).entries()));
   const di = p.deckInput, n = di.spans.length + 1;
-  const deck = { h: di.h, b: di.width / 2, g: { psi: p.concept.psi || 100 } };
+  const deck = { h: di.h, b: di.width / 2, g: { psi: p.concept.psi || 100, devers: di.devers, roadway: di.roadway } };
   const nb = p.concept.nBearings || Math.max(2, Math.round(di.width / 3));
   const bearings = state && state.bearings && state.bearings.rows.length === n ? state.bearings : { rows: Array.from({ length: n }, () => ({ nb })), nb };
   const sp = p.supports;
@@ -103,7 +103,7 @@ export function initNivellement(form, getState) {
 function coupeLongitudinale({ di, n, niv, sp }) {
   const [aL, aR] = di.overhangs || [0, 0], xs = [0]; di.spans.forEach(L => xs.push(xs[xs.length - 1] + L));
   const Ls = niv.lignes, zs = [];
-  for (const L of Ls) for (const k of ['zCh', 'zTN', 'zDS', 'zSS', 'zPP', 'zT']) if (Number.isFinite(L[k])) zs.push(L[k]);
+  for (const L of Ls) for (const k of ['zCh', 'zTN', 'zDS', 'zSS', 'zPP', 'zT', 'zPHE', 'zLit']) if (Number.isFinite(L[k])) zs.push(L[k]);
   if (zs.length < 2) return '<p class="small">Saisissez au moins les cotes de chaussée et de semelle pour dessiner la coupe.</p>';
   const W = 980, Hh = 360, ml = 60, mr = 20, mt = 20, mb = 40, x0 = -aL - 2, x1 = xs[n - 1] + aR + 2;
   const zMin = Math.min(...zs) - 1, zMax = Math.max(...zs) + 1.5;
@@ -115,6 +115,8 @@ function coupeLongitudinale({ di, n, niv, sp }) {
   // terrain naturel
   const tn = Ls.map((L, i) => (Number.isFinite(L.zTN) ? [X(xs[i]), Z(L.zTN)] : null)).filter(Boolean);
   if (tn.length > 1) s += `<polyline points="${tn.map(p => p.join(',')).join(' ')}" fill="none" stroke="#8a6d3b" stroke-width="1.5" stroke-dasharray="6 3"/><text x="${tn[0][0] - 4}" y="${tn[0][1] + 12}" text-anchor="end" fill="#8a6d3b">TN</text>`;
+  // plus hautes eaux et lit (piles en rivière)
+  Ls.forEach((L, i) => { if (Number.isFinite(L.zPHE) && Number.isFinite(L.zLit)) { const x = X(xs[i]); s += `<line x1="${x - 40}" y1="${Z(L.zPHE)}" x2="${x + 40}" y2="${Z(L.zPHE)}" stroke="#3b8ea5" stroke-width="2"/><text x="${x - 42}" y="${Z(L.zPHE) - 3}" fill="#3b8ea5" font-size="9.5">PHE ${fr(L.zPHE)}</text><line x1="${x - 40}" y1="${Z(L.zLit)}" x2="${x + 40}" y2="${Z(L.zLit)}" stroke="#3b8ea5" stroke-dasharray="3 2"/>`; } });
   // tablier (chaussée et sous-face, linéaires entre appuis, prolongés sur les abouts)
   const pt = (k, i) => (Number.isFinite(Ls[i][k]) ? Ls[i][k] : null);
   const top = [], bot = [];
@@ -143,16 +145,17 @@ function coupeLongitudinale({ di, n, niv, sp }) {
 }
 
 /** Coupe transversale sur une ligne d'appui : chaussée avec dévers, dalle, appareils, bossages, sommier. */
-function coupeTransversale({ di, niv, sp }, i) {
+function coupeTransversale({ di, niv }, i) {
   const L = niv.lignes[i];
   if (!L || !Number.isFinite(L.zSF) || !L.appareils) return '<p class="small">Saisissez la cote de chaussée de cette ligne.</p>';
   const b = di.width / 2, W = 760, Hh = 240, ml = 50, mr = 20;
   const zTop = L.zCh + 0.3, zBot = L.zT - 0.6, kx = (W - ml - mr) / (2 * b + 2), kz = Math.min((Hh - 50) / (zTop - zBot), kx * 8);
   const X = y => ml + (y + b + 1) * kx, Z = z => 30 + (zTop - z) * kz;
-  const app = L.appareils, pc = (+sp.niv.devers || 0) / 100, toit = sp.niv.profil !== 'unique';
-  const prof = y => L.zSF + (toit ? -pc * Math.abs(y) : pc * y);   // sous-face de la dalle, parallèle à la chaussée
+  const app = L.appareils, dv = di.devers, pc = dv ? dv.p / 100 : 0, toit = !dv || dv.profil !== 'unique';
+  const dzCh = y => (toit ? -pc * Math.abs(y) : pc * y);
+  const prof = y => L.zSF + (dv && dv.mode === 'inclinee' ? dzCh(y) : 0);   // sous-face : inclinée avec la chaussée, ou horizontale
   const ys = [-b, ...app.map(a => a.y), b, 0].sort((u, v) => u - v);
-  const zsf = ys.map(y => [X(y), Z(prof(y))]), zch = ys.map(y => [X(y), Z(prof(y) + (L.zCh - L.zSF))]);
+  const zsf = ys.map(y => [X(y), Z(prof(y))]), zch = ys.map(y => [X(y), Z(L.zCh + dzCh(y))]);
   let s = `<svg viewBox="0 0 ${W} ${Hh}" width="100%" style="max-width:${W}px;font:11px system-ui" role="img" aria-label="Coupe transversale sur la ligne d'appui">`;
   s += `<text x="${ml}" y="14" font-weight="600">Coupe transversale — ligne ${i === 0 || i === niv.lignes.length - 1 ? 'C' : 'P'}${i} (hauteurs ×${(kz / kx).toFixed(1).replace('.', ',')})</text>`;
   s += `<polygon points="${[...zch, ...zsf.slice().reverse()].map(p => p.join(',')).join(' ')}" fill="#b9c2d1" stroke="#1d2433"/>`;

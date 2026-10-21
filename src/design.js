@@ -14,6 +14,10 @@ import { combineEC, combineBAEL, combineBeamEC, combineBeamBAEL } from './combin
 import { materialsEC2, flexureULS, flexureSLS, asForCrackWidth, minimumSteel, shearVRdc, punching, chamferWidthFn } from './section_ec2.js';
 import { materialsBAEL, flexureELU, flexureELS, minimumSteelBAEL, shearBAEL, punchingBAEL } from './section_bael.js';
 import { mechanicalSkew, equivalentWidth, annexe12A } from './skew.js';
+import { epaisseurDevers } from './devers.js';
+
+/** Section par mètre à la fibre iy : épaisseur variable si le dévers est rattrapé par la dalle (même enrobage). */
+const secFibre = (deck, sec, iy) => { const dv = deck.g.devers; if (!dv || dv.mode !== 'dalle') return sec; const h = epaisseurDevers(deck.h, dv, deck.ys[iy]); return { ...sec, h, d: sec.d - (sec.h - h) }; };
 
 const kNm2MNm = 1e-3;
 
@@ -38,8 +42,9 @@ function facesEC(deck, comb, mat, sec, secTop, mins, { wkMax, phi, c }) {
         const As = Math.max(uls.As, sls.As, wk, as921, as732, mins.perFace);
         return { Mu, Mcar, Mfre, Mqp, AsULS: uls.As, AsSLS: sls.As, AsWk: wk, as921, as732, perFace: mins.perFace, As, As2: Math.max(uls.As2, sls.As2 || 0), sigS: sls.sigS, sigC: sls.sigC, xOverD: uls.xOverD };
       };
-      const b = face(Math.max(comb.ELU.max[s][iy], 0), Math.max(comb.CAR.max[s][iy], 0), Math.max(comb.FREQ.max[s][iy], 0), Math.max(comb.QP.max[s][iy], 0));
-      const t = face(Math.max(-comb.ELU.min[s][iy], 0), Math.max(-comb.CAR.min[s][iy], 0), Math.max(-comb.FREQ.min[s][iy], 0), Math.max(-comb.QP.min[s][iy], 0), secTop);
+      const sb = secFibre(deck, sec, iy), st_ = secFibre(deck, secTop, iy);
+      const b = face(Math.max(comb.ELU.max[s][iy], 0), Math.max(comb.CAR.max[s][iy], 0), Math.max(comb.FREQ.max[s][iy], 0), Math.max(comb.QP.max[s][iy], 0), sb);
+      const t = face(Math.max(-comb.ELU.min[s][iy], 0), Math.max(-comb.CAR.min[s][iy], 0), Math.max(-comb.FREQ.min[s][iy], 0), Math.max(-comb.QP.min[s][iy], 0), st_);
       rowB.push(b.As); rowT.push(t.As); fibres.push({ bot: b, top: t });
     }
     bot.push(rowB); top.push(rowT); perFibre.push(fibres);
@@ -135,8 +140,8 @@ export function designBAEL(deck, perm, f61, opt = {}) {
         const As = Math.max(elu.As, els.As, nonFrag, mins.dalle);
         return { Mu, Ms, AsELU: elu.As, AsELS: els.As, nonFrag, dalle: mins.dalle, As, As2: Math.max(elu.As2, els.As2 || 0), sigS: els.sigS, sigB: els.sigB, alpha: elu.alpha };
       };
-      const b = face(Math.max(comb.ELU.max[s][iy], 0), Math.max(comb.ELS.max[s][iy], 0));
-      const t = face(Math.max(-comb.ELU.min[s][iy], 0), Math.max(-comb.ELS.min[s][iy], 0), secTop);
+      const b = face(Math.max(comb.ELU.max[s][iy], 0), Math.max(comb.ELS.max[s][iy], 0), secFibre(deck, sec, iy));
+      const t = face(Math.max(-comb.ELU.min[s][iy], 0), Math.max(-comb.ELS.min[s][iy], 0), secFibre(deck, secTop, iy));
       rowB.push(b.As); rowT.push(t.As); fibres.push({ bot: b, top: t });
     }
     bot.push(rowB); top.push(rowT); perFibre.push(fibres);

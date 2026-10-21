@@ -67,6 +67,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
     ['Trottoirs [m]', (g.footways || []).map(f => `${F2(f.y1)} ; ${F2(f.y2)}`).join(' | ') || '—'],
     ['Dalle : largeur 2b ; épaisseur h [m]', `${F3(2 * deck.b)} ; ${F3(deck.h)}`],
     ['Aire S [m²] ; inertie I [m⁴]', `${F3(deck.area)} ; ${F(I, 5)}`],
+    ...(g.devers ? [['Dévers transversal', `${F1(g.devers.p)} % ${g.devers.profil === 'unique' ? 'unique' : 'en toit'}, rattrapé par ${g.devers.mode === 'dalle' ? 'la dalle (sous-face horizontale, épaisseur h à l\'axe et ' + F3(Math.min(...[-deck.b, deck.b].map(y => deck.h + (g.devers.profil === 'unique' ? g.devers.p / 100 * y : -g.devers.p / 100 * Math.abs(y))))) + ' m au point bas ; S et I de la section réelle, aciers par fibre avec l\'épaisseur locale)' : g.devers.mode === 'revetement' ? 'le revêtement (dalle horizontale ; supplément de revêtement 24 kN/m³, k = 0,8 / 1,4, en bandes sur la chaussée)' : 'la dalle inclinée d\'épaisseur constante'}`]] : []),
   ]);
   if (deck.plaque) {
     const PM = deck.plaque.M, PP = PM.P;

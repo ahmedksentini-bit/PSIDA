@@ -11,6 +11,7 @@ import { TransverseModel } from './transverse.js';
 import { aideConception } from './conception.js';
 import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations, parseDesignation } from './bearings.js';
 import { chevetresEC } from './chevetre.js';
+import { sectionDevers, bandesRevetement } from './devers.js';
 import { woodArmer, woodArmerTous, transversalPlaque, chevetresPlaque, reactionsAppareils, renfortsAppareils } from './plate/design.js';
 import { raideurAppareil } from './plate/deck.js';
 import { parseAxles, vehicleEnvelope, provisionalProfile, ANNEX_A_VEHICLES, dynLM3 } from './vehicles.js';
@@ -26,6 +27,23 @@ const pairs = s => String(s ?? '').split(';').map(t => t.trim()).filter(Boolean)
 function parseK(t) { const m = t.match(/k\s*([\d.]+)\s*\/\s*([\d.]+)/i); return m ? { kmin: +m[1], kmax: +m[2], rest: t.replace(m[0], '') } : { kmin: 1, kmax: 1, rest: t }; }
 
 export function parseData(d) {
+  return appliquerDevers(parseData0(d));
+}
+
+/** Dévers rattrapé par la dalle (aire, inertie) ou par le revêtement (bandes de charge supplémentaires). */
+function appliquerDevers(p) {
+  const di = p.deckInput, dv = di.devers;
+  if (!dv) return p;
+  if (dv.mode === 'dalle') {
+    const s = sectionDevers(di.width / 2, di.h, dv);
+    if (di.area === undefined) di.area = s.A;
+    if (p.I == null) p.I = s.I;
+  }
+  if (dv.mode === 'revetement') di.bands = [...di.bands, ...bandesRevetement(dv, di.roadway)];
+  return p;
+}
+
+function parseData0(d) {
   const [y1, y2] = nums(d.roadway);
   const overhangs = nums(d.overhangs || '0,0');
   const EIv = d.EI.split(',').map(t => t.trim());
@@ -40,6 +58,7 @@ export function parseData(d) {
       nu: +d.nu, laneStep: +d.laneStep, nSec: 20, nGrid: 100,
       chamfer: d.hEdge.trim() && d.joue.trim() ? { hEdge: +d.hEdge, joue: +d.joue } : undefined,
       psi: +(d.psi || 100),
+      devers: +(d.devers || 0) > 0 ? { p: +d.devers, profil: d.devProfil === 'unique' ? 'unique' : 'toit', mode: ['dalle', 'revetement'].includes(d.devMode) ? d.devMode : 'inclinee' } : undefined,
     },
     methodeTablier: d.methodeTablier === 'plaque' ? 'plaque' : 'guyon',
     alpha: d.alpha, nRetenue: +d.nRetenue, classe: d.classe.trim() ? +d.classe : null, mil: d.mil || 'Mc120+D240', chamoaSign: !!d.chamoaSign,
@@ -140,7 +159,7 @@ export function parseSupports(d) {
     epsPSIDP: (d.ap_epsPSIDP ?? 'oui') !== 'non',
     joint: { debut: ['debut', 'deux'].includes(d.ap_joint), fin: ['fin', 'deux'].includes(d.ap_joint), rG: v('ap_jointG', 1), rQ: v('ap_jointQ', 1), rH: v('ap_jointH', 1) },
     // plan de nivellement : listes par ligne d'appui séparées par « ; » (valeur vide = donnée générale)
-    niv: { actif: d.niv_actif === 'on' || d.niv_actif === true, hBos: v('niv_hBos', 0.10), devers: v('niv_devers', 0), profil: d.niv_profil || 'toit', ...Object.fromEntries(['zCh', 'zTN', 'zDS', 'zSS', 'zPP', 'type', 'B'].map(k => [k, String(d['niv_' + k] ?? '').split(';').map(t => t.trim())])) },
+    niv: { actif: d.niv_actif === 'on' || d.niv_actif === true, hBos: v('niv_hBos', 0.10), ...Object.fromEntries(['zCh', 'zTN', 'zDS', 'zSS', 'zPP', 'zPHE', 'zLit', 'type', 'B'].map(k => [k, String(d['niv_' + k] ?? '').split(';').map(t => t.trim())])) },
     ec8: { zone: v('ap_zone', 3), categorie: d.ap_catEC8 || 'III', classeSol: d.ap_solEC8 || 'B' },
     seisme: { actif: !!d.ap_seisme, source: d.ap_seismeSrc || 'auto', q: { long: v('ap_qL', 1), trans: v('ap_qT', 1) } },
     choc: { vehicule: d.ap_choc || 'aucun', hV: v('ap_hV', 1.25), bateau: d.ap_bateau || 'aucun', hB: v('ap_hB', 2.0) },

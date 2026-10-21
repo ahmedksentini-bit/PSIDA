@@ -240,6 +240,22 @@ export function computeSupports(st, input = {}) {
   // instantanées, élastomère G = 0,9 MPa pour les déformations lentes — distribution distincte de celle des fondations (différée)
   const distEb = horizontalDistribution(lineData('EC').map(l => ({ ...l, sApp: { inst: l.sApp.inst, diff: l.sApp.inst } })));
 
+  // --- profil en long (plan de nivellement) : composante du poids parallèle à la pente, W_j·sin α_j par travée (abouts
+  //     avec la travée de rive), action permanente répartie entre les lignes d'appui au prorata des raideurs différées ;
+  //     cumulée en valeur absolue avec le retrait-fluage (sens indifférent, prudent)
+  const pente = (() => {
+    const z = niv.actif ? niv.lignes.map(L => L.zCh) : [];
+    if (!niv.actif || z.some(v => !Number.isFinite(v))) return null;
+    const [aL, aR] = deck.g.overhangs || [0, 0], g = perm.gTotal;
+    const sl = deck.spans.map((L, j) => (z[j + 1] - z[j]) / L);
+    const Wj = deck.spans.map((L, j) => g * (L + (j === 0 ? aL : 0) + (j === deck.spans.length - 1 ? aR : 0)));
+    const H = Wj.reduce((a, W, j) => a + W * Math.sin(Math.atan(sl[j])), 0);
+    if (Math.abs(H) < 1e-9) return null;
+    const rep = d => { const S = d.K.diff.reduce((a, b) => a + b, 0); return d.K.diff.map(k => k * H / S); };
+    return { sl, H, B: rep(distB), E: rep(distE), Eb: rep(distEb) };
+  })();
+  const Hp = (code, i) => (pente ? Math.abs(pente[code][i]) : 0);
+
   // --- actions en tête par ligne ---
   const chargeable = deck.g.roadway.y2 - deck.g.roadway.y1;
   const brk = brakingF61Deck({ Ltot, Lc: chargeable });
@@ -275,9 +291,13 @@ export function computeSupports(st, input = {}) {
     return out;
   };
   // --- cours d'eau : courant, embâcles, poussée d'Archimède, affouillement (piles en rivière) ---
-  const inWater = i => sp.eau.actif && !isEnd(i) && (!sp.eau.appuis || !sp.eau.appuis.length || sp.eau.appuis.includes(i + 1));
-  const water = xs.map((x, i) => (inWater(i) ? pierWater(sp.eau, { type: sp.pile.type, b: sp.pile.b, Lv, D: sp.pile.D, nCol: sp.pile.nCol, s: sp.pile.nCol > 1 ? width / sp.pile.nCol : 0,
-    Hf: Hpile(i), dBed: Math.max(0, F0(i).De - F0(i).hs) }) : null));
+  // plan de nivellement : une pile est dans l'eau si ses cotes de PHE et de lit sont données (PHE au-dessus du lit)
+  // (dès qu'une ligne porte des cotes d'eau, les lignes sans cotes d'eau sont hors de l'eau)
+  const eauNiv = niv.actif && niv.lignes.some(L => L.hEau != null);
+  const nivEau = i => { if (!eauNiv) return null; const L = niv.lignes[i]; return !!(L && L.hEau > 0); };
+  const inWater = i => sp.eau.actif && !isEnd(i) && (nivEau(i) ?? (!sp.eau.appuis || !sp.eau.appuis.length || sp.eau.appuis.includes(i + 1)));
+  const water = xs.map((x, i) => (inWater(i) ? pierWater(S(i).eau, { type: sp.pile.type, b: sp.pile.b, Lv, D: sp.pile.D, nCol: sp.pile.nCol, s: sp.pile.nCol > 1 ? width / sp.pile.nCol : 0,
+    Hf: Hpile(i), dBed: (niv.actif && niv.lignes[i] && niv.lignes[i].dBed != null) ? niv.lignes[i].dBed : Math.max(0, F0(i).De - F0(i).hs) }) : null));
   const waterCombos = (i, Nfreq) => {
     const w = water[i]; if (!w) return { F61: [], EC: [] };
     // F_wa action variable de courte durée (γ_Q = 1,5) ; BAEL/F61 : comme le vent (annexe D), sans trafic ; EC : action
@@ -299,13 +319,13 @@ export function computeSupports(st, input = {}) {
       ...(f61.Bt ? [{ label: 'Bt + trottoirs', N: q * (R(f61.Bt, i) + tr), H: 0, gU: 1.605, gS: 1.2 }] : []),
       ...(f61.Mc120 ? [{ label: 'Mc120 + trottoirs', N: q * (R(f61.Mc120, i) + tr), H: 0, gU: 1.35, gS: 1.0 }] : []),
     ];
-    const F61 = headCombinationsBAEL({ G, Q: QF, RF: { H: h * distB.imposed(RF).H[i] }, TLD: { H: h * distB.imposed(sp.eps.TLD).H[i] }, TCD: { H: h * distB.imposed(sp.eps.TCD, 'inst').H[i] }, envelope: true });
+    const F61 = headCombinationsBAEL({ G, Q: QF, RF: { H: Math.abs(h * distB.imposed(RF).H[i]) + Hp('B', i) }, TLD: { H: h * distB.imposed(sp.eps.TLD).H[i] }, TCD: { H: h * distB.imposed(sp.eps.TCD, 'inst').H[i] }, envelope: true });
     const psi0 = (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i) + 0.4 * R(ec.gr3, i) * 0.6) / Math.max(1e-9, R(ec.gr1a, i));
     const QE = [
       { label: 'gr1a', N: q * R(ec.gr1a, i), H: 0, psi0 },
       { label: 'gr2 (freinage)', N: q * (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)), H: h * bearings.H * distE.braking(1)[i], psi0: 0 },
     ];
-    const EC = headCombinationsEC({ G, Q: QE, RF: { H: h * distE.imposed(RF).H[i] }, T: { H: h * distE.imposed(epsT).H[i] } });
+    const EC = headCombinationsEC({ G, Q: QE, RF: { H: Math.abs(h * distE.imposed(RF).H[i]) + Hp('E', i) }, T: { H: h * distE.imposed(epsT).H[i] } });
     const Nfreq = q * (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i));
     const acc = accidental(i, Nfreq), wc = waterCombos(i, Nfreq);
     return { x, F61: [...F61, ...wc.F61, ...acc], EC: [...EC, ...wc.EC, ...acc] };
@@ -327,7 +347,8 @@ export function computeSupports(st, input = {}) {
       aG = Math.max(mx(R0.service[i]), mx({ g: (R0.cp[i].g ?? 0) + (R0.pI[i].g ?? 0), d: (R0.cp[i].d ?? 0) + (R0.pI[i].d ?? 0) }));
     }
     const dist = code === 'BAEL' ? distB : distEb;
-    const vRF = Math.abs(dist.imposed(RF, 'diff').disp[i]);
+    // déplacement lent : retrait-fluage + distorsion sous la composante du poids le long de la pente (profil en long)
+    const vRF = Math.abs(dist.imposed(RF, 'diff').disp[i]) + (pente ? Math.abs(pente[code === 'BAEL' ? 'B' : 'Eb'][i]) * dist.lines[i].sNeo.diff : 0);
     // température : BAEL longue durée (module différé) + courte durée (instantané) ; EC variation uniforme T (guide 2007, G = 0,9 MPa)
     const vT = code === 'BAEL' ? Math.abs(dist.imposed(sp.eps.TLD, 'diff').disp[i]) + Math.abs(dist.imposed(sp.eps.TCD, 'inst').disp[i]) : Math.abs(dist.imposed(epsT, 'diff').disp[i]);
     const Gb = row.kCP * perm.Rmax[i] / nb, GbMin = perm.Rmin[i] / nb, Pmax = hypMax[i] / nb, Pmin = hypMin[i] / nb;
@@ -735,5 +756,5 @@ export function computeSupports(st, input = {}) {
     return out;
   });
   const footRotAll = xs.every((_, i) => onPiles(i)) ? null : xs.map((x, i) => (onPiles(i) ? null : { BAEL: footRot(i, 'BAEL'), EC: footRot(i, 'EC') }));
-  return { sp, niv, spLigne: niv.actif ? xs.map((_, i) => S(i)) : null, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
+  return { sp, niv, pente, spLigne: niv.actif ? xs.map((_, i) => S(i)) : null, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
 }
