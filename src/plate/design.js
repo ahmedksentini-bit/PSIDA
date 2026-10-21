@@ -57,6 +57,13 @@ export function transversalPlaque(deck, perm, ec, f61, transG, { f1 = 0.2, f2 = 
       thermal: g.thermal, settle: g.settle, plaque: true,
     };
   });
+  // contrôle : toute valeur non numérique est signalée avec sa composante (plutôt qu'un échec plus loin)
+  spans.forEach((sp, j) => {
+    const bad = [];
+    const chk = (nom, r) => { if (r && [...(r.myMax || []), ...(r.myMin || [])].some(v => !Number.isFinite(v))) bad.push(nom); };
+    chk('permanent', sp.perm); for (const [k, r] of Object.entries(sp.ec)) if (k !== 'lanes') chk(`EC ${k}`, r); for (const [k, r] of Object.entries(sp.f61)) if (r && typeof r === 'object') chk(`F61 ${k}`, r);
+    if (bad.length) throw new Error(`plaque : moments transversaux non numériques en travée ${j + 1} (${bad.join(', ')})`);
+  });
   return { spans, ys: deck.ys.slice(), plaque: { f1, f2 } };
 }
 
@@ -85,7 +92,7 @@ export function chevetresPlaque(base, { deck, perm, ec, fck = 35, fyk = 500, gG 
     const Ru = perm.RappMax[l].map((v, k) => gG * v + gQ * Math.max(tr.RappMax[l][k], 0));
     const R1 = Math.max(Ru[0], Ru[n - 1]), R2 = n > 2 ? Math.max(...Ru.slice(1, -1)) : R1;
     const As = m => (m > 0 ? flexureULS(m / 1000, { b: 1, d: cv.dEff }, mat).As : 0);
-    const larg = (face, rang) => bandes.find(bd => bd.face === face && bd.rang === rang).largeur;
+    const larg = (face, rang) => { const bd = bandes.find(u => u.face === face && u.rang === rang); return bd.largeurLigne ?? bd.largeur; };   // largeur mesurée le long de la ligne d'appui
     const top = cv.bands.top.map((bd, r) => { const p = pire('top', r); return { ...bd, width: larg('top', r), m: p.m, yc: p.yc, As: As(p.m) }; });
     const bot = cv.bands.bot.map((bd, r) => { const p = pire('bot', r); return { ...bd, width: larg('bot', r), m: p.m, yc: p.yc, As: As(p.m) }; });
     return { ...cv, plaque: true, annexe4: { R1: cv.R1, R2: cv.R2, mc: cv.mc, me_neg: cv.me_neg, me_pos: cv.me_pos, bands: cv.bands }, R1, R2, Rmax: Math.max(R1, R2), Rapp: Ru,

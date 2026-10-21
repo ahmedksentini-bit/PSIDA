@@ -1649,14 +1649,14 @@ table.valeurs td.vide {
   gap: 8px;
 }
 
-.conditions-liste li {
+.conditions-liste > li {
   display: grid;
   grid-template-columns: 22px 1fr;
   gap: 2px 8px;
   font-size: 0.9rem;
 }
 
-.conditions-liste li .refs-ligne {
+.conditions-liste > li > .refs-ligne {
   grid-column: 2;
   margin-top: 0;
 }
@@ -1671,12 +1671,12 @@ table.valeurs td.vide {
   font-weight: 700;
 }
 
-.conditions-liste li.ok .marque-condition {
+.conditions-liste > li.ok .marque-condition {
   background: var(--ok-fond);
   color: var(--ok);
 }
 
-.conditions-liste li.ko .marque-condition {
+.conditions-liste > li.ko .marque-condition {
   background: var(--alerte-fond);
   color: var(--alerte);
 }

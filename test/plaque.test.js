@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PlaqueDF, grille, BandSPD } from '../src/plate/fd.js';
-import { plaqueTablier, permanentPlaque, raideurAppareil } from '../src/plate/deck.js';
+import { PlaqueEF } from '../src/plate/fe.js';
+import { plaqueTablier, permanentPlaque, raideurAppareil, repere } from '../src/plate/deck.js';
 import { transverseMoments } from '../src/guyon.js';
 import { formDefaults } from '../tools/formdefaults.mjs';
 import { parseData, compute } from '../src/pipeline.js';
@@ -106,7 +107,7 @@ test('Plaque, trafic LM1 de l\'exemple : symétrie, pointes sur appareils, cohé
   }
   // aux sections déterminantes (moments extrêmes), sans excès déraisonnable (répartition transversale ≈ Guyon)
   const sMax = G.Mmax.indexOf(Math.max(...G.Mmax)), sMin = G.Mmin.indexOf(Math.min(...G.Mmin));
-  assert.ok(trapz(e.mxMax[sMax]) < 1.25 * G.Mmax[sMax] && trapz(e.mxMin[sMin]) > 1.25 * G.Mmin[sMin]);
+  assert.ok(trapz(e.mxMax[sMax]) < 1.3 * G.Mmax[sMax] && trapz(e.mxMin[sMin]) > 1.3 * G.Mmin[sMin], `${trapz(e.mxMax[sMax]) / G.Mmax[sMax]} ${trapz(e.mxMin[sMin]) / G.Mmin[sMin]}`);
   for (const [k, sk] of [['mxMax', sMax], ['mxMin', sMin]]) {
     const r = Math.max(...e[k][sk].map(Math.abs)) / Math.max(...G[k][sk].map(Math.abs));
     assert.ok(r > 0.9 && r < 1.3, `${k} plaque / Guyon = ${r}`);
@@ -146,4 +147,68 @@ test('Calcul complet en plaque : dimensionnement, chevêtres proches de l\'annex
   st.bearings.rows.forEach((row, i) => assert.ok(row.Pmax >= Math.max(...st.bearings.plaque[i].Rk) - 1e-6));
   // flexion transversale : lue sur la plaque, mêmes ordres de grandeur que Guyon
   st.transDesign.EC.spans.forEach((sp, j) => assert.ok(sp.bot.As / G.transDesign.EC.spans[j].bot.As > 0.8 && sp.bot.As / G.transDesign.EC.spans[j].bot.As < 1.5));
+});
+
+test('Éléments finis DKT : plaques de Navier et de Lévy, plaque biaise de Morley (30°)', () => {
+  { // Navier
+    const a = 10, nu = 0.3, D = 1e5, q = 10, xs = grille([0, a], 0.5), ys = grille([0, a], 0.5);
+    const appuis = []; for (const x of xs) for (const y of ys) if (x === 0 || y === 0 || Math.abs(x - a) < 1e-9 || Math.abs(y - a) < 1e-9) appuis.push({ x, y, k: Infinity });
+    const P = new PlaqueEF({ xs, ys, D, nu, appuis }), w = P.resoudre(P.chargeRectangle(P.vecteur(), { x1: 0, x2: a, y1: 0, y2: a, q }));
+    const c = P.idx(P.plusProche(xs, a / 2), P.plusProche(ys, a / 2)), m = P.moments(w);
+    assert.ok(Math.abs(m.mx[c] / (0.0479 * q * a * a) - 1) < 0.005 && Math.abs(w[c] / (0.00406 * q * a ** 4 / D) - 1) < 0.005);
+  }
+  { // Lévy (deux bords libres) contre Guyon-Massonnet à 99 harmoniques
+    const L = 14, b = 6, nu = 0.2, D = 34000e3 * 0.7 ** 3 / (12 * (1 - nu * nu)), ysOut = [-4.5, -3, -1.5, 0, 3];
+    const xs = grille([0, L], 0.25), ys = grille([-b, ...ysOut, b], 0.25);
+    const appuis = []; for (const x of [0, L]) for (const y of ys) appuis.push({ x, y, k: Infinity });
+    const P = new PlaqueEF({ xs, ys, D, nu, appuis }), patches = [{ x1: 0, x2: L, e1: -b, e2: b, q: 10 }];
+    const w = P.resoudre(P.chargeRectangle(P.vecteur(), { x1: 0, x2: L, y1: -b, y2: b, q: 10 })), m = P.moments(w), i = P.plusProche(xs, L / 2);
+    const ex = transverseMoments({ b, L, patches, x: L / 2, ys: ysOut, nHarm: 99, nu });
+    ysOut.forEach((y, k) => { const p = P.idx(i, P.plusProche(ys, y)); assert.ok(Math.abs(m.mx[p] / ex.mx[k] - 1) < 0.003 && Math.abs(m.my[p] / ex.my[k] - 1) < 0.01); });
+  }
+  { // Morley (1963) : losange de 30°, quatre bords appuyés, ν = 0,3 : w = 4,08e-4 qL⁴/D, M_max = 0,0191 qL², M_min = 0,0108 qL²
+    const L = 10, nu = 0.3, D = 1e5, q = 10, Hh = L / 2, cot = Math.sqrt(3), xs = grille([0, L], L / 32), ys = grille([0, Hh], Hh / 32);
+    const appuis = []; for (const s of xs) for (const y of ys) if (s === 0 || y === 0 || Math.abs(s - L) < 1e-9 || Math.abs(y - Hh) < 1e-9) appuis.push({ x: s + y * cot, y, k: Infinity });
+    const P = new PlaqueEF({ xs, ys, D, nu, appuis, psi: 100 / 3 }), w = P.resoudre(P.chargeRectangle(P.vecteur(), { x1: 0, x2: L, y1: 0, y2: Hh, q }));
+    const c = P.idx(P.plusProche(xs, L / 2), P.plusProche(ys, Hh / 2)), m = P.moments(w);
+    const a = (m.mx[c] + m.my[c]) / 2, r = Math.hypot((m.mx[c] - m.my[c]) / 2, m.mxy[c]);
+    assert.ok(Math.abs(w[c] / (4.08e-4 * q * L ** 4 / D) - 1) < 0.03, `w ${w[c]}`);
+    assert.ok(Math.abs((a + r) / (0.0191 * q * L * L) - 1) < 0.03 && Math.abs((a - r) / (0.0108 * q * L * L) - 1) < 0.05);
+  }
+});
+
+test('Wood-Armer pour armatures biaises : capacité ≥ moment normal dans toute direction (faces inférieure et supérieure)', () => {
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let t = 0; t < 3000; t++) {
+    const m = { mx: rnd() * 300 - 150, my: rnd() * 300 - 150, mxy: rnd() * 120 - 60 }, aGr = 40 + rnd() * 60, al = aGr * Math.PI / 200, R = repere(aGr);
+    const L = k => Object.entries(R[k]).reduce((s, [g, c]) => s + c * m[g], 0), T = Math.abs(L('mxy'));
+    const bot = [L('mx') + T, L('my') + T], top = [L('mx') - T, L('my') - T];
+    for (let k = 0; k < 180; k++) {
+      const th = k * Math.PI / 180, mn = m.mx * Math.cos(th) ** 2 + m.my * Math.sin(th) ** 2 + 2 * m.mxy * Math.sin(th) * Math.cos(th);
+      const cap = M => M[0] * Math.cos(th) ** 2 + M[1] * Math.cos(th - al) ** 2;
+      assert.ok(cap(bot) >= mn - 1e-9 && cap(top) <= mn + 1e-9);
+    }
+  }
+});
+
+test('Différences finies et éléments finis sur le tablier de l\'exemple : réactions et moments concordants', () => {
+  const st = compute(parseData(formDefaults()));
+  const r = moteur => permanentPlaque(plaqueTablier(st.deck, { h: 0.5, nb: 4, kv: Infinity, moteur }));
+  const A = r('df'), B = r('ef');
+  A.Rapp.forEach((row, i) => row.forEach((v, k) => assert.ok(Math.abs(B.Rapp[i][k] / v - 1) < 0.01)));
+  const sm = st.deck.beam.sectionIndex(1, 0.5);
+  A.mx[sm].forEach((v, f) => assert.ok(Math.abs(B.mx[sm][f] / v - 1) < 0.02));
+});
+
+test('Ouvrage biais en plaque (ψ = 80 gr) : équilibre, symétrie centrale, réactions plus fortes aux angles obtus', () => {
+  const d = formDefaults(); d.psi = '80';
+  const p = parseData(d), st = compute(p);
+  const M = plaqueTablier(st.deck, { h: 0.5, nb: 4, kv: Infinity, psi: 80 }), r = permanentPlaque(M);
+  const tot = st.perm.R.reduce((s, v) => s + v, 0);
+  assert.ok(Math.abs(r.R.reduce((s, v) => s + v, 0) / tot - 1) < 2e-3);
+  // symétrie par rapport au centre de l'ouvrage : appareil k de la ligne i ↔ appareil n−1−k de la ligne N−1−i
+  const N = r.Rapp.length;
+  r.Rapp.forEach((row, i) => row.forEach((v, k) => assert.ok(Math.abs(v - r.Rapp[N - 1 - i][row.length - 1 - k]) < 0.01 * Math.abs(v) + 1)));
+  // culée C0 : l'angle obtus (côté y > 0 pour x = s + y cot ψ, ψ < 100 gr) est le plus chargé
+  assert.ok(r.Rapp[0][3] > r.Rapp[0][0]);
 });

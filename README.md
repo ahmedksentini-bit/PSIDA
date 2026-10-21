@@ -248,6 +248,10 @@ dimensionnement sur les moments de Wood-Armer, flexion transversale lue sur la p
 les bandes de l'annexe 4 du guide PSIDP-EL, réaction de chaque appareil, renforts locaux au droit des appareils des piles
 (annexe 4 § 7) ; comparaison avec Guyon dans l'onglet Tablier. Validée sur les solutions exactes de Lévy et de Navier.
 Ouvrage droit seulement ; ≈ 30 s de calcul.
+v0.55 : la plaque passe aux éléments finis (triangle DKT de Batoz, Bathe et Ho, 1980 ; les différences finies restent
+en contrôle croisé) et traite les ouvrages biais (maillage en parallélogrammes, appareils le long des lignes d'appui,
+Wood-Armer pour armatures biaises vérifié numériquement) ; validation sur Navier, Lévy et la plaque biaise de Morley (30°).
+Onglet Calcul sismique : références des conditions d'application de nouveau lisibles (sélecteur CSS trop large).
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

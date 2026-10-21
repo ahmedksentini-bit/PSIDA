@@ -16,11 +16,21 @@ function champsPermanents(st) {
 }
 
 function carte(div, M, champ, { titre, unite, echelle = 1, symetrique = false }) {
-  const { P, xs, ys, deck } = M, { ink, grid } = theme();
-  const z = ys.map((_, j) => xs.map((_, i) => champ[P.idx(i, j)] * echelle));
-  const vmax = Math.max(...z.flat().map(Math.abs));
+  const { P, ys, deck } = M, { ink, grid } = theme(), cot = M.cot || 0;
+  // ouvrage biais : la grille (s, y) est rééchantillonnée sur une grille régulière en x (x = s + y·cot ψ), vide hors dalle
+  const sx = M.xs, h = Math.min(...sx.slice(1).map((v, k) => v - sx[k])), xMin = sx[0] + Math.min(0, -deck.b * cot), xMax = sx[sx.length - 1] + Math.max(0, deck.b * cot);
+  const xs = cot ? Array.from({ length: Math.round((xMax - xMin) / h) + 1 }, (_, m) => xMin + m * h) : sx;
+  const val = (j, x) => {
+    const t = x - ys[j] * cot;
+    if (t < sx[0] - 1e-9 || t > sx[sx.length - 1] + 1e-9) return null;
+    let k = 0; while (k < sx.length - 2 && sx[k + 1] < t) k++;
+    const r = Math.min(1, Math.max(0, (t - sx[k]) / (sx[k + 1] - sx[k])));
+    return (champ[P.idx(k, j)] * (1 - r) + champ[P.idx(k + 1, j)] * r) * echelle;
+  };
+  const z = ys.map((_, j) => (cot ? xs.map(x => val(j, x)) : xs.map((_, i) => champ[P.idx(i, j)] * echelle)));
+  const vmax = Math.max(...z.flat().filter(v => v !== null).map(Math.abs));
   const data = [{ type: 'heatmap', x: xs, y: ys, z, colorscale: symetrique ? 'RdBu' : 'Viridis', reversescale: symetrique, zmid: symetrique ? 0 : undefined, zmin: symetrique ? -vmax : undefined, zmax: symetrique ? vmax : undefined, colorbar: { title: unite, thickness: 12 }, hovertemplate: 'x = %{x:.2f} m<br>y = %{y:.2f} m<br>%{z:.1f} ' + unite + '<extra></extra>' },
-    { type: 'scatter', mode: 'markers', x: P.appuis.map(a => xs[a.i]), y: P.appuis.map(a => ys[a.j]), marker: { symbol: 'square', size: 7, color: ink, line: { color: '#fff', width: 1 } }, name: 'appareils', hovertemplate: 'appareil<extra></extra>' }];
+    { type: 'scatter', mode: 'markers', x: P.appuis.map(a => sx[a.i] + ys[a.j] * cot), y: P.appuis.map(a => ys[a.j]), marker: { symbol: 'square', size: 7, color: ink, line: { color: '#fff', width: 1 } }, name: 'appareils', hovertemplate: 'appareil<extra></extra>' }];
   const layout = { title: { text: titre, font: { size: 14 } }, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: ink, size: 12 }, margin: { l: 55, r: 10, t: 40, b: 45 },
     xaxis: { title: { text: 'x [m]' }, gridcolor: grid }, yaxis: { title: { text: 'y [m]' }, gridcolor: grid, scaleanchor: 'x', scaleratio: 1 }, showlegend: false, height: Math.max(260, 120 + 520 * (2 * deck.b) / (xs[xs.length - 1] - xs[0])) };
   Plotly.newPlot(div, data, layout, CONFIG);
@@ -34,7 +44,7 @@ export function renderPlaque(st) {
   if (!PL) return;
   const M = PL.M, P = M.P, G = st.guyon;
   const kv = P.appuis.filter(a => a.rang === 0).map(a => a.k);
-  let h = `<p class="small">Dalle de Kirchhoff d'épaisseur variable (chanfreins), bords libres sur les quatre côtés, abouts compris, appuyée sur ${M.nb} appareils par ligne (entraxe ${f2(M.a)} m) modélisés en ressorts verticaux de raideur ${kv.map(k => (Number.isFinite(k) ? (k / 1000).toFixed(0) + ' MN/m' : 'rigide')).join(' / ')} (élastomère fretté choisi au premier passage, guide Sétra 2007). Différences finies énergétiques sur une grille de ${P.nx} × ${P.ny} = ${P.n} nœuds (pas ≤ ${f2(M.h)} m, lignes d'appui, sections et fibres sur la grille) ; E = ${f0(M.E)} MPa, ν = ${M.nu}. Surfaces d'influence par réciprocité de Maxwell-Betti (${PL.cibles.length} grandeurs : m_x, m_y, m_xy aux sections × fibres, réactions des appareils, moyennes de m_y et m_xy sur les bandes de chevêtre) ; enveloppes de trafic en long avec les mêmes convois et arrangements que le modèle poutre. Dimensionnement sur les moments de Wood-Armer (m_x ± |m_xy|, m_y ± |m_xy|).</p>`;
+  let h = `<p class="small">Dalle de Kirchhoff d'épaisseur variable (chanfreins), bords libres sur les quatre côtés, abouts compris, appuyée sur ${M.nb} appareils par ligne (entraxe ${f2(M.a)} m) modélisés en ressorts verticaux de raideur ${kv.map(k => (Number.isFinite(k) ? (k / 1000).toFixed(0) + ' MN/m' : 'rigide')).join(' / ')} (élastomère fretté choisi au premier passage, guide Sétra 2007). ${M.moteur === 'df' ? 'Différences finies énergétiques' : 'Éléments finis de plaque mince DKT (Batoz, Bathe et Ho, 1980), 3 degrés de liberté par nœud,'} sur une grille de ${P.nx} × ${P.ny} = ${P.n} nœuds (pas ≤ ${f2(M.h)} m, lignes d'appui, sections et fibres sur la grille${M.cot ? `, mailles en parallélogrammes suivant le biais ψ = ${f0(M.psi)} gr` : ''}) ; E = ${f0(M.E)} MPa, ν = ${M.nu}. Surfaces d'influence par réciprocité de Maxwell-Betti (${PL.cibles.length} grandeurs : m_x, m_y, m_xy aux sections × fibres, réactions des appareils, moyennes de m_y et m_xy sur les bandes de chevêtre) ; enveloppes de trafic en long avec les mêmes convois et arrangements que le modèle poutre. Dimensionnement sur les moments de Wood-Armer ${M.alphaT < 100 ? `pour armatures biaises (aciers transversaux à α = ${f0(M.alphaT)} gr de l'axe : m_x* = m_x − 2 m_xy cot α + m_y cot²α ± |t|, m_α* = m_y/sin²α ± |t|, t = (m_xy − m_y cot α)/sin α)` : '(m_x ± |m_xy|, m_y ± |m_xy|)'}${M.cot ? ' ; m_x, m_y et m_xy des tableaux sont dans ce repère des armatures' : ''}.</p>`;
   if (G) {
     const keys = st.keys;
     const row = (lab, a, b, fmt = f0) => `<tr><td>${lab}</td><td>${fmt(b)}</td><td>${fmt(a)}</td><td>${Number.isFinite(a / b) ? ((a / b - 1) * 100).toFixed(0) + ' %' : '–'}</td></tr>`;
@@ -53,7 +63,7 @@ export function renderPlaque(st) {
   }
   const ra = st.design.EC.renfortsAppareils || [];
   if (ra.length) h += `<p class="small">Pointes de moment au droit des appareils des piles (annexe 4 § 7 du guide PSIDP-EL) : ferraillage supérieur courant dimensionné sur ± 0,2 L au plus grand de la moyenne sur la largeur et des fibres hors bandes ① (${ra.map(r => `P${r.support} : ${cm(r.uniforme)} cm²/m`).join(', ')}), pointe reprise par renforts locaux de ${ra.map(r => `${cm(r.As)} cm²/m`).join(', ')} sur ${f2(ra[0].width)} m centrés sur chaque appareil.</p>`;
-  h += `<p class="small">Limites de la version : ouvrage droit (le biais demande une grille oblique) ; gradient thermique et tassements d'appui traités par le modèle poutre (m_x uniforme, ν·m_x transversal de Guyon) ; enveloppes de m_x, m_y et m_xy non concomitantes (Wood-Armer majorant). Calcul en ${st.dt.toFixed(0)} s.</p>`;
+  h += `<p class="small">Limites de la version : gradient thermique et tassements d'appui traités par le modèle poutre (m_x uniforme, ν·m_x transversal de Guyon) ; enveloppes de m_x, m_y et m_xy non concomitantes (Wood-Armer majorant). Calcul en ${st.dt.toFixed(0)} s.</p>`;
   document.getElementById('plaque-info').innerHTML = h;
   const sel = document.getElementById('plaque-champ');
   const draw = () => {

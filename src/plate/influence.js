@@ -9,8 +9,11 @@
  * parts par travée pour les δ du Fascicule 61). Les files se placent indépendamment en long, comme dans le modèle
  * poutre ; la position transversale est celle de l'arrangement.
  */
-import { plaqueTablier } from './deck.js';
+import { plaqueTablier, repere } from './deck.js';
 
+/** Grandeurs aux sections × fibres, dans le repère des armatures (voir repere() de deck.js) : m_x → moment des aciers
+ * longitudinaux, m_y → moment des aciers transversaux, m_xy → terme de torsion de Wood-Armer ; identiques aux moments
+ * cartésiens pour un ouvrage droit. */
 export const GRANDEURS = ['mx', 'my', 'mxy'];
 
 export class InfluencePlaque {
@@ -44,10 +47,29 @@ export class InfluencePlaque {
     if (this._eta[k]) return this._eta[k];
     const { P } = this.M, c = this.cibles[k];
     let v;
+    // combinaison linéaire des vecteurs cartésiens (repère des armatures) : somme coefficient × vecteurGrandeur
+    const comb = (i, j, co, w = 1, acc = null) => {
+      for (const [g, a] of Object.entries(co)) { if (!a) continue; const u = P.vecteurGrandeur(i, j, g); acc ||= new Float64Array(u.length); for (let p = 0; p < u.length; p++) if (u[p]) acc[p] += w * a * u[p]; }
+      return acc;
+    };
     if (c.g === 'R') { v = new Float64Array(P.n); const a = P.appuis[c.k]; v[P.idx(a.i, a.j)] = a.kEff; }
-    else if (c.g[0] === 'B') { v = new Float64Array(P.n); for (const [j, w] of c.poids) { const u = P.vecteurGrandeur(c.i, j, c.g.slice(1)); for (let p = 0; p < v.length; p++) if (u[p]) v[p] += w * u[p]; } }
-    else v = P.vecteurGrandeur(c.i, c.j, c.g);
+    else if (c.g[0] === 'B') { for (const [j, w] of c.poids) v = comb(c.i, j, this.M.repereChev[c.g.slice(1)], w, v); v ||= new Float64Array(P.n); }
+    else v = comb(c.i, c.j, this.M.repere[c.g]) || new Float64Array(P.n);
     return (this._eta[k] = Float32Array.from(P.resoudre(v)));
+  }
+  /** Table d'interpolation des abscisses de la poutre sur la ligne de nœuds j (biais) ; i = −1 hors de la dalle. */
+  interpY(j) {
+    this._iy ||= new Map();
+    if (this._iy.has(j)) return this._iy.get(j);
+    const { P } = this.M, xs = P.xs, sh = P.ys[j] * this.M.cot;
+    const tab = Array.from(this.deck.beam.xs, x => {
+      const t = x - sh;
+      if (t < xs[0] - 1e-9 || t > xs[xs.length - 1] + 1e-9) return [-1, 0];
+      let k = 0; while (k < xs.length - 2 && xs[k + 1] < t) k++;
+      return [k, Math.min(1, Math.max(0, (t - xs[k]) / (xs[k + 1] - xs[k])))];
+    });
+    this._iy.set(j, tab);
+    return tab;
   }
   /** Ligne d'influence (abscisses de la poutre) de la cible k pour une piste [e1, e2]. */
   ligne(k, e1, e2) {
@@ -63,11 +85,20 @@ export class InfluencePlaque {
       const pts = [a1, ...ys.filter(y => y > a1 && y < a2), a2], L = a2 - a1;
       for (let m = 1; m < pts.length; m++) { const d = (pts[m] - pts[m - 1]) / L / 2; pointY(pts[m - 1], d); pointY(pts[m], d); }
     }
-    const nx = P.xs.length, ny = ys.length, lx = new Float64Array(nx), J = [], W = [];
+    const nx = P.xs.length, ny = ys.length, J = [], W = [];
     for (let j = 0; j < ny; j++) if (poids[j]) { J.push(j); W.push(poids[j]); }
-    for (let i = 0; i < nx; i++) { let t = 0; const o = i * ny; for (let m = 0; m < J.length; m++) t += W[m] * eta[o + J[m]]; lx[i] = t; }
-    const out = new Float64Array(this.interp.length);
-    for (let m = 0; m < out.length; m++) { const [i, r] = this.interp[m]; out[m] = lx[i] * (1 - r) + lx[i + 1] * r; }
+    const out = new Float64Array(this.deck.beam.xs.length);
+    if (!this.M.cot) {
+      const lx = new Float64Array(nx);
+      for (let i = 0; i < nx; i++) { let t = 0; const o = i * ny; for (let m = 0; m < J.length; m++) t += W[m] * eta[o + J[m]]; lx[i] = t; }
+      for (let m = 0; m < out.length; m++) { const [i, r] = this.interp[m]; out[m] = lx[i] * (1 - r) + lx[i + 1] * r; }
+    } else {
+      // ouvrage biais : la charge en (x, y) est au nœud d'abscisse s = x − y·cot ψ ; interpolation propre à chaque fibre
+      for (let q = 0; q < J.length; q++) {
+        const j = J[q], tab = this.interpY(j);
+        for (let m = 0; m < out.length; m++) { const [i, r] = tab[m]; if (i < 0) continue; out[m] += W[q] * (eta[i * ny + j] * (1 - r) + eta[(i + 1) * ny + j] * r); }
+      }
+    }
     this._lignes.set(key, out);
     return out;
   }

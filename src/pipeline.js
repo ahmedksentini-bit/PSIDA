@@ -217,7 +217,7 @@ export function compute(p) {
   if (p.methodeTablier === 'plaque' && !p.deckInput.plaque) {
     const st0 = compute({ ...p, methodeTablier: 'guyon' });
     const kv = st0.bearings.rows.map(r => (r.sel ? raideurAppareil(r.sel.bd, r.sel.n) : Infinity));
-    const st = compute({ ...p, deckInput: { ...p.deckInput, plaque: { nb: st0.bearings.nb, kv, E: p.E || 34000, psi: p.concept.psi || 100 } } });
+    const st = compute({ ...p, deckInput: { ...p.deckInput, plaque: { nb: st0.bearings.nb, kv, E: p.E || 34000, psi: p.concept.psi || 100, alphaT: p.concept.transversePerpendicular ? 100 : (p.concept.psi || 100) } } });
     st.guyon = { perm: st0.perm, ec: st0.ec, f61: st0.f61, design: st0.design, transDesign: st0.transDesign, trans: st0.trans, rebar: st0.rebar, bearings: st0.bearings, chevetres: st0.chevetres };
     st.dt += st0.dt;
     return st;
@@ -249,7 +249,8 @@ export function compute(p) {
   const skewed = (p.concept.psi || 100) < 100;
   const transF = skewed && !PL ? runF(deck.nu) : trans;
   const transELU = !PL && p.mat.fissuration === 'peu nuisible' && deck.nu > 0 ? runF(0) : null;
-  const skewOpt = { psi: p.concept.psi, I: p.I, transversePerpendicular: p.concept.transversePerpendicular };
+  // plaque : moments déjà dans le repère des armatures (Wood-Armer biais) → pas de transformation de l'annexe 12A
+  const skewOpt = { psi: p.concept.psi, I: p.I, transversePerpendicular: p.concept.transversePerpendicular, plaque: !!PL };
   const transDesign = {
     EC: designTransverseEC(deck, trans, design.EC, { ...p.mat, phi: p.mat.phiT, phiLong: p.mat.phi, ...skewOpt }),
     F61: designTransverseBAEL(deck, transF, design.F61, { ...p.mat, phiLong: p.mat.phi, ...skewOpt, transELU }),

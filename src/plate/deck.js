@@ -1,11 +1,28 @@
 /**
- * Tablier de pont-dalle modélisé en plaque (différences finies, src/plate/fd.js) : dalle continue réelle de largeur 2b,
- * abouts compris, chanfreins (épaisseur variable en travers), appuyée ponctuellement sur ses appareils d'appui
- * (ressorts verticaux de l'élastomère fretté), bords libres sur les quatre côtés.
- * Repère : x le long du pont (origine sur l'axe de la culée C0, comme la poutre), y en travers (−b à +b).
- * Ouvrage droit uniquement à ce stade (biais : grille oblique à prévoir).
+ * Tablier de pont-dalle modélisé en plaque : dalle continue réelle de largeur 2b, abouts compris, chanfreins (épaisseur
+ * variable en travers), appuyée ponctuellement sur ses appareils d'appui (ressorts verticaux de l'élastomère fretté),
+ * bords libres sur les quatre côtés. Éléments finis DKT (src/plate/fe.js, par défaut, ouvrages droits et biais) ou
+ * différences finies énergétiques (src/plate/fd.js, ouvrages droits, conservées pour contrôle croisé).
+ * Repère : x le long du pont (origine sur l'axe de la culée C0, comme la poutre), y en travers (−b à +b). Ouvrage biais :
+ * lignes d'appui et abouts inclinés de ψ sur l'axe ; une section de la poutre d'abscisse x est la droite parallèle aux
+ * lignes d'appui passant par le point (x, 0).
  */
 import { PlaqueDF, grille } from './fd.js';
+import { PlaqueEF } from './fe.js';
+
+/**
+ * Repère des armatures : aciers longitudinaux suivant x, aciers transversaux faisant l'angle α avec x (α = ψ pour des
+ * aciers parallèles aux lignes d'appui, 100 gr pour des aciers perpendiculaires aux bords libres). Moments de
+ * Wood-Armer pour armatures biaises (forme vérifiée numériquement : capacité ≥ moment normal dans toute direction,
+ * test/plaque.test.js) : m_x* = L_x ± |t|, m_α* = L_α ± |t| avec
+ *   L_x = m_x − 2 m_xy cot α + m_y cot²α,  L_α = m_y / sin²α,  t = (m_xy − m_y cot α) / sin α
+ * (α compté de x vers y). Renvoie les coefficients de L_x (clé mx), L_α (my) et t (mxy) sur m_x, m_y, m_xy.
+ */
+export function repere(alphaGr = 100) {
+  const a = alphaGr * Math.PI / 200, ca = Math.abs(alphaGr - 100) < 1e-9 ? 0 : 1 / Math.tan(a), sa = Math.sin(a);
+  return { mx: { mx: 1, mxy: -2 * ca, my: ca * ca }, my: { my: 1 / (sa * sa) }, mxy: { mxy: 1 / sa, my: -ca / sa }, alpha: alphaGr };
+}
+const appliquer = (co, m, p) => (co.mx || 0) * m.mx[p] + (co.my || 0) * m.my[p] + (co.mxy || 0) * m.mxy[p];
 import { bearingSpacing } from '../bearings.js';
 
 /** Raideur verticale d'un appareil en élastomère fretté [kN/m] (guide Sétra 2007 : v_z = F Σt_i/A′ (1/(5 G S²) + 1/E_b)). */
@@ -29,23 +46,26 @@ export function epaisseur(deck, y) {
  * @param {object} o { h : pas de grille [m], E [MPa], nu, nb : appareils par ligne, kv : raideur par ligne [kN/m]
  *   (nombre ou tableau ; Infinity = appui rigide), psi [gr] }
  */
-export function plaqueTablier(deck, { h = 0.25, E = 34000, nu = deck.nu ?? 0.2, nb = 4, kv = Infinity, psi = 100 } = {}) {
-  if (psi < 100 - 1e-9) throw new Error('plaque : ouvrage biais non traité à ce stade (grille oblique à venir)');
+export function plaqueTablier(deck, { h = 0.25, E = 34000, nu = deck.nu ?? 0.2, nb = 4, kv = Infinity, psi = 100, alphaT = null, moteur = 'ef' } = {}) {
+  if (moteur === 'df' && psi < 100 - 1e-9) throw new Error('plaque : les différences finies ne traitent que les ouvrages droits (moteur « ef » pour le biais)');
   const b = deck.b, [aL, aR] = deck.g.overhangs || [0, 0];
   const x0 = deck.beam.x0, xA = -aL, xB = x0[x0.length - 1] + aR;
   const secs = deck.beam.sections.map(s => s.x);
+  // entraxe des appareils le long de la ligne d'appui ; en travers (y) : a·sin ψ
+  const sPsi = Math.sin(psi * Math.PI / 200), cot = Math.abs(psi - 100) < 1e-9 ? 0 : 1 / Math.tan(psi * Math.PI / 200);
   const a = bearingSpacing({ width: 2 * b, psi, n: nb });
-  const yb = Array.from({ length: nb }, (_, k) => (k - (nb - 1) / 2) * a);
+  const yb = Array.from({ length: nb }, (_, k) => (k - (nb - 1) / 2) * a * sPsi);
   const ch = deck.g.chamfer;
   const ptsY = [-b, b, ...deck.ys, ...yb, ...(ch && ch.joue > 0 ? [-b + ch.joue, b - ch.joue] : [])].filter(y => y >= -b - 1e-9 && y <= b + 1e-9);
   const xs = grille([xA, xB, ...x0, ...secs.filter(x => x >= xA && x <= xB)], h);
   const ys = grille(ptsY, h);
   const Dy = y => E * 1000 * epaisseur(deck, y) ** 3 / (12 * (1 - nu * nu));
   const kLigne = i => (Array.isArray(kv) ? kv[i] : kv);
-  const appuis = x0.flatMap((x, i) => yb.map((y, k) => ({ x, y, k: kLigne(i), ligne: i, rang: k })));
-  const P = new PlaqueDF({ xs, ys, D: (_, y) => Dy(y), nu, appuis });
+  const appuis = x0.flatMap((x, i) => yb.map((y, k) => ({ x: x + y * cot, y, k: kLigne(i), ligne: i, rang: k })));
+  const P = moteur === 'df' ? new PlaqueDF({ xs, ys, D: (_, y) => Dy(y), nu, appuis }) : new PlaqueEF({ xs, ys, D: (_, y) => Dy(y), nu, appuis, psi });
   const iSec = secs.map(x => P.plusProche(xs, x)), jFib = deck.ys.map(y => P.plusProche(ys, y));
-  const M = { P, deck, xs, ys, yb, a, nb, iSec, jFib, E, nu, h };
+  const aT = alphaT ?? psi;
+  const M = { P, deck, xs, ys, yb, a, nb, iSec, jFib, E, nu, h, psi, cot, moteur, alphaT: aT, repere: repere(aT), repereChev: repere(psi) };
   M.bandes = bandesChevetre(M);
   return M;
 }
@@ -57,7 +77,7 @@ export function plaqueTablier(deck, { h = 0.25, E = 34000, nu = deck.nu ?? 0.2, 
  * Poids des nœuds de la grille pour la moyenne sur [y1, y2] (longueur tributaire dans la bande / largeur).
  */
 export function bandesChevetre(M) {
-  const { yb, ys, deck } = M, b = deck.b, n = yb.length;
+  const { yb, ys, deck } = M, b = deck.b, n = yb.length, sPsi = Math.sin((M.psi ?? 100) * Math.PI / 200);
   const a = n > 1 ? yb[1] - yb[0] : 2 * b, c = b - yb[n - 1];
   const e = n > 3 ? yb[2] - yb[1] : a, big = Math.max(c, a, e), ae = Math.max(a, e);
   const larg = { top: [2 / 3 * big, Math.max(2 * c, a, e), 2 * big], bot: [2 / 3 * ae, 2 * ae] };
@@ -86,7 +106,7 @@ export function bandesChevetre(M) {
       const w = Math.max(w0, wPrev), wIn = wPrev;
       centres.forEach(yc => {
         const ivs = (wIn > 0 ? moins([[yc - w / 2, yc + w / 2]], [[yc - wIn / 2, yc + wIn / 2], ...trous]) : [[yc - w / 2, yc + w / 2]]).map(clip);
-        out.push({ face, rang, yc, y1: Math.max(-b, yc - w / 2), y2: Math.min(b, yc + w / 2), largeur: w, interieur: wIn, poids: poids(ivs) });
+        out.push({ face, rang, yc, y1: Math.max(-b, yc - w / 2), y2: Math.min(b, yc + w / 2), largeur: w, largeurLigne: w / sPsi, interieur: wIn, poids: poids(ivs) });
       });
       wPrev = w;
     });
@@ -97,20 +117,22 @@ export function bandesChevetre(M) {
 /** Résultats d'un cas de charge aux sections × fibres de la poutre, réactions par appareil et par ligne. */
 export function resultats(M, w) {
   const { P, iSec, jFib, deck, xs, ys } = M;
-  const m = P.moments(w);
-  const at = (arr, s, f) => arr[P.idx(iSec[s], jFib[f])];
-  const mx = iSec.map((_, s) => jFib.map((_, f) => at(m.mx, s, f)));
-  const my = iSec.map((_, s) => jFib.map((_, f) => at(m.my, s, f)));
-  const mxy = iSec.map((_, s) => jFib.map((_, f) => at(m.mxy, s, f)));
+  const m = P.moments(w), R = M.repere || repere(100), RC = M.repereChev || repere(100);
+  // moments aux sections × fibres dans le repère des armatures (identiques aux moments cartésiens pour un ouvrage droit)
+  const at = (g, s, f) => appliquer(R[g], m, P.idx(iSec[s], jFib[f]));
+  const mx = iSec.map((_, s) => jFib.map((_, f) => at('mx', s, f)));
+  const my = iSec.map((_, s) => jFib.map((_, f) => at('my', s, f)));
+  const mxy = iSec.map((_, s) => jFib.map((_, f) => at('mxy', s, f)));
   // moment total sur la largeur (règle des trapèzes sur la grille) : contrôle d'équilibre avec la poutre
   const Mtot = iSec.map(i => { let t = 0; for (let j = 1; j < ys.length; j++) t += (m.mx[P.idx(i, j)] + m.mx[P.idx(i, j - 1)]) / 2 * (ys[j] - ys[j - 1]); return t; });
   const reac = P.reactions(w);
   const nL = deck.beam.x0.length;
-  const R = Array.from({ length: nL }, (_, i) => reac.filter(r => r.ligne === i).reduce((s, r) => s + r.R, 0));
+  const Rl = Array.from({ length: nL }, (_, i) => reac.filter(r => r.ligne === i).reduce((s, r) => s + r.R, 0));
   const Rapp = Array.from({ length: nL }, (_, i) => reac.filter(r => r.ligne === i).sort((u, v) => u.rang - v.rang).map(r => r.R));
   // moyennes de m_y et m_xy sur les bandes de chevêtre de chaque ligne d'appui
-  const B = M.bandes ? deck.beam.x0.map(x => { const i = P.plusProche(xs, x); return M.bandes.bandes.map(bd => ({ my: bd.poids.reduce((t, [j, w]) => t + w * m.my[P.idx(i, j)], 0), mxy: bd.poids.reduce((t, [j, w]) => t + w * m.mxy[P.idx(i, j)], 0) })); }) : null;
-  return { mx, my, mxy, Mtot, R, Rapp, B, w, champ: m, xs, ys };
+  // (aciers des chevêtres parallèles aux lignes d'appui : repère α = ψ)
+  const B = M.bandes ? deck.beam.x0.map(x => { const i = P.plusProche(xs, x); return M.bandes.bandes.map(bd => ({ my: bd.poids.reduce((t, [j, w]) => t + w * appliquer(RC.my, m, P.idx(i, j)), 0), mxy: bd.poids.reduce((t, [j, w]) => t + w * appliquer(RC.mxy, m, P.idx(i, j)), 0) })); }) : null;
+  return { mx, my, mxy, Mtot, R: Rl, Rapp, B, w, champ: m, xs, ys };
 }
 
 /**

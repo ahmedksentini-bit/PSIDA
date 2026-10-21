@@ -222,10 +222,11 @@ export function designTransverseEC(deck, trans, longEC, opt = {}) {
     const botY = trans.ys.map((_, iy) => face(Math.max(comb.ELU.max[j][iy], 0), Math.max(comb.CAR.max[j][iy], 0), Math.max(comb.FREQ.max[j][iy], 0)));
     const topY = trans.ys.map((_, iy) => face(Math.max(-comb.ELU.min[j][iy], 0), Math.max(-comb.CAR.min[j][iy], 0), Math.max(-comb.FREQ.min[j][iy], 0)));
     const ib = botY.map(f => f.flex).indexOf(Math.max(...botY.map(f => f.flex))), it = topY.map(f => f.flex).indexOf(Math.max(...topY.map(f => f.flex)));
+    if (ib < 0 || it < 0) throw new Error(`flexion transversale, travée ${j + 1} : moments non numériques (fibres ${trans.ys.filter((_, iy) => !Number.isFinite(botY[iy].flex) || !Number.isFinite(topY[iy].flex)).join(', ')}) — données de la travée à vérifier`);
     let bot = botY[ib], top = topY[it];
     // biais : moments dans la direction des aciers (annexe 12A) à la place de m_y
     const skew = skewMoments(deck, j, longEC.comb, { ELU: comb.ELU, CAR: comb.CAR, FREQ: comb.FREQ }, opt);
-    if (skew) {
+    if (skew && !opt.plaque) {
       bot = { ...face(skew.max.ELU.M, skew.max.CAR.M, skew.max.FREQ.M), straight: bot, skew: skew.max };
       top = { ...face(-skew.min.ELU.M, -skew.min.CAR.M, -skew.min.FREQ.M), straight: top, skew: skew.min };
     }
@@ -268,9 +269,10 @@ export function designTransverseBAEL(deck, trans, longBAEL, opt = {}) {
     const botY = trans.ys.map((_, iy) => face(Math.max(comb.ELU.max[j][iy], 0), Math.max(comb.ELS.max[j][iy], 0)));
     const topY = trans.ys.map((_, iy) => face(Math.max(-comb.ELU.min[j][iy], 0), Math.max(-comb.ELS.min[j][iy], 0)));
     const ib = botY.map(f => f.flex).indexOf(Math.max(...botY.map(f => f.flex))), it = topY.map(f => f.flex).indexOf(Math.max(...topY.map(f => f.flex)));
+    if (ib < 0 || it < 0) throw new Error(`flexion transversale, travée ${j + 1} : moments non numériques (fibres ${trans.ys.filter((_, iy) => !Number.isFinite(botY[iy].flex) || !Number.isFinite(topY[iy].flex)).join(', ')}) — données de la travée à vérifier`);
     let bot = botY[ib], top = topY[it];
     const skew = skewMoments(deck, j, longBAEL.comb, { ELU: comb.ELU, ELS: comb.ELS }, opt);
-    if (skew) {
+    if (skew && !opt.plaque) {
       bot = { ...face(skew.max.ELU.M, skew.max.ELS.M), straight: bot, skew: skew.max };
       top = { ...face(-skew.min.ELU.M, -skew.min.ELS.M), straight: top, skew: skew.min };
     }
