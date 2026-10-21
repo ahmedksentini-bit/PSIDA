@@ -354,3 +354,6 @@ v0.60 : ouvrage courbe — forces centrifuges du Fascicule 61 titre II art. 7 (s
 δ_B et b_c, combinaison « Bc + centrifuge » sans freinage) ; cartes de la plaque (flèche, m_x, m_y, m_xy, surfaces
 d'influence) dessinées en vue en plan pour un ouvrage courbe ; manuel : chapitre 21 « l'ouvrage courbe ».
 Bouton « Manuel » (en-tête) : ouvre la dernière version du manuel d'utilisation, publiée avec le site dans docs/manuel/PSIDA_Manuel.pdf.
+v0.61 : ouvrage courbe — force centrifuge répartie au prorata des raideurs transversales (pile voile fléchie dans son plan,
+colonnes en portique sous chevêtre, culée remblayée rigide en travers, pieux dans le sens transversal, semelle autour de
+son grand axe) ; rayon minimal pris sur la longueur du tablier seulement ; manuel § 21.8 mis à jour.

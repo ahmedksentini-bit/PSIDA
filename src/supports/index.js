@@ -239,6 +239,34 @@ export function computeSupports(st, input = {}) {
     };
   });
   const distB = horizontalDistribution(lineData('BAEL')), distE = horizontalDistribution(lineData('EC'));
+  // --- rigidités TRANSVERSALES (efforts H_y : force centrifuge) : mêmes appareils (élastomère isotrope en distorsion) ;
+  //     pile voile fléchie dans son plan (I = b L_v³/12) ; colonnes liées en tête par le chevêtre : portique à traverse
+  //     rigide (12 EI/H³ par colonne, soit un fût console d'inertie 4 Σ I) ; culée remblayée rigide en travers ;
+  //     fondation : groupe de pieux dans le sens transversal (PSH), semelle tournant autour de son grand axe (B ↔ L) ---
+  const segmentsT = (i, E) => {
+    if (isEnd(i)) {
+      const C = S(i).culee;
+      if (C.type === 'remblayee') return [{ h: C.Hm, E, A: C.em * width, I: Infinity }];
+      return [{ h: C.Hm, E, A: C.nCol * Math.PI * C.D ** 2 / 4, I: (C.nCol > 1 ? 4 : 1) * C.nCol * Math.PI * C.D ** 4 / 64 }, ...(C.hc > 0 ? [{ h: C.hc, E, A: C.lc * width, I: C.lc * width ** 3 / 12 }] : [])];
+    }
+    const P = sp.pile, col = P.type === 'colonnes', n = bTop === bBot ? 1 : 6;
+    return [...(col ? [{ h: Hpile(i), E, A: P.nCol * Math.PI * P.D ** 2 / 4, I: (P.nCol > 1 ? 4 : 1) * P.nCol * Math.PI * P.D ** 4 / 64 }]
+      : Array.from({ length: n }, (_, k) => { const bk = bBot + (bTop - bBot) * (k + 0.5) / n; return { h: Hpile(i) / n, E, A: Lv * bk, I: bk * Lv ** 3 / 12 }; })),
+      ...(col && P.hc > 0 ? [{ h: P.hc, E, A: P.lc * width, I: P.lc * width ** 3 / 12 }] : [])];
+  };
+  const footRotT = (i, code) => { const F = F0(i), k = `T|${profileOf(i).name}|${code}|${Lfoot(i)}|${F.B}|${F.De}`; if (!footRotCache.has(k)) footRotCache.set(k, footingRotationStiffness({ profile: profileOf(i), B: Lfoot(i), L: F.B, D: F.De, code })); return footRotCache.get(k); };
+  const lineDataT = code => lineData(code).map((l, i) => {
+    const Ei = (code === 'BAEL' ? EiB(fck) : Ecm(fck)), Ev = code === 'BAEL' ? EvB(fck) : Ecm(fck) / 3;
+    const fl = (E, dur) => {
+      const segs = segmentsT(i, E);
+      if (onPiles(i)) return headFlexibility({ group: groupsOf(i, code, dur).trans, segments: segs.map(g => ({ ...g, E: g.E * 1000 })), hs: F0(i).hs })[2][2];
+      if (isEnd(i) && S(i).culee.type === 'remblayee') return 0;
+      const hT = segs.reduce((a, g) => a + g.h, 0) + F0(i).hs, fr = footRotT(i, code);
+      return segFlex(segs) + hT ** 2 / fr.Ktheta[dur === 'sus' ? 'diff' : 'inst'];
+    };
+    return { ...l, sApp: { inst: fl(Ei, 'inst'), diff: fl(Ev, 'sus') } };
+  });
+  const distTB = horizontalDistribution(lineDataT('BAEL')), distTE = horizontalDistribution(lineDataT('EC'));
   // appareils d'appui, référentiel EC (guide Sétra 2007 § 4.3.1 et 4.3.2.3.1) : appui (fût, fondation, sol) avec ses raideurs
   // instantanées, élastomère G = 0,9 MPa pour les déformations lentes — distribution distincte de celle des fondations (différée)
   const distEb = horizontalDistribution(lineData('EC').map(l => ({ ...l, sApp: { inst: l.sApp.inst, diff: l.sApp.inst } })));
@@ -265,7 +293,8 @@ export function computeSupports(st, input = {}) {
   // ouvrage courbe : force centrifuge EN 1991-2 § 4.4.2 au rayon minimal du tracé, groupe gr2, répartie entre les lignes
   // comme le freinage (raideurs instantanées des appareils et des appuis — approximation : raideurs transversales prises
   // égales aux raideurs longitudinales)
-  const rTrace = deck.g.trace ? new Axe(deck.g.trace.segments).rayonMin() : Infinity;
+  // rayon minimal sur la longueur du tablier (abouts compris), pas sur tout l'axe dessiné
+  const rTrace = deck.g.trace ? (() => { const t = deck.g.trace, ov = deck.g.overhangs || [0, 0], s0 = (t.s0 || 0) + deck.beam.x0[0]; return new Axe(t.segments).rayonMin(s0 - ov[0], s0 + Ltot + ov[1]); })() : Infinity;
   const Qv = qvEC(st.ec && st.ec.alpha ? st.ec.alpha.aQ : [1, 1, 1], st.ec && st.ec.lanes ? st.ec.lanes.n : 3);
   const centrifuge = Number.isFinite(rTrace) ? { r: rTrace, Qv, Qtk: forceCentrifuge({ r: rTrace, Qv }),
     F61: f61 ? forceCentrifugeF61({ r: rTrace, nv: f61.nv, bc: BC.bc[f61.classe] || BC.bc[1], delta: Math.max(1, ...(f61.deltaBc || [1])), Ltot }) : null } : null;
@@ -327,7 +356,7 @@ export function computeSupports(st, input = {}) {
       { label: 'A(l) + trottoirs', N: q * (R(f61.A, i) + tr), H: h * brk.A * bB, gU: 1.605, gS: 1.2 },
       { label: 'Bc + trottoirs', N: q * (R(f61.Bc, i) + tr), H: h * brk.Bc * bB, gU: 1.605, gS: 1.2 },
       // ouvrage courbe : force centrifuge du Bc (art. 7), non cumulée avec le freinage (art. 7.3)
-      ...(centrifuge && centrifuge.F61 && centrifuge.F61.F ? [{ label: 'Bc + trottoirs + centrifuge', N: q * (R(f61.Bc, i) + tr), H: 0, Hy: h * centrifuge.F61.F * bB, gU: 1.605, gS: 1.2 }] : []),
+      ...(centrifuge && centrifuge.F61 && centrifuge.F61.F ? [{ label: 'Bc + trottoirs + centrifuge', N: q * (R(f61.Bc, i) + tr), H: 0, Hy: h * centrifuge.F61.F * distTB.braking(1)[i], gU: 1.605, gS: 1.2 }] : []),
       ...(f61.Bt ? [{ label: 'Bt + trottoirs', N: q * (R(f61.Bt, i) + tr), H: 0, gU: 1.605, gS: 1.2 }] : []),
       ...(f61.Mc120 ? [{ label: 'Mc120 + trottoirs', N: q * (R(f61.Mc120, i) + tr), H: 0, gU: 1.35, gS: 1.0 }] : []),
     ];
@@ -335,7 +364,7 @@ export function computeSupports(st, input = {}) {
     const psi0 = (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i) + 0.4 * R(ec.gr3, i) * 0.6) / Math.max(1e-9, R(ec.gr1a, i));
     const QE = [
       { label: 'gr1a', N: q * R(ec.gr1a, i), H: 0, psi0 },
-      { label: centrifuge && centrifuge.Qtk ? 'gr2 (freinage + centrifuge)' : 'gr2 (freinage)', N: q * (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)), H: h * bearings.H * distE.braking(1)[i], Hy: centrifuge ? h * centrifuge.Qtk * distE.braking(1)[i] : 0, psi0: 0 },
+      { label: centrifuge && centrifuge.Qtk ? 'gr2 (freinage + centrifuge)' : 'gr2 (freinage)', N: q * (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)), H: h * bearings.H * distE.braking(1)[i], Hy: centrifuge ? h * centrifuge.Qtk * distTE.braking(1)[i] : 0, psi0: 0 },
     ];
     const EC = headCombinationsEC({ G, Q: QE, RF: { H: Math.abs(h * distE.imposed(RF).H[i]) + Hp('E', i) }, T: { H: h * distE.imposed(epsT).H[i] } });
     const Nfreq = q * (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i));
@@ -367,9 +396,9 @@ export function computeSupports(st, input = {}) {
     const tr = R(f61.trottoir, i);
     const bB = distB.braking(1)[i], bE = distE.braking(1)[i];
     const QQ = code === 'BAEL'
-      ? [{ label: 'A(l)', res: f61.A, add: tr, g: 1.605, H: brk.A * bB / nb }, { label: 'Bc', res: f61.Bc, add: tr, g: 1.605, H: Math.max(brk.Bc, centrifuge && centrifuge.F61 ? centrifuge.F61.F : 0) * bB / nb },
+      ? [{ label: 'A(l)', res: f61.A, add: tr, g: 1.605, H: brk.A * bB / nb }, { label: 'Bc', res: f61.Bc, add: tr, g: 1.605, H: Math.max(brk.Bc * bB, centrifuge && centrifuge.F61 ? centrifuge.F61.F * distTB.braking(1)[i] : 0) / nb },
         ...(f61.Mc120 ? [{ label: 'Mc120', res: f61.Mc120, add: tr, g: 1.35, H: 0 }] : [])]
-      : [{ label: 'gr1a', res: ec.gr1a, add: 0, g: 1.35, H: 0 }, { label: centrifuge && centrifuge.Qtk ? 'gr2 (freinage + centrifuge)' : 'gr2 (freinage)', noT: true, res: ec.gr1a, frac: R(ec.gr1a, i) > 0 ? (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)) / R(ec.gr1a, i) : 0, add: 0, g: 1.35, H: Math.hypot(bearings.H, centrifuge ? centrifuge.Qtk : 0) * bE / nb }];
+      : [{ label: 'gr1a', res: ec.gr1a, add: 0, g: 1.35, H: 0 }, { label: centrifuge && centrifuge.Qtk ? 'gr2 (freinage + centrifuge)' : 'gr2 (freinage)', noT: true, res: ec.gr1a, frac: R(ec.gr1a, i) > 0 ? (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)) / R(ec.gr1a, i) : 0, add: 0, g: 1.35, H: Math.hypot(bearings.H * bE, centrifuge ? centrifuge.Qtk * distTE.braking(1)[i] : 0) / nb }];
     // gradient thermique (réactions hyperstatiques N_θ du gradient, réparties sur les n appareils) : ψ₀ = 0,6 avec le trafic
     // dominant (BAEL 1,3 × 0,6 = 0,78 ; EC 1,5 × 0,6), 1,35 / 1,5 en action dominante, 1,0 dans les combinaisons minimales
     const th = st.thermal && st.thermal.Rmax ? st.thermal : null;
@@ -768,5 +797,5 @@ export function computeSupports(st, input = {}) {
     return out;
   });
   const footRotAll = xs.every((_, i) => onPiles(i)) ? null : xs.map((x, i) => (onPiles(i) ? null : { BAEL: footRot(i, 'BAEL'), EC: footRot(i, 'EC') }));
-  return { sp, niv, pente, centrifuge, spLigne: niv.actif ? xs.map((_, i) => S(i)) : null, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
+  return { sp, niv, pente, centrifuge, distTB, distTE, spLigne: niv.actif ? xs.map((_, i) => S(i)) : null, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
 }

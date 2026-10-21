@@ -59,8 +59,8 @@ export class Axe {
     const p = this.point(best), n = this.normale(best);
     return { s: best, y: (q[0] - p[0]) * n[0] + (q[1] - p[1]) * n[1], d: dmin };
   }
-  /** Rayon minimal (∞ si l'axe est droit). */
-  rayonMin() { return Math.min(Infinity, ...this.seg.filter(g => g.type === 'arc').map(g => g.r)); }
+  /** Rayon minimal (∞ si l'axe est droit), sur tout l'axe ou sur [sa, sb]. */
+  rayonMin(sa = -Infinity, sb = Infinity) { return Math.min(Infinity, ...this.seg.filter(g => g.type === 'arc' && g.s0 + g.L > sa + 1e-9 && g.s0 < sb - 1e-9).map(g => g.r)); }
 }
 
 /**

@@ -49,6 +49,11 @@ test('Ligne d\'appui biaise sur un ouvrage courbe : refusée avec un message exp
   assert.throws(() => analyserDXF(dxf, { calqueAxe: 'AXE', calqueAppuis: 'BIAIS' }), /non radiale/);
 });
 
+test('Rayon minimal sur la longueur du tablier seulement', () => {
+  const ax = analyserDXF(dxfCourbe()).axe;
+  assert.equal(ax.rayonMin(0, 9), Infinity); proche(ax.rayonMin(0, 11), 60, 1e-9, 'arc atteint'); proche(ax.rayonMin(), 60, 1e-9, 'tout l\'axe');
+});
+
 test('Force centrifuge EN 1991-2 tableau 4.3', () => {
   const Qv = qvEC([1, 1, 1], 3);
   assert.equal(Qv, 1200);
@@ -97,6 +102,11 @@ test('Calcul complet d\'un ouvrage courbe : tracé lu dans le formulaire, plaque
   assert.ok(c && c.Hy > 0 && c.Myb > 0, 'effort transversal en tête et moment en pied');
   const sHy = st.supports.lines.reduce((s, L) => s + (L.EC.base.find(b => /centrifuge/.test(b.label) && b.ls === 'ELS') || { Hy: 0 }).Hy, 0);
   proche(sHy, 240, 1, 'somme des efforts centrifuges ELS sur les lignes');
+  // répartition transversale : pile voile bien plus raide en travers qu'en long (I = b L_v³/12)
+  const KL = st.supports.distE.K.inst, KT = st.supports.distTE.K.inst;
+  assert.ok(KT[1] > 2 * KL[1] && KT[2] > 2 * KL[2], `raideurs P1/P2 : long ${KL.slice(1, 3)} / trans ${KT.slice(1, 3)}`);
+  const parts = st.supports.lines.map(L => (L.EC.base.find(b => /centrifuge/.test(b.label) && b.ls === 'ELS') || { Hy: 0 }).Hy);
+  proche(parts[1] / 240, KT[1] / KT.reduce((a, v) => a + v, 0), 1e-6, 'part de P1 = K_T,P1 / Σ K_T');
   // Fascicule 61 : combinaison Bc + centrifuge sans freinage
   const F = st.supports.centrifuge.F61, cb = L.BAEL.base.find(b => /centrifuge/.test(b.label) && b.ls === 'ELS');
   assert.ok(F.F > 0 && cb && cb.Hy > 0 && cb.Hinst === 0, 'Bc + centrifuge (F61)');
