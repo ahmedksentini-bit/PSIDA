@@ -22,6 +22,8 @@ export interface Critere {
   etat: Etat;
   commentaire?: string;
   references: string[];
+  /** Que changer si le critère n'est pas vérifié (paramètres de saisie et valeurs cibles approchées). */
+  conseils?: string[];
 }
 
 export interface CombinaisonAppareil {
@@ -242,8 +244,18 @@ export function verifierAppuis(p: Projet, a: ActionSismique, m: Modele, r: Analy
 
     const ok = (cond: boolean): Etat => (cond ? "ok" : "non_verifie");
     criteres.push(
-      { id: `${appui.id}_epsq`, appui: appui.id, libelle: `Distorsion de cisaillement εq,max (${pireQ.nom})`, valeur: pireQ.epsQ, limite: 2.0, unite: "", etat: ok(pireQ.epsQ <= 2.0), references: ["elastomere_limites_eps_q", "elastomere_eps_q_max"], commentaire: "Limite conseillée 2,0 (NF EN 15129 : 2,5)." },
-      { id: `${appui.id}_epst`, appui: appui.id, libelle: `Distorsion totale εt,d (${pire.nom})`, valeur: pire.epsT, limite: 7, unite: "", etat: ok(pire.epsT <= 7), references: ["elastomere_distorsion_totale"] },
+      { id: `${appui.id}_epsq`, appui: appui.id, libelle: `Distorsion de cisaillement εq,max (${pireQ.nom})`, valeur: pireQ.epsQ, limite: 2.0, unite: "", etat: ok(pireQ.epsQ <= 2.0), references: ["elastomere_limites_eps_q", "elastomere_eps_q_max"], commentaire: "Limite conseillée 2,0 (NF EN 15129 : 2,5).",
+        conseils: pireQ.epsQ <= 2.0 ? undefined : [
+          `Épaissir l'élastomère : T_q ≥ d_Ed/2 = ${nombre((pireQ.dEd / 2) * 1000, 0)} mm, soit au moins ${Math.ceil((pireQ.dEd / 2 - 2 * e.enrobage) / e.ti)} feuillets de ${nombre(e.ti * 1000, 0)} mm (au lieu de ${e.nbFeuillets}) — à confirmer en relançant : l'appareil plus souple se déplace un peu plus.`,
+          "Ou limiter le déplacement sismique : appareils plus raides en plan sur les piles, butées sismiques, ou pont isolé (onglet Isolation).",
+        ] },
+      { id: `${appui.id}_epst`, appui: appui.id, libelle: `Distorsion totale εt,d (${pire.nom})`, valeur: pire.epsT, limite: 7, unite: "", etat: ok(pire.epsT <= 7), references: ["elastomere_distorsion_totale"],
+        conseils: pire.epsT <= 7 ? undefined : [
+          `Terme dominant : ${[["compression ε_c", pire.epsC], ["cisaillement ε_q", pire.epsQ], ["rotation ε_α", pire.epsA]].sort((x, y) => (y[1] as number) - (x[1] as number)).map(([k, v]) => `${k} = ${nombre(v as number, 2)}`).join(", ")}.`,
+          `ε_c : agrandir l'appareil en plan (a, b) ou augmenter le nombre d'appareils par ligne (${n} actuellement).`,
+          `ε_q : ajouter des feuillets (T_q actuel ${nombre(Tq * 1000, 0)} mm).`,
+          "ε_α : feuillets plus minces (t_i) pour une même épaisseur totale.",
+        ] },
     );
 
     // Flambement : pour chaque combinaison.
@@ -269,6 +281,10 @@ export function verifierAppuis(p: Projet, a: ActionSismique, m: Modele, r: Analy
       etat: ok(flambeOk),
       references: ["elastomere_flambement"],
       commentaire: `Pcr = ${nombre(Pcr * 1000, 0)} kN. ${flambeTexte}`,
+      conseils: flambeOk ? undefined : [
+        `P_cr ∝ A_r·a'·S/T_q : agrandir l'appareil en plan (a' = ${nombre(ap * 1000, 0)} mm) ; pour N_Ed < P_cr/4, il faut P_cr ≥ ${nombre(4 * Nmax * 1000, 0)} kN.`,
+        "Ou augmenter le nombre d'appareils (N_Ed plus faible par appareil). Réduire T_q aide aussi, mais augmente la distorsion ε_q.",
+      ],
     });
     lignes.push({
       id: `${appui.id}_Pcr`,
@@ -301,6 +317,10 @@ export function verifierAppuis(p: Projet, a: ActionSismique, m: Modele, r: Analy
         : e.fixation === "mecanique"
           ? "Frottement insuffisant : la fixation mécanique prévue reprend l'effort (taquets ou boulonnage à justifier)."
           : "Frottement insuffisant : fixation mécanique (anti-cheminement) nécessaire.",
+      conseils: glisseOk || e.fixation === "mecanique" ? undefined : [
+        "Prévoir une fixation mécanique des appareils (champ « fixation » des appareils : mécanique), à justifier.",
+        `Ou réduire l'effort F (appareils plus souples : plus de feuillets) ; il faudrait F ≤ ${nombre(R * 1000, 0)} kN contre ${nombre(F * 1000, 0)} kN.`,
+      ],
     });
     lignes.push({
       id: `${appui.id}_glissement`,
@@ -326,6 +346,7 @@ export function verifierAppuis(p: Projet, a: ActionSismique, m: Modele, r: Analy
       unite: "",
       etat: rapportV <= seuil ? "ok" : "non_verifie",
       references: ["anti_soulevement"],
+      conseils: rapportV <= seuil ? undefined : ["Prévoir des dispositifs anti-soulèvement (EN 1998-2 § 6.6.3.2), ou réduire la réaction sismique verticale (coefficient q, répartition des appuis)."],
       commentaire: `Rv = ${nombre(rv, 3)} MN ; Nmin = ${nombre(permanentes.Nmin, 3)} MN. ${permanentes.Nmin - rv > 0 ? "Pas de soulèvement d'appareil (Nmin − Rv > 0)." : "Soulèvement des appareils !"}`,
     });
 
@@ -361,6 +382,10 @@ export function verifierAppuis(p: Projet, a: ActionSismique, m: Modele, r: Analy
       unite: "m",
       etat: lov <= disponible ? "ok" : "non_verifie",
       references: ["lov_repos_appui", "Lg"],
+      conseils: lov <= disponible ? undefined : [
+        `Allonger le recouvrement de ${nombre((lov - disponible) * 100, 1)} cm : débord d'about du tablier (actuellement ${nombre(p.tablier.debordAbout, 2)} m → ${nombre(p.tablier.debordAbout + lov - disponible, 2)} m), ou débord avant du sommier, ou excentrement de l'appui.`,
+        "Ou réduire le déplacement sismique d_E (appareils plus raides, butées), ou prévoir des dispositifs de liaison anti-chute.",
+      ],
     });
     lignesRepos.push({
       id: `${c.id}_lov`,

@@ -3524,14 +3524,16 @@ function analyse(p, a, m) {
 			libelle: "Masse des piles < 20 % de celle du tablier (longitudinal)",
 			valeur: `${nombre(100 * rapportMasse, 1)} %`,
 			respectee: rapportMasse < .2,
-			references: ["conditions_monomodal"]
+			references: ["conditions_monomodal"],
+			conseils: rapportMasse < .2 ? void 0 : ["Choisir la méthode multimodale (onglet Méthodes) : cette condition ne vaut que pour la méthode du mode fondamental.", `Ou alléger les fûts d'au moins ${nombre(100 * (1 - .2 / rapportMasse), 0)} % (fûts plus minces, colonnes au lieu d'un voile, fûts creux) pour descendre sous 20 %.`]
 		},
 		{
 			id: "L_sur_B",
 			libelle: "Tablier rigide en transversal : L/B ≤ 4",
 			valeur: `L/B = ${nombre(LsurB, 2)}`,
 			respectee: LsurB <= 4,
-			references: ["tablier_rigide"]
+			references: ["tablier_rigide"],
+			conseils: LsurB <= 4 ? void 0 : [`Le tablier n'est pas rigide en transversal : il faudrait B ≥ L/4 = ${nombre(L / 4, 2)} m (B = ${nombre(p.tablier.largeur, 2)} m).`, "Choisir la méthode multimodale, qui tient compte de la souplesse transversale du tablier (onglet Méthodes)."]
 		}
 	];
 	const appuisY = m.directions.y.appuis;
@@ -3548,7 +3550,8 @@ function analyse(p, a, m) {
 			"conditions_monomodal",
 			"centre_raideur",
 			"torsion_excentricite"
-		]
+		],
+		conseils: !torsionAppliquee ? void 0 : ["Non bloquant : l'effet de torsion est alors ajouté automatiquement (EN 1998-2 § 4.2.2.5).", `Pour l'éviter, rapprocher le centre des raideurs transversales du milieu de l'ouvrage (e0 = ${nombre(e0, 2)} m → ≤ ${nombre(.05 * L, 2)} m) : équilibrer hauteurs, sections ou appareils des piles de part et d'autre.`]
 	});
 	for (const c of conditions) notes.conditions.push({
 		id: c.id,
@@ -5180,7 +5183,8 @@ function verifierAppuis(p, a, m, r) {
 			unite: "",
 			etat: ok(pireQ.epsQ <= 2),
 			references: ["elastomere_limites_eps_q", "elastomere_eps_q_max"],
-			commentaire: "Limite conseillée 2,0 (NF EN 15129 : 2,5)."
+			commentaire: "Limite conseillée 2,0 (NF EN 15129 : 2,5).",
+			conseils: pireQ.epsQ <= 2 ? void 0 : [`Épaissir l'élastomère : T_q ≥ d_Ed/2 = ${nombre(pireQ.dEd / 2 * 1e3, 0)} mm, soit au moins ${Math.ceil((pireQ.dEd / 2 - 2 * e.enrobage) / e.ti)} feuillets de ${nombre(e.ti * 1e3, 0)} mm (au lieu de ${e.nbFeuillets}) — à confirmer en relançant : l'appareil plus souple se déplace un peu plus.`, "Ou limiter le déplacement sismique : appareils plus raides en plan sur les piles, butées sismiques, ou pont isolé (onglet Isolation)."]
 		}, {
 			id: `${appui.id}_epst`,
 			appui: appui.id,
@@ -5189,7 +5193,17 @@ function verifierAppuis(p, a, m, r) {
 			limite: 7,
 			unite: "",
 			etat: ok(pire.epsT <= 7),
-			references: ["elastomere_distorsion_totale"]
+			references: ["elastomere_distorsion_totale"],
+			conseils: pire.epsT <= 7 ? void 0 : [
+				`Terme dominant : ${[
+					["compression ε_c", pire.epsC],
+					["cisaillement ε_q", pire.epsQ],
+					["rotation ε_α", pire.epsA]
+				].sort((x, y) => y[1] - x[1]).map(([k, v]) => `${k} = ${nombre(v, 2)}`).join(", ")}.`,
+				`ε_c : agrandir l'appareil en plan (a, b) ou augmenter le nombre d'appareils par ligne (${n} actuellement).`,
+				`ε_q : ajouter des feuillets (T_q actuel ${nombre(Tq * 1e3, 0)} mm).`,
+				"ε_α : feuillets plus minces (t_i) pour une même épaisseur totale."
+			]
 		});
 		let flambeOk = true;
 		let flambeTexte = "";
@@ -5212,7 +5226,8 @@ function verifierAppuis(p, a, m, r) {
 			unite: "kN",
 			etat: ok(flambeOk),
 			references: ["elastomere_flambement"],
-			commentaire: `Pcr = ${nombre(Pcr * 1e3, 0)} kN. ${flambeTexte}`
+			commentaire: `Pcr = ${nombre(Pcr * 1e3, 0)} kN. ${flambeTexte}`,
+			conseils: flambeOk ? void 0 : [`P_cr ∝ A_r·a'·S/T_q : agrandir l'appareil en plan (a' = ${nombre(ap * 1e3, 0)} mm) ; pour N_Ed < P_cr/4, il faut P_cr ≥ ${nombre(4 * Nmax * 1e3, 0)} kN.`, "Ou augmenter le nombre d'appareils (N_Ed plus faible par appareil). Réduire T_q aide aussi, mais augmente la distorsion ε_q."]
 		});
 		lignes.push({
 			id: `${appui.id}_Pcr`,
@@ -5243,7 +5258,8 @@ function verifierAppuis(p, a, m, r) {
 			unite: "MN",
 			etat: glisseOk ? "ok" : e.fixation === "mecanique" ? "info" : "non_verifie",
 			references: ["elastomere_glissement", "elastomere_effort_glissement"],
-			commentaire: glisseOk ? void 0 : e.fixation === "mecanique" ? "Frottement insuffisant : la fixation mécanique prévue reprend l'effort (taquets ou boulonnage à justifier)." : "Frottement insuffisant : fixation mécanique (anti-cheminement) nécessaire."
+			commentaire: glisseOk ? void 0 : e.fixation === "mecanique" ? "Frottement insuffisant : la fixation mécanique prévue reprend l'effort (taquets ou boulonnage à justifier)." : "Frottement insuffisant : fixation mécanique (anti-cheminement) nécessaire.",
+			conseils: glisseOk || e.fixation === "mecanique" ? void 0 : ["Prévoir une fixation mécanique des appareils (champ « fixation » des appareils : mécanique), à justifier.", `Ou réduire l'effort F (appareils plus souples : plus de feuillets) ; il faudrait F ≤ ${nombre(R * 1e3, 0)} kN contre ${nombre(F * 1e3, 0)} kN.`]
 		});
 		lignes.push({
 			id: `${appui.id}_glissement`,
@@ -5271,6 +5287,7 @@ function verifierAppuis(p, a, m, r) {
 			unite: "",
 			etat: rapportV <= seuil ? "ok" : "non_verifie",
 			references: ["anti_soulevement"],
+			conseils: rapportV <= seuil ? void 0 : ["Prévoir des dispositifs anti-soulèvement (EN 1998-2 § 6.6.3.2), ou réduire la réaction sismique verticale (coefficient q, répartition des appuis)."],
 			commentaire: `Rv = ${nombre(rv, 3)} MN ; Nmin = ${nombre(permanentes.Nmin, 3)} MN. ${permanentes.Nmin - rv > 0 ? "Pas de soulèvement d'appareil (Nmin − Rv > 0)." : "Soulèvement des appareils !"}`
 		});
 		return {
@@ -5322,7 +5339,8 @@ function verifierAppuis(p, a, m, r) {
 			limite: disponible,
 			unite: "m",
 			etat: lov <= disponible ? "ok" : "non_verifie",
-			references: ["lov_repos_appui", "Lg"]
+			references: ["lov_repos_appui", "Lg"],
+			conseils: lov <= disponible ? void 0 : [`Allonger le recouvrement de ${nombre((lov - disponible) * 100, 1)} cm : débord d'about du tablier (actuellement ${nombre(p.tablier.debordAbout, 2)} m → ${nombre(p.tablier.debordAbout + lov - disponible, 2)} m), ou débord avant du sommier, ou excentrement de l'appui.`, "Ou réduire le déplacement sismique d_E (appareils plus raides, butées), ou prévoir des dispositifs de liaison anti-chute."]
 		});
 		lignesRepos.push({
 			id: `${c.id}_lov`,

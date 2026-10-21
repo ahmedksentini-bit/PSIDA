@@ -6,6 +6,7 @@ import { valeur } from "../../moteur/spectres.ts";
 import { exporterEfforts, telechargerEfforts } from "../../moteur/export-efforts.ts";
 import { validerAnalyseExemple } from "../../moteur/validation-exemple.ts";
 import type { Projet } from "../../projet/types.ts";
+import { Conseils } from "../Conseils.tsx";
 import { GraphiqueSpectre, type Serie } from "../action/GraphiqueSpectre.tsx";
 import { formatNombre } from "../format.ts";
 import { NoteCalcul, References } from "../note/NoteCalcul.tsx";
@@ -74,6 +75,7 @@ function Synthese({ r, avecBornes, spectres }: { r: Analyse; avecBornes: boolean
                 {c.libelle} — <strong>{c.valeur}</strong> {c.respectee ? "" : "(non respectée)"}
               </span>
               <References ids={c.references} />
+              {!c.respectee && c.conseils && <Conseils items={c.conseils} />}
             </li>
           ))}
         </ul>

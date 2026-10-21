@@ -1993,3 +1993,9 @@ tr.mm-actif > * {
 .choix-efforts {
   margin-bottom: 1rem;
 }
+
+/* Recommandations (« Que changer ? ») sous une condition ou un critère non satisfait */
+.conseils { grid-column: 2; margin-top: 4px; }
+.bouton-conseils { font-size: 0.8rem; padding: 2px 10px; border-radius: 12px; border: 1px solid var(--alerte); background: var(--alerte-fond); color: var(--alerte); cursor: pointer; }
+.conseils-liste { margin: 6px 0 2px; padding-left: 20px; font-size: 0.85rem; }
+.conseils-liste li { margin: 2px 0; }

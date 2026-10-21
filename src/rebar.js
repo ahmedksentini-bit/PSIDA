@@ -277,7 +277,8 @@ export function rebarPlan({ deck, design, trans = null, opt = {} }) {
 
   // ---------------- contrôle A_s mis en place ≥ requis (épure non décalée et décalée)
   const check = xs.map((x, i) => ({ x, reqBot: design.envBot[i], reqTop: design.envTop[i], shBot: bot[i], shTop: top[i], provBot: providedBot(x), provTop: providedTop(x) }));
-  const deficits = check.filter(r => r.provBot + 1e-7 < Math.max(r.reqBot, r.shBot) || r.provTop + 1e-7 < Math.max(r.reqTop, r.shTop));
+  // sections hors des barres (au-delà de l'enrobage d'extrémité c_End, about nul) : zone d'ancrage, pas de contrôle de section
+  const deficits = check.filter(r => r.x >= xStart - 1e-9 && r.x <= xEnd + 1e-9 && (r.provBot + 1e-7 < Math.max(r.reqBot, r.shBot) || r.provTop + 1e-7 < Math.max(r.reqTop, r.shTop)));
   const totalMass = marks.reduce((a, m) => a + m.mass, 0);
   const volume = deck.area * (deck.beam.Ltot + aL + aR);
   return { c, marks, spansBot, filTop, supTop, locMarks, transMarks, chevMarks, chevBands, stirrups, check, deficits, totalMass, volume, ratio: totalMass / volume, al, sMaxPeak, sMaxMain, xStart, xEnd };

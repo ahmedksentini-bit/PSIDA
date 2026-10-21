@@ -252,6 +252,11 @@ v0.55 : la plaque passe aux éléments finis (triangle DKT de Batoz, Bathe et Ho
 en contrôle croisé) et traite les ouvrages biais (maillage en parallélogrammes, appareils le long des lignes d'appui,
 Wood-Armer pour armatures biaises vérifié numériquement) ; validation sur Navier, Lévy et la plaque biaise de Morley (30°).
 Onglet Calcul sismique : références des conditions d'application de nouveau lisibles (sélecteur CSS trop large).
+v0.56 : bouton « Recommandations » (en-tête) : pour chaque vérification non satisfaite (conception, tablier, appareils,
+têtes d'appui, piles, fondations superficielles et pieux, PP73, conditions sismiques), le constat et les paramètres à
+modifier ; « Calculer » cherche par dichotomie la plus petite modification qui suffit, « Appliquer » l'écrit dans le
+formulaire. Onglet Calcul sismique : « Que changer ? » sous chaque condition ou critère non satisfait. Plan de
+ferraillage : plus de fausse alerte aux sections d'extrémité hors des barres.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

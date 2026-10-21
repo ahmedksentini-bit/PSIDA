@@ -12,6 +12,9 @@ import { aideConception, rechercheEpaisseur } from '../src/conception.js';
 import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations } from '../src/bearings.js';
 import { chevetresEC } from '../src/chevetre.js';
 import { renderPlaque } from './plaque_view.js';
+import { majBouton as majReco, ouvrir as ouvrirReco } from './recommandations_view.js';
+import { candidats, dichotomie } from '../src/recommandations.js';
+import { computeSupports } from '../src/supports/index.js';
 import { applyHelp, readGeometry, elevationInputSVG, crossSectionInputSVG, planSVG, summaryHTML, zoningPlanSVG } from './schema.js';
 import { parseAxles, vehicleEnvelope, provisionalProfile, ANNEX_A_VEHICLES, dynLM3 } from '../src/vehicles.js';
 import { designSingleActionEC } from '../src/design.js';
@@ -226,7 +229,54 @@ function renderStatic(st) {
   $('#trans-span').innerHTML = deck.spans.map((L, j) => `<option value="${j}">Travée ${j + 1} (${L} m)</option>`).join('');
   renderConception(st); renderCase(st); renderSection(st); renderDesign(st); renderTransverse(st); renderExtra(st); renderRebar(st); renderSupports(st); renderPrecontrainte(st);
   try { renderPlaque(st); } catch (e) { const el = document.getElementById('plaque-info'); if (el) el.textContent = 'Affichage de la plaque impossible : ' + e.message; }
+  st._recoRef = ($('#supports-ref') && $('#supports-ref').value === 'F61') ? 'BAEL' : 'EC';
+  majReco(st);
 }
+
+// --- recommandations : écrire une valeur, montrer un champ, chercher la valeur qui suffit ---
+function setField(name, value) {
+  const f = $('#f'), el = f.elements[name];
+  if (!el) return;
+  if (el instanceof RadioNodeList) { for (const r of el) r.checked = r.value === value; }
+  else if (el.type === 'checkbox') el.checked = !!value;
+  else el.value = value;
+  if (FORM_UI && FORM_UI.refresh) FORM_UI.refresh();
+  (el.length && !el.tagName ? el[0] : el).dispatchEvent(new Event('input', { bubbles: true }));
+  (el.length && !el.tagName ? el[0] : el).dispatchEvent(new Event('change', { bubbles: true }));
+}
+function goField(name) {
+  const el = $('#f').elements[name]; if (!el) return;
+  const node = el.tagName ? el : el[0];
+  const tab = node.closest('section.tab'); if (tab) goTab(tab.id.replace(/^tab-/, ''));
+  const d = node.closest('details'); if (d) d.open = true;
+  const vis = node.closest('label') || node;
+  setTimeout(() => { vis.scrollIntoView({ behavior: 'smooth', block: 'center' }); vis.classList.add('reco-flash'); setTimeout(() => vis.classList.remove('reco-flash'), 2500); try { node.focus({ preventScroll: true }); } catch {} }, 60);
+}
+/** Recherche de la plus petite modification d'un champ qui satisfait la vérification (calcul des appuis seul, ou complet). */
+async function solveReco(a) {
+  const c = a.chercher, f = $('#f'), el = f.elements[c.champ];
+  if (!el) throw new Error(`champ ${c.champ} introuvable`);
+  const ancien = el.value, base = state;
+  const vals = candidats({ min: c.min, max: c.max, pas: c.pas, vers: c.vers, depart: c.depart ?? (c.vers === 'haut' ? c.min : c.max) });
+  const essai = async v => {
+    el.value = String(v);
+    try {
+      const p = parseForm(f);
+      if (c.calcul === 'appuis') {
+        const sup = computeSupports({ p, deck: base.deck, perm: base.perm, f61: base.f61, ec: base.ec, bearings: base.bearings, psidp: base.psidp, thermal: base.thermal }, p.supports);
+        return !!c.verifie({ ...base, p, supports: sup });
+      }
+      if (p.methodeTablier === 'plaque') p.methodeTablier = 'guyon';   // recherche en Guyon-Massonnet (rapide), à confirmer par le calcul en plaque
+      await new Promise(r => setTimeout(r, 0));
+      return !!c.verifie(compute(p));
+    } catch { return false; } finally { el.value = ancien; }
+  };
+  const v = await dichotomie(vals, essai);
+  if (v == null) return null;
+  return { champ: String(v), affiche: String(v).replace('.', ','), detail: c.calcul === 'complet' ? 'calcul complet relancé pour chaque essai' : 'calcul des appuis relancé pour chaque essai' };
+}
+document.addEventListener('change', ev => { if (ev.target && ev.target.id === 'supports-ref' && state && state.supports) { state._recoRef = ev.target.value === 'F61' ? 'BAEL' : 'EC'; majReco(state); } });
+$('#btn-reco').addEventListener('click', () => { if (state) ouvrirReco(state, { form: $('#f'), onApply: setField, goField, solve: solveReco }); });
 
 function renderPrecontrainte(st) {
   const box = $('#bp-out'); if (!box) return;
@@ -451,7 +501,7 @@ $('#stale').addEventListener('click', ev => {
   if (!ev.target.closest('[data-stale-run]')) return;
   if (state && state.standalone) $('#btn-standalone').click(); else $('#f').requestSubmit($('#btn-calc'));
 });
-enhanceForm($('#f')); // saisie valeur par valeur des champs multi-valeurs (avant la lecture d'un lien partagé)
+const FORM_UI = enhanceForm($('#f')); // saisie valeur par valeur des champs multi-valeurs (avant la lecture d'un lien partagé)
 applyHelp($('#f'), $('#help-list'));
 renderScheme();
 
@@ -500,7 +550,7 @@ async function saveProject() {
   const form = $('#f');
   const spans = String(form.spans.value || '').split(/[,;\s]+/).filter(Boolean).join('-');
   const name = projName || `projet-psida-${spans || 'ouvrage'}.json`;
-  const file = { format: PROJ_FORMAT, version: '0.55', date: new Date().toISOString(), data: formSnapshot(form) };
+  const file = { format: PROJ_FORMAT, version: '0.56', date: new Date().toISOString(), data: formSnapshot(form) };
   if (ec8Data) file.ec8 = ec8Data;
   const txt = JSON.stringify(file, null, 1);
   if (window.showSaveFilePicker) { // Chrome, Edge : choix du nom et du dossier
@@ -577,7 +627,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.55', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = await buildReport({ ...state, version: '0.56', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -614,7 +664,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.55', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.56', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -670,7 +720,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.55', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.56', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));

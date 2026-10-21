@@ -58,3 +58,13 @@ test("note de l'analyse : références connues", () => {
   const ids = new Set(REFERENTIEL.map((e) => e.id));
   for (const s of calculer(EXEMPLE_PONT_DALLE).note) for (const l of s.lignes) for (const r of l.references) assert.ok(ids.has(r), `${l.id} : ${r}`);
 });
+
+test("conditions non respectées : recommandations chiffrées (L/B et tablier étroit)", () => {
+  const p = copie();
+  p.tablier.largeur = 2;   // L/B > 4
+  const c = calculer(p).conditions.find((x) => x.id === "L_sur_B")!;
+  assert.equal(c.respectee, false);
+  assert.ok(c.conseils && c.conseils.length >= 2 && /B ≥ L\/4/.test(c.conseils[0]));
+  const ok = calculer(copie()).conditions.find((x) => x.id === "L_sur_B")!;
+  assert.equal(ok.conseils, undefined);
+});

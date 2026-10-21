@@ -44,6 +44,8 @@ export interface Condition {
   valeur: string;
   respectee: boolean;
   references: string[];
+  /** Que changer si la condition n'est pas respectée. */
+  conseils?: string[];
 }
 
 export interface ReactionVerticale {
@@ -101,6 +103,10 @@ export function analyse(p: Projet, a: ActionSismique, m: Modele): Analyse {
       valeur: `${nombre(100 * rapportMasse, 1)} %`,
       respectee: rapportMasse < 0.2,
       references: ["conditions_monomodal"],
+      conseils: rapportMasse < 0.2 ? undefined : [
+        "Choisir la méthode multimodale (onglet Méthodes) : cette condition ne vaut que pour la méthode du mode fondamental.",
+        `Ou alléger les fûts d'au moins ${nombre(100 * (1 - 0.2 / rapportMasse), 0)} % (fûts plus minces, colonnes au lieu d'un voile, fûts creux) pour descendre sous 20 %.`,
+      ],
     },
     {
       id: "L_sur_B",
@@ -108,6 +114,10 @@ export function analyse(p: Projet, a: ActionSismique, m: Modele): Analyse {
       valeur: `L/B = ${nombre(LsurB, 2)}`,
       respectee: LsurB <= 4,
       references: ["tablier_rigide"],
+      conseils: LsurB <= 4 ? undefined : [
+        `Le tablier n'est pas rigide en transversal : il faudrait B ≥ L/4 = ${nombre(L / 4, 2)} m (B = ${nombre(p.tablier.largeur, 2)} m).`,
+        "Choisir la méthode multimodale, qui tient compte de la souplesse transversale du tablier (onglet Méthodes).",
+      ],
     },
   ];
 
@@ -125,6 +135,10 @@ export function analyse(p: Projet, a: ActionSismique, m: Modele): Analyse {
     valeur: `e0 = ${nombre(e0, 2)} m ; 5 % L = ${nombre(0.05 * L, 2)} m`,
     respectee: !torsionAppliquee,
     references: ["conditions_monomodal", "centre_raideur", "torsion_excentricite"],
+    conseils: !torsionAppliquee ? undefined : [
+      "Non bloquant : l'effet de torsion est alors ajouté automatiquement (EN 1998-2 § 4.2.2.5).",
+      `Pour l'éviter, rapprocher le centre des raideurs transversales du milieu de l'ouvrage (e0 = ${nombre(e0, 2)} m → ≤ ${nombre(0.05 * L, 2)} m) : équilibrer hauteurs, sections ou appareils des piles de part et d'autre.`,
+    ],
   });
   for (const c of conditions) {
     notes.conditions.push({
