@@ -28,9 +28,9 @@ test('Reference beam: 20 m simply supported, 100 kN at midspan', () => {
     return values[j-1] * (1-t) + values[j] * t;
   };
   // For uniform grid, integrateIL is not used: evaluate ordinate at the load.
-  close(P * interpolate(bm.grid, bm.ILM[mid], x), M, 1e-5);
-  close(P * interpolate(bm.grid, bm.ILR[0], x), R, 1e-5);
-  close(P * interpolate(bm.grid, bm.ILR[1], x), R, 1e-5);
+  close(P * interpolate(bm.xs, bm.ILM[mid], x), M, 1e-5);
+  close(P * interpolate(bm.xs, bm.ILR[0], x), R, 1e-5);
+  close(P * interpolate(bm.xs, bm.ILR[1], x), R, 1e-5);
 });
 
 test('Rectangular beam section: exact area, centroid, second moment', () => {
