@@ -5,6 +5,7 @@
  */
 import { planCoffrage } from '../src/plans/coffrage.js';
 import { planFerraillage } from '../src/plans/ferraillage.js';
+import { planCoffrageAppui, appuisDisponibles } from '../src/plans/appuis.js';
 import { feuilleSVG } from '../src/plans/svg.js';
 import { feuilleDXF, octetsCp1252 } from '../src/plans/dxf.js';
 
@@ -25,23 +26,35 @@ const PLANS = {
   ferraillage: { titre: 'Plan de ferraillage', fichier: 'ferraillage', num: () => val('plan_num_fer') || 'TAB-FER-01', faire: (st, c) => planFerraillage(st, c) },
 };
 
-function feuille(st, k) { const P = PLANS[k]; return P.faire(st, cartouche(P.num())); }
+/** Plan par clé : 'coffrage', 'ferraillage', 'appui-i' (coffrage de la ligne d'appui i). */
+function plan(st, k) {
+  if (PLANS[k]) return PLANS[k];
+  const i = +k.split('-')[1], nom = i === 0 ? 'C0' : i === st.deck.beam.x0.length - 1 ? `C${i}` : `P${i}`;
+  return { titre: `Appui ${nom} — coffrage`, fichier: null, num: () => `${val('plan_num_app') || 'APP-COF'}-${nom}`, faire: (s, c) => planCoffrageAppui(s, i, c) };
+}
+function feuille(st, k) { const P = plan(st, k); return P.faire(st, cartouche(P.num())); }
 function telecharger(blob, nom) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nom; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
-const nomFichier = (st, k, ext) => `${PLANS[k].num().replace(/[^\w.-]+/g, '_')}-${PLANS[k].fichier}.${ext}`;
+const nomFichier = (st, k, ext) => { const P = plan(st, k); return `${P.num().replace(/[^\w.-]+/g, '_')}${P.fichier ? '-' + P.fichier : ''}.${ext}`; };
 
 /** Plans disponibles pour l'état de calcul : le ferraillage seulement pour une dalle armée calculée. */
-export function plansDisponibles(st) { return st && st.deck ? (st.rebar && st.rebar.marks ? ['coffrage', 'ferraillage'] : ['coffrage']) : []; }
+export function plansDisponibles(st) {
+  if (!st || !st.deck) return [];
+  return [...(st.rebar && st.rebar.marks ? ['coffrage', 'ferraillage'] : ['coffrage']), ...appuisDisponibles(st).map(i => `appui-${i}`)];
+}
 
 export function renderPlans(st) {
   const box = $('#plans-box'); if (!box) return;
   const dispo = plansDisponibles(st);
   const sel = $('#plan-type'), prev = sel.value;
-  sel.innerHTML = dispo.map(k => `<option value="${k}">${PLANS[k].titre}</option>`).join('');
+  sel.innerHTML = dispo.map(k => `<option value="${k}">${PLANS[k] ? 'Tablier — ' + PLANS[k].titre.toLowerCase() : plan(st, k).titre}</option>`).join('');
   if (dispo.includes(prev)) sel.value = prev;
-  $('#plans-info').innerHTML = dispo.includes('ferraillage') ? '' : 'Dalle précontrainte ou ferraillage indisponible : seul le plan de coffrage est proposé (le câblage et les aciers passifs sont dans l\'onglet Précontrainte).';
+  const msg = [];
+  if (!dispo.includes('ferraillage')) msg.push('Dalle précontrainte ou ferraillage indisponible : seul le plan de coffrage du tablier est proposé (le câblage et les aciers passifs sont dans l\'onglet Précontrainte).');
+  if (!dispo.some(k => k.startsWith('appui-'))) msg.push('Plans des appuis : calcul des appuis indisponible (voir l\'onglet Appuis et fondations).');
+  $('#plans-info').innerHTML = msg.join(' ');
   $('#plan-apercu').innerHTML = '';
 }
 
@@ -51,7 +64,7 @@ function apercu(st) {
     const F = feuille(st, k);
     // image isolée des styles de la page (les règles CSS des schémas ne s'appliquent pas au plan)
     const url = URL.createObjectURL(new Blob([feuilleSVG(F)], { type: 'image/svg+xml' }));
-    $('#plan-apercu').innerHTML = `<a href="${url}" target="_blank" rel="noopener" title="Ouvrir le plan en grand dans un nouvel onglet"><img src="${url}" alt="${PLANS[k].titre}"></a>`;
+    $('#plan-apercu').innerHTML = `<a href="${url}" target="_blank" rel="noopener" title="Ouvrir le plan en grand dans un nouvel onglet"><img src="${url}" alt="${plan(st, k).titre}"></a>`;
   } catch (e) { $('#plan-apercu').innerHTML = `<p class="small"><span class="badge warn">ATTENTION</span> ${e.message}</p>`; }
 }
 
@@ -71,8 +84,8 @@ export function initPlans(getState) {
   const pdf = tous => avec(async st => {
     const { feuillesPDFBlob } = await import('./plans_pdf.js');
     const ks = tous ? plansDisponibles(st) : [$('#plan-type').value];
-    const blob = await feuillesPDFBlob(ks.map(k => feuille(st, k)), { titre: `${val('plan_ouvrage') || 'Tablier'} — plans`, auteur: val('plan_etabli') });
-    telecharger(blob, tous ? `${(val('plan_ouvrage') || 'tablier').replace(/[^\w.-]+/g, '_')}-plans.pdf` : nomFichier(st, ks[0], 'pdf'));
+    const blob = await feuillesPDFBlob(ks.map(k => feuille(st, k)), { titre: `${val('plan_ouvrage') || 'Ouvrage'} — plans`, auteur: val('plan_etabli') });
+    telecharger(blob, tous ? `${(val('plan_ouvrage') || 'ouvrage').replace(/[^\w.-]+/g, '_')}-plans.pdf` : nomFichier(st, ks[0], 'pdf'));
   });
   $('#plan-pdf').addEventListener('click', pdf(false));
   $('#plan-pdf-tous').addEventListener('click', pdf(true));

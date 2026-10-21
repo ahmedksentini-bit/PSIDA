@@ -89,3 +89,31 @@ test('Outils de dessin : hachures et choix d\'échelle', () => {
   assert.ok(h.length >= 9 && h.every(([a, b]) => a[0] >= -1e-9 && b[0] <= 10 + 1e-9));
   assert.equal(echelleQuiTient([46, 12], [780, 220]), 75);
 });
+
+import { planCoffrageAppui, geometrieAppui, quantitesAppui } from '../src/plans/appuis.js';
+
+test('Appuis : un plan de coffrage par ligne, géométrie et quantités cohérentes', () => {
+  for (let i = 0; i < st.deck.beam.x0.length; i++) {
+    const A = geometrieAppui(st, i), F = planCoffrageAppui(st, i, { numero: 'A-' + i });
+    assert.equal(F.vues.length, 3);
+    assert.ok(['A1', 'A2'].includes(F.format));
+    // niveaux : tête − chevêtre − fût (ou mur) = dessus de semelle ; semelle d'épaisseur h_s
+    const Hc = A.kind === 'pile' ? A.H : A.Hm;
+    assert.ok(Math.abs(A.zT - A.hc - Hc - A.zDS) < 1e-9 && Math.abs(A.zDS - A.zSS - A.hs) < 1e-9);
+    const Q = quantitesAppui(A);
+    assert.ok(Math.abs(Q.lignes[0][1] - A.B * A.Lf * A.hs) < 1e-9);
+    const D = lireDXF(feuilleDXF(F));
+    assert.deepEqual(D.fin, ['0', 'EOF']); assert.equal(D.compte('BLOCK'), 3);
+    assert.ok(feuilleSVG(F).includes(`${A.kind === 'culee' ? 'CULÉE' : 'PILE'} ${A.nom}`));
+  }
+});
+
+test('Appuis de l\'exemple 1 : niveaux du plan de nivellement, pile sur pieux', () => {
+  const s1 = compute(parseData(donnees(EXEMPLES[0])));
+  const A = geometrieAppui(s1, 2), L = s1.supports.niv.lignes[2];
+  assert.ok(A.pieux && A.niv);
+  assert.ok(Math.abs(A.zDS - L.zDS) < 1e-6 && Math.abs(A.zSS - L.zSS) < 1e-6);
+  const Q = quantitesAppui(A);
+  assert.equal(Q.pieux.n, A.nF * A.nP);
+  assert.ok(/pointe/.test(feuilleSVG(planCoffrageAppui(s1, 2))));
+});

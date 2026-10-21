@@ -50,7 +50,7 @@ web/vendor/         plotly.min.js (2.35.2, MIT)
 web/vendor/plans/   jsPDF 2.5.2 et svg2pdf.js 2.2.4 (MIT), DejaVu Sans Condensed (licence Bitstream Vera) pour le PDF des plans
 web/plans_view.js   carte « Plans d'exécution » : cartouche, aperçu, téléchargements ; web/plans_pdf.js : feuilles → PDF
 src/plans/          plans d'exécution : dessin.js (vues, feuilles), primitives.js, svg.js, dxf.js (R12), geometrie.js,
-                    coffrage.js, ferraillage.js, bordereau.js (ISO 4066)
+                    coffrage.js, ferraillage.js, bordereau.js (ISO 4066), appuis.js (coffrage des appuis)
 src/linalg.js       Gauss, Gauss-Legendre
 src/beam.js         poutre continue : lignes d'influence M, V, R ; enveloppes UDL / travées entières / convois
 src/guyon.js        Guyon-Massonnet recalculé (plaque isotrope, ν = 0) : K, μ, m_y multi-harmoniques
@@ -385,3 +385,8 @@ appui, notes, quantités) et plan de ferraillage (coupe longitudinale des repèr
 transversales au 1/25, bordereau de façonnage ISO 4066 avec croquis et récapitulatif par diamètre), cartouche sobre ;
 sorties DXF R12 (mm, calques normalisés, une vue = un bloc en vraie grandeur) et PDF vectoriel (jsPDF + svg2pdf.js, police
 DejaVu incorporée) ; src/plans/ ; manuel chapitre 26.
+v0.67 : plans de coffrage des appuis (une feuille par ligne d'appui, A2 ou A1) — élévation suivant l'axe de l'ouvrage,
+coupe dans l'axe (mur de front, sommier, garde-grève, mur en retour et dalle de transition des culées ; voile ou colonnes
+et chevêtre des piles ; pieux et leur inclinaison), vue en plan de la fondation alignée sous l'élévation, niveaux du plan
+de nivellement, quantités de béton par élément et des pieux (src/plans/appuis.js) ; plans du tablier : cotes attachées
+à l'ouvrage, bulles de repères sans chevauchement ; manuel § 26.5.
