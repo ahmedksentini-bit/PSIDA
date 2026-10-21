@@ -25,6 +25,8 @@ export function toPontEC8(st, opt = {}) {
   const { p, deck, perm, bearings, supports } = st;
   if (!supports) throw new Error('Calcul des appuis indisponible : export Pont EC8 impossible.');
   const sp = supports.sp, width = 2 * deck.b;
+  // données propres à chaque ligne (plan de nivellement : hauteurs, semelles, pieux)
+  const spL = i => (supports.spLigne && supports.spLigne[i]) || sp;
   const n = deck.spans.length + 1;
   const di = p.deckInput;
   const superstr = di.lines.reduce((a, l) => a + (+l.g || 0), 0) + di.bands.reduce((a, b) => a + (+b.q || 0) * Math.abs(b.y2 - b.y1), 0);
@@ -36,8 +38,8 @@ export function toPontEC8(st, opt = {}) {
   };
   const charges = i => ({ Nmax: Math.max(perm.Rmax[i], perm.Rmin[i]) / 1000, Nmin: Math.min(perm.Rmax[i], perm.Rmin[i]) / 1000, rotation: Math.abs((bearings.rotPerm || [])[i] || 0) });
   const Lfoot = (end) => (end ? width : (sp.pile.type === 'voile' ? (sp.pile.Lv ?? width) : width)) + 1.0;
-  const semelle = end => ({ long: sp.found.B, trans: Lfoot(end), epaisseur: sp.found.hs });
-  const Hpile = i => { const H = [].concat(sp.pile.H); return H[Math.min(H.length - 1, i - 1)] ?? H[0]; };
+  const semelle = (end, i) => ({ long: spL(i).found.B, trans: Lfoot(end), epaisseur: spL(i).found.hs });
+  const Hpile = i => { const H = [].concat(spL(i).pile.H); return H[Math.min(H.length - 1, i - 1)] ?? H[0]; };
   // armatures longitudinales du fût (une colonne ou le voile) retenues par PSIDA, pour la poussée progressive de Pont EC8 :
   // barres Ø 20, axe des aciers à c + 1 cm du parement (comme le calcul en flexion composée de PSIDA)
   const armatures = i => {
@@ -52,11 +54,11 @@ export function toPontEC8(st, opt = {}) {
         type: 'pile', id: `P${i}`,
         futs: col ? { forme: 'circulaire', nombre: P.nCol, long: P.D, trans: P.D, entraxe: width / P.nCol, hauteur: Hpile(i) + (P.hc || 0) }
           : { forme: 'rectangulaire', nombre: 1, long: P.b, trans: P.Lv ?? width, entraxe: 0, hauteur: Hpile(i) },
-        semelle: semelle(false), appareils: appareils(i), butees: { transversales: false, longitudinales: false }, chargesPermanentes: charges(i),
+        semelle: semelle(false, i), appareils: appareils(i), butees: { transversales: false, longitudinales: false }, chargesPermanentes: charges(i),
         ...armatures(i),
       };
     }
-    const C = sp.culee, rem = C.type === 'remblayee';
+    const C = spL(i).culee, rem = C.type === 'remblayee';
     const nCol = rem ? 2 : C.nCol, cote = rem ? C.em : C.D * Math.sqrt(Math.PI) / 2;
     const hc = rem ? 1.0 : C.hc;
     // sommier assez long pour que le garde-grève (épaisseur 0,30, à l'arrière du sommier) laisse 0,15 m de jeu devant le tablier
@@ -67,7 +69,7 @@ export function toPontEC8(st, opt = {}) {
       poteaux: { nombre: nCol, cote, entraxe: rem ? width / 2 : width / nCol, hauteur: C.Hm },
       sommier: { long: lc, haut: hc, trans: width, debordAvant: 0.2 },
       gardeGreve: { hauteur: supports.hGG, epaisseur: 0.30, retrait: 0 },
-      longrine: null, semelle: semelle(true), excentrementAppui: 0,
+      longrine: null, semelle: semelle(true, i), excentrementAppui: 0,
       rigide: { longitudinal: true, transversal: rem },
       appareils: ap, butees: { transversales: false, longitudinales: false }, chargesPermanentes: charges(i),
     };

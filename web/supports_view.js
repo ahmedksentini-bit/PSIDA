@@ -38,6 +38,13 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
   const table = (head, rows, opt = {}) => B.push({ t: 'table', head, rows, ...opt });
   const dist = isF ? sup.distB : sup.distE, Ls = sup.lines, n = Ls.length;
 
+  if (sup.niv && sup.niv.actif) {
+    const N = sup.niv, fz = v => (Number.isFinite(v) ? F2(v) : '—');
+    h2('Plan de nivellement — cotes et dimensions déduites');
+    table(['Ligne', 'Chaussée à l\'axe', 'Sous-face tablier', 'Tête d\'appui', 'Dessus / sous-face semelle', 'Terrain naturel', 'Pointe des pieux', 'H_f ou H_m [m]', 'h_s [m]', 'D_e [m]', 'L pieux [m]', 'Bossages [m]'], N.lignes.map(L => [lineName(Ls[L.i], n), fz(L.zCh), fz(L.zSF), fz(L.zT), `${fz(L.zDS)} / ${fz(L.zSS)}`, fz(L.zTN), fz(L.zPP), fz(L.H ?? L.Hm), fz(L.hs), fz(L.De), fz(L.Lpile), L.appareils ? `${F2(Math.min(...L.appareils.map(a => a.hBossage)))} à ${F2(Math.max(...L.appareils.map(a => a.hBossage)))}` : '—']), { small: true });
+    comment(`Cotes en m. Sous-face du tablier à l'axe = chaussée − revêtement − épaisseur de la dalle ; tête d'appui (dessus du sommier ou du chevêtre, horizontal) = sous-face au droit de l'appareil le plus bas − hauteur de l'appareil − bossage minimal ${F2(sup.sp.niv.hBos ?? 0.1)} m ; dalle parallèle à la chaussée, dévers ${F2(+sup.sp.niv.devers || 0)} % ${sup.sp.niv.profil === 'unique' ? 'unique' : 'en toit'}. H_f (fût de pile, sous le chevêtre éventuel) ou H_m (culée) = tête d'appui − dessus de semelle ; h_s = dessus − sous-face de semelle ; D_e = terrain naturel − sous-face de semelle ; L = sous-face de semelle − pointe des pieux. Ces valeurs remplacent, ligne par ligne, les données générales correspondantes.${N.warnings.length ? ' Points à vérifier : ' + N.warnings.join(' ; ') + '.' : ''}`);
+  }
+
   h2('Souplesses des lignes d\'appui et répartition des efforts horizontaux');
   table(['Ligne', 'Type', 'x [m]', 'K instantané [kN/m]', 'K différé [kN/m]', isF ? 'Freinage A(l) [kN]' : 'Freinage Q_lk [kN]', isF ? 'Freinage Bc [kN]' : '', isF ? 'Retrait+fluage / TLD / TCD [kN]' : 'Retrait+fluage / température [kN]'].filter(Boolean),
     Ls.map((L, i) => {
@@ -209,7 +216,9 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
   }
 
   h2('Fondations');
-  const fType = Ls[0][code].found.type;
+  // fondations par type (plan de nivellement : semelles et pieux peuvent coexister selon les lignes)
+  const Lsup = Ls.filter(L => L[code].found.type === 'superficielle'), Lpie = Ls.filter(L => L[code].found.type !== 'superficielle');
+  const nivL = i => (sup.niv && sup.niv.lignes ? sup.niv.lignes[i] : null);
   if (sup.profiles) {
     const F = sup.sp.found;
     for (const pr of sup.profiles) {
@@ -217,20 +226,22 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
       B.push({ t: 'p', text: `Profil pressiométrique ${pr.name}${used.length ? ` — ${used.map(L => lineName(L, n)).join(', ')}` : ' (non utilisé)'}${pr.tests.length ? ` ; ${pr.tests.length} essai(s)` : ''}` });
       // zones sollicitées : semelle [D ; D + 1,5 B] (F62 E.2) ; pointe de pieu [D − a ; D + 3a], a = max(B/2 ; 0,5 m) (F62 C.3)
       const bandes = [];
-      if (used.length) {
-        if (fType === 'superficielle') bandes.push({ z0: F.De, z1: F.De + 1.5 * F.B, libelle: `semelles (${used.map(L => lineName(L, n)).join(', ')})` });
-        else { const a = Math.max(F.pileD / 2, 0.5), tip = F.De + F.Lpile; bandes.push({ z0: tip - a, z1: tip + 3 * a, libelle: `pointe des pieux (${used.map(L => lineName(L, n)).join(', ')})` }); }
+      for (const L of used) {
+        const f = L[code].found, De = nivL(L.i)?.De ?? F.De;
+        if (f.type === 'superficielle') bandes.push({ z0: De, z1: De + 1.5 * f.B, libelle: `semelle ${lineName(L, n)}` });
+        else { const a = Math.max(f.D / 2, 0.5), tip = De + f.Lpile; bandes.push({ z0: tip - a, z1: tip + 3 * a, libelle: `pointe des pieux ${lineName(L, n)}` }); }
       }
       B.push({ t: 'svg', svg: profileFigure(pr, bandes), caption: `Sondage ${pr.name} — coupe, E_M, p*_l et p*_f, E_M/p*_l (figure du bureau de calcul fond.ksr-infra.org)` });
       table(['Couche', 'Profondeur [m]', 'Classe (F62)', 'Catégorie NF P 94-261/262', 'p*_l [MPa]', 'E_M [MPa]', 'E_M/p*_l', 'α', 'Origine'], pr.layers.map((l, k) => [String(k + 1), `${F2(l.z0)} – ${F2(l.z1)}`, l.classe, l.sol, F2(l.pl), F1(l.EM), F1(l.EM / l.pl), F2(l.alpha), l.derive ? `${l.nEssais} essai(s)${l.estimee ? ' (essai le plus proche)' : ''}` : 'saisie']));
     }
     comment('Valeurs de couche tirées des essais (« - » dans la saisie) : p*_l moyenne géométrique, E_M moyenne harmonique des essais de la couche (à défaut, essai le plus proche du milieu de couche) ; α de Ménard selon la nature et E_M/p*_l (F62 V annexe C.5). Repères pointillés du rapport E_M/p*_l par nature (argile 9 et 16, limon 8 et 14, grave 6 et 10, autres 7 et 12). Zones bleues : sol sollicité par les fondations des lignes rattachées au sondage.');
   }
-  if (fType === 'superficielle' && sup.footRot) {
-    table(['Ligne', 'k_v (long terme) [kN/m³]', 'k_i = 2 k_v [kN/m³]', 'K_θ diff. / inst. [kN·m/rad]'], Ls.map((L, i) => { const r = sup.footRot[i][code]; return [lineName(L, n), F0(r.kv), F0(r.ki), `${F0(r.Ktheta.diff)} / ${F0(r.Ktheta.inst)}`]; }), { small: true });
+  if (Lsup.length && sup.footRot) {
+    table(['Ligne', 'k_v (long terme) [kN/m³]', 'k_i = 2 k_v [kN/m³]', 'K_θ diff. / inst. [kN·m/rad]'], Lsup.map(L => { const r = sup.footRot[L.i][code]; return [lineName(L, n), F0(r.kv), F0(r.ki), `${F0(r.Ktheta.diff)} / ${F0(r.Ktheta.inst)}`]; }), { small: true });
     comment('Rotation des semelles superficielles sur le sol dans la répartition des efforts horizontaux : module de réaction de Ménard 1/k_v = α B λ_c/(9 E_c) + 2 B₀ (λ_d B/B₀)^α/(9 E_d), k_i = 2 k_v (F62 annexe F.3), K_θ = k L B³/12, souplesse ramenée en tête h²/K_θ.');
   }
-  if (fType === 'superficielle') {
+  if (Lsup.length) {
+    const Ls = Lsup;
     table(['Ligne', 'p*_le [MPa] ; D_e [m] ; k_p (assise)', 'Semelle B × L × h [m]', 'V/R_v max', 'H/R_h max (ELU)', 'Excentrement', 'Méthode des aciers : bielles si d ≥ (B − b)/4 et e ≤ B/6, sinon consoles', 'A_s // B [cm²]', 'A_s ⊥ B [cm²/m]'], Ls.map(L => { const f = L[code].found; const w = f.checks.reduce((a, k) => (k.ratioV > a.ratioV ? k : a), f.checks[0]); return [lineName(L, n), `${F2(w.ple)} ; ${F2(w.De)} ; ${F2(w.kp)} (${w.classe})`, `${F2(f.B)} × ${F2(f.L)} × ${F2(f.hs)}`, `${F2(f.worstV)} ${ok(f.worstV)}`, `${F2(f.worstH)} ${ok(f.worstH)}`, f.excOk ? 'OK' : 'NON', f.method === 'bielles' ? 'bielles' : (f.bielles.eOk ? 'consoles (d < (B − b)/4)' : 'consoles (e > B/6)'), CM(f.AsLong), CM(f.AsTransPerM)]; }));
     comment(isF ? 'Fascicule 62 titre V (annexes B.1, B.2, E.2, F.1) : p*_le moyenne géométrique de p*_l sur [D ; D + 1,5 B], D_e = (1/p*_le)∫p*_l dz, classe de la couche d\'assise ; k_p = k₀[1 + a(0,6 + 0,4 B/L) D_e/B] selon la classe de sol (D_e/B ≤ 2,5) ; q\'_ref = (3 q_max + q_min)/4 ≤ i_δβ k_p p*_le/γ_q + q\'_0 (γ_q = 2 ELU, 3 ELS rares), i_δβ = Φ₁(δ) (sols cohérents) ou Φ₂(δ, D_e/B) (sols frottants) ; surface comprimée ≥ 10 % (ELU), 75 % (ELS rares) ; glissement (ELU) V tan φ\'/1,2 + c\'A\'/1,5 (c\' ≤ 75 kPa). Ferraillage par bielles A = N\'(B − b)/(8 d f_su), N\' = N(1 + 3e/B), minimum 0,12 % par nappe (PP73 1.1.1). Combinaisons fréquentes (sol entièrement comprimé) non vérifiées.'
       : 'NF P 94-261 (annexe D, guide Cerema 2015) : p*_le moyenne géométrique de p*_l sur [D ; D + h_r] (h_r = 1,5 B, réduit selon l\'excentrement à l\'ELU), D_e = (1/p*_le)∫p*_l dz ; k_p (tableau D.2.3, D_e/B ≤ 2), i_δ (D.2.4), R_v;d = A\' k_p p*_le i_δ/(γ_R;v γ_R;d;v), γ_R;v = 1,4 (ELU), 2,3 (ELS), γ_R;d;v = 1,2, R₀ = A q₀ déduit ; A\' = A(1 − 2e/B) ; 1 − 2e/B ≥ 1/15 (ELU), 1/2 (ELS car.) ; glissement (ELU) V tan φ\'/(γ_R;h γ_R;d;h), γ_R;h = γ_R;d;h = 1,1. Ferraillage par bielles, minimum 0,12 % par nappe. ELS quasi-permanent (1 − 2e/B ≥ 2/3) non vérifié.');
@@ -252,7 +263,9 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
       }
     }
     if (!opts.noFigures) { const fp = Ls.map(L => { try { return footingPressureChart(L, code); } catch (e) { return null; } }).filter(Boolean); for (let k = 0; k < fp.length; k += 2) B.push(fp[k + 1] ? svgBlock(sideBySide(fp[k].svg, fp[k + 1].svg), `${fp[k].caption} ; ${fp[k + 1].caption}`) : svgBlock(sideBySide([fp[k].svg], null, 10, pairWidth(fp.map(x => x.svg))), fp[k].caption)); }
-  } else {
+  }
+  if (Lpie.length) {
+    const Ls = Lpie;
     table(['Ligne', 'Pieux', 'k Ménard en tête [kN/m³]', 'N max / min ELU [kN]', 'N max ELS [kN]', 'M max ; T max pieu ELU [kN·m ; kN]', 'Portance ELU / ELS', 'Groupe C_e ; taux', 'A_s pieu [cm²]', 'Effort tranchant'], Ls.map(L => {
       const f = L[code].found, el = f.rows.filter(r => r.ls === 'ELU'), mm = Math.max(...el.map(r => r.Mmax)), sh = f.shear.ELU;
       const trac = (f.NminU < 0 ? ` ; traction ELU ${F2(f.capRatio.traction)} ${ok(f.capRatio.traction)}` : '') + (f.capRatio.ACC ? ` ; accidentel ${F2(f.capRatio.ACC)} ${ok(f.capRatio.ACC)}` : '');
@@ -296,7 +309,7 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
     table(['Ligne', 'w/N [m/kN]', 'θ/M [rad/kN·m]', 'θ/T = u/M [rad/kN]', 'u/T [m/kN]', 'w/N soutenu', 'θ/M soutenu', 'θ/T soutenu', 'u/T soutenu'], Ls.map(L => {
       const F = L[code].found.psh.flex; return [lineName(L, n), E3(F.inst[0][0]), E3(F.inst[1][1]), E3(F.inst[1][2]), E3(F.inst[2][2]), E3(F.sus[0][0]), E3(F.sus[1][1]), E3(F.sus[1][2]), E3(F.sus[2][2])];
     }), { small: true });
-    comment(`Matrices de souplesse de la tête d'appui (programme PSH, SETRA/CETE de l'Ouest) : déplacements (vertical w, rotation θ, horizontal u) sous N, M, T unitaires en tête, charges instantanées (béton ${isF ? 'E_i' : 'E_cm'}, sol k) et soutenues (béton ${isF ? 'E_v' : 'E_cm/3'}, sol k × ${F2(sup.lines[0][code].found.psh.kSus)}${isF ? ', F62 annexe C.5' : ''}) ; fût et chevêtre consoles, semelle rigide, groupe de pieux : rigidité axiale E A/L (pieu en colonne, pointe fixe — convention PSH), rigidité transversale de Winkler (différences finies) avec le module de Ménard de chaque couche, tête ${sup.lines[0][code].found.psh.head === 'articule' ? 'articulée' : 'encastrée'}, pied ${sup.lines[0][code].found.psh.tip === 'encastre' ? 'encastré' : 'libre'}${(sup.sp.found.incl || []).some(a => a) ? ', pieux inclinés' : ''}. Ces souplesses (u/T) entrent dans la répartition des efforts horizontaux entre les lignes d'appui (§ 1). Contrôlé sur la sortie PSH de la pile P3 du Pont de Noé : souplesses à 0,3–4 % près, efforts et profil du pieu à 3 % près (tests).`);
+    comment(`Matrices de souplesse de la tête d'appui (programme PSH, SETRA/CETE de l'Ouest) : déplacements (vertical w, rotation θ, horizontal u) sous N, M, T unitaires en tête, charges instantanées (béton ${isF ? 'E_i' : 'E_cm'}, sol k) et soutenues (béton ${isF ? 'E_v' : 'E_cm/3'}, sol k × ${F2(Ls[0][code].found.psh.kSus)}${isF ? ', F62 annexe C.5' : ''}) ; fût et chevêtre consoles, semelle rigide, groupe de pieux : rigidité axiale E A/L (pieu en colonne, pointe fixe — convention PSH), rigidité transversale de Winkler (différences finies) avec le module de Ménard de chaque couche, tête ${Ls[0][code].found.psh.head === 'articule' ? 'articulée' : 'encastrée'}, pied ${Ls[0][code].found.psh.tip === 'encastre' ? 'encastré' : 'libre'}${(sup.sp.found.incl || []).some(a => a) ? ', pieux inclinés' : ''}. Ces souplesses (u/T) entrent dans la répartition des efforts horizontaux entre les lignes d'appui (§ 1). Contrôlé sur la sortie PSH de la pile P3 du Pont de Noé : souplesses à 0,3–4 % près, efforts et profil du pieu à 3 % près (tests).`);
     const rowsHead = [];
     for (const L of Ls) for (const [lab, r] of L[code].found.psh.gov) for (const fl of r.psh.files) rowsHead.push([`${lineName(L, n)} — ${lab}`, `${fl.file + 1} (x = ${F2(fl.x)}${fl.omega ? `, ω = ${F1(fl.omega * 180 / Math.PI)}°` : ''})`, `${F0(fl.Nmax)} / ${F0(fl.Nmin)}`, F1(fl.Mhead), `${F1(fl.Mmax)} à ${F1(fl.zMmax)} m`, F1(fl.Tmax), F2(fl.y0 * 1000), F1(fl.pmax), r.label]);
     table(['Ligne — cas', 'File', 'N max / min par pieu [kN]', 'M tête [kN·m]', 'M max [kN·m] à z', 'T max [kN]', 'y tête [mm]', 'p max [kPa]', 'Combinaison'], rowsHead, { small: true });

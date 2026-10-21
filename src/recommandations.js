@@ -18,6 +18,17 @@ export function recommandations(st) {
   for (const regle of [...reglesTablier, ...reglesAppuis]) {
     try { for (const it of regle(st) || []) items.push(it); } catch (e) { items.push({ domaine: 'Recommandations', lieu: '', verification: 'règle en erreur', constat: e.message, actions: [] }); }
   }
+  // plan de nivellement : pour une ligne définie par ses cotes, les données générales correspondantes n'agissent plus ;
+  // l'action renvoie au tableau des cotes
+  const niv = st.supports && st.supports.niv;
+  if (niv && niv.actif) for (const it of items) {
+    const m = /\b[CP](\d+)$/.exec(it.lieu || ''), o = m && niv.parLigne[+m[1]];
+    if (!o) continue;
+    const pris = { ap_B: o.found && o.found.B != null, ap_hs: o.found && o.found.hs != null, ap_De: o.found && o.found.De != null, ap_Lpile: o.found && o.found.Lpile != null, ap_found: o.found && o.found.type != null };
+    const avant = it.actions.length;
+    it.actions = it.actions.filter(a => !(a.champ && pris[a.champ]));
+    if (it.actions.length < avant) it.actions.unshift({ texte: `${m[0]} est définie par le plan de nivellement : modifier ses cotes (dessus et sous-face de semelle, terrain naturel, pointe des pieux) ou sa largeur de semelle dans le tableau des cotes`, champ: 'niv_actif' });
+  }
   return { items };
 }
 

@@ -29,6 +29,9 @@ function cote(x1, y1, x2, y2, lib) {
 const rappel = (x1, y1, x2, y2, lib, col = COULEURS.encre) => ligne(x1, y1, x2, y2, '#64748b', 0.9) + dot(x1, y1, 2.2, '#64748b') + texte(x2 + 4, y2 + 4, lib, `style="font-size:11.5px;fill:${col}"`);
 const nom = L => (L.kind === 'culee' ? `culée C${L.i}` : L.joint ? `pile de joint C${L.i}` : `pile P${L.i}`);
 /** Largeur du fût ou du mur au pied (dans le sens B de la semelle). */
+/** Données d'appui de la ligne L (plan de nivellement : propres à la ligne). */
+export const spOf = (sup, L) => (sup.spLigne && sup.spLigne[L.i]) || sup.sp;
+
 export function wallWidth(sp, L) {
   if (L.kind === 'culee') return sp.culee.type === 'remblayee' ? sp.culee.em : sp.culee.D;
   return sp.pile.type === 'voile' ? sp.pile.b : sp.pile.D;
@@ -40,7 +43,7 @@ const HA = (n, phi) => `${n} HA${phi}`;
 export function menardSchema(sup, L, code = 'EC') {
   const f = L[code].found, t = f.settle; if (!t || t.error || !t.E) return null;
   const prof = (sup.profiles || []).find(p => p.name === L.profile) || (sup.profiles || [])[0];
-  const D = sup.sp.found.De, B = Math.min(f.B, f.L), zMax = D + 8 * B, isF = code === 'BAEL';
+  const D = spOf(sup, L).found.De, B = Math.min(f.B, f.L), zMax = D + 8 * B, isF = code === 'BAEL';
   const top = 46, Hd = 430, sc = Hd / zMax, Y = z => top + z * sc;
   const xL = 30, wL = 150, xT = 300, wT = 150, xG = xT + wT + 10, xTx = 640, W = 1000;
   const grp = [[1, 1, `E₁ = ${f1(t.E1)}`, '#1d4ed8'], [2, 2, `E₂ = ${f1(t.E2)}`, '#60a5fa'], [3, 5, `E₃,₅ = ${f1(t.E35)}`, '#15803d'], [6, 8, `E₆,₈ = ${f1(t.E68)}`, '#ea580c'], [9, 16, `E₉,₁₆ = ${f1(t.E916)}`, '#a16207']];
@@ -272,7 +275,7 @@ export function pileRebarSchema(sup, L, code = 'EC') {
 /** Plan de ferraillage de la semelle sur deux files de pieux : bandes de tirants au droit des couples, coupe. */
 export function capRebarSchema(sup, L, code = 'EC') {
   const f = L[code].found, t = f.tie; if (!t || f.nF !== 2) return null;
-  const F = sup.sp.found, B = F.B, hs = f.hs, Lf = f.W / (25 * B * hs), sP = F.sPile, D = f.D, nP = f.nP, b = wallWidth(sup.sp, L);
+  const F = spOf(sup, L).found, B = F.B, hs = f.hs, Lf = f.W / (25 * B * hs), sP = F.sPile, D = f.D, nP = f.nP, b = wallWidth(sup.sp, L);
   // tirant par couple : barres dans la bande Ø + h_s
   let tb = null;
   for (const phi of [16, 20, 25, 32]) { const a = areaOf(phi), n = Math.max(4, Math.ceil(t.A1 / a - 1e-9)); if (t.band / n < 0.07 + phi / 1000) continue; const A = n * a; if (!tb || A < tb.As - 1e-9) tb = { phi, n, As: A }; }

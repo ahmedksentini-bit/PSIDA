@@ -111,7 +111,7 @@ export function deckFigures(st, ref = 'EC') {
  * naturel, remblai, niveau des plus hautes eaux et fond affouillé, cotes principales.
  */
 export function supportSchema(sup, L, code = 'EC') {
-  const sp = sup.sp, end = L.kind === 'culee', F = sp.found, r = L[code], found = r.found;
+  const sp = (sup.spLigne && sup.spLigne[L.i]) || sup.sp, end = L.kind === 'culee', F = sp.found, r = L[code], found = r.found;   // données de la ligne (plan de nivellement)
   const col = end ? sp.culee.type !== 'remblayee' : sp.pile.type === 'colonnes';
   const Hf = end ? sp.culee.Hm : (Array.isArray(sp.pile.H) ? sp.pile.H[Math.min(sp.pile.H.length - 1, L.i - 1)] : sp.pile.H);
   const hc = end ? (col ? sp.culee.hc : 0) : (col ? sp.pile.hc : 0), hGG = end ? sup.hGG : 0;
@@ -223,6 +223,7 @@ export function footingPressureChart(L, code = 'EC') {
   if (!w) return null;
   const Vm = w.V / f.L, e = w.e, B = f.B;
   const qmax = w.qmax ?? (Vm / Math.max(1e-6, B - 2 * e)), qmin = w.qmin ?? 0, Bc = (w.compressed ?? 1) * B;
+  if (!(B - 2 * Math.abs(e) > 0) || !(Bc > 0)) return null;   // résultante hors de la semelle : pas de diagramme (signalé par les vérifications)
   try {
     return svgBlock(figureContraintes({ B, V: Vm, e, qmax, qmin, Bc, qref: w.qref ?? null, meyerhof: Vm / Math.max(1e-6, B - 2 * e), uniteV: 'kN/m' }),
       `${L.kind === 'culee' ? 'Culée C' : 'Pile P'}${L.i} — contraintes sous la semelle (${w.label})`);

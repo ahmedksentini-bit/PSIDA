@@ -257,6 +257,11 @@ têtes d'appui, piles, fondations superficielles et pieux, PP73, conditions sism
 modifier ; « Calculer » cherche par dichotomie la plus petite modification qui suffit, « Appliquer » l'écrit dans le
 formulaire. Onglet Calcul sismique : « Que changer ? » sous chaque condition ou critère non satisfait. Plan de
 ferraillage : plus de fausse alerte aux sections d'extrémité hors des barres.
+v0.57 : plan de nivellement (onglet Appuis et fondations) : cotes par ligne d'appui (chaussée à l'axe, terrain naturel,
+dessus et sous-face de semelle, pointe des pieux), type de fondation et largeur de semelle par ligne ; hauteurs de fûts et
+de culées, épaisseurs et encastrements des semelles, longueurs des pieux en découlent ligne par ligne (fondations mixtes
+semelles / pieux possibles) ; dévers en toit ou unique et hauteur des bossages sous chaque appareil ; coupes longitudinale
+et transversale en direct ; tableau dans la note des appuis ; export Pont EC8 avec les hauteurs propres à chaque pile.
 
 - **Ce que vous saisissez** — en direct, avant tout calcul : résumé en clair des données (travure, dalle, voies EN 1991-2 et
   classe Fascicule 61 déduites de la chaussée, charges permanentes et leur total, biais, matériaux, appareils d'appui) et

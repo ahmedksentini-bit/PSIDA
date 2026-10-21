@@ -139,6 +139,8 @@ export function parseSupports(d) {
     bossage: { debord: v('ap_bosDeb', 0.05), fck: v('ap_bosFck', null) ?? undefined },
     epsPSIDP: (d.ap_epsPSIDP ?? 'oui') !== 'non',
     joint: { debut: ['debut', 'deux'].includes(d.ap_joint), fin: ['fin', 'deux'].includes(d.ap_joint), rG: v('ap_jointG', 1), rQ: v('ap_jointQ', 1), rH: v('ap_jointH', 1) },
+    // plan de nivellement : listes par ligne d'appui séparées par « ; » (valeur vide = donnée générale)
+    niv: { actif: d.niv_actif === 'on' || d.niv_actif === true, hBos: v('niv_hBos', 0.10), devers: v('niv_devers', 0), profil: d.niv_profil || 'toit', ...Object.fromEntries(['zCh', 'zTN', 'zDS', 'zSS', 'zPP', 'type', 'B'].map(k => [k, String(d['niv_' + k] ?? '').split(';').map(t => t.trim())])) },
     ec8: { zone: v('ap_zone', 3), categorie: d.ap_catEC8 || 'III', classeSol: d.ap_solEC8 || 'B' },
     seisme: { actif: !!d.ap_seisme, source: d.ap_seismeSrc || 'auto', q: { long: v('ap_qL', 1), trans: v('ap_qT', 1) } },
     choc: { vehicule: d.ap_choc || 'aucun', hV: v('ap_hV', 1.25), bateau: d.ap_bateau || 'aucun', hB: v('ap_hB', 2.0) },

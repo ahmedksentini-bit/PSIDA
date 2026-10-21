@@ -1,3 +1,4 @@
+import { nivellement } from './nivellement.js';
 /**
  * Appuis et fondations — chaîne complète à partir des résultats du tablier (réactions, appareils d'appui) :
  * rigidités des lignes, répartition du freinage et des déformations imposées, combinaisons en tête (BAEL/F61 et EC),
@@ -37,8 +38,8 @@ export const IMPACT_BATEAU = {
 };
 
 /** Séisme par le moteur de Pont EC8 (EN 1998-2, mode fondamental) sur le projet exporté ; efforts par appui en kN. */
-export function seismicActions(st, sp, hGG) {
-  const projet = EC8.lireProjet(JSON.parse(JSON.stringify(toPontEC8({ ...st, supports: { sp, hGG } }, { site: sp.ec8, q: sp.seisme.q }))));
+export function seismicActions(st, sp, hGG, spLigne = null) {
+  const projet = EC8.lireProjet(JSON.parse(JSON.stringify(toPontEC8({ ...st, supports: { sp, hGG, spLigne } }, { site: sp.ec8, q: sp.seisme.q }))));
   const problemes = EC8.valider(projet);
   const a = EC8.actionSismique(projet), m = EC8.modele(projet), r = EC8.analyse(projet, a, m);
   return { projet, problemes, efforts: EC8.exporterEfforts(projet, a, r), T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T }, F: { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 }, M: r.M, conditions: r.conditions };
@@ -131,7 +132,10 @@ export function computeSupports(st, input = {}) {
   const isEnd = i => (i === 0 || i === nL - 1) && !jointAt(i);
   const jG = i => (jointAt(i) ? 1 + (J.rG ?? 1) : 1), jQ = i => (jointAt(i) ? 1 + (J.rQ ?? 1) : 1), jH = i => (jointAt(i) ? 1 + (J.rH ?? 1) : 1);
   const { fck, fyk, c } = sp.mat;
-  const Hpile = i => { const H = [].concat(sp.pile.H); return H[Math.min(H.length - 1, i - 1)] ?? H[0]; };
+  // plan de nivellement : données propres à chaque ligne d'appui (hauteurs, semelle, pieux) déduites des cotes
+  const niv = nivellement(sp, { deck, bearings, tRev: st.p && st.p.mat ? st.p.mat.tRev : 0.08, isEnd, nL: xs.length });
+  const S = i => (niv.parLigne[i] ? merge(sp, niv.parLigne[i]) : sp);
+  const Hpile = i => { const H = [].concat(S(i).pile.H); return H[Math.min(H.length - 1, i - 1)] ?? H[0]; };
   const Lv = sp.pile.Lv ?? width;
   // voile d'épaisseur variable : b en pied, bTop en tête (vide = constante) ; moyenne pour le poids, plus faible pour l'élancement
   const bBot = sp.pile.b, bTop = sp.pile.bTop ?? sp.pile.b, bMean = (bBot + bTop) / 2, bMin = Math.min(bBot, bTop);
@@ -147,19 +151,20 @@ export function computeSupports(st, input = {}) {
   const profileOf = i => profs.find(p => p.name === (soil.assign || [])[i]) || profs[0];
 
   // --- fondations sur pieux : modèle PSH (semelle rigide, pieux de Winkler, matrice de rigidité du groupe) ---
-  const F0 = sp.found, onPiles = F0.type !== 'superficielle';
-  const nF0 = Math.max(1, F0.nFiles), nP0 = Math.max(1, F0.nPile), Dp = F0.pileD;
+  // fondation de chaque ligne (type, semelle, pieux) : données générales ou propres à la ligne (plan de nivellement)
+  const F0 = i => S(i).found, onPiles = i => F0(i).type !== 'superficielle';
+  const nF0 = i => Math.max(1, F0(i).nFiles), nP0 = i => Math.max(1, F0(i).nPile), Dp = i => F0(i).pileD;
   const Lfoot = i => (isEnd(i) ? width : (sp.pile.type === 'voile' ? Lv : width)) + 1.0;
-  const fileX = f => (nF0 === 1 ? 0 : (f - (nF0 - 1) / 2) * F0.sPile);
-  const fileOmega = f => { const a = (F0.incl || [])[f] ?? 0; return (fileX(f) < 0 ? -1 : 1) * a * Math.PI / 180; };
-  const pilesLong = Array.from({ length: nF0 }, (_, f) => Array.from({ length: nP0 }, () => ({ x: fileX(f), omega: fileOmega(f), file: f }))).flat();
-  const pilesTrans = i => Array.from({ length: nF0 }, () => Array.from({ length: nP0 }, (_, k2) => ({ x: Lfoot(i) * (2 * k2 + 1) / (2 * nP0) - Lfoot(i) / 2, omega: 0 }))).flat();
-  const pileE = code => { const pc = pileConcrete({ fc28: fck, D: Dp, L: F0.Lpile, type: F0.pileType }); const Ei = code === 'BAEL' ? pc.Ei : Ecm(Math.min(fck, 30)); return { pc, inst: Ei * 1000, sus: Ei * 1000 * (code === 'BAEL' ? 3700 / 11000 : 1 / 3) }; };
+  const fileX = (i, f) => (nF0(i) === 1 ? 0 : (f - (nF0(i) - 1) / 2) * F0(i).sPile);
+  const fileOmega = (i, f) => { const a = (F0(i).incl || [])[f] ?? 0; return (fileX(i, f) < 0 ? -1 : 1) * a * Math.PI / 180; };
+  const pilesLong = i => Array.from({ length: nF0(i) }, (_, f) => Array.from({ length: nP0(i) }, () => ({ x: fileX(i, f), omega: fileOmega(i, f), file: f }))).flat();
+  const pilesTrans = i => Array.from({ length: nF0(i) }, () => Array.from({ length: nP0(i) }, (_, k2) => ({ x: Lfoot(i) * (2 * k2 + 1) / (2 * nP0(i)) - Lfoot(i) / 2, omega: 0 }))).flat();
+  const pileE = (code, i) => { const F = F0(i), pc = pileConcrete({ fc28: fck, D: F.pileD, L: F.Lpile, type: F.pileType }); const Ei = code === 'BAEL' ? pc.Ei : Ecm(Math.min(fck, 30)); return { pc, inst: Ei * 1000, sus: Ei * 1000 * (code === 'BAEL' ? 3700 / 11000 : 1 / 3) }; };
   // remblai traversé par les pieux des culées sous la semelle (hauteur hR, poussée K_a, module E_M) — PSH « couches de remblai »
-  const RB = { h: 0, gamma: 20, Ka: 0.33, EM: 5, alpha: 0.5, pf: 0.3, ...(F0.remblai || {}) };
+  const RB = { h: 0, gamma: 20, Ka: 0.33, EM: 5, alpha: 0.5, pf: 0.3, ...(sp.found.remblai || {}) };
   const hRem = i => (isEnd(i) ? Math.max(0, RB.h || 0) : 0);
   /** Profondeur sous le terrain naturel d'un point du pieu à z sous la tête (z < 0 : dans le remblai). */
-  const zTN = (i, z) => (hRem(i) > 0 ? z - hRem(i) : F0.De + z);
+  const zTN = (i, z) => (hRem(i) > 0 ? z - hRem(i) : F0(i).De + z);
   /**
    * Loi de réaction frontale du pieu à z sous la tête (F62 annexe C.5 ; NF P 94-262 annexe I) : module k = E_s/B (Ménard,
    * court terme), palier r_max = B p*_f ; minoration près de la surface 0,5 (1 + z/z_c), z_c = 2B (sols cohérents) ou 4B
@@ -168,10 +173,10 @@ export function computeSupports(st, input = {}) {
   const soilLaw = (i, z) => {
     const zt = zTN(i, z), inRem = zt < 0;
     const l = inRem ? { EM: RB.EM, alpha: RB.alpha, pf: RB.pf, classe: 'sable-A' } : profileOf(i).at(zt);
-    const k = menardReaction({ EM: l.EM * 1000, alpha: l.alpha, B: Dp }).k;
+    const D = Dp(i), k = menardReaction({ EM: l.EM * 1000, alpha: l.alpha, B: D }).k;
     const depth = inRem ? z : Math.max(0, zt) + (hRem(i) > 0 ? hRem(i) : 0);   // profondeur sous la surface du sol
-    const m = minorationSurface({ z: depth, B: Dp, sol: isCohesive(l.classe) ? 'coherent' : 'frottant' });
-    return { k: k * m.pente, rmax: Dp * (l.pf ?? l.pl / 2) * 1000 * m.palier, minor: m.pente < 1 };
+    const m = minorationSurface({ z: depth, B: D, sol: isCohesive(l.classe) ? 'coherent' : 'frottant' });
+    return { k: k * m.pente, rmax: D * (l.pf ?? l.pl / 2) * 1000 * m.palier, minor: m.pente < 1 };
   };
   const groupCache = new Map();
   /**
@@ -179,21 +184,21 @@ export function computeSupports(st, input = {}) {
    * longueur dégagée par l'affouillement ; fac : coefficients sécants de plastification par nœud (palier de réaction).
    */
   const groupsOf = (i, code, dur, expo = 0, fac = null) => {
-    const key = `${profileOf(i).name}|${code}|${dur}|${expo.toFixed(3)}|${isEnd(i)}|${fac ? fac.key : ''}`;
+    const F = F0(i), key = `${profileOf(i).name}|${code}|${dur}|${expo.toFixed(3)}|${isEnd(i)}|${fac ? fac.key : ''}|${F.Lpile}|${F.pileD}|${F.De}|${F.nFiles}|${F.nPile}|${F.sPile}`;
     if (groupCache.has(key)) return groupCache.get(key);
-    const E = pileE(code)[dur], fk = dur === 'sus' ? (soil.kSus ?? 0.5) : 1, hz = F0.Lpile / 240;
+    const E = pileE(code, i)[dur], fk = dur === 'sus' ? (soil.kSus ?? 0.5) : 1, hz = F.Lpile / 240;
     const kz = z => (z < expo ? 0 : fk * soilLaw(i, z).k * (fac ? fac.f[Math.min(fac.f.length - 1, Math.round(z / hz))] : 1));
-    const wp = winklerPile({ L: F0.Lpile, D: Dp, E, k: kz, tip: F0.pied || 'libre', n: 240 });
-    const opt = { head: F0.tete || 'encastre' };
-    const g = { wp, long: pileGroup(pilesLong, wp, opt), trans: pileGroup(pilesTrans(i), wp, opt), E };
+    const wp = winklerPile({ L: F.Lpile, D: F.pileD, E, k: kz, tip: F.pied || 'libre', n: 240 });
+    const opt = { head: F.tete || 'encastre' };
+    const g = { wp, long: pileGroup(pilesLong(i), wp, opt), trans: pileGroup(pilesTrans(i), wp, opt), E };
     groupCache.set(key, g); return g;
   };
   const footRotCache = new Map();
-  const footRot = (i, code) => { const k = `${profileOf(i).name}|${code}|${Lfoot(i)}`; if (!footRotCache.has(k)) footRotCache.set(k, footingRotationStiffness({ profile: profileOf(i), B: F0.B, L: Lfoot(i), D: F0.De, code })); return footRotCache.get(k); };
+  const footRot = (i, code) => { const F = F0(i), k = `${profileOf(i).name}|${code}|${Lfoot(i)}|${F.B}|${F.De}`; if (!footRotCache.has(k)) footRotCache.set(k, footingRotationStiffness({ profile: profileOf(i), B: F.B, L: Lfoot(i), D: F.De, code })); return footRotCache.get(k); };
   /** Tronçons de l'appui au-dessus de la semelle (fût, chevêtre) pour la souplesse de tête (sens longitudinal). */
   const segmentsOf = (i, E) => {
     if (isEnd(i)) {
-      const C = sp.culee;
+      const C = S(i).culee;
       if (C.type === 'remblayee') return [{ h: C.Hm, E, A: C.em * width, I: Infinity }];
       return [{ h: C.Hm, E, A: C.nCol * Math.PI * C.D ** 2 / 4, I: C.nCol * Math.PI * C.D ** 4 / 64 }, ...(C.hc > 0 ? [{ h: C.hc, E, A: C.lc * width, I: width * C.lc ** 3 / 12 }] : [])];
     }
@@ -204,7 +209,7 @@ export function computeSupports(st, input = {}) {
   /** Matrice de souplesse de la tête d'appui (N, M, T) — PSH. */
   const headFlex = (i, code, dur) => {
     const Eapp = (code === 'BAEL' ? (dur === 'inst' ? EiB(fck) : EvB(fck)) : (dur === 'inst' ? Ecm(fck) : Ecm(fck) / 3)) * 1000;
-    return headFlexibility({ group: groupsOf(i, code, dur).long, segments: segmentsOf(i, Eapp), hs: F0.hs });
+    return headFlexibility({ group: groupsOf(i, code, dur).long, segments: segmentsOf(i, Eapp), hs: F0(i).hs });
   };
   // --- rigidités horizontales (néoprène + fût console encastré ; fondation sur pieux : souplesse de tête PSH, fondation
   //     superficielle supposée rigide) ---
@@ -212,7 +217,7 @@ export function computeSupports(st, input = {}) {
     if (isEnd(i)) return sp.culee.type === 'remblayee' ? Infinity : sp.culee.nCol * Math.PI * sp.culee.D ** 4 / 64;
     return sp.pile.type === 'voile' ? Lv * sp.pile.b ** 3 / 12 : sp.pile.nCol * Math.PI * sp.pile.D ** 4 / 64;
   };
-  const shaftH = i => (isEnd(i) ? sp.culee.Hm : Hpile(i) + (sp.pile.type === 'colonnes' ? sp.pile.hc : 0));
+  const shaftH = i => (isEnd(i) ? S(i).culee.Hm : Hpile(i) + (sp.pile.type === 'colonnes' ? sp.pile.hc : 0));
   const lineData = code => xs.map((x, i) => {
     const r = bearings.rows[i], sel = r.sel || { bd: { a: 300, b: 400 }, T: 0.04 };
     const a = sel.bd.a / 1000, b = sel.bd.b / 1000, Te = (sel.T || 0.04) + 2 * 0.0025;   // élastomère + enrobages 2,5 mm
@@ -221,9 +226,9 @@ export function computeSupports(st, input = {}) {
     return {
       x, bearing: { a, b, Te, n: r.nb },
       sNeo: { inst: neopreneFlexibility({ n: r.nb, a, b, Te, G: 1.8 }), diff: neopreneFlexibility({ n: r.nb, a, b, Te, G: 0.9 }) },
-      sApp: onPiles ? { inst: headFlex(i, code, 'inst')[2][2], diff: headFlex(i, code, 'sus')[2][2] } : (() => {
+      sApp: onPiles(i) ? { inst: headFlex(i, code, 'inst')[2][2], diff: headFlex(i, code, 'sus')[2][2] } : (() => {
         // semelle superficielle : rotation sur le sol (module de réaction de Ménard, F62 F.3 : k_i = 2 k_v) ramenée en tête
-        const fr = footRot(i, code), hT = H + F0.hs;
+        const fr = footRot(i, code), hT = H + F0(i).hs;
         const varV = !isEnd(i) && sp.pile.type === 'voile' && bTop !== bBot;
         const cf = E => (varV ? segFlex(voileSegs(H, E)) : Number.isFinite(I) ? cantileverFlexibility({ H, E, I }) : 0);
         return { inst: cf(Ei) + hT ** 2 / fr.Ktheta.inst, diff: cf(Ev) + hT ** 2 / fr.Ktheta.diff };
@@ -244,7 +249,7 @@ export function computeSupports(st, input = {}) {
   let seisme = null;
   if (sp.seisme.actif) {
     if (sp.seisme.source === 'onglet') seisme = externalSeismic(sp.seisme.externe, nL, deck.spans);
-    else { try { seisme = seismicActions(st, sp, hGG); } catch (e) { seisme = { error: e.message }; } }
+    else { try { seisme = seismicActions(st, sp, hGG, niv.actif ? xs.map((_, i) => S(i)) : null); } catch (e) { seisme = { error: e.message }; } }
   }
   const accidental = (i, Nfreq) => {
     const out = [];
@@ -272,7 +277,7 @@ export function computeSupports(st, input = {}) {
   // --- cours d'eau : courant, embâcles, poussée d'Archimède, affouillement (piles en rivière) ---
   const inWater = i => sp.eau.actif && !isEnd(i) && (!sp.eau.appuis || !sp.eau.appuis.length || sp.eau.appuis.includes(i + 1));
   const water = xs.map((x, i) => (inWater(i) ? pierWater(sp.eau, { type: sp.pile.type, b: sp.pile.b, Lv, D: sp.pile.D, nCol: sp.pile.nCol, s: sp.pile.nCol > 1 ? width / sp.pile.nCol : 0,
-    Hf: Hpile(i), dBed: Math.max(0, sp.found.De - sp.found.hs) }) : null));
+    Hf: Hpile(i), dBed: Math.max(0, F0(i).De - F0(i).hs) }) : null));
   const waterCombos = (i, Nfreq) => {
     const w = water[i]; if (!w) return { F61: [], EC: [] };
     // F_wa action variable de courte durée (γ_Q = 1,5) ; BAEL/F61 : comme le vent (annexe D), sans trafic ; EC : action
@@ -415,6 +420,7 @@ export function computeSupports(st, input = {}) {
   // --- éléments d'appui ---
   const KA = Ka(sp.soil.phi);
   const lines = xs.map((x, i) => {
+    const sp = S(i);   // données de la ligne (plan de nivellement)
     const end = isEnd(i), profile = profileOf(i), out = { i, x, kind: end ? 'culee' : 'pile', joint: jointAt(i), type: end ? sp.culee.type : sp.pile.type, head: heads[i], profile: profile.name };
     out.K = { BAEL: { inst: distB.K.inst[i], diff: distB.K.diff[i] }, EC: { inst: distE.K.inst[i], diff: distE.K.diff[i] } };
     const per = {};
@@ -535,14 +541,14 @@ export function computeSupports(st, input = {}) {
         } else found.AsTransPerM = found.AsLong / Lf / 4;
         found.AsTransPerM = Math.max(found.AsTransPerM, 0.0012 * F.hs);
       } else {
-        const nF = nF0, nP = nP0, D = Dp;
-        const xsP = pilesLong.map(p => p.x);
+        const nF = nF0(i), nP = nP0(i), D = Dp(i), PL = pilesLong(i);
+        const xsP = PL.map(p => p.x);
         const kHead = soilLaw(i, 0).k;
-        const pc = pileE(code).pc;
+        const pc = pileE(code, i).pc;
         // crue : longueur de pieu dégagée sous la semelle par l'affouillement (sol sans réaction latérale ni frottement)
         const expo = wl ? Math.min(Math.max(0, dAff - F.De), 0.9 * F.Lpile) : 0;
-        const head = F0.tete || 'encastre', hR = hRem(i), Lf_ = Lfoot(i);
-        const lawZ = Array.from({ length: 241 }, (_, j) => soilLaw(i, j * F0.Lpile / 240));
+        const head = F.tete || 'encastre', hR = hRem(i), Lf_ = Lfoot(i);
+        const lawZ = Array.from({ length: 241 }, (_, j) => soilLaw(i, j * F.Lpile / 240));
         // poussée des terres du remblai traversé sur les pieux (culées) : p = K_a (γ σ + q) sur une largeur b = min(3 Ø ; entraxe)
         // (même règle que pour les colonnes enterrées ; hypothèse PSIDA), action permanente (terres) et variable (surcharge)
         const bEff = Math.min(3 * D, Lf_ / nP);
@@ -581,7 +587,7 @@ export function computeSupports(st, input = {}) {
           const rT = (f.Hy || f.My) ? g.inst.trans.respond(0, f.My || 0, f.Hy || 0) : null;
           const piles = rI.piles.map((pI, k) => {
             const pS = rS.piles[k], pT = rT ? rT.piles[k] : null;
-            return { x: pI.x, omega: pI.omega, file: pilesLong[k].file, N: pI.N + pS.N + (pT ? pT.N : 0), Nsus: pS.N, Ninst: pI.N + (pT ? pT.N : 0), Tlong: pI.T + pS.T, t: pI.t + pS.t, phi: pI.phi + pS.phi, a: pI.a + pS.a, pI, pS, pT };
+            return { x: pI.x, omega: pI.omega, file: PL[k].file, N: pI.N + pS.N + (pT ? pT.N : 0), Nsus: pS.N, Ninst: pI.N + (pT ? pT.N : 0), Tlong: pI.T + pS.T, t: pI.t + pS.t, phi: pI.phi + pS.phi, a: pI.a + pS.a, pI, pS, pT };
           });
           // profils par file (pieux d'une file : mêmes déplacements dans le plan longitudinal) et profil transversal commun
           const files = [...new Set(piles.map(p => p.file))].map(fi => {
@@ -614,7 +620,7 @@ export function computeSupports(st, input = {}) {
         // l₀ = (4 E I/k)^¼ longueur de transfert du pieu (module de réaction en tête) ; ELU seulement
         let pileSO = null;
         if (F.secondOrdre) {
-          const Ep = pileE(code).inst, Ip = Math.PI * D ** 4 / 64, kh = Math.max(1, soilLaw(i, Math.min(D, F.Lpile / 2)).k);
+          const Ep = pileE(code, i).inst, Ip = Math.PI * D ** 4 / 64, kh = Math.max(1, soilLaw(i, Math.min(D, F.Lpile / 2)).k);
           const l0 = (4 * Ep * Ip / kh) ** 0.25, lf = 2 * l0, ea = Math.max(0.02, lf / 250);
           pileSO = { l0, lf, ea, kh, e2: alpha => 3 * lf ** 2 / (1e4 * D) * (2 + 2 * alpha) };
         }
@@ -728,6 +734,6 @@ export function computeSupports(st, input = {}) {
     if (end && sp.found.type !== 'superficielle' && sp.found.nFiles === 1 && sp.found.pileD < 0.80 - 1e-9) out.warnings.push(`culée sur une file de pieux Ø ${sp.found.pileD} m : Ø 0,80 m minimal (PP73 1.2.3 § 1.2.3)`);
     return out;
   });
-  const footRotAll = onPiles ? null : xs.map((x, i) => ({ BAEL: footRot(i, 'BAEL'), EC: footRot(i, 'EC') }));
-  return { sp, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
+  const footRotAll = xs.every((_, i) => onPiles(i)) ? null : xs.map((x, i) => (onPiles(i) ? null : { BAEL: footRot(i, 'BAEL'), EC: footRot(i, 'EC') }));
+  return { sp, niv, spLigne: niv.actif ? xs.map((_, i) => S(i)) : null, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
 }
