@@ -508,6 +508,9 @@ $('#stale').addEventListener('click', ev => {
 const FORM_UI = enhanceForm($('#f')); // saisie valeur par valeur des champs multi-valeurs (avant la lecture d'un lien partagé)
 const NIV = initNivellement($('#f'), () => state);
 const TRACE = initTrace($('#f'), { setField });
+// manuel d'utilisation : PDF publié avec le site (docs/manuel), paramètre de version pour ne pas servir un ancien PDF en cache
+const MANUEL = { version: '0.60', url: 'docs/manuel/PSIDA_Manuel.pdf' };
+$('#btn-manuel').addEventListener('click', () => window.open(`${MANUEL.url}?v=${MANUEL.version}`, '_blank', 'noopener'));
 $('#f').addEventListener('change', ev => { if (ev.target.name === 'niv_actif') NIV.refresh(); });
 applyHelp($('#f'), $('#help-list'));
 renderScheme();

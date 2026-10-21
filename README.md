@@ -353,3 +353,4 @@ tête, moment en pied, fondations, appareils). Fichier d'essai : exemples/ouvrag
 v0.60 : ouvrage courbe — forces centrifuges du Fascicule 61 titre II art. 7 (système Bc, (R + 150)/(6R + 350) ou 80/R,
 δ_B et b_c, combinaison « Bc + centrifuge » sans freinage) ; cartes de la plaque (flèche, m_x, m_y, m_xy, surfaces
 d'influence) dessinées en vue en plan pour un ouvrage courbe ; manuel : chapitre 21 « l'ouvrage courbe ».
+Bouton « Manuel » (en-tête) : ouvre la dernière version du manuel d'utilisation, publiée avec le site dans docs/manuel/PSIDA_Manuel.pdf.
