@@ -64,8 +64,8 @@ export class Axe {
 }
 
 /**
- * Lignes d'appui (segments) : abscisse s de l'intersection avec l'axe, angle ψ [gr] entre l'axe et la ligne (100 gr =
- * ligne d'appui radiale, perpendiculaire à l'axe). Triées par s croissant.
+ * Lignes d'appui (segments) : abscisse s de l'intersection avec l'axe, angle ψ [gr] de la tangente à la ligne (100 gr =
+ * ligne d'appui radiale, perpendiculaire à l'axe ; ψ < 100 ou > 100 selon le sens du biais). Triées par s croissant.
  */
 export function stationsAppuis(axe, lignes) {
   return lignes.map(seg => {
@@ -76,8 +76,12 @@ export function stationsAppuis(axe, lignes) {
     if (ylo * yhi > 0) throw new Error('ligne d\'appui qui ne coupe pas l\'axe');
     for (let it = 0; it < 60; it++) { const m = (lo + hi) / 2, ym = y(m); if (ylo * ym <= 0) { hi = m; yhi = ym; } else { lo = m; ylo = ym; } }
     const t = (lo + hi) / 2, P = [seg.a[0] + t * (seg.b[0] - seg.a[0]), seg.a[1] + t * (seg.b[1] - seg.a[1])], pr = axe.projeter(P);
-    const u = [seg.b[0] - seg.a[0], seg.b[1] - seg.a[1]], lu = Math.hypot(u[0], u[1]), tg = axe.tangente(pr.s);
-    const cosA = Math.abs(u[0] * tg[0] + u[1] * tg[1]) / lu, psi = Math.acos(Math.min(1, cosA)) * 200 / Math.PI;
+    // ψ : angle de la tangente vers la ligne orientée vers la gauche de l'axe, dans ]0, 200[ gr (100 = radiale ;
+    // ψ < 100 : la ligne s'incline vers les s croissants à gauche de l'axe, comme le biais d'un ouvrage droit)
+    const u = [seg.b[0] - seg.a[0], seg.b[1] - seg.a[1]], lu = Math.hypot(u[0], u[1]), tg = axe.tangente(pr.s), nm = [-tg[1], tg[0]];
+    let dT = (u[0] * tg[0] + u[1] * tg[1]) / lu, dN = (u[0] * nm[0] + u[1] * nm[1]) / lu;
+    if (dN < 0) { dT = -dT; dN = -dN; }
+    const psi = Math.atan2(dN, dT) * 200 / Math.PI;
     return { s: pr.s, psi, longueur: lu, P };
   }).sort((a, b) => a.s - b.s);
 }

@@ -34,7 +34,7 @@ export class InfluencePlaque {
     for (const [k, a] of P.appuis.entries()) this.cibles.push({ g: 'R', ligne: a.ligne, rang: a.rang, k });
     // moyennes de m_y et m_xy sur les bandes de chevêtre (ligne d'appui × bande)
     this.nB0 = this.cibles.length;
-    deck.beam.x0.forEach((x, ligne) => { const i = P.plusProche(P.xs, x); this.M.bandes.bandes.forEach((bd, kb) => { for (const g of ['my', 'mxy']) this.cibles.push({ g: 'B' + g, ligne, kb, i, poids: bd.poids }); }); });
+    deck.beam.x0.forEach((x, ligne) => { const i = P.plusProche(P.xs, x); (this.M.lignes ? this.M.lignes[ligne].bandes : this.M.bandes).bandes.forEach((bd, kb) => { for (const g of ['my', 'mxy']) this.cibles.push({ g: 'B' + g, ligne, kb, i, poids: bd.poids }); }); });
     this._eta = new Array(this.cibles.length);
     this._lignes = new Map();
     this._env = new Map();
@@ -53,7 +53,7 @@ export class InfluencePlaque {
       return acc;
     };
     if (c.g === 'R') { v = new Float64Array(P.n); const a = P.appuis[c.k]; v[P.idx(a.i, a.j)] = a.kEff; }
-    else if (c.g[0] === 'B') { for (const [j, w] of c.poids) v = comb(c.i, j, this.M.repereChev[c.g.slice(1)], w, v); v ||= new Float64Array(P.n); }
+    else if (c.g[0] === 'B') { for (const [j, w] of c.poids) v = comb(c.i, j, (this.M.lignes ? this.M.lignes[c.ligne].repereChev : this.M.repereChev)[c.g.slice(1)], w, v); v ||= new Float64Array(P.n); }
     else v = comb(c.i, c.j, this.M.repere[c.g]) || new Float64Array(P.n);
     return (this._eta[k] = Float32Array.from(P.resoudre(v)));
   }

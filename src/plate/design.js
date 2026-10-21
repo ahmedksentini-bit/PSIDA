@@ -79,11 +79,12 @@ export function transversalPlaque(deck, perm, ec, f61, transG, { f1 = 0.2, f2 = 
  */
 export function chevetresPlaque(base, { deck, perm, ec, fck = 35, fyk = 500, gG = 1.35, gQ = 1.35 }) {
   const mat = materialsEC2({ fck, fyk });
-  const { bandes } = deck.plaque.M.bandes, n = deck.plaque.M.yb.length;
+  const PM = deck.plaque.M, n = PM.yb.length;
   const tr = ec.gr1a || ec.LM1;
   const wa = (r, l, k) => Math.max(Math.abs(r.BmxyMax[l][k]), Math.abs(r.BmxyMin[l][k]));
   return base.map(cv => {
     const l = deck.beam.x0.findIndex(x => Math.abs(x - cv.x) < 1e-6);
+    const { bandes } = PM.lignes ? PM.lignes[l].bandes : PM.bandes;   // bandes propres à la ligne (biais variable)
     // moments de dimensionnement par bande (≥ 0) : sup. −(m_y − |m_xy|), inf. m_y + |m_xy|
     const mB = bandes.map((bd, k) => bd.face === 'top'
       ? gG * Math.max(-perm.BmyMin[l][k] + wa(perm, l, k), 0) + gQ * Math.max(-tr.BmyMin[l][k] + wa(tr, l, k), 0)
@@ -128,13 +129,14 @@ export function reactionsAppareils(deck, perm, ec, beamComb) {
  * Modifie dz.envTop dans la zone et ajoute dz.renfortsAppareils.
  */
 export function renfortsAppareils(deck, dz, { zone = 0.2 } = {}) {
-  const M = deck.plaque.M, { a, e } = M.bandes, yb = M.yb, ys = deck.ys, x0 = deck.beam.x0, secs = deck.beam.sections;
-  const w1 = 2 / 3 * Math.max(a, e), b = deck.b;
-  const dansBande = y => yb.some(t => Math.abs(y - t) <= w1 / 2 + 1e-9);
-  const hors = ys.map((y, i) => (dansBande(y) ? -1 : i)).filter(i => i >= 0);
+  const M = deck.plaque.M, ys = deck.ys, x0 = deck.beam.x0, secs = deck.beam.sections, b = deck.b;
+  // bandes ① des appareils de la ligne i (biais propre à la ligne sur un ouvrage courbe)
+  const geomL = i => { const L = M.lignes ? M.lignes[i] : { bandes: M.bandes, yb: M.yb }, { a, e } = L.bandes, w1 = 2 / 3 * Math.max(a, e);
+    return { yb: L.yb, w1, hors: ys.map((y, k) => (L.yb.some(t => Math.abs(y - t) <= w1 / 2 + 1e-9) ? -1 : k)).filter(k => k >= 0) }; };
   const moy = row => row.reduce((t, v, i) => (i ? t + (v + row[i - 1]) / 2 * (ys[i] - ys[i - 1]) : t), 0) / (2 * b);
   const envTop = dz.envTop.slice(), out = [];
   for (let i = 1; i < x0.length - 1; i++) {
+    const { yb, w1, hors } = geomL(i);
     const zL = zone * deck.spans[i - 1], zR = zone * deck.spans[i];
     const idx = secs.map((sc, k) => (sc.x >= x0[i] - zL - 1e-9 && sc.x <= x0[i] + zR + 1e-9 ? k : -1)).filter(k => k >= 0);
     let need = 0, sMax = null;

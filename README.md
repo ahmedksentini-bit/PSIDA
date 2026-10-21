@@ -357,3 +357,7 @@ Bouton « Manuel » (en-tête) : ouvre la dernière version du manuel d'utilisat
 v0.61 : ouvrage courbe — force centrifuge répartie au prorata des raideurs transversales (pile voile fléchie dans son plan,
 colonnes en portique sous chevêtre, culée remblayée rigide en travers, pieux dans le sens transversal, semelle autour de
 son grand axe) ; rayon minimal pris sur la longueur du tablier seulement ; manuel § 21.8 mis à jour.
+v0.62 : ouvrage courbe à lignes d'appui biaises, biais propre à chaque ligne (franchissement d'une voie droite par un pont
+courbe) : angle signé avec la tangente lu dans le DXF, plaque maillée suivant chaque ligne (P = A + y (N + cot ψ T), cot ψ
+interpolé), appareils, bandes et repère de chevêtre par ligne ; cartes en plan par transformation inverse ; fichier
+d'essai exemples/ouvrage_courbe_biais.dxf ; manuel § 21.9.

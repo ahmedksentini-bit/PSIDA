@@ -57,7 +57,7 @@ function carteCourbe(div, M, champ, { titre, unite, echelle = 1, symetrique = fa
   const gx = Array.from({ length: Math.ceil((X1 - X0) / pas) + 1 }, (_, m) => X0 + m * pas), gy = Array.from({ length: Math.ceil((Y1 - Y0) / pas) + 1 }, (_, m) => Y0 + m * pas);
   // projection : départ de la recherche au point voisin déjà projeté (balayage par lignes) pour rester rapide
   const z = gy.map(Y => gx.map(X => {
-    const pr = geo.axe.projeter([X, Y]); const v = interpSY(M, champ, pr.s - geo.s0, pr.y);
+    const pr = geo.inv([X, Y]); const v = interpSY(M, champ, pr.u, pr.y);
     return v === null || Math.abs(pr.y) > b + 1e-9 ? null : v * echelle;
   }));
   const vmax = Math.max(...z.flat().filter(v => v !== null).map(Math.abs));

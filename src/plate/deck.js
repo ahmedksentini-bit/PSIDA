@@ -16,9 +16,34 @@ import { Axe } from '../geom/axe.js';
  * Géométrie d'un ouvrage courbe (tracé en plan) : abscisse s le long de la poutre (origine sur C0), déport y à gauche ;
  * point(s, y), rapport des aires J = 1 − κ y, angle de la tangente. trace = { segments, s0 } (s0 : abscisse de C0 sur l'axe).
  */
-export function geoTrace(trace) {
+export function geoTrace(trace, { x0 = null, psiL = null } = {}) {
   const axe = trace.axe || new Axe(trace.segments), s0 = trace.s0 || 0;
-  return { axe, s0, pt: (s, y) => axe.pointDeporte(s0 + s, y), J: (s, y) => 1 - axe.courbure(s0 + s) * y, theta: s => { const t = axe.tangente(s0 + s); return Math.atan2(t[1], t[0]); }, kappa: s => axe.courbure(s0 + s) };
+  const theta = s => { const t = axe.tangente(s0 + s); return Math.atan2(t[1], t[0]); }, kappa = s => axe.courbure(s0 + s);
+  if (!psiL || psiL.every(p => Math.abs(p - 100) < 1e-9)) return { axe, s0, pt: (s, y) => axe.pointDeporte(s0 + s, y), inv: q => { const r = axe.projeter(q); return { u: r.s - s0, y: r.y }; }, J: (s, y) => 1 - kappa(s) * y, theta, kappa };
+  // lignes d'appui biaises (angle ψ_i avec la tangente, variable d'une ligne à l'autre) : P(u, y) = A(u) + y (N(u) + c(u) T(u)),
+  // c = cot ψ interpolé linéairement entre les lignes d'appui (constant au-delà des lignes d'extrémité) ; chaque ligne
+  // u = x_i est la droite du DXF (direction N + cot ψ_i T) ; y = distance normale à l'axe au droit de la ligne.
+  // Rapport des aires (jacobien) : J = 1 − κ y + y c′ − κ y c².
+  const cL = psiL.map(p => (Math.abs(p - 100) < 1e-9 ? 0 : 1 / Math.tan(p * Math.PI / 200)));
+  const seg = u => { if (u <= x0[0]) return [0, 0]; if (u >= x0[x0.length - 1]) return [x0.length - 2, 1]; let k = 0; while (k < x0.length - 2 && x0[k + 1] < u) k++; return [k, (u - x0[k]) / (x0[k + 1] - x0[k])]; };
+  const c = u => { if (u <= x0[0]) return cL[0]; if (u >= x0[x0.length - 1]) return cL[cL.length - 1]; const [k, r] = seg(u); return cL[k] * (1 - r) + cL[k + 1] * r; };
+  const dc = u => { if (u < x0[0] || u > x0[x0.length - 1]) return 0; const [k] = seg(u); return (cL[k + 1] - cL[k]) / (x0[k + 1] - x0[k]); };
+  const pt = (u, y) => { const A = axe.point(s0 + u), t = axe.tangente(s0 + u), cu = c(u); return [A[0] + y * (-t[1] + cu * t[0]), A[1] + y * (t[0] + cu * t[1])]; };
+  // inverse : départ sur la projection normale, puis Newton (jacobien numérique)
+  const inv = q => {
+    const p0 = axe.projeter(q); let u = p0.s - s0, y = p0.y;
+    for (let it = 0; it < 30; it++) {
+      const P = pt(u, y), rx = q[0] - P[0], ry = q[1] - P[1];
+      if (Math.hypot(rx, ry) < 1e-9) break;
+      const e = 1e-6, Pu = pt(u + e, y), Py = pt(u, y + e);
+      const a11 = (Pu[0] - P[0]) / e, a21 = (Pu[1] - P[1]) / e, a12 = (Py[0] - P[0]) / e, a22 = (Py[1] - P[1]) / e, det = a11 * a22 - a12 * a21;
+      u += (a22 * rx - a12 * ry) / det; y += (-a21 * rx + a11 * ry) / det;
+    }
+    return { u, y };
+  };
+  return { axe, s0, cot: c, psiL, biais: true, inv,
+    pt,
+    J: (u, y) => { const k = kappa(u), cu = c(u); return 1 - k * y + y * dc(u) - k * y * cu * cu; }, theta, kappa };
 }
 
 /**
@@ -61,27 +86,35 @@ export function plaqueTablier(deck, { h = 0.25, E = 34000, nu = deck.nu ?? 0.2, 
   if (moteur === 'df' && psi < 100 - 1e-9) throw new Error('plaque : les différences finies ne traitent que les ouvrages droits (moteur « ef » pour le biais)');
   const trace = deck.g.trace || null;
   if (trace && moteur === 'df') throw new Error('plaque : ouvrage courbe traité par les éléments finis seulement');
-  if (trace && psi < 100 - 1e-9) throw new Error('plaque : ouvrage courbe à lignes d\'appui biaises non traité (lignes d\'appui radiales seulement)');
-  const geo = trace ? geoTrace(trace) : null;
   const b = deck.b, [aL, aR] = deck.g.overhangs || [0, 0];
   const x0 = deck.beam.x0, xA = -aL, xB = x0[x0.length - 1] + aR;
+  // ouvrage courbe : biais propre à chaque ligne d'appui (trace.psiLignes, angle avec la tangente), géométrie portée par
+  // la transformation geo ; la plaque est alors maillée sur une grille rectangulaire (u, y)
+  const psiL = trace ? (trace.psiLignes && trace.psiLignes.length === x0.length ? trace.psiLignes.slice() : x0.map(() => 100)) : x0.map(() => psi);
+  const geo = trace ? geoTrace(trace, { x0, psiL }) : null;
+  if (trace) psi = 100;
   const secs = deck.beam.sections.map(s => s.x);
-  // entraxe des appareils le long de la ligne d'appui ; en travers (y) : a·sin ψ
+  // entraxe des appareils le long de la ligne d'appui ; en travers (y) : a·sin ψ (par ligne)
   const sPsi = Math.sin(psi * Math.PI / 200), cot = Math.abs(psi - 100) < 1e-9 ? 0 : 1 / Math.tan(psi * Math.PI / 200);
-  const a = bearingSpacing({ width: 2 * b, psi, n: nb });
-  const yb = Array.from({ length: nb }, (_, k) => (k - (nb - 1) / 2) * a * sPsi);
+  const parLigne = psiL.map(pl => { const aI = bearingSpacing({ width: 2 * b, psi: Math.min(pl, 200 - pl), n: nb }), sI = Math.sin(pl * Math.PI / 200); return { psi: pl, a: aI, yb: Array.from({ length: nb }, (_, k) => (k - (nb - 1) / 2) * aI * sI) }; });
+  const a = parLigne[0].a, yb = parLigne[0].yb;
   const ch = deck.g.chamfer;
-  const ptsY = [-b, b, ...deck.ys, ...yb, ...(ch && ch.joue > 0 ? [-b + ch.joue, b - ch.joue] : [])].filter(y => y >= -b - 1e-9 && y <= b + 1e-9);
+  // ordonnées des appareils de toutes les lignes ; regroupées quand elles sont plus proches que h/3 (mailles trop fines)
+  const ybTous = [...new Set(parLigne.flatMap(l => l.yb))].sort((u, v) => u - v), ybG = [];
+  for (const y of ybTous) { const g = ybG[ybG.length - 1]; if (g && y - g[g.length - 1] < h / 3) g.push(y); else ybG.push([y]); }
+  const ptsY = [-b, b, ...deck.ys, ...ybG.map(g => g.reduce((t, v) => t + v, 0) / g.length), ...(ch && ch.joue > 0 ? [-b + ch.joue, b - ch.joue] : [])].filter(y => y >= -b - 1e-9 && y <= b + 1e-9);
   const xs = grille([xA, xB, ...x0, ...secs.filter(x => x >= xA && x <= xB)], h);
   const ys = grille(ptsY, h);
   const Dy = y => E * 1000 * epaisseur(deck, y) ** 3 / (12 * (1 - nu * nu));
   const kLigne = i => (Array.isArray(kv) ? kv[i] : kv);
-  const appuis = x0.flatMap((x, i) => yb.map((y, k) => ({ x: x + y * cot, s: x, y, k: kLigne(i), ligne: i, rang: k })));
+  const appuis = x0.flatMap((x, i) => parLigne[i].yb.map((y, k) => ({ x: x + y * cot, s: x, y, k: kLigne(i), ligne: i, rang: k })));
   const P = moteur === 'df' ? new PlaqueDF({ xs, ys, D: (_, y) => Dy(y), nu, appuis }) : new PlaqueEF({ xs, ys, D: (_, y) => Dy(y), nu, appuis, psi, geo });
   const iSec = secs.map(x => P.plusProche(xs, x)), jFib = deck.ys.map(y => P.plusProche(ys, y));
-  const aT = alphaT ?? psi;
-  const M = { P, deck, xs, ys, yb, a, nb, iSec, jFib, E, nu, h, psi, cot, moteur, geo, alphaT: aT, repere: repere(aT), repereChev: repere(psi) };
+  // ouvrage courbe : aciers transversaux perpendiculaires à l'axe (α = 100 gr) ; chevêtres parallèles à chaque ligne
+  const aT = trace ? 100 : (alphaT ?? psi);
+  const M = { P, deck, xs, ys, yb, a, nb, iSec, jFib, E, nu, h, psi, cot, moteur, geo, alphaT: aT, repere: repere(aT), repereChev: repere(psi), psiL };
   M.bandes = bandesChevetre(M);
+  M.lignes = parLigne.map((l, i) => { const Mi = { ...M, yb: l.yb, psi: l.psi }; return { ...l, bandes: bandesChevetre(Mi), repereChev: repere(l.psi) }; });
   return M;
 }
 
@@ -146,7 +179,7 @@ export function resultats(M, w) {
   const Rapp = Array.from({ length: nL }, (_, i) => reac.filter(r => r.ligne === i).sort((u, v) => u.rang - v.rang).map(r => r.R));
   // moyennes de m_y et m_xy sur les bandes de chevêtre de chaque ligne d'appui
   // (aciers des chevêtres parallèles aux lignes d'appui : repère α = ψ)
-  const B = M.bandes ? deck.beam.x0.map(x => { const i = P.plusProche(xs, x); return M.bandes.bandes.map(bd => ({ my: bd.poids.reduce((t, [j, w]) => t + w * appliquer(RC.my, m, P.idx(i, j)), 0), mxy: bd.poids.reduce((t, [j, w]) => t + w * appliquer(RC.mxy, m, P.idx(i, j)), 0) })); }) : null;
+  const B = M.bandes ? deck.beam.x0.map((x, l) => { const i = P.plusProche(xs, x), L = M.lignes ? M.lignes[l] : { bandes: M.bandes, repereChev: RC }, rc = L.repereChev; return L.bandes.bandes.map(bd => ({ my: bd.poids.reduce((t, [j, w]) => t + w * appliquer(rc.my, m, P.idx(i, j)), 0), mxy: bd.poids.reduce((t, [j, w]) => t + w * appliquer(rc.mxy, m, P.idx(i, j)), 0) })); }) : null;
   return { mx, my, mxy, Mtot, R: Rl, Rapp, B, w, champ: m, xs, ys };
 }
 
