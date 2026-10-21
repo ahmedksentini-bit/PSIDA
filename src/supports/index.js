@@ -412,7 +412,9 @@ export function computeSupports(st, input = {}) {
     const vRF = Math.abs(dist.imposed(RF, 'diff').disp[i]) + (pente ? Math.abs(pente[code === 'BAEL' ? 'B' : 'Eb'][i]) * dist.lines[i].sNeo.diff : 0);
     // température : BAEL longue durée (module différé) + courte durée (instantané) ; EC variation uniforme T (guide 2007, G = 0,9 MPa)
     const vT = code === 'BAEL' ? Math.abs(dist.imposed(sp.eps.TLD, 'diff').disp[i]) + Math.abs(dist.imposed(sp.eps.TCD, 'inst').disp[i]) : Math.abs(dist.imposed(epsT, 'diff').disp[i]);
-    const Gb = row.kCP * perm.Rmax[i] / nb, GbMin = perm.Rmin[i] / nb, Pmax = hypMax[i] / nb, Pmin = hypMin[i] / nb;
+    // ouvrage courbe précontraint : réactions différentielles des appareils dues au couple de la poussée radiale des câbles
+    const tC = dp && dp.courbe && dp.courbe.dRmax ? dp.courbe : null;
+    const Gb = row.kCP * perm.Rmax[i] / nb, GbMin = perm.Rmin[i] / nb, Pmax = hypMax[i] / nb + (tC ? tC.dRmax[i] : 0), Pmin = hypMin[i] / nb + (tC ? tC.dRmin[i] : 0);
     const tr = R(f61.trottoir, i);
     const bB = distB.braking(1)[i], bE = distE.braking(1)[i];
     const QQ = code === 'BAEL'

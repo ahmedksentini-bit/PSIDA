@@ -195,3 +195,29 @@ test('Clothoïdes : point par intégration, inverse, et reconstitution depuis SP
   const pts = []; for (let s = 0; s <= ref.L + 1e-9; s += 1) pts.push(ref.point(s).map(v => +v.toFixed(2)));
   assert.ok(ajusterElements(pts).ecartMax < 0.01);
 });
+
+test('Précontrainte d\'un ouvrage courbe : frottement avec la déviation horizontale (câble rectiligne en élévation)', async () => {
+  const { prestress } = await import('../src/psidp/prestress.js');
+  const spans = [20], R = 50, f = 0.18, phi = 0.002, s0 = 1.4e6;
+  const segs = [[{ A: 0, B: 0, C: 0, x1: 20 }]];
+  const base = { spans, sec: { B: 6, I: 0.25, v: 0.35, vp: 0.35, h: 0.7 }, mat: { Eij: 3e7, Ei28: 3.5e7, epsR: 3e-4, Kfl: 2, rj: 0.5, rm: 0.3 }, nPerSpan: 100,
+    cable: { n: 4, Ap: 1.8e-3, phiG: 0.08, segs, sigma0: s0, f, phi, g: 0.006, Ep: 1.9e8, rho1000: 2.5, mu0: 0.43, fprg: 1.86e6, ends: 'left', friction: 'continu' } };
+  const d = prestress(base), c = prestress({ ...base, cable: { ...base.cable, alphaH: x => x / R } });
+  // sans recul d'ancrage au-delà de la zone d'ancrage : rapport des tensions après frottement à l'extrémité = e^(−f L/R)
+  const i = d.xs.length - 1;
+  proche(c.friction.s[i] / d.friction.s[i], Math.exp(-f * 20 / R), 1e-9, 'perte supplémentaire e^(−f L/R)');
+});
+
+test('Précontrainte d\'un ouvrage courbe : couture, couple de poussée radiale et réactions différentielles des appareils', () => {
+  const r = analyserDXF(readFileSync(new URL('../exemples/ouvrage_courbe.dxf', import.meta.url), 'utf8'));
+  const st = compute(parseData({ ...formDefaults(), bp_actif: 'on', trace: JSON.stringify({ segments: r.axe.seg, s0: r.stations[0].s }) }));
+  const c = st.psidp && st.psidp.courbe;
+  assert.ok(c, st.psidpError || 'courbe');
+  proche(c.aHtot, 36 / 60, 1e-3, 'α_h = longueur d\'arc / R');
+  proche(c.qUnit, c.Pmax1 / c.rInt, 1e-9, 'P/R');
+  assert.ok(c.At > 0 && c.mtMax > 0);
+  assert.ok(c.dR.flat().some(v => Math.abs(v) > 5), 'réactions différentielles');
+  // prises en compte dans les appareils d'appui (EC) : P_max par appareil = hyperstatique / n + max ΔR
+  const b = st.supports.lines[2].EC.brg || st.supports.lines[2].brg;
+  assert.ok(b, 'appareils');
+});

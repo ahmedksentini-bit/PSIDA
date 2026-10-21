@@ -168,6 +168,20 @@ export function psidpBlocks(dp, { error = null } = {}) {
     table(['Appui', 'Rotation C.P. inst. g / d [10⁻³ rad]', 'Rotation P inst.', 'Rotation en service'], D.rot.cp.map((q, i) => [String(i + 1), `${q.g == null ? '—' : F(q.g * 1000, 2)} / ${q.d == null ? '—' : F(q.d * 1000, 2)}`, `${D.rot.pI[i].g == null ? '—' : F(D.rot.pI[i].g * 1000, 2)} / ${D.rot.pI[i].d == null ? '—' : F(D.rot.pI[i].d * 1000, 2)}`, `${D.rot.service[i].g == null ? '—' : F(D.rot.service[i].g * 1000, 2)} / ${D.rot.service[i].d == null ? '—' : F(D.rot.service[i].d * 1000, 2)}`]), { small: true });
     comment(`Flèches en mm (positives vers le haut) ; poutre continue à inertie brute constante sous les moments réels (hyperstatiques compris). E_ij = ${F0(D.Eij / 1000)} MPa (ossature, C.P. et précontrainte instantanées) ; long terme des C.P. (1 + K_fl) w(E_i28) (E_v28 = E_i28/3 pour K_fl = 2) ; précontrainte par fluage K_fl · w(P∞ moyenne, E_i28), convention retrouvée sur la note PSIDP-EL (15,2 mm calculés pour 15,0). Une flèche finale proche de zéro ou positive traduit la prépondérance de la précontrainte (contre-flèche de coffrage à prévoir en conséquence).`);
   }
+  // ------------------------------------------------------------------ ouvrage courbe
+  if (dp.courbe) {
+    const C = dp.courbe, n = dp.n;
+    h2('Ouvrage courbe — effets de la courbure en plan sur la précontrainte');
+    table(['Effet', 'Valeur', 'Règle'], [
+      ['Déviation angulaire horizontale cumulée α_h (câbles parallèles à l\'axe)', `${F(C.aHtot, 3)} rad`, 'frottement σ = σ_p0 e^(−f α − φ x), Δα = √(Δθ_v² + Δθ_h²) pas à pas (BPEL 3.3,11 ; EN 1992-1-1 § 5.10.5.2)'],
+      ['Rayon minimal sur le tablier ; unité la plus intérieure (à ' + F2(C.yInt) + ' m de l\'axe)', `${F(C.rMin, 1)} m ; ${F(C.rInt, 1)} m`, '—'],
+      ['Poussée au vide d\'une unité, vers le centre de courbure : P_max/R', `${F(C.qUnit, 1)} kN/m (P_max = 1,02 σ_p0 A_p = ${F0(C.Pmax1)} kN)`, 'force radiale du câble courbe sur le béton'],
+      ['Armatures de couture (épingles horizontales autour des gaines, côté concave)', `${F(C.At * 1e4, 2)} cm²/m par unité ; ${F(C.AtTot * 1e4, 1)} cm²/m pour les ${n} unités`, 'A_t f_e/γ_s ≥ P_max/R'],
+      ['Couple réparti de la poussée radiale m_t = F z κ (F moyen en service)', `${F(C.mtMax, 1)} kN·m/m au plus`, 'z : cote du câble par rapport au centre de gravité'],
+    ], { small: true });
+    if (C.dR) table(['Ligne', ...C.dR[0].map((_, k) => `Appareil ${k + 1}`)], C.dR.map((row, i) => [i === 0 ? 'C0' : i === C.dR.length - 1 ? `C${i}` : `P${i}`, ...row.map(v => F0(v))]), { small: true });
+    comment(`La poussée radiale des câbles s'exerce à la cote du câble : elle tord le tablier autour de son axe (couple m_t = F z κ). Sur la plaque, ce couple est appliqué comme une pression linéaire en travers q(y) = 3 m_t y/(2 b³) ; le tableau donne les réactions différentielles des appareils qui en résultent [kN, appareil 1 du côté y < 0, extérieur d'un virage à gauche], ajoutées aux réactions de précontrainte dans le dimensionnement des appareils d'appui. La perte par frottement tient compte de la déviation horizontale des câbles ; la poussée au vide est reprise par des épingles de couture autour des gaines, à disposer du côté concave sur toute la longueur courbe.`);
+  }
   // ------------------------------------------------------------------ zones d'about
   if (dp.anchors) {
     const A = dp.anchors, W = dp.sec.bBot, cm = v => F(v * 1e4, 1), cmm = v => F(v * 1e4 / W, 1);

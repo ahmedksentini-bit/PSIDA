@@ -8,6 +8,8 @@ import { prestress, cableGeometry, deflection } from './prestress.js';
 import { materialsBAEL, flexureELU, flexureELS } from '../section_bael.js';
 import { psidpChecks, mLim } from './checks.js';
 import { unitOf } from './agrements.js';
+import { Axe } from '../geom/axe.js';
+import { resultats } from '../plate/deck.js';
 
 /** Unités de précontrainte courantes (aire d'acier, Ø extérieur de gaine, rayon minimal de courbure). */
 export const UNITS = {
@@ -149,7 +151,17 @@ export function designPSIDP(ctx, bpIn = {}) {
   const lim = { fcj: fcj * MPa, fc28: fc28 * MPa, ftj: ft(fcj) * MPa, ft28: ft(fc28) * MPa };
   const steel = { fe: bp.fe * MPa, skin: bp.skin, Es: 200000 * MPa, gs: 1.15, gp: 1.15, gb: 1.5, fpeg: fpeg * MPa, cover: 0.035, atMin: (bp.atMin ?? 0.1) * MPa };
 
-  const cableOf = (n, sg) => ({ n, Ap: U.Ap, phiG: U.phiG, segs: sg, sigma0: sigma0 * MPa, f: bp.f, phi: bp.phi, g: bp.g, Ep: bp.Ep * MPa, rho1000: bp.rho1000, mu0: bp.mu0, fprg: fprg * MPa, ends: bp.ends, friction: bp.friction });
+  // ouvrage courbe : déviation angulaire horizontale cumulée α_h(x) = ∫|κ| ds le long de l'axe (câbles parallèles à l'axe :
+  // même déviation angulaire quel que soit leur excentrement en travers)
+  const tr = deck.g.trace || null, axe = tr ? new Axe(tr.segments) : null, sC0 = tr ? (tr.s0 || 0) + bm.x0[0] : 0;
+  const kapAt = x => (axe ? axe.courbure(sC0 + x - bm.x0[0]) : 0);
+  let alphaH = null;
+  if (axe) {
+    const Lt = spans.reduce((a, v) => a + v, 0), nA = Math.max(200, Math.ceil(Lt / 0.1)), tx = [0], ta = [0];
+    for (let k = 1; k <= nA; k++) { const x = Lt * k / nA, xm = Lt * (k - 0.5) / nA; tx.push(x); ta.push(ta[k - 1] + Math.abs(kapAt(xm)) * Lt / nA); }
+    alphaH = x => interpS(tx, ta, x);
+  }
+  const cableOf = (n, sg) => ({ n, Ap: U.Ap, phiG: U.phiG, segs: sg, sigma0: sigma0 * MPa, f: bp.f, phi: bp.phi, g: bp.g, Ep: bp.Ep * MPa, rho1000: bp.rho1000, mu0: bp.mu0, fprg: fprg * MPa, ends: bp.ends, friction: bp.friction, alphaH });
   const rm = sec.B / (sec.bTop + sec.bBot + 2 * sec.h);                       // rayon moyen B/u [m] (BPEL 2.1,51)
   const matP = { Eij: Ei(fcj) * MPa, Ei28: Ei(fc28) * MPa, epsR: bp.epsR, Kfl: bp.Kfl, rj: bp.rj, reg: bp.reg || 'BPEL91', j: bp.j ?? 7, rm };
   const run = (n, sg = segs, fast = false) => {
@@ -256,7 +268,47 @@ export function designPSIDP(ctx, bpIn = {}) {
   const rjS = (bp.j ?? 7) / ((bp.j ?? 7) + 9 * rm * 100);
   const shorten = { sigm, Fm, el: sigm / Ei(fcj), fl: (bp.Kfl ?? 2) * sigm / Ei(fc28), r: bp.epsR * (1 - rjS), rj: rjS, rm, Kfl: bp.Kfl ?? 2, epsR: bp.epsR, j: bp.j ?? 7 };
   shorten.total = shorten.el + shorten.fl + shorten.r;
-  return { bp, unit: U, sec, sigma0, fcj, fc28, lim, steel, segs, geoChk, pre, n0, tried, auto: !bp.n, opt, anchors, shorten, xs, M, Q, G, O, ...res };
+  const courbe = axe ? effetsCourbure({ res, U, sigma0: sigma0 * MPa, fe: bp.fe * MPa, deck, kapAt, alphaH, axe }) : null;
+  return { bp, unit: U, sec, sigma0, fcj, fc28, lim, steel, segs, geoChk, pre, n0, tried, auto: !bp.n, opt, anchors, shorten, xs, M, Q, G, O, courbe, ...res };
+}
+
+/**
+ * Précontrainte d'un ouvrage courbe en plan (câbles parallèles à l'axe) :
+ *  - frottement : déviation horizontale α_h ajoutée (prestress, cb.alphaH) ; α_h total et perte correspondante ;
+ *  - poussée au vide : chaque unité exerce sur le béton une force radiale P/R par mètre, dirigée vers le centre de
+ *    courbure ; armatures de couture (épingles horizontales autour des gaines, côté concave) A_t ≥ γ_p P_max/(R f_e/γ_s)
+ *    par mètre et par unité, P_max = 1,02 σ_p0 A_p (BPEL 4.1,2 ; SETRA, guide des ponts courbes) ; rayon de l'unité la
+ *    plus intérieure R − y_int ;
+ *  - torsion : la poussée radiale, appliquée à la cote z du câble (z < 0 sous le centre de gravité), donne un couple
+ *    réparti m_t(x) = F(x) z(x) κ(x) autour de l'axe [kN·m/m] ; sur la plaque, couple remplacé par une pression linéaire en
+ *    travers q(y) = 3 m_t y/(2 b³) (∫q y dy = m_t, ∫q dy = 0) ; réactions différentielles des appareils (somme nulle par ligne).
+ */
+export function effetsCourbure({ res, U, sigma0, fe, deck, kapAt, alphaH, axe, gp = 1.0, gs = 1.15 }) {
+  const r = res.r, n = res.n, xs = r.xs, b = deck.b, Lt = xs[xs.length - 1];
+  const sC0 = (deck.g.trace.s0 || 0) + deck.beam.x0[0];
+  const rMin = axe.rayonMin(sC0 - (deck.g.overhangs || [0, 0])[0], sC0 + Lt + (deck.g.overhangs || [0, 0])[1]);
+  const Pmax1 = 1.02 * sigma0 * U.Ap;                                      // effort maximal d'une unité à la mise en tension [kN]
+  const yInt = Math.max(0, b - 0.5), rInt = Number.isFinite(rMin) ? rMin - yInt : Infinity;
+  const qUnit = Number.isFinite(rInt) && rInt > 0 ? Pmax1 / rInt : 0;     // poussée au vide d'une unité [kN/m]
+  const At = gp * qUnit / (fe / gs);                                       // couture par unité [m²/m]
+  const aHtot = alphaH ? alphaH(Lt) : 0;
+  // couple réparti (précontrainte moyenne en service, F en kN, z en m) et réactions différentielles sur la plaque
+  const F = r.ES.moy.F, z = r.z, mt = xs.map((x, i) => F[i] * z[i] * kapAt(x));
+  let dR = null;
+  const PL = deck.plaque;
+  if (PL && PL.M) {
+    const M = PL.M, P = M.P, Fv = P.vecteur(), ys = M.ys, c = mtx => 3 * mtx / (2 * b ** 3);
+    for (let i = 0; i < M.xs.length; i++) {
+      const xa = i > 0 ? (M.xs[i - 1] + M.xs[i]) / 2 : M.xs[0], xb = i < M.xs.length - 1 ? (M.xs[i] + M.xs[i + 1]) / 2 : M.xs[i];
+      const xm = (xa + xb) / 2; if (xm < 0 || xm > Lt) continue;
+      const m = interpS(xs, mt, xm); if (!m) continue;
+      for (let j = 0; j < ys.length - 1; j++) { const ym = (ys[j] + ys[j + 1]) / 2; P.chargeRectangle(Fv, { x1: xa, x2: xb, y1: ys[j], y2: ys[j + 1], q: c(m) * ym }); }
+    }
+    const w = P.resoudre(Fv);
+    dR = resultats(M, w).Rapp;
+  }
+  return { rMin, rInt, yInt, aHtot, Pmax1, qUnit, qTot: n * qUnit, At, AtTot: n * At, mt, mtMax: Math.max(...mt.map(Math.abs)), dR,
+    dRmax: dR ? dR.map(row => Math.max(0, ...row)) : null, dRmin: dR ? dR.map(row => Math.min(0, ...row)) : null };
 }
 
 /**

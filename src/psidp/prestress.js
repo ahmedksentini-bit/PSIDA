@@ -108,6 +108,11 @@ export function prestress(p) {
   const k = mat.k || [1.02, 0.8, 0.98, 1.2];
 
   // ---- frottement (depuis la gauche et depuis la droite)
+  // déviation angulaire entre deux points : verticale (pente du câble) et, pour un ouvrage courbe, horizontale (angle de la
+  // tangente en plan, cb.alphaH(x) = ∫|κ| ds depuis l'origine) ; câble gauche : Δα = √(Δθ_v² + Δθ_h²) (BPEL 3.3,11 ;
+  // EN 1992-1-1 § 5.10.5.2 (2) : somme des déviations angulaires horizontales et verticales)
+  const aH = cb.alphaH ? xs.map(cb.alphaH) : null;
+  const dev = (i, j) => (aH ? Math.hypot(th[i] - th[j], aH[i] - aH[j]) : Math.abs(th[i] - th[j]));
   const frictionFrom = fromLeft => {
     const order = fromLeft ? xs.map((_, i) => i) : xs.map((_, i) => N - 1 - i);
     const dist = order.map(i => (fromLeft ? xs[i] : Lt - xs[i]));
@@ -116,11 +121,11 @@ export function prestress(p) {
       // convention du programme PSIDP : déviation cumulée sur la grille des dixièmes de travée, σ interpolée linéairement
       const tOrd = fromLeft ? tenth : [...tenth].reverse();
       let a = 0; const sT = [], dT = [];
-      tOrd.forEach((i, q) => { if (q > 0) a += Math.abs(th[i] - th[tOrd[q - 1]]); const d = fromLeft ? xs[i] : Lt - xs[i]; dT.push(d); sT.push(s0 * Math.exp(-cb.f * a - cb.phi * d)); });
+      tOrd.forEach((i, q) => { if (q > 0) a += dev(i, tOrd[q - 1]); const d = fromLeft ? xs[i] : Lt - xs[i]; dT.push(d); sT.push(s0 * Math.exp(-cb.f * a - cb.phi * d)); });
       order.forEach((i, q) => { sig[i] = interp(dT, sT, dist[q]); });
     } else {
       let a = 0;
-      order.forEach((i, q) => { if (q > 0) a += Math.abs(th[i] - th[order[q - 1]]); sig[i] = s0 * Math.exp(-cb.f * a - cb.phi * dist[q]); });
+      order.forEach((i, q) => { if (q > 0) a += dev(i, order[q - 1]); sig[i] = s0 * Math.exp(-cb.f * a - cb.phi * dist[q]); });
     }
     return sig;
   };

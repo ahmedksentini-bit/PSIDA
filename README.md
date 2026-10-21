@@ -367,3 +367,6 @@ des droites, arcs et clothoïdes (diagramme des courbures, Douglas-Peucker, moin
 centrifuge promenée le long du tablier avec l'intensité du rayon local, tablier indéformable dans son plan en translation
 ET rotation d'ensemble sur les ressorts longitudinaux et transversaux des lignes (H_x ajouté au freinage) ; fichier
 d'essai exemples/ouvrage_clothoides.dxf ; manuel § 21.8 et 21.10.
+v0.64 : précontrainte d'un ouvrage courbe — frottement avec la déviation horizontale des câbles (Δα = √(Δθ_v² + Δθ_h²)),
+poussée au vide P/R et armatures de couture, couple de la poussée radiale m_t = F z κ appliqué à la plaque et réactions
+différentielles des appareils ajoutées aux réactions de précontrainte ; manuel § 21.11.
