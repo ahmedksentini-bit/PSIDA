@@ -395,3 +395,6 @@ garde-corps, bordures et remplissage des trottoirs, étanchéité et couche de r
 2 v_T + v_RF, famille selon le guide Cerema 2016), gargouilles (retombée 0,50 m, fiche MEMOAR X-2) ; dessinés dans les
 coupes et la vue en plan du coffrage ; feuille « Équipements » (détails des bords, du joint et de la gargouille, schéma
 d'évacuation des eaux, métré) ; contrôle des poids propres par rapport aux charges linéaires du calcul.
+v0.69 : maillage du modèle en plaque (onglet Tablier, web/maillage_view.js) — vue en plan des triangles DKT, appuis-ressorts,
+épaisseur, sections et fibres, nœuds et numéros ; statistiques ; export DXF ; aperçu du maillage sans calcul en plaque ;
+manuel § 20.3 et § 26.6.

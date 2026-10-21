@@ -151,3 +151,19 @@ test('Équipements : géométrie, poids, souffle, métré et feuille dédiée', 
   const Fc = planCoffrage(st, {}, eq);
   assert.ok(Fc.vues.some(p => p.vue.ents.some(e => e.calque === 'EQUIPEMENTS')));
 });
+
+import { plaqueTablier } from '../src/plate/deck.js';
+import { statsMaillage, maillageSVG, maillageDXF } from '../web/maillage_view.js';
+
+test('Maillage du modèle en plaque : comptes, SVG et DXF', () => {
+  const M = plaqueTablier(st.deck, { h: 0.5, nb: st.bearings.nb, psi: 100, kv: Infinity });
+  const S = statsMaillage(M);
+  assert.equal(S.noeuds, S.nx * S.ny); assert.equal(S.triangles, 2 * (S.nx - 1) * (S.ny - 1)); assert.equal(S.ddl, 3 * S.noeuds);
+  // arêtes d'une grille triangulée : horizontales + verticales + diagonales
+  assert.equal(S.aretes, (S.nx - 1) * S.ny + S.nx * (S.ny - 1) + (S.nx - 1) * (S.ny - 1));
+  assert.equal(S.appuis, st.bearings.nb * st.deck.beam.x0.length);
+  assert.ok(maillageSVG(M, { numeros: true }).includes('>' + S.noeuds + '<'));
+  const D = maillageDXF(M);
+  assert.equal((D.match(/\r\nLINE\r\n/g) || []).length, S.aretes);
+  assert.equal((D.match(/\r\nCIRCLE\r\n/g) || []).length, S.appuis);
+});
