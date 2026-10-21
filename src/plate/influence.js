@@ -110,9 +110,12 @@ export class InfluencePlaque {
     const key = `${sig}|${f.tracks.map(t => `${t.e1.toFixed(3)},${t.e2.toFixed(3)},${t.share}`).join(';')}`;
     if (this._env.has(key)) return this._env.get(key);
     const n = this.cibles.length, out = new Array(n), nX = this.interp.length;
+    // ouvrage courbe : une charge répartie par mètre de voie, à l'excentrement y, couvre J = 1 − κ y mètre d'axe
+    const geo = this.M.geo, distrib = ['udl', 'strip', 'stripTrain', 'spanwise'].includes(f.kind), bx = this.deck.beam.xs;
+    const Jt = geo && distrib ? f.tracks.map(t => Float64Array.from(bx, x => geo.J(x, (t.e1 + t.e2) / 2))) : null;
     for (let k = 0; k < n; k++) {
       const il = new Float64Array(nX);
-      for (const t of f.tracks) { const l = this.ligne(k, t.e1, t.e2); for (let m = 0; m < nX; m++) il[m] += t.share * l[m]; }
+      f.tracks.forEach((t, q) => { const l = this.ligne(k, t.e1, t.e2); for (let m = 0; m < nX; m++) il[m] += t.share * l[m] * (Jt ? Jt[q][m] : 1); });
       out[k] = envOf(il);
     }
     this._env.set(key, out);

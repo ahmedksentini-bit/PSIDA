@@ -10,6 +10,7 @@
  *  12 appareils d'appui et chevêtres incorporés · 13 nomenclature des aciers · 14 appuis et fondations · références.
  * Le modèle ne dépend pas du DOM (testable sous Node) ; les figures sont passées en data: URI.
  */
+import { Axe } from '../src/geom/axe.js';
 import { BC, BT, MC120, maxAxleLoadOnLength, maxStripTrainLoad, COMBI_BAEL } from '../src/loads_f61.js';
 import { mechanicalSkew } from '../src/skew.js';
 import { supportsBlocks, waterBlocks } from './supports_view.js';
@@ -67,6 +68,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
     ['Trottoirs [m]', (g.footways || []).map(f => `${F2(f.y1)} ; ${F2(f.y2)}`).join(' | ') || '—'],
     ['Dalle : largeur 2b ; épaisseur h [m]', `${F3(2 * deck.b)} ; ${F3(deck.h)}`],
     ['Aire S [m²] ; inertie I [m⁴]', `${F3(deck.area)} ; ${F(I, 5)}`],
+    ...(g.trace ? [['Tracé en plan', (() => { const ax = new Axe(g.trace.segments); return `ouvrage courbe${g.trace.source ? ' (' + g.trace.source + ')' : ''} : axe de ${F2(ax.L)} m, rayon minimal ${F1(ax.rayonMin())} m, lignes d'appui radiales ; tablier calculé en plaque de Kirchhoff (DKT) maillée le long de l'axe (x = abscisse curviligne, y = déport), charges réparties pondérées par J = 1 − κ y, moments dans le repère local (tangente, radiale) ; force centrifuge EN 1991-2 § 4.4.2 sur les appuis`; })()]] : []),
     ...(g.devers ? [['Dévers transversal', `${F1(g.devers.p)} % ${g.devers.profil === 'unique' ? 'unique' : 'en toit'}, rattrapé par ${g.devers.mode === 'dalle' ? 'la dalle (sous-face horizontale, épaisseur h à l\'axe et ' + F3(Math.min(...[-deck.b, deck.b].map(y => deck.h + (g.devers.profil === 'unique' ? g.devers.p / 100 * y : -g.devers.p / 100 * Math.abs(y))))) + ' m au point bas ; S et I de la section réelle, aciers par fibre avec l\'épaisseur locale)' : g.devers.mode === 'revetement' ? 'le revêtement (dalle horizontale ; supplément de revêtement 24 kN/m³, k = 0,8 / 1,4, en bandes sur la chaussée)' : 'la dalle inclinée d\'épaisseur constante'}`]] : []),
   ]);
   if (deck.plaque) {

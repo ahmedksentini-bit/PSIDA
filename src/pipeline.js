@@ -43,6 +43,14 @@ function appliquerDevers(p) {
   return p;
 }
 
+/** Tracé en plan (champ caché « trace », JSON { segments, s0, ... } écrit par l'import DXF) ; null si absent ou droit. */
+function lireTrace(t) {
+  if (!t || !String(t).trim()) return undefined;
+  const o = JSON.parse(t);
+  if (!o.segments || !o.segments.some(g => g.type === 'arc')) return undefined;
+  return { segments: o.segments, s0: +o.s0 || 0, source: o.source || '' };
+}
+
 function parseData0(d) {
   const [y1, y2] = nums(d.roadway);
   const overhangs = nums(d.overhangs || '0,0');
@@ -58,9 +66,11 @@ function parseData0(d) {
       nu: +d.nu, laneStep: +d.laneStep, nSec: 20, nGrid: 100,
       chamfer: d.hEdge.trim() && d.joue.trim() ? { hEdge: +d.hEdge, joue: +d.joue } : undefined,
       psi: +(d.psi || 100),
+      trace: lireTrace(d.trace),
       devers: +(d.devers || 0) > 0 ? { p: +d.devers, profil: d.devProfil === 'unique' ? 'unique' : 'toit', mode: ['dalle', 'revetement'].includes(d.devMode) ? d.devMode : 'inclinee' } : undefined,
     },
-    methodeTablier: d.methodeTablier === 'plaque' ? 'plaque' : 'guyon',
+    // ouvrage courbe : la plaque est obligatoire (Guyon-Massonnet suppose un tablier droit)
+    methodeTablier: d.methodeTablier === 'plaque' || lireTrace(d.trace) ? 'plaque' : 'guyon',
     alpha: d.alpha, nRetenue: +d.nRetenue, classe: d.classe.trim() ? +d.classe : null, mil: d.mil || 'Mc120+D240', chamoaSign: !!d.chamoaSign,
     withTherm: !!d.withTherm, dT: nums(d.dT), E: +EIv[0] || 34000, I: EIv[1] ? +EIv[1] : null, delta: +d.delta, phiFluage: +d.phiFluage,
     mat: { fck: +d.fck, fyk: +d.fyk, fc28: +d.fck, fe: +d.fyk, c: +d.cover, phi: +d.phi / 1000, phiT: +(d.phiT || 16) / 1000, wkMax: +d.wk, fissuration: d.fiss, tRev: +d.tRev },

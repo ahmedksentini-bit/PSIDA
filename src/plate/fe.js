@@ -70,15 +70,19 @@ export class PlaqueEF {
    * @param {object} o { xs : abscisses s de la grille, ys, D:(x,y)=>number, nu, appuis:[{x,y,k}] (x = abscisse le long de
    *   l'axe du point d'appui ; ressorts verticaux kN/m ; k = Infinity → très raide), psi [gr] (biais, défaut 100) }
    */
-  constructor({ xs, ys, D, nu = 0.2, appuis = [], psi = 100 }) {
+  constructor({ xs, ys, D, nu = 0.2, appuis = [], psi = 100, geo = null }) {
+    // geo (ouvrage courbe) : { pt(s, y) → [x, y], J(s, y) = 1 − κ y (rapport des aires), theta(s) angle de la tangente } ;
+    // les moments sont alors exprimés dans le repère local (tangente, normale) de l'axe
+    this.geo = geo;
     this.xs = xs; this.ys = ys; this.nu = nu; this.psi = psi;
     this.cot = Math.abs(psi - 100) < 1e-9 ? 0 : 1 / Math.tan(psi * Math.PI / 200);
     this.nx = xs.length; this.ny = ys.length; this.n = this.nx * this.ny; this.ndof = 3 * this.n;
     this.idx = (i, j) => i * this.ny + j;
     this.X = (i, j) => xs[i] + ys[j] * this.cot;
+    this.Pt = (i, j) => (geo ? geo.pt(xs[i], ys[j]) : [this.X(i, j), ys[j]]);
     this.Dn = new Float64Array(this.n);
     for (let i = 0; i < this.nx; i++) for (let j = 0; j < this.ny; j++) this.Dn[this.idx(i, j)] = typeof D === 'function' ? D(this.X(i, j), ys[j]) : D;
-    this.appuis = appuis.map(a => ({ ...a, i: this.plusProche(xs, a.x - a.y * this.cot), j: this.plusProche(ys, a.y) }));
+    this.appuis = appuis.map(a => ({ ...a, i: this.plusProche(xs, geo ? (a.s ?? a.x) : a.x - a.y * this.cot), j: this.plusProche(ys, a.y) }));
     this.mailler();
     this.assembler();
   }
@@ -87,14 +91,16 @@ export class PlaqueEF {
     const { nx, ny, ys } = this, T = [];
     const tri = (p, q, r) => {
       const ids = [p, q, r].map(([i, j]) => this.idx(i, j));
-      let x = [p, q, r].map(([i, j]) => this.X(i, j)), y = [p, q, r].map(([, j]) => ys[j]);
+      const P3 = [p, q, r].map(([i, j]) => this.Pt(i, j));
+      let x = P3.map(v => v[0]), y = P3.map(v => v[1]);
       let A2 = (x[1] - x[0]) * (y[2] - y[0]) - (x[2] - x[0]) * (y[1] - y[0]);
       if (A2 < 0) { [ids[1], ids[2]] = [ids[2], ids[1]]; [x[1], x[2]] = [x[2], x[1]]; [y[1], y[2]] = [y[2], y[1]]; A2 = -A2; }
       const D = (this.Dn[ids[0]] + this.Dn[ids[1]] + this.Dn[ids[2]]) / 3;
       T.push({ ids, x, y, A2, D, C: coefficients(x, y) });
     };
     for (let i = 0; i < nx - 1; i++) for (let j = 0; j < ny - 1; j++) {
-      const d1 = Math.hypot(this.X(i + 1, j + 1) - this.X(i, j), ys[j + 1] - ys[j]), d2 = Math.hypot(this.X(i, j + 1) - this.X(i + 1, j), ys[j + 1] - ys[j]);
+      const dd = (u, v) => { const A = this.Pt(...u), B = this.Pt(...v); return Math.hypot(A[0] - B[0], A[1] - B[1]); };
+      const d1 = dd([i + 1, j + 1], [i, j]), d2 = dd([i, j + 1], [i + 1, j]);
       const diag1 = Math.abs(d1 - d2) < 1e-9 * (d1 + d2) ? (i + j) % 2 === 0 : d1 < d2;
       if (diag1) { tri([i, j], [i + 1, j], [i + 1, j + 1]); tri([i, j], [i + 1, j + 1], [i, j + 1]); }
       else { tri([i, j], [i + 1, j], [i, j + 1]); tri([i + 1, j], [i + 1, j + 1], [i, j + 1]); }
@@ -135,7 +141,7 @@ export class PlaqueEF {
       if (lx <= 0) continue;
       for (let j = 0; j < ny; j++) {
         const [b1, b2] = bornes(ys, j, ny), ly = Math.min(b2, y2) - Math.max(b1, y1);
-        if (ly > 0) F[this.idx(i, j)] += q * lx * ly;
+        if (ly > 0) F[this.idx(i, j)] += q * lx * ly * (this.geo ? this.geo.J(xs[i], ys[j]) : 1);
       }
     }
     return F;
@@ -179,6 +185,10 @@ export class PlaqueEF {
         for (let r = 0; r < 3; r++) { let v = 0; for (let k = 0; k < 9; k++) v += S[e][s][r][k] * u[3 * g[Math.floor(k / 3)] + (k % 3)]; out[keys[r]][p] += v / lst.length; }
       }
     }
+    if (this.geo) for (let p = 0; p < n; p++) {   // repère local de l'axe (tangente, normale)
+      const th = this.geo.theta(this.xs[Math.floor(p / this.ny)]), c = Math.cos(th), sn = Math.sin(th), a = out.mx[p], b = out.my[p], t = out.mxy[p];
+      out.mx[p] = c * c * a + sn * sn * b + 2 * c * sn * t; out.my[p] = sn * sn * a + c * c * b - 2 * c * sn * t; out.mxy[p] = -c * sn * a + c * sn * b + (c * c - sn * sn) * t;
+    }
     for (let p = 0; p < n; p++) if (this.bordY(p)) out.my[p] = 0;   // bord libre y = cte : m_y = 0 (m_n nul)
     return out;
   }
@@ -189,7 +199,12 @@ export class PlaqueEF {
    * { mx: a, my: b, mxy: c } (moments dans la direction des armatures).
    */
   vecteurGrandeur(i, j, g) {
-    const co = typeof g === 'string' ? { [g]: 1 } : g, f = [co.mx || 0, this.bordY(this.idx(i, j)) ? 0 : co.my || 0, co.mxy || 0];
+    const co = typeof g === 'string' ? { [g]: 1 } : g;
+    let f = [co.mx || 0, this.bordY(this.idx(i, j)) ? 0 : co.my || 0, co.mxy || 0];
+    if (this.geo) {   // coefficients du repère local ramenés au repère global
+      const th = this.geo.theta(this.xs[i]), c = Math.cos(th), sn = Math.sin(th);
+      f = [f[0] * c * c + f[1] * sn * sn - f[2] * c * sn, f[0] * sn * sn + f[1] * c * c + f[2] * c * sn, f[0] * 2 * c * sn - f[1] * 2 * c * sn + f[2] * (c * c - sn * sn)];
+    }
     const c = new Float64Array(this.ndof), p = this.idx(i, j), lst = this.autour[p], S = this._cache();
     for (const [e, s] of lst) {
       const ids = this.T[e].ids;

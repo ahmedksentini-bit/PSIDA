@@ -345,3 +345,8 @@ long (action permanente répartie entre les appuis, distorsion lente des apparei
 ## Licence
 
 MIT.
+v0.59 : ouvrage courbe — import du tracé en plan au format DXF (onglet Projet : axe sur un calque — LINE, ARC,
+LWPOLYLINE à renflements, POLYLINE —, lignes d'appui radiales sur un autre ; portées déduites des abscisses le long de
+l'axe, vue en plan) ; plaque DKT maillée le long de l'axe (abscisse curviligne, déport ; charges pondérées par
+J = 1 − κ y, moments dans le repère local) ; force centrifuge EN 1991-2 § 4.4.2 dans le groupe gr2 (effort transversal en
+tête, moment en pied, fondations, appareils). Fichier d'essai : exemples/ouvrage_courbe.dxf (tools/dxf_courbe.mjs).

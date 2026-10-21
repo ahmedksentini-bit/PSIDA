@@ -10,6 +10,16 @@
 import { PlaqueDF, grille } from './fd.js';
 import { PlaqueEF } from './fe.js';
 import { deltaDevers } from '../devers.js';
+import { Axe } from '../geom/axe.js';
+
+/**
+ * Géométrie d'un ouvrage courbe (tracé en plan) : abscisse s le long de la poutre (origine sur C0), déport y à gauche ;
+ * point(s, y), rapport des aires J = 1 − κ y, angle de la tangente. trace = { segments, s0 } (s0 : abscisse de C0 sur l'axe).
+ */
+export function geoTrace(trace) {
+  const axe = trace.axe || new Axe(trace.segments), s0 = trace.s0 || 0;
+  return { axe, s0, pt: (s, y) => axe.pointDeporte(s0 + s, y), J: (s, y) => 1 - axe.courbure(s0 + s) * y, theta: s => { const t = axe.tangente(s0 + s); return Math.atan2(t[1], t[0]); }, kappa: s => axe.courbure(s0 + s) };
+}
 
 /**
  * Repère des armatures : aciers longitudinaux suivant x, aciers transversaux faisant l'angle α avec x (α = ψ pour des
@@ -49,6 +59,10 @@ export function epaisseur(deck, y) {
  */
 export function plaqueTablier(deck, { h = 0.25, E = 34000, nu = deck.nu ?? 0.2, nb = 4, kv = Infinity, psi = 100, alphaT = null, moteur = 'ef' } = {}) {
   if (moteur === 'df' && psi < 100 - 1e-9) throw new Error('plaque : les différences finies ne traitent que les ouvrages droits (moteur « ef » pour le biais)');
+  const trace = deck.g.trace || null;
+  if (trace && moteur === 'df') throw new Error('plaque : ouvrage courbe traité par les éléments finis seulement');
+  if (trace && psi < 100 - 1e-9) throw new Error('plaque : ouvrage courbe à lignes d\'appui biaises non traité (lignes d\'appui radiales seulement)');
+  const geo = trace ? geoTrace(trace) : null;
   const b = deck.b, [aL, aR] = deck.g.overhangs || [0, 0];
   const x0 = deck.beam.x0, xA = -aL, xB = x0[x0.length - 1] + aR;
   const secs = deck.beam.sections.map(s => s.x);
@@ -62,11 +76,11 @@ export function plaqueTablier(deck, { h = 0.25, E = 34000, nu = deck.nu ?? 0.2, 
   const ys = grille(ptsY, h);
   const Dy = y => E * 1000 * epaisseur(deck, y) ** 3 / (12 * (1 - nu * nu));
   const kLigne = i => (Array.isArray(kv) ? kv[i] : kv);
-  const appuis = x0.flatMap((x, i) => yb.map((y, k) => ({ x: x + y * cot, y, k: kLigne(i), ligne: i, rang: k })));
-  const P = moteur === 'df' ? new PlaqueDF({ xs, ys, D: (_, y) => Dy(y), nu, appuis }) : new PlaqueEF({ xs, ys, D: (_, y) => Dy(y), nu, appuis, psi });
+  const appuis = x0.flatMap((x, i) => yb.map((y, k) => ({ x: x + y * cot, s: x, y, k: kLigne(i), ligne: i, rang: k })));
+  const P = moteur === 'df' ? new PlaqueDF({ xs, ys, D: (_, y) => Dy(y), nu, appuis }) : new PlaqueEF({ xs, ys, D: (_, y) => Dy(y), nu, appuis, psi, geo });
   const iSec = secs.map(x => P.plusProche(xs, x)), jFib = deck.ys.map(y => P.plusProche(ys, y));
   const aT = alphaT ?? psi;
-  const M = { P, deck, xs, ys, yb, a, nb, iSec, jFib, E, nu, h, psi, cot, moteur, alphaT: aT, repere: repere(aT), repereChev: repere(psi) };
+  const M = { P, deck, xs, ys, yb, a, nb, iSec, jFib, E, nu, h, psi, cot, moteur, geo, alphaT: aT, repere: repere(aT), repereChev: repere(psi) };
   M.bandes = bandesChevetre(M);
   return M;
 }

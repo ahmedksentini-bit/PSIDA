@@ -14,6 +14,7 @@ import { chevetresEC } from '../src/chevetre.js';
 import { renderPlaque } from './plaque_view.js';
 import { majBouton as majReco, ouvrir as ouvrirReco } from './recommandations_view.js';
 import { initNivellement } from './nivellement_view.js';
+import { initTrace } from './trace_view.js';
 import { candidats, dichotomie } from '../src/recommandations.js';
 import { computeSupports } from '../src/supports/index.js';
 import { applyHelp, readGeometry, elevationInputSVG, crossSectionInputSVG, planSVG, summaryHTML, zoningPlanSVG } from './schema.js';
@@ -436,6 +437,7 @@ function applyData(form, d) {
     if (el.type === 'checkbox') el.checked = v === true || v === 'on' || !!+v; else el.value = v;
   }
   if (d.bp_agrement && $('#bp-agrement')) { $('#bp-agrement').value = d.bp_agrement; fillUnits(d.bp_unite); }
+  try { if (typeof TRACE !== 'undefined') TRACE.refresh(); } catch (e) { /* vue du tracé indisponible */ }
 }
 function formToHash(form) {
   const d = formSnapshot(form);
@@ -505,6 +507,7 @@ $('#stale').addEventListener('click', ev => {
 });
 const FORM_UI = enhanceForm($('#f')); // saisie valeur par valeur des champs multi-valeurs (avant la lecture d'un lien partagé)
 const NIV = initNivellement($('#f'), () => state);
+const TRACE = initTrace($('#f'), { setField });
 $('#f').addEventListener('change', ev => { if (ev.target.name === 'niv_actif') NIV.refresh(); });
 applyHelp($('#f'), $('#help-list'));
 renderScheme();
@@ -554,7 +557,7 @@ async function saveProject() {
   const form = $('#f');
   const spans = String(form.spans.value || '').split(/[,;\s]+/).filter(Boolean).join('-');
   const name = projName || `projet-psida-${spans || 'ouvrage'}.json`;
-  const file = { format: PROJ_FORMAT, version: '0.58', date: new Date().toISOString(), data: formSnapshot(form) };
+  const file = { format: PROJ_FORMAT, version: '0.59', date: new Date().toISOString(), data: formSnapshot(form) };
   if (ec8Data) file.ec8 = ec8Data;
   const txt = JSON.stringify(file, null, 1);
   if (window.showSaveFilePicker) { // Chrome, Edge : choix du nom et du dossier
@@ -631,7 +634,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.58', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = await buildReport({ ...state, version: '0.59', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -668,7 +671,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.58', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.59', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -724,7 +727,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.58', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.59', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));

@@ -6,6 +6,8 @@ import { nivellement } from './nivellement.js';
  * retour, semelles superficielles ou sur pieux, pieux (Ménard, efforts, ferraillage, portance).
  * Unités : m, kN, kN·m, MPa (p*_l, E_M en MPa).
  */
+import { Axe } from '../geom/axe.js';
+import { forceCentrifuge, qvEC } from '../geom/centrifuge.js';
 import { neopreneFlexibility, cantileverFlexibility, horizontalDistribution, brakingF61Deck, headCombinationsBAEL, headCombinationsEC } from './actions.js';
 import { designShaft, pierCap, buckling, chevetreTorsion } from './pier.js';
 import { gardeGreve, murEnRetour, earthPressure, earthPressureUpper, videCombos, dalleTransition, Ka } from './abutment.js';
@@ -259,6 +261,12 @@ export function computeSupports(st, input = {}) {
   // --- actions en tête par ligne ---
   const chargeable = deck.g.roadway.y2 - deck.g.roadway.y1;
   const brk = brakingF61Deck({ Ltot, Lc: chargeable });
+  // ouvrage courbe : force centrifuge EN 1991-2 § 4.4.2 au rayon minimal du tracé, groupe gr2, répartie entre les lignes
+  // comme le freinage (raideurs instantanées des appareils et des appuis — approximation : raideurs transversales prises
+  // égales aux raideurs longitudinales)
+  const rTrace = deck.g.trace ? new Axe(deck.g.trace.segments).rayonMin() : Infinity;
+  const Qv = qvEC(st.ec && st.ec.alpha ? st.ec.alpha.aQ : [1, 1, 1], st.ec && st.ec.lanes ? st.ec.lanes.n : 3);
+  const centrifuge = Number.isFinite(rTrace) ? { r: rTrace, Qv, Qtk: forceCentrifuge({ r: rTrace, Qv }) } : null;
   const RFsaisi = Math.max(0, st.p.concept.epsSlow ?? 2.5e-4), epsT = 1e-5 * (st.p.concept.dTu ?? 30);
   const RF = dp && dp.shorten ? dp.shorten.total : RFsaisi;
   const R = (res, i) => (res ? Math.max(0, res.Rmax[i]) : 0);
@@ -323,7 +331,7 @@ export function computeSupports(st, input = {}) {
     const psi0 = (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i) + 0.4 * R(ec.gr3, i) * 0.6) / Math.max(1e-9, R(ec.gr1a, i));
     const QE = [
       { label: 'gr1a', N: q * R(ec.gr1a, i), H: 0, psi0 },
-      { label: 'gr2 (freinage)', N: q * (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)), H: h * bearings.H * distE.braking(1)[i], psi0: 0 },
+      { label: centrifuge && centrifuge.Qtk ? 'gr2 (freinage + centrifuge)' : 'gr2 (freinage)', N: q * (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)), H: h * bearings.H * distE.braking(1)[i], Hy: centrifuge ? h * centrifuge.Qtk * distE.braking(1)[i] : 0, psi0: 0 },
     ];
     const EC = headCombinationsEC({ G, Q: QE, RF: { H: Math.abs(h * distE.imposed(RF).H[i]) + Hp('E', i) }, T: { H: h * distE.imposed(epsT).H[i] } });
     const Nfreq = q * (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i));
@@ -357,7 +365,7 @@ export function computeSupports(st, input = {}) {
     const QQ = code === 'BAEL'
       ? [{ label: 'A(l)', res: f61.A, add: tr, g: 1.605, H: brk.A * bB / nb }, { label: 'Bc', res: f61.Bc, add: tr, g: 1.605, H: brk.Bc * bB / nb },
         ...(f61.Mc120 ? [{ label: 'Mc120', res: f61.Mc120, add: tr, g: 1.35, H: 0 }] : [])]
-      : [{ label: 'gr1a', res: ec.gr1a, add: 0, g: 1.35, H: 0 }, { label: 'gr2 (freinage)', noT: true, res: ec.gr1a, frac: R(ec.gr1a, i) > 0 ? (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)) / R(ec.gr1a, i) : 0, add: 0, g: 1.35, H: bearings.H * bE / nb }];
+      : [{ label: 'gr1a', res: ec.gr1a, add: 0, g: 1.35, H: 0 }, { label: centrifuge && centrifuge.Qtk ? 'gr2 (freinage + centrifuge)' : 'gr2 (freinage)', noT: true, res: ec.gr1a, frac: R(ec.gr1a, i) > 0 ? (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)) / R(ec.gr1a, i) : 0, add: 0, g: 1.35, H: Math.hypot(bearings.H, centrifuge ? centrifuge.Qtk : 0) * bE / nb }];
     // gradient thermique (réactions hyperstatiques N_θ du gradient, réparties sur les n appareils) : ψ₀ = 0,6 avec le trafic
     // dominant (BAEL 1,3 × 0,6 = 0,78 ; EC 1,5 × 0,6), 1,35 / 1,5 en action dominante, 1,0 dans les combinaisons minimales
     const th = st.thermal && st.thermal.Rmax ? st.thermal : null;
@@ -756,5 +764,5 @@ export function computeSupports(st, input = {}) {
     return out;
   });
   const footRotAll = xs.every((_, i) => onPiles(i)) ? null : xs.map((x, i) => (onPiles(i) ? null : { BAEL: footRot(i, 'BAEL'), EC: footRot(i, 'EC') }));
-  return { sp, niv, pente, spLigne: niv.actif ? xs.map((_, i) => S(i)) : null, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
+  return { sp, niv, pente, centrifuge, spLigne: niv.actif ? xs.map((_, i) => S(i)) : null, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
 }

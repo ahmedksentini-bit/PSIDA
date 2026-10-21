@@ -38,6 +38,10 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
   const table = (head, rows, opt = {}) => B.push({ t: 'table', head, rows, ...opt });
   const dist = isF ? sup.distB : sup.distE, Ls = sup.lines, n = Ls.length;
 
+  if (sup.centrifuge && !isF) {
+    const c = sup.centrifuge;
+    comment(`Ouvrage courbe (rayon minimal ${F1(c.r)} m) : force centrifuge EN 1991-2 § 4.4.2 (tableau 4.3) Q_tk = ${c.r < 200 ? '0,2 Q_v' : c.r <= 1500 ? '40 Q_v / r' : '0'} = ${F0(c.Qtk)} kN (Q_v = Σ α_Qi 2 Q_ik = ${F0(c.Qv)} kN), transversale au niveau de la chaussée, prise dans le groupe gr2 avec le freinage (tableau 4.4a) ; répartie entre les lignes comme le freinage (${dist.braking(1).map(k => F0(k * c.Qtk)).join(' / ')} kN) — approximation : raideurs transversales des appareils et des appuis prises égales aux raideurs longitudinales. Effort H_y en tête, moment transversal en pied de fût et sur les fondations ; distorsion des appareils sous √(H_freinage² + Q_tk²).`);
+  }
   if (sup.niv && sup.niv.actif) {
     const N = sup.niv, fz = v => (Number.isFinite(v) ? F2(v) : '—');
     h2('Plan de nivellement — cotes et dimensions déduites');

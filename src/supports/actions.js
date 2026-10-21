@@ -74,8 +74,9 @@ export function headCombinationsEC({ G, Q = [], RF = { H: 0 }, T = { H: 0 }, psi
   if (envelope) { Q = Q.map(q => ({ ...q, H: Math.abs(q.H) })); RF = { H: Math.abs(RF.H) }; T = { H: Math.abs(T.H) }; }
   const out = [];
   for (const q of Q) {
-    out.push({ label: `ELU ${q.label}`, ls: 'ELU', Nsus: 1.35 * G.N + (G.P || 0), Ninst: 1.35 * q.N, Hinst: 1.35 * q.H, Hsus: 1.35 * RF.H + 1.5 * psi0T * T.H });
-    out.push({ label: `ELS car. ${q.label}`, ls: 'ELS', Nsus: G.N + (G.P || 0), Ninst: q.N, Hinst: q.H, Hsus: RF.H + psi0T * T.H });
+    // q.Hy : effort transversal du groupe (force centrifuge du gr2 sur ouvrage courbe)
+    out.push({ label: `ELU ${q.label}`, ls: 'ELU', Nsus: 1.35 * G.N + (G.P || 0), Ninst: 1.35 * q.N, Hinst: 1.35 * q.H, Hsus: 1.35 * RF.H + 1.5 * psi0T * T.H, ...(q.Hy ? { Hy: 1.35 * Math.abs(q.Hy) } : {}) });
+    out.push({ label: `ELS car. ${q.label}`, ls: 'ELS', Nsus: G.N + (G.P || 0), Ninst: q.N, Hinst: q.H, Hsus: RF.H + psi0T * T.H, ...(q.Hy ? { Hy: Math.abs(q.Hy) } : {}) });
   }
   const q0 = Q[0] || { N: 0, H: 0, psi0: 0.75 };
   out.push({ label: 'ELU température', ls: 'ELU', Nsus: 1.35 * G.N + (G.P || 0), Ninst: 1.35 * (q0.psi0 ?? 0.4) * q0.N, Hinst: 0, Hsus: 1.35 * RF.H + 1.5 * T.H });
