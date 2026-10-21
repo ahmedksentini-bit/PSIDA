@@ -370,3 +370,8 @@ d'essai exemples/ouvrage_clothoides.dxf ; manuel § 21.8 et 21.10.
 v0.64 : précontrainte d'un ouvrage courbe — frottement avec la déviation horizontale des câbles (Δα = √(Δθ_v² + Δθ_h²)),
 poussée au vide P/R et armatures de couture, couple de la poussée radiale m_t = F z κ appliqué à la plaque et réactions
 différentielles des appareils ajoutées aux réactions de précontrainte ; manuel § 21.11.
+v0.65 : exemples traités (manuel, chapitres 22 à 25 ; projets exemples/exemple1.json à exemple4.json, tools/exemples.mjs) —
+corrections issues de leur calcul : coefficient K des sections à moment de poutre nul (fausse alerte d'effort tranchant
+aux abouts), plan de ferraillage sans disposition possible (message explicite) et non tenté pour une dalle précontrainte,
+proposition d'appareil vérifiant à la fois l'EN 1337-3 et le guide 1989, domaine d'emploi d'une dalle précontrainte à
+encorbellements, vue en plan d'un ouvrage courbe dans l'onglet Projet, étiquettes du plan de nivellement.

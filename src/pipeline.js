@@ -240,7 +240,7 @@ export function computeExtra(p, deck, perm, ec, thermal, settle, design, bearing
 /** Données de l'aide à la conception à partir du formulaire analysé et des résultats disponibles. */
 export function conceptInput(p) {
   const di = p.deckInput;
-  return { spans: di.spans, width: di.width, h: di.h, fck: p.mat.fck, psi: p.concept.psi, tirantAir: p.concept.tirantAir, overhangs: di.overhangs, D: p.concept.D, I: p.I, type: p.concept.type };
+  return { spans: di.spans, width: di.width, h: di.h, fck: p.mat.fck, psi: p.concept.psi, tirantAir: p.concept.tirantAir, overhangs: di.overhangs, D: p.concept.D, I: p.I, type: p.concept.type, encorbellements: !!di.chamfer };
 }
 
 export function compute(p) {
@@ -342,7 +342,9 @@ export function compute(p) {
   }
   // plan de ferraillage BA : impossible quand aucune disposition de barres ne suffit (dalle à précontraindre, travées longues)
   let rebar = null, rebarError = null;
-  try { rebar = rebarPlan({ deck, design: env, trans: transDesign.EC, opt: { fck: p.mat.fck, fyk: p.mat.fyk, phiLong: Math.round(p.mat.phi * 1000), phiTrans: Math.round(p.mat.phiT * 1000), chevetres } }); rebar.governing = governing; }
+  // dalle précontrainte (onglet Précontrainte actif) : le plan de ferraillage BA (sans précontrainte) n'a pas de sens
+  if (p.bp && p.bp.actif) rebarError = null;
+  else try { rebar = rebarPlan({ deck, design: env, trans: transDesign.EC, opt: { fck: p.mat.fck, fyk: p.mat.fyk, phiLong: Math.round(p.mat.phi * 1000), phiTrans: Math.round(p.mat.phiT * 1000), chevetres } }); rebar.governing = governing; }
   catch (e) { rebarError = `plan de ferraillage BA impossible (${e.message}) : sections d'acier hors des dispositions courantes — dalle à précontraindre ou à épaissir`; }
   let psidp = null, psidpError = null;
   if (p.bp && p.bp.actif) {

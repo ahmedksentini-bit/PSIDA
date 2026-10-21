@@ -422,6 +422,12 @@ export class SlabDeck {
       fMin.push(res.mxMin[s].map(v => (Math.abs(c) > 1e-9 ? v / c : 0)));
       K.push(Math.max(...fMax[s], ...fMin[s]));
     }
+    // sections où le moment de poutre est presque nul (appuis d'extrémité, abouts) : le rapport m_x·2b/M n'a pas de sens
+    // (division par un moment résiduel, en particulier sur la plaque) → plus grand K des sections significatives
+    const Mref = Math.max(...res.Mmax.map(Math.abs), ...res.Mmin.map(Math.abs));
+    const sig = s => Math.max(Math.abs(res.Mmax[s]), Math.abs(res.Mmin[s])) >= 0.05 * Mref;
+    const Kok = K.filter((_, s) => sig(s)), Kmax = Kok.length ? Math.max(...Kok) : 1;
+    for (let s = 0; s < nS; s++) if (!sig(s)) K[s] = Kmax;
     return { fMax, fMin, K };
   }
 

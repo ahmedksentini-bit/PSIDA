@@ -318,8 +318,11 @@ export function pointsVigilance({ width, psi = 100, type = 'DA', spans }) {
  */
 export function aideConception(p, res = {}) {
   const { spans, width, h, fck = 25, psi = 100, tirantAir = null, overhangs = [0, 0], D = 0.02, I = null } = p;
-  const dom = domaineEmploi(spans);
-  const type = p.type && p.type !== 'auto' ? p.type : (dom.recommande === 'autre' ? 'DP' : dom.recommande);
+  const dom0 = domaineEmploi(spans);
+  const type = p.type && p.type !== 'auto' ? p.type : (dom0.recommande === 'autre' ? 'DP' : dom0.recommande);
+  // dalle précontrainte retenue (type DP), dans son domaine, avec des encorbellements quand ils sont conseillés : conforme
+  const dpOk = type === 'DP' && (dom0.types.includes('DP') || (dom0.types.includes('DP à encorbellements') && p.encorbellements));
+  const dom = dpOk ? { ...dom0, level: 'ok', text: `${dom0.text} Dalle précontrainte retenue${p.encorbellements ? ', à encorbellements' : ''} : conforme au domaine d'emploi.` } : dom0;
   const ep = epaisseurGuide({ spans, type, fck, encorbellements: dom.types.includes('DP à encorbellements') });
   const ratio = h / ep.h;
   const sections = [];

@@ -105,7 +105,7 @@ function coupeLongitudinale({ di, n, niv, sp }) {
   const Ls = niv.lignes, zs = [];
   for (const L of Ls) for (const k of ['zCh', 'zTN', 'zDS', 'zSS', 'zPP', 'zT', 'zPHE', 'zLit']) if (Number.isFinite(L[k])) zs.push(L[k]);
   if (zs.length < 2) return '<p class="small">Saisissez au moins les cotes de chaussée et de semelle pour dessiner la coupe.</p>';
-  const W = 980, Hh = 360, ml = 60, mr = 20, mt = 20, mb = 40, x0 = -aL - 2, x1 = xs[n - 1] + aR + 2;
+  const W = 980, Hh = 360, ml = 60, mr = 20, mt = 36, mb = 40, x0 = -aL - 2, x1 = xs[n - 1] + aR + 2;
   const zMin = Math.min(...zs) - 1, zMax = Math.max(...zs) + 1.5;
   const kx = (W - ml - mr) / (x1 - x0), kz0 = (Hh - mt - mb) / (zMax - zMin);
   const kz = Math.min(kz0, kx * 5), ex = kz / kx;   // exagération des hauteurs limitée à ×5
@@ -136,7 +136,10 @@ function coupeLongitudinale({ di, n, niv, sp }) {
     if (Number.isFinite(L.zDS) && Number.isFinite(L.zSS)) s += `<rect x="${x - B * kx / 2}" y="${Z(L.zDS)}" width="${B * kx}" height="${Math.max(1, Z(L.zSS) - Z(L.zDS))}" fill="#c9ced8" stroke="#1d2433"/>`;
     if (F.type === 'pieux' && Number.isFinite(L.zSS) && Number.isFinite(L.zPP)) for (const dx of [-0.3, 0.3]) s += `<line x1="${x + dx * B * kx}" y1="${Z(L.zSS)}" x2="${x + dx * B * kx}" y2="${Z(L.zPP)}" stroke="#1d2433" stroke-width="2"/>`;
     s += `<text x="${x}" y="${Hh - mb + 14}" text-anchor="middle" font-weight="600">${end ? 'C' : 'P'}${i}</text>`;
-    const lab = [[L.zCh, 'ch'], [L.zT, 'tête'], [L.zDS, 'ds'], [L.zSS, 'ss'], [F.type === 'pieux' ? L.zPP : null, 'pointe']].filter(([z]) => Number.isFinite(z));
+    // cotes du tablier (chaussée, tête d'appui) au-dessus du tablier, centrées ; cotes de fondation à côté de la semelle
+    const haut = [[L.zCh, 'ch'], [L.zT, 'tête']].filter(([z]) => Number.isFinite(z));
+    if (haut.length) s += `<text x="${x}" y="${Z(L.zCh ?? L.zT) - 8}" font-size="9.5" fill="#5b6478" text-anchor="${i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}">${haut.map(([z, t]) => `${t} ${fr(z)}`).join(' · ')}</text>`;
+    const lab = [[L.zDS, 'ds'], [L.zSS, 'ss'], [F.type === 'pieux' ? L.zPP : null, 'pointe']].filter(([z]) => Number.isFinite(z));
     const gauche = i === n - 1, dxl = Math.max(B, bw) * kx / 2 + 3;
     lab.forEach(([z, t]) => { s += `<text x="${gauche ? x - dxl : x + dxl}" y="${Z(z) + 3}" font-size="9.5" fill="#5b6478" text-anchor="${gauche ? 'end' : 'start'}">${t} ${fr(z)}</text>`; });
   });
@@ -148,7 +151,7 @@ function coupeLongitudinale({ di, n, niv, sp }) {
 function coupeTransversale({ di, niv }, i) {
   const L = niv.lignes[i];
   if (!L || !Number.isFinite(L.zSF) || !L.appareils) return '<p class="small">Saisissez la cote de chaussée de cette ligne.</p>';
-  const b = di.width / 2, W = 760, Hh = 240, ml = 50, mr = 20;
+  const b = di.width / 2, W = 760, Hh = 240, ml = 50, mr = 110;
   const zTop = L.zCh + 0.3, zBot = L.zT - 0.6, kx = (W - ml - mr) / (2 * b + 2), kz = Math.min((Hh - 50) / (zTop - zBot), kx * 8);
   const X = y => ml + (y + b + 1) * kx, Z = z => 30 + (zTop - z) * kz;
   const app = L.appareils, dv = di.devers, pc = dv ? dv.p / 100 : 0, toit = !dv || dv.profil !== 'unique';

@@ -17,7 +17,7 @@ import { requiredSteelNM } from './section_nm.js';
 import { winklerPile, pileGroup, headFlexibility, pileProfile, pileShear, pileCapFiles, blevot } from './psh.js';
 import { minorationSurface } from '../geotech/lateral.js';
 import { pierWater } from './water.js';
-import { bearingSpacing, STANDARD_BEARINGS, designation } from '../bearings.js';
+import { bearingSpacing, STANDARD_BEARINGS, designation, checkBearing } from '../bearings.js';
 import { verifyBearing1337 } from './bearings1337.js';
 import { localPressure, bearingSplitting, shortCorbel } from './pierhead.js';
 import { toPontEC8 } from '../ec8export.js';
@@ -450,14 +450,20 @@ export function computeSupports(st, input = {}) {
       const cands = [];
       for (const s0 of STANDARD_BEARINGS) for (const n of s0.ns) cands.push({ s0, n, area: s0.a * s0.b, T: n * s0.t });
       cands.sort((p, q) => p.area - q.area || p.T - q.T);
+      // proposition : plus petit appareil standard qui vérifie l'EN 1337-3 ET le guide Sétra 1989 (sinon le premier qui
+      // vérifie l'EN 1337-3) — une proposition qui ne passerait pas le guide serait aussitôt signalée comme non conforme
+      const g89 = c => (row && row.Pmax != null ? checkBearing(c.s0, c.n, { Pmax: Math.max(row.Pmax, row.PSIDA ? row.PSIDA.Pmax : 0), Pmin: row.Pmin, H: row.Hb, ug: row.ug, alpha: row.alpha }).ok : true);
+      let enSeul = null;
       for (const c of cands) {
         const bdc = { a: c.s0.a / 1000, b: c.s0.b / 1000, n: c.n, t: c.s0.t / 1000, ts: c.s0.ts / 1000 };
         const rc = verifyBearing1337(bdc, combos, null);
         if (!rc.rows.every(r => r.ok || r.indicatif)) continue;
         if (!slides.every(sl0 => { const x = verifyBearing1337(bdc, [], sl0).slide; return x.okGlissement && x.okPerm; })) continue;
+        if (!g89(c)) { enSeul ||= { label: designation(c.s0, c.n), bd: bdc, guide1989: false }; continue; }
         proposal = { label: designation(c.s0, c.n), bd: bdc };
         break;
       }
+      proposal ||= enSeul;
     }
     return { proposal, ...res, label: sel.label || `${sel.bd.a}×${sel.bd.b}×${sel.n}(${sel.bd.t}+${sel.bd.ts})`, nb, vRF, vT, aG, a0, RF, Pmax: hypMax[i], Pmin: hypMin[i], Ntheta: th ? { max: NtMax, min: NtMin } : null };
   };

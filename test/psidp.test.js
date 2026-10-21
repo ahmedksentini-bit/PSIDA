@@ -129,7 +129,7 @@ test('PSI-DP — dimensionnement intégré au modèle PSIDA (18-24-18 m, h = 0,8
   assert.ok(ch.filter(b => b.t === 'svg').length >= 5 && !JSON.stringify(ch).includes('NaN'));
   assert.ok(!JSON.stringify(ch).includes('— — L'));
   // dalle en béton armé sur grandes portées : le plan de ferraillage BA ne bloque plus le calcul
-  assert.ok(st.rebar || st.rebarError);
+  assert.equal(st.rebar, null); assert.equal(st.rebarError, null);   // dalle précontrainte : pas de plan de ferraillage BA;
 });
 
 test('PSI-DP — flèches (NP 58) et flexion transversale due à la précontrainte (NP 48)', async () => {

@@ -170,6 +170,7 @@ export function rebarPlan({ deck, design, trans = null, opt = {} }) {
     }
     if (ok && (!bestT || mass < bestT.mass)) bestT = { s, f, rs, mass };
   }
+  if (!bestT) throw new Error(`nappe supérieure : aucune disposition de filantes et de renforts sur appuis (espacements 15 à 30 cm, Ø ≤ 32) ne fournit ${(peakTop * 1e4).toFixed(1)} cm²/m sur appui (filantes ${(AfTop * 1e4).toFixed(1)} cm²/m)`);
   const aTf = anchT(bestT.f.phi);
   const topLen = xEnd - xStart, pcT = pieces(topLen, aTf.l0, Lmax);
   const filTop = add({ face: 'sup', dir: 'long', role: 'filante', span: null, phi: bestT.f.phi, s: bestT.s, x1: xStart, x2: xEnd, len: topLen, pieces: pcT.n, totalLen: pcT.total, count: nBarsAcross(bestT.s), hookL: true, hookR: true,
