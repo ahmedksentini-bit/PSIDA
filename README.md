@@ -47,6 +47,10 @@ web/plots.js        graphiques Plotly : enveloppes M/V/R, K(y), m_x(y), facteur 
 web/report.js       note de calcul HTML imprimable (graphiques en PNG)
 web/schema.js       schémas « ce que vous saisissez » (élévation, coupe, plan) et aide contextuelle des champs
 web/vendor/         plotly.min.js (2.35.2, MIT)
+web/vendor/plans/   jsPDF 2.5.2 et svg2pdf.js 2.2.4 (MIT), DejaVu Sans Condensed (licence Bitstream Vera) pour le PDF des plans
+web/plans_view.js   carte « Plans d'exécution » : cartouche, aperçu, téléchargements ; web/plans_pdf.js : feuilles → PDF
+src/plans/          plans d'exécution : dessin.js (vues, feuilles), primitives.js, svg.js, dxf.js (R12), geometrie.js,
+                    coffrage.js, ferraillage.js, bordereau.js (ISO 4066)
 src/linalg.js       Gauss, Gauss-Legendre
 src/beam.js         poutre continue : lignes d'influence M, V, R ; enveloppes UDL / travées entières / convois
 src/guyon.js        Guyon-Massonnet recalculé (plaque isotrope, ν = 0) : K, μ, m_y multi-harmoniques
@@ -375,3 +379,9 @@ corrections issues de leur calcul : coefficient K des sections à moment de pout
 aux abouts), plan de ferraillage sans disposition possible (message explicite) et non tenté pour une dalle précontrainte,
 proposition d'appareil vérifiant à la fois l'EN 1337-3 et le guide 1989, domaine d'emploi d'une dalle précontrainte à
 encorbellements, vue en plan d'un ouvrage courbe dans l'onglet Projet, étiquettes du plan de nivellement.
+v0.66 : plans d'exécution du tablier (onglet Ferraillage, carte « Plans d'exécution ») — plan de coffrage (vue en plan,
+coupe longitudinale développée avec appuis, garde-grèves et niveaux du nivellement, coupes transversales en travée et sur
+appui, notes, quantités) et plan de ferraillage (coupe longitudinale des repères à échelles dilatées, demi-coupes
+transversales au 1/25, bordereau de façonnage ISO 4066 avec croquis et récapitulatif par diamètre), cartouche sobre ;
+sorties DXF R12 (mm, calques normalisés, une vue = un bloc en vraie grandeur) et PDF vectoriel (jsPDF + svg2pdf.js, police
+DejaVu incorporée) ; src/plans/ ; manuel chapitre 26.
