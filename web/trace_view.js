@@ -20,10 +20,12 @@ export function analyserDXF(texte, { calqueAxe, calqueAppuis, echelle = 1 } = {}
   const eA = d.entites.filter(e => e.calque === cA);
   if (!eA.length) throw new Error(`aucune entité sur le calque d'axe « ${cA} »`);
   const axe = Axe.depuisEntites(eA);
+  // courbes reconstituées (SPLINE, polylignes à points serrés) : éléments reconnus et écart aux points du dessin
+  const lissees = eA.filter(e => e.lissee).map(e => e.lissee);
   const lignes = d.entites.filter(e => e.calque === cP).flatMap(e => e.segments).filter(g => g.type === 'ligne');
   if (lignes.length < 2) throw new Error(`il faut au moins deux lignes d'appui (segments) sur le calque « ${cP} »`);
   const st = stationsAppuis(axe, lignes);
-  const warnings = [];
+  const warnings = lissees.filter(l => l.ecartMax > 0.02).map(l => `courbe ${l.source} reconstituée avec un écart de ${fr(100 * l.ecartMax, 1)} cm aux points du dessin`);
   // biais propre à chaque ligne (angle avec la tangente) ; arrondi à 0,1 gr, 100 gr à 0,5 gr près (dessin)
   const psiLignes = st.map(s => (Math.abs(s.psi - 100) < 0.5 ? 100 : Math.round(s.psi * 10) / 10));
   const fort = psiLignes.filter(p => Math.min(p, 200 - p) < 50);
@@ -34,7 +36,7 @@ export function analyserDXF(texte, { calqueAxe, calqueAppuis, echelle = 1 } = {}
   const rMin = axe.rayonMin();
   if (st[0].s < -1e-6 || st[st.length - 1].s > axe.L + 1e-6) warnings.push('l\'axe ne couvre pas toutes les lignes d\'appui : prolongé en ligne droite');
   const psiMin = Math.min(...psiLignes.map(p => Math.min(p, 200 - p)));
-  return { axe, calques: cal, calqueAxe: cA, calqueAppuis: cP, stations: st, spans, rMin, warnings, nSeg: axe.seg.length, psiLignes, psiMin };
+  return { axe, calques: cal, calqueAxe: cA, calqueAppuis: cP, stations: st, spans, rMin, warnings, nSeg: axe.seg.length, psiLignes, psiMin, lissees };
 }
 
 /** Vue en plan SVG : axe, bords de la dalle (±b), lignes d'appui et leurs noms. */
@@ -72,7 +74,7 @@ export function initTrace(form, { setField }) {
     try {
       const o = JSON.parse(t), axe = new Axe(o.segments);
       const st = (o.stations || []).map((s, k) => ({ s, psi: o.psiLignes ? o.psiLignes[k] : 100 }));
-      info.innerHTML = `<p class="small">Tracé ${esc(o.source || '')} : ${o.segments.length} élément(s), longueur ${fr(axe.L)} m, rayon minimal ${fr(axe.rayonMin(), 1)} m ; lignes d'appui aux abscisses ${(o.stations || []).map(v => fr(v)).join(' ; ')} m${o.psiLignes ? `, biais ψ = ${o.psiLignes.map(v => fr(v, 1)).join(' / ')} gr` : ', radiales'}. Tablier calculé en plaque (éléments finis) ; force centrifuge EN 1991-2 § 4.4.2 dans le groupe gr2.</p>${st.length ? planSVG(axe, st, b()) : ''}`;
+      info.innerHTML = `<p class="small">Tracé ${esc(o.source || '')} : ${o.segments.length} élément(s), longueur ${fr(axe.L)} m, rayon minimal ${fr(axe.rayonMin(), 1)} m ; lignes d'appui aux abscisses ${(o.stations || []).map(v => fr(v)).join(' ; ')} m${o.psiLignes ? `, biais ψ = ${o.psiLignes.map(v => fr(v, 1)).join(' / ')} gr` : ', radiales'}. Tablier calculé en plaque (éléments finis) ; force centrifuge EN 1991-2 § 4.4.2 dans le groupe gr2.</p><p class="small">Éléments de l'axe : ${esc(axe.elements().join(' ; ').replace(/(\d)\.(\d)/g, '$1,$2'))}.</p>${st.length ? planSVG(axe, st, b()) : ''}`;
     } catch (e) { info.textContent = 'Tracé illisible : ' + e.message; }
   };
   const analyser = () => {

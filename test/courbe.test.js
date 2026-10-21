@@ -10,6 +10,9 @@ import { analyserDXF } from '../web/trace_view.js';
 import { formDefaults } from '../tools/formdefaults.mjs';
 import { parseData, compute } from '../src/pipeline.js';
 import { plaqueTablier, permanentPlaque, raideurAppareil } from '../src/plate/deck.js';
+import { repartitionPlan } from '../src/supports/actions.js';
+import { ajusterElements, clothoSeg, clothoPoint } from '../src/geom/clothoide.js';
+import { axeClothoides, dxfClothoides } from '../tools/dxf_courbe.mjs';
 
 const proche = (a, b, tol, m) => assert.ok(Math.abs(a - b) <= tol, `${m} : ${a} / ${b}`);
 
@@ -101,18 +104,17 @@ test('Calcul complet d\'un ouvrage courbe : tracé lu dans le formulaire, plaque
   assert.equal(st.supports.centrifuge.Qtk, 240);
   const L = st.supports.lines[1], c = L.EC.base.find(b => /centrifuge/.test(b.label) && b.ls === 'ELU');
   assert.ok(c && c.Hy > 0 && c.Myb > 0, 'effort transversal en tête et moment en pied');
-  const sHy = st.supports.lines.reduce((s, L) => s + (L.EC.base.find(b => /centrifuge/.test(b.label) && b.ls === 'ELS') || { Hy: 0 }).Hy, 0);
-  proche(sHy, 240, 1, 'somme des efforts centrifuges ELS sur les lignes');
-  // répartition transversale : pile voile bien plus raide en travers qu'en long (I = b L_v³/12)
-  const KL = st.supports.distE.K.inst, KT = st.supports.distTE.K.inst;
-  assert.ok(KT[1] > 2 * KL[1] && KT[2] > 2 * KL[2], `raideurs P1/P2 : long ${KL.slice(1, 3)} / trans ${KT.slice(1, 3)}`);
-  const parts = st.supports.lines.map(L => (L.EC.base.find(b => /centrifuge/.test(b.label) && b.ls === 'ELS') || { Hy: 0 }).Hy);
-  proche(parts[1] / 240, KT[1] / KT.reduce((a, v) => a + v, 0), 1e-6, 'part de P1 = K_T,P1 / Σ K_T');
+  // enveloppe des efforts par ligne (force promenée, rotation d'ensemble) : ELS = valeurs du plan
+  const plan = st.supports.centrifuge.plan.EC;
+  st.supports.lines.forEach((L, i) => proche((L.EC.base.find(b => /centrifuge/.test(b.label) && b.ls === 'ELS') || { Hy: 0 }).Hy, plan.Hy[i], 1e-6, `H_y ligne ${i}`));
+  // une force au bout du tablier fait tourner le tablier : la culée voisine reprend plus que sa part de translation
+  const KT = st.supports.distTE.K.inst, part = KT[3] / KT.reduce((a, v) => a + v, 0) * 240;
+  assert.ok(plan.Hy[3] > 1.5 * part, `C3 : ${plan.Hy[3]} / ${part}`);
   // Fascicule 61 : combinaison Bc + centrifuge sans freinage
   const F = st.supports.centrifuge.F61, cb = L.BAEL.base.find(b => /centrifuge/.test(b.label) && b.ls === 'ELS');
-  assert.ok(F.F > 0 && cb && cb.Hy > 0 && cb.Hinst === 0, 'Bc + centrifuge (F61)');
-  const sF = st.supports.lines.reduce((s, L) => s + (L.BAEL.base.find(b => /centrifuge/.test(b.label) && b.ls === 'ELS') || { Hy: 0 }).Hy, 0);
-  proche(sF, 1.2 * F.F, 1, 'somme F61 (γ = 1,2 à l\'ELS)');
+  assert.ok(F.F > 0 && cb && cb.Hy > 0, 'Bc + centrifuge (F61)');
+  proche(cb.Hinst, 1.2 * st.supports.centrifuge.plan.BAEL.Hx[1], 1e-6, 'sans freinage : H_x de la seule force centrifuge');
+  st.supports.lines.forEach((L, i) => proche((L.BAEL.base.find(b => /centrifuge/.test(b.label) && b.ls === 'ELS') || { Hy: 0 }).Hy, 1.2 * st.supports.centrifuge.plan.BAEL.Hy[i], 1e-6, `F61 ligne ${i} (γ = 1,2 à l'ELS)`));
 });
 
 test('Ouvrage courbe à lignes d\'appui biaises (parallèles) : ψ par ligne, lignes du DXF retrouvées par la transformation', async () => {
@@ -158,4 +160,38 @@ test('Plaque courbe biaise : équilibre, réactions positives', () => {
   proche(tot(c) / tot(d), aire / aire0, 2e-3, 'poids ∝ aire en plan');
   c.Rapp.flat().forEach((v, k) => assert.ok(v > 0, `appareil ${k} : ${v}`));
   assert.equal(M.lignes[3].psi, 61.8); assert.ok(M.lignes[3].a > M.lignes[0].a, 'entraxe le long d\'une ligne biaise plus grand');
+});
+
+test('Tablier indéformable dans son plan : équilibre des forces et des moments ; force au centre de rigidité = répartition en translation', () => {
+  const lignes = [[0, 0, 0], [14, 0.5, 0.05], [32, 3, 0.25], [46, 8, 0.45]].map(([x, y, a], i) => ({ P: [x, y], T: [Math.cos(a), Math.sin(a)], N: [-Math.sin(a), Math.cos(a)], KL: [13, 8, 5, 10][i] * 1e3, KT: [20, 28, 27, 21][i] * 1e3 }));
+  const F = [30, -200], Q = [40, 6], r = repartitionPlan(lignes, F, Q);
+  proche(r.reduce((t, v) => t + v.f[0], 0), F[0], 1e-6, 'Σ Fx'); proche(r.reduce((t, v) => t + v.f[1], 0), F[1], 1e-6, 'Σ Fy');
+  const mom = (p, f) => p[0] * f[1] - p[1] * f[0];
+  proche(r.reduce((t, v, i) => t + mom(lignes[i].P, v.f), 0), mom(Q, F), 1e-6, 'Σ M');
+  // lignes alignées, ressorts transversaux égaux, force au milieu : parts égales, sans rotation
+  const al = [0, 14, 32, 46].map(x => ({ P: [x, 0], T: [1, 0], N: [0, 1], KL: 1e4, KT: 2e4 }));
+  repartitionPlan(al, [0, 100], [23, 0]).forEach(v => { proche(v.Hy, 25, 1e-9, 'part'); proche(v.Hx, 0, 1e-9, 'H_x'); });
+  // force au bout : rotation, la ligne voisine reprend 25 + 100·23·23/(2·(23² + 9²)) %
+  const e = repartitionPlan(al, [0, 100], [46, 0]);
+  proche(e[3].Hy, 25 + 100 * 23 * 23 / (2 * (23 * 23 + 9 * 9)), 1e-9, 'rotation');
+});
+
+test('Clothoïdes : point par intégration, inverse, et reconstitution depuis SPLINE ou polyligne du DXF', () => {
+  // clothoïde de paramètre A = 30 (L = 30, R final 30) : comparaison au développement en série de Fresnel
+  const g = clothoSeg({ a: [0, 0], theta0: 0, k0: 0, k1: 1 / 30, long: 30 });
+  const A2 = 900, x = l => { const t = l * l / A2; return l * (1 - t ** 2 / 40 + t ** 4 / 3456 - t ** 6 / 599040 + t ** 8 / 175472640); }, y = l => { const t = l * l / A2; return l * (t / 6 - t ** 3 / 336 + t ** 5 / 42240 - t ** 7 / 9676800); };
+  for (const l of [5, 15, 30]) { const p = clothoPoint(g, l); proche(p[0], x(l), 1e-6, `x(${l})`); proche(p[1], y(l), 1e-6, `y(${l})`); }
+  const ref = axeClothoides();
+  for (const [nom, txt] of [['SPLINE', readFileSync(new URL('../exemples/ouvrage_clothoides.dxf', import.meta.url), 'utf8')], ['polyligne 0,5 m', dxfClothoides({ forme: 'poly' })], ['polyligne 2 m', dxfClothoides({ forme: 'poly', pas: 2 })]]) {
+    const r = analyserDXF(txt);
+    assert.deepEqual(r.axe.seg.map(g => g.type), ['ligne', 'clothoide', 'arc', 'clothoide', 'ligne'], nom);
+    proche(r.rMin, 60, 0.1, `${nom} : rayon`);
+    const cl = r.axe.seg[1]; proche(Math.sqrt(cl.long / Math.abs(cl.k1 - cl.k0)), Math.sqrt(60 * 20), 0.1, `${nom} : A`);
+    let e = 0; for (let s = 0; s <= ref.L; s += 1) e = Math.max(e, r.axe.projeter(ref.point(s)).d);
+    assert.ok(e < 0.005, `${nom} : écart ${e}`);
+    r.spans.forEach((L, i) => proche(L, [14, 18, 14][i], 0.08, `${nom} : travée ${i + 1}`));
+  }
+  // polyligne arrondie au centimètre : écart aux points de l'ordre du centimètre
+  const pts = []; for (let s = 0; s <= ref.L + 1e-9; s += 1) pts.push(ref.point(s).map(v => +v.toFixed(2)));
+  assert.ok(ajusterElements(pts).ecartMax < 0.01);
 });

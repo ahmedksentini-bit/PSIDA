@@ -361,3 +361,9 @@ v0.62 : ouvrage courbe à lignes d'appui biaises, biais propre à chaque ligne (
 courbe) : angle signé avec la tangente lu dans le DXF, plaque maillée suivant chaque ligne (P = A + y (N + cot ψ T), cot ψ
 interpolé), appareils, bandes et repère de chevêtre par ligne ; cartes en plan par transformation inverse ; fichier
 d'essai exemples/ouvrage_courbe_biais.dxf ; manuel § 21.9.
+v0.63 : clothoïdes — lecture des SPLINE du DXF (de Boor, poids compris) et des polylignes à points serrés ; reconstitution
+des droites, arcs et clothoïdes (diagramme des courbures, Douglas-Peucker, moindres carrés de Levenberg-Marquardt sur les
+écarts latéraux, fusion des éléments) ; segment « clothoide » dans l'axe (Gauss-Legendre, table au mètre) ; force
+centrifuge promenée le long du tablier avec l'intensité du rayon local, tablier indéformable dans son plan en translation
+ET rotation d'ensemble sur les ressorts longitudinaux et transversaux des lignes (H_x ajouté au freinage) ; fichier
+d'essai exemples/ouvrage_clothoides.dxf ; manuel § 21.8 et 21.10.

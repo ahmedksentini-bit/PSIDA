@@ -84,3 +84,31 @@ export function headCombinationsEC({ G, Q = [], RF = { H: 0 }, T = { H: 0 }, psi
   for (const c of out) { c.N = c.Nsus + c.Ninst; c.H = c.Hsus + c.Hinst; }
   return out;
 }
+
+/**
+ * Tablier indéformable dans son plan sur des lignes d'appui élastiques (ressort longitudinal K_L suivant la tangente T de
+ * la ligne, transversal K_T suivant la normale N) : déplacement d'ensemble (u, v, rotation φ) sous une force F appliquée
+ * au point Q. Renvoie, par ligne, l'effort repris (vecteur) et ses composantes H_x (suivant T) et H_y (suivant N).
+ * Équilibre : Σ f_i = F, Σ (P_i − O) × f_i = (Q − O) × F.
+ * @param {{P:number[], T:number[], N:number[], KL:number, KT:number}[]} lignes
+ */
+export function repartitionPlan(lignes, F, Q) {
+  const n = lignes.length, O = [lignes.reduce((t, l) => t + l.P[0], 0) / n, lignes.reduce((t, l) => t + l.P[1], 0) / n];
+  const K = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], kl = [];
+  for (const l of lignes) {
+    const k = [[l.KL * l.T[0] * l.T[0] + l.KT * l.N[0] * l.N[0], l.KL * l.T[0] * l.T[1] + l.KT * l.N[0] * l.N[1]], [0, l.KL * l.T[1] * l.T[1] + l.KT * l.N[1] * l.N[1]]];
+    k[1][0] = k[0][1];
+    const rx = l.P[0] - O[0], ry = l.P[1] - O[1], B = [[1, 0, -ry], [0, 1, rx]];
+    for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) { let t = 0; for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) t += B[i][a] * k[i][j] * B[j][b]; K[a][b] += t; }
+    kl.push({ k, B });
+  }
+  const f = [F[0], F[1], (Q[0] - O[0]) * F[1] - (Q[1] - O[1]) * F[0]];
+  // résolution 3 × 3 (Cramer)
+  const det = M => M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
+  const D = det(K), U = [0, 1, 2].map(c => det(K.map((row, i) => row.map((v, j) => (j === c ? f[i] : v)))) / D);
+  return lignes.map((l, i) => {
+    const { k, B } = kl[i], d = [0, 1].map(r => B[r][0] * U[0] + B[r][1] * U[1] + B[r][2] * U[2]);
+    const fv = [k[0][0] * d[0] + k[0][1] * d[1], k[1][0] * d[0] + k[1][1] * d[1]];
+    return { f: fv, Hx: fv[0] * l.T[0] + fv[1] * l.T[1], Hy: fv[0] * l.N[0] + fv[1] * l.N[1] };
+  });
+}

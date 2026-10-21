@@ -5,7 +5,9 @@
  * Renvoie { entites: [{ type, calque, ... }], calques: [noms] }. Une entité « polyligne » devient une liste de segments
  * { type: 'ligne', a, b } ou { type: 'arc', c, r, a0, a1 (rad, sens trigonométrique), a, b }.
  */
-export function lireDXF(texte, { echelle = 1 } = {}) {
+import { ajusterElements, echantillonnerSpline } from './clothoide.js';
+
+export function lireDXF(texte, { echelle = 1, lisser = 'auto' } = {}) {
   const l = texte.replace(/\r/g, '').split('\n');
   const paires = [];
   for (let k = 0; k + 1 < l.length; k += 2) paires.push([parseInt(l[k].trim(), 10), l[k + 1].trim()]);
@@ -35,17 +37,50 @@ export function lireDXF(texte, { echelle = 1 } = {}) {
         if (c === 10) { last = { x: +v * s, y: 0, bulge: 0 }; pts.push(last); } else if (c === 20 && last) last.y = +v * s; else if (c === 42 && last) last.bulge = +v;
       }
       const closed = (get(70) & 1) === 1;
-      out.push({ type: 'polyligne', calque, segments: depuisSommets(pts, closed) });
+      out.push(lisser !== 'non' && !closed && estEchantillonnee(pts) ? courbeLissee(calque, pts.map(p => [p.x, p.y]), 'LWPOLYLINE') : { type: 'polyligne', calque, segments: depuisSommets(pts, closed) });
     } else if (e.type === 'POLYLINE') {
       const pts = [];
       for (k = k + 1; k < ents.length && ents[k].type === 'VERTEX'; k++) {
         const vx = ents[k], g = c => { const p = vx.g.find(x => x[0] === c); return p ? +p[1] : 0; };
         pts.push({ x: g(10) * s, y: g(20) * s, bulge: g(42) });
       }
-      out.push({ type: 'polyligne', calque, segments: depuisSommets(pts, (get(70) & 1) === 1) });
+      out.push(lisser !== 'non' && !((get(70) & 1) === 1) && estEchantillonnee(pts) ? courbeLissee(calque, pts.map(p => [p.x, p.y]), 'POLYLINE') : { type: 'polyligne', calque, segments: depuisSommets(pts, (get(70) & 1) === 1) });
+    } else if (e.type === 'SPLINE') {
+      // B-spline : degré (71), nœuds (40), poids (41), points de contrôle (10/20) ou, à défaut, points de lissage (11/21)
+      const ctrl = [], fit = [], noeuds = [], poids = []; let cur = null, curF = null;
+      for (const [c, v] of e.g) {
+        if (c === 10) { cur = [+v * s, 0]; ctrl.push(cur); } else if (c === 20 && cur) cur[1] = +v * s;
+        else if (c === 11) { curF = [+v * s, 0]; fit.push(curF); } else if (c === 21 && curF) curF[1] = +v * s;
+        else if (c === 40) noeuds.push(+v); else if (c === 41) poids.push(+v);
+      }
+      const degre = get(71, 3);
+      const pts = ctrl.length > degre && noeuds.length === ctrl.length + degre + 1 ? echantillonnerSpline({ degre, noeuds, ctrl, poids }, 0.25) : fit;
+      if (pts.length >= 2) out.push(courbeLissee(calque, pts, 'SPLINE'));
     }
   }
   return { entites: out, calques: [...new Set(out.map(e => e.calque))] };
+}
+
+/**
+ * Polyligne sans renflements à sommets serrés et déviations faibles (< 10° à chaque sommet, au moins un sommet dévié) :
+ * courbe échantillonnée par le logiciel de tracé (clothoïdes et arcs exportés en points).
+ */
+function estEchantillonnee(pts) {
+  if (pts.length < 6 || pts.some(p => Math.abs(p.bulge) > 1e-12)) return false;
+  let devie = 0;
+  for (let k = 1; k < pts.length - 1; k++) {
+    const a = Math.atan2(pts[k].y - pts[k - 1].y, pts[k].x - pts[k - 1].x), b = Math.atan2(pts[k + 1].y - pts[k].y, pts[k + 1].x - pts[k].x);
+    const d = Math.abs(Math.atan2(Math.sin(b - a), Math.cos(b - a))) * 180 / Math.PI;
+    if (d > 10) return false; if (d > 0.02) devie++;
+    if (Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y) > 25) return false;
+  }
+  return devie >= 2;
+}
+
+/** Entité courbe reconstituée (droites, arcs, clothoïdes) à partir de points serrés. */
+function courbeLissee(calque, pts, source) {
+  const f = ajusterElements(pts);
+  return { type: 'polyligne', calque, segments: f.segments, lissee: { source, nPoints: pts.length, elements: f.elements, ecartMax: f.ecartMax } };
 }
 
 /** Arc de centre c, rayon r, de l'angle a0 à a1 ; sens +1 trigonométrique, −1 horaire (a1 < a0). */
@@ -76,6 +111,13 @@ export function ecrireDXF(entites) {
     if (e.type === 'LINE') L.push('0', 'LINE', '8', e.calque, '10', e.a[0], '20', e.a[1], '30', 0, '11', e.b[0], '21', e.b[1], '31', 0);
     else if (e.type === 'ARC') L.push('0', 'ARC', '8', e.calque, '10', e.c[0], '20', e.c[1], '30', 0, '40', e.r, '50', e.a0Deg, '51', e.a1Deg);
     else if (e.type === 'LWPOLYLINE') { L.push('0', 'LWPOLYLINE', '8', e.calque, '90', e.pts.length, '70', 0); for (const p of e.pts) { L.push('10', p.x, '20', p.y); if (p.bulge) L.push('42', p.bulge); } }
+    else if (e.type === 'SPLINE') {
+      // B-spline cubique serrée (nœuds uniformes, extrémités répétées) de points de contrôle donnés
+      const p = 3, n = e.ctrl.length, m = n + p + 1, U = Array.from({ length: m }, (_, k) => (k <= p ? 0 : k >= n ? n - p : k - p));
+      L.push('0', 'SPLINE', '8', e.calque, '70', 8, '71', p, '72', m, '73', n, '74', 0);
+      for (const u of U) L.push('40', u);
+      for (const c of e.ctrl) L.push('10', c[0], '20', c[1], '30', 0);
+    }
   }
   L.push('0', 'ENDSEC', '0', 'EOF');
   return L.map(String).join('\n') + '\n';

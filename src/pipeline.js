@@ -47,7 +47,7 @@ function appliquerDevers(p) {
 function lireTrace(t) {
   if (!t || !String(t).trim()) return undefined;
   const o = JSON.parse(t);
-  if (!o.segments || !o.segments.some(g => g.type === 'arc')) return undefined;
+  if (!o.segments || !o.segments.some(g => g.type === 'arc' || g.type === 'clothoide')) return undefined;
   const psiLignes = Array.isArray(o.psiLignes) && o.psiLignes.some(v => Math.abs(v - 100) > 1e-6) ? o.psiLignes.map(Number) : undefined;
   return { segments: o.segments, s0: +o.s0 || 0, source: o.source || '', ...(psiLignes ? { psiLignes } : {}) };
 }

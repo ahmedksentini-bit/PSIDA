@@ -9,7 +9,7 @@ import { nivellement } from './nivellement.js';
 import { Axe } from '../geom/axe.js';
 import { forceCentrifuge, qvEC, forceCentrifugeF61 } from '../geom/centrifuge.js';
 import { BC } from '../loads_f61.js';
-import { neopreneFlexibility, cantileverFlexibility, horizontalDistribution, brakingF61Deck, headCombinationsBAEL, headCombinationsEC } from './actions.js';
+import { neopreneFlexibility, cantileverFlexibility, horizontalDistribution, brakingF61Deck, headCombinationsBAEL, headCombinationsEC, repartitionPlan } from './actions.js';
 import { designShaft, pierCap, buckling, chevetreTorsion } from './pier.js';
 import { gardeGreve, murEnRetour, earthPressure, earthPressureUpper, videCombos, dalleTransition, Ka } from './abutment.js';
 import { shallowFooting, footingStrutTie, pileCapStrutTie, pileGroupForces, menardReaction, lateralPile, pileMinSteel, pileCapacity, minPileLength, PILE_TYPES, pileCapTwoRows, paroiFlechie, negativeFrictionPiles, pileGroupSettlement, footingRotationStiffness, footingSettlement, footingCantilever, sigmaSBAEL, pileConcrete, efficaciteCoherentF62, efficaciteEC7, isCohesive, soilProfile } from './foundation.js';
@@ -267,6 +267,24 @@ export function computeSupports(st, input = {}) {
     return { ...l, sApp: { inst: fl(Ei, 'inst'), diff: fl(Ev, 'sus') } };
   });
   const distTB = horizontalDistribution(lineDataT('BAEL')), distTE = horizontalDistribution(lineDataT('EC'));
+  // ouvrage courbe : force centrifuge promenée le long du tablier (intensité au rayon local, dirigée vers l'extérieur
+  // du virage, appliquée sur l'axe), tablier indéformable dans son plan sur les lignes d'appui (ressorts longitudinal et
+  // transversal de chaque ligne) : translation et ROTATION d'ensemble ; enveloppe des efforts par ligne
+  const centrifugePlan = (code, Fde) => {
+    const t = deck.g.trace, ax = new Axe(t.segments), sC0 = (t.s0 || 0) + deck.beam.x0[0], ov = deck.g.overhangs || [0, 0];
+    const dL = code === 'BAEL' ? distB : distE, dT = code === 'BAEL' ? distTB : distTE;
+    const lignes = xs.map((x, i) => { const s = sC0 + x - deck.beam.x0[0], T = ax.tangente(s); return { P: ax.point(s), T, N: [-T[1], T[0]], KL: dL.K.inst[i], KT: dT.K.inst[i] }; });
+    const Hx = xs.map(() => 0), Hy = xs.map(() => 0), pos = xs.map(() => null);
+    let Fmax = 0;
+    for (let x = -ov[0]; x <= Ltot + ov[1] + 1e-9; x += 0.5) {
+      const s = sC0 + x, k = ax.courbure(s); if (!k) continue;
+      const F = Fde(1 / Math.abs(k)); if (!(F > 0)) continue;
+      Fmax = Math.max(Fmax, F);
+      const T = ax.tangente(s), N = [-T[1], T[0]], dir = -Math.sign(k), Fv = [dir * F * N[0], dir * F * N[1]];
+      repartitionPlan(lignes, Fv, ax.point(s)).forEach((r, i) => { if (Math.abs(r.Hy) > Hy[i]) { Hy[i] = Math.abs(r.Hy); pos[i] = x; } Hx[i] = Math.max(Hx[i], Math.abs(r.Hx)); });
+    }
+    return { Hx, Hy, Fmax, pos };
+  };
   // appareils d'appui, référentiel EC (guide Sétra 2007 § 4.3.1 et 4.3.2.3.1) : appui (fût, fondation, sol) avec ses raideurs
   // instantanées, élastomère G = 0,9 MPa pour les déformations lentes — distribution distincte de celle des fondations (différée)
   const distEb = horizontalDistribution(lineData('EC').map(l => ({ ...l, sApp: { inst: l.sApp.inst, diff: l.sApp.inst } })));
@@ -296,8 +314,10 @@ export function computeSupports(st, input = {}) {
   // rayon minimal sur la longueur du tablier (abouts compris), pas sur tout l'axe dessiné
   const rTrace = deck.g.trace ? (() => { const t = deck.g.trace, ov = deck.g.overhangs || [0, 0], s0 = (t.s0 || 0) + deck.beam.x0[0]; return new Axe(t.segments).rayonMin(s0 - ov[0], s0 + Ltot + ov[1]); })() : Infinity;
   const Qv = qvEC(st.ec && st.ec.alpha ? st.ec.alpha.aQ : [1, 1, 1], st.ec && st.ec.lanes ? st.ec.lanes.n : 3);
+  const optF61 = f61 ? { nv: f61.nv, bc: BC.bc[f61.classe] || BC.bc[1], delta: Math.max(1, ...(f61.deltaBc || [1])), Ltot } : null;
   const centrifuge = Number.isFinite(rTrace) ? { r: rTrace, Qv, Qtk: forceCentrifuge({ r: rTrace, Qv }),
-    F61: f61 ? forceCentrifugeF61({ r: rTrace, nv: f61.nv, bc: BC.bc[f61.classe] || BC.bc[1], delta: Math.max(1, ...(f61.deltaBc || [1])), Ltot }) : null } : null;
+    F61: f61 ? forceCentrifugeF61({ r: rTrace, ...optF61 }) : null,
+    plan: { EC: centrifugePlan('EC', r => forceCentrifuge({ r, Qv })), BAEL: f61 ? centrifugePlan('BAEL', r => forceCentrifugeF61({ r, ...optF61 }).F) : null } } : null;
   const RFsaisi = Math.max(0, st.p.concept.epsSlow ?? 2.5e-4), epsT = 1e-5 * (st.p.concept.dTu ?? 30);
   const RF = dp && dp.shorten ? dp.shorten.total : RFsaisi;
   const R = (res, i) => (res ? Math.max(0, res.Rmax[i]) : 0);
@@ -356,7 +376,7 @@ export function computeSupports(st, input = {}) {
       { label: 'A(l) + trottoirs', N: q * (R(f61.A, i) + tr), H: h * brk.A * bB, gU: 1.605, gS: 1.2 },
       { label: 'Bc + trottoirs', N: q * (R(f61.Bc, i) + tr), H: h * brk.Bc * bB, gU: 1.605, gS: 1.2 },
       // ouvrage courbe : force centrifuge du Bc (art. 7), non cumulée avec le freinage (art. 7.3)
-      ...(centrifuge && centrifuge.F61 && centrifuge.F61.F ? [{ label: 'Bc + trottoirs + centrifuge', N: q * (R(f61.Bc, i) + tr), H: 0, Hy: h * centrifuge.F61.F * distTB.braking(1)[i], gU: 1.605, gS: 1.2 }] : []),
+      ...(centrifuge && centrifuge.F61 && centrifuge.F61.F ? [{ label: 'Bc + trottoirs + centrifuge', N: q * (R(f61.Bc, i) + tr), H: h * centrifuge.plan.BAEL.Hx[i], Hy: h * centrifuge.plan.BAEL.Hy[i], gU: 1.605, gS: 1.2 }] : []),
       ...(f61.Bt ? [{ label: 'Bt + trottoirs', N: q * (R(f61.Bt, i) + tr), H: 0, gU: 1.605, gS: 1.2 }] : []),
       ...(f61.Mc120 ? [{ label: 'Mc120 + trottoirs', N: q * (R(f61.Mc120, i) + tr), H: 0, gU: 1.35, gS: 1.0 }] : []),
     ];
@@ -364,7 +384,7 @@ export function computeSupports(st, input = {}) {
     const psi0 = (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i) + 0.4 * R(ec.gr3, i) * 0.6) / Math.max(1e-9, R(ec.gr1a, i));
     const QE = [
       { label: 'gr1a', N: q * R(ec.gr1a, i), H: 0, psi0 },
-      { label: centrifuge && centrifuge.Qtk ? 'gr2 (freinage + centrifuge)' : 'gr2 (freinage)', N: q * (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)), H: h * bearings.H * distE.braking(1)[i], Hy: centrifuge ? h * centrifuge.Qtk * distTE.braking(1)[i] : 0, psi0: 0 },
+      { label: centrifuge && centrifuge.Qtk ? 'gr2 (freinage + centrifuge)' : 'gr2 (freinage)', N: q * (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)), H: h * (bearings.H * distE.braking(1)[i] + (centrifuge ? centrifuge.plan.EC.Hx[i] : 0)), Hy: centrifuge ? h * centrifuge.plan.EC.Hy[i] : 0, psi0: 0 },
     ];
     const EC = headCombinationsEC({ G, Q: QE, RF: { H: Math.abs(h * distE.imposed(RF).H[i]) + Hp('E', i) }, T: { H: h * distE.imposed(epsT).H[i] } });
     const Nfreq = q * (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i));
@@ -396,9 +416,9 @@ export function computeSupports(st, input = {}) {
     const tr = R(f61.trottoir, i);
     const bB = distB.braking(1)[i], bE = distE.braking(1)[i];
     const QQ = code === 'BAEL'
-      ? [{ label: 'A(l)', res: f61.A, add: tr, g: 1.605, H: brk.A * bB / nb }, { label: 'Bc', res: f61.Bc, add: tr, g: 1.605, H: Math.max(brk.Bc * bB, centrifuge && centrifuge.F61 ? centrifuge.F61.F * distTB.braking(1)[i] : 0) / nb },
+      ? [{ label: 'A(l)', res: f61.A, add: tr, g: 1.605, H: brk.A * bB / nb }, { label: 'Bc', res: f61.Bc, add: tr, g: 1.605, H: Math.max(brk.Bc * bB, centrifuge && centrifuge.plan.BAEL ? Math.hypot(centrifuge.plan.BAEL.Hx[i], centrifuge.plan.BAEL.Hy[i]) : 0) / nb },
         ...(f61.Mc120 ? [{ label: 'Mc120', res: f61.Mc120, add: tr, g: 1.35, H: 0 }] : [])]
-      : [{ label: 'gr1a', res: ec.gr1a, add: 0, g: 1.35, H: 0 }, { label: centrifuge && centrifuge.Qtk ? 'gr2 (freinage + centrifuge)' : 'gr2 (freinage)', noT: true, res: ec.gr1a, frac: R(ec.gr1a, i) > 0 ? (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)) / R(ec.gr1a, i) : 0, add: 0, g: 1.35, H: Math.hypot(bearings.H * bE, centrifuge ? centrifuge.Qtk * distTE.braking(1)[i] : 0) / nb }];
+      : [{ label: 'gr1a', res: ec.gr1a, add: 0, g: 1.35, H: 0 }, { label: centrifuge && centrifuge.Qtk ? 'gr2 (freinage + centrifuge)' : 'gr2 (freinage)', noT: true, res: ec.gr1a, frac: R(ec.gr1a, i) > 0 ? (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)) / R(ec.gr1a, i) : 0, add: 0, g: 1.35, H: Math.hypot(bearings.H * bE + (centrifuge ? centrifuge.plan.EC.Hx[i] : 0), centrifuge ? centrifuge.plan.EC.Hy[i] : 0) / nb }];
     // gradient thermique (réactions hyperstatiques N_θ du gradient, réparties sur les n appareils) : ψ₀ = 0,6 avec le trafic
     // dominant (BAEL 1,3 × 0,6 = 0,78 ; EC 1,5 × 0,6), 1,35 / 1,5 en action dominante, 1,0 dans les combinaisons minimales
     const th = st.thermal && st.thermal.Rmax ? st.thermal : null;
