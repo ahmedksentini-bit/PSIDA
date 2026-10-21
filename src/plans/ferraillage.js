@@ -63,8 +63,11 @@ function vueLongitudinale(G, st, marks, e, eV) {
   const nr = { inf: ranger(items.inf, larg), sup: ranger(items.sup, larg) };
   for (const face of ['inf', 'sup']) for (const it of items[face]) {
     const zb = face === 'inf' ? -h - V(9 + it.r * PAS) : V(9 + it.r * PAS);
-    v.repere([it.x, zb], it.m.mark, [it.x, it.z]);
-    v.texte('TEXTES', [it.x + Hz(4.5), zb], it.txt, { h: 2.4, ancre: 'g', v: 'm' });
+    // une bulle d'une rangée plus éloignée, au-dessus d'une bulle plus proche : décalée, rappel oblique
+    const gene = items[face].some(o => o.r < it.r && Math.abs(o.x - it.x) < Hz(7));
+    const xb = gene ? it.x + Hz(10) : it.x;
+    v.repere([xb, zb], it.m.mark, [it.x, it.z]);
+    v.texte('TEXTES', [xb + Hz(4.5), zb], it.txt, { h: 2.4, ancre: 'g', v: 'm' });
   }
   const zChev = V(9 + nr.sup * PAS + 4), zHaut = zChev + V(12);
   const zT = -h - V(9 + nr.inf * PAS + 4), zEp = zT - V(12), zCote = zEp - V(14);
@@ -99,7 +102,7 @@ function vueLongitudinale(G, st, marks, e, eV) {
   }
   // cotes des travées
   const us = [uA, ...x0, uB].filter((u, k, a) => k === 0 || u - a[k - 1] > 1e-6);
-  for (let k = 0; k + 1 < us.length; k++) v.cote([us[k], zCote], [us[k + 1], zCote], -0.0001);
+  for (let k = 0; k + 1 < us.length; k++) v.coteH([us[k], -h], [us[k + 1], -h], zCote);
   return v;
 }
 
@@ -185,7 +188,7 @@ function vueDemiCoupes(G, st, marks, { xT, jT, xA, iA }) {
     });
   }
   // cotes : largeur, enrobage figuré par une note
-  v.cote([X(b), zmax + 1.75], [X(-b), zmax + 1.75], 0.0001);
+  v.coteH([X(b), G.dessus(b)], [X(-b), G.dessus(-b)], zmax + 1.75);
   return v;
 }
 

@@ -60,17 +60,18 @@ function vuePlan(G) {
   });
   // biais
   const psi = G.psiL[0];
-  if (Math.abs(psi - 100) > 1e-6 && !G.courbe) v.texte('TEXTES', G.pt(x0[0], -b - 2.4), `Biais ψ = ${psi.toFixed(2).replace('.', ',')} gr`, { h: 2.5, ancre: 'c' });
+  if (Math.abs(psi - 100) > 1e-6 && !G.courbe) v.texte('TEXTES', G.pt(x0[0], -b - 5.2), `Biais ψ = ${psi.toFixed(2).replace('.', ',')} gr`, { h: 2.5, ancre: 'c' });
   // cotes : travées (le long de l'axe, en développé), longueur totale, largeur
   if (!G.courbe) {
-    const yc = -b, pts = [uA, ...x0, uB].filter((u, k, a) => k === 0 || u - a[k - 1] > 1e-6);
-    for (let k = 0; k + 1 < pts.length; k++) v.cote([pts[k], yc], [pts[k + 1], yc], -1.8);
-    v.cote([uA, yc], [uB, yc], -3.2);
+    const pts = [uA, ...x0, uB].filter((u, k, a) => k === 0 || u - a[k - 1] > 1e-6);
+    const bord = u => G.pt(u, -b);   // biais uniforme : les écarts sur le bord égalent les écarts sur l'axe
+    for (let k = 0; k + 1 < pts.length; k++) v.coteH(bord(pts[k]), bord(pts[k + 1]), -b - 2.8);
+    v.coteH(bord(uA), bord(uB), -b - 4.2);
     const xg = Math.min(G.pt(uA, -b)[0], G.pt(uA, b)[0]) - 0.8;
-    v.cote([xg, -b], [xg, b], 2.6);
+    v.coteV(G.pt(uA, -b), G.pt(uA, b), xg - 2.6);
     // trottoirs et chaussée
     const cuts = [-b, ...(G.g.footways || []).flatMap(f => [f.y1, f.y2]), b].filter((y, k, a) => a.indexOf(y) === k).sort((p, q) => p - q);
-    if (cuts.length > 2) for (let k = 0; k + 1 < cuts.length; k++) v.cote([xg, cuts[k]], [xg, cuts[k + 1]], 1.2);
+    if (cuts.length > 2) for (let k = 0; k + 1 < cuts.length; k++) v.coteV(G.pt(uA, cuts[k]), G.pt(uA, cuts[k + 1]), xg - 1.2);
   }
   if (G.courbe) {   // ouvrage courbe : longueurs développées le long de l'axe et rayon minimal
     const pts = [uA, ...x0, uB].filter((u, k, a) => k === 0 || u - a[k - 1] > 1e-6);
@@ -80,7 +81,7 @@ function vuePlan(G) {
       v.texte('COTES', G.pt(um, 0.35), `${fmtCote(pts[k + 1] - pts[k])} (dév.)`, { h: 2.5, ancre: 'c', angle: ang });
     }
     const R = G.rayonMin;
-    if (R && isFinite(R)) v.texte('TEXTES', G.pt(x0[0], -b - 2.4), `Axe en courbe : rayon minimal ${fmtCote(R)} m — longueur développée ${fmtCote(uB - uA)} m`, { h: 2.5, ancre: 'g' });
+    if (R && isFinite(R)) v.texte('TEXTES', G.pt(x0[0], -b - 2.6), `Axe en courbe : rayon minimal ${fmtCote(R)} m — longueur développée ${fmtCote(uB - uA)} m`, { h: 2.5, ancre: 'g' });
   }
   // flèche du sens de la coupe longitudinale et repères des coupes transversales
   const um = (x0[0] + x0[1]) / 2;
@@ -122,6 +123,7 @@ function vueElevation(G, st) {
   v.poly('COFFRAGE', dalle, true); v.hachure(dalle);
   // revêtement
   v.poly('VUES', us.map(u => [u, zDessus(u) + G.tRev]));
+  const attache = new Map(us.map(u => [u, zDessus(u) + e0]));   // point d'attache des cotes de travées
   x0.forEach((u, i) => {
     const ap = G.appareils[i], zsf = zDessus(u) + e0, nv = NV[i];
     const hApp = ap.h, hBos = nv ? nv.hBos : 0.10, zT = nv ? nv.zT : zsf - hApp - hBos;
@@ -152,6 +154,7 @@ function vueElevation(G, st) {
     rupture(v, x1, x2, zT - hBloc - 0.6);
     // axe d'appui et nom
     v.ligne('AXES', [u, zDessus(u) + G.tRev + 1.0], [u, zT - hBloc - 1.0]);
+    attache.set(u, zT - hBloc - 1.0);
     v.texte('TEXTES', [u, zDessus(u) + G.tRev + 1.3], G.nomLigne(i), { h: 3.5, ancre: 'c', gras: true });
     // niveaux
     if (nv) {
@@ -163,11 +166,11 @@ function vueElevation(G, st) {
     }
   });
   // cotes : abouts et travées, épaisseur
-  const zb = Math.min(...bas.map(p => p[1])) - 2.2;
+  const zb = Math.min(...attache.values()) - 0.6;
   const pts = us.filter((u, k, a) => k === 0 || u - a[k - 1] > 1e-6);
-  for (let k = 0; k + 1 < pts.length; k++) v.cote([pts[k], zb], [pts[k + 1], zb], -0.0001);
+  for (let k = 0; k + 1 < pts.length; k++) v.coteH([pts[k], attache.get(pts[k])], [pts[k + 1], attache.get(pts[k + 1])], zb);
   const um = (x0[0] + x0[1]) / 2;
-  v.cote([um, zDessus(um) + e0], [um, zDessus(um)], -0.8, fmtCote(-e0));
+  v.coteV([um, zDessus(um) + e0], [um, zDessus(um)], um + 0.8, fmtCote(-e0));
   return v;
 }
 
@@ -191,12 +194,14 @@ function vueCoupe(G, st, { titre, appui = null }) {
   v.ligne('AXES', [0, zc + 1.3], [0, G.dessous(0) - (appui != null ? 1.6 : 0.6)]);
   v.texte('TEXTES', [0, zc + 1.45], 'Axe', { h: 2.5, ancre: 'c' });
   const cuts = [-b, ...(G.g.footways || []).flatMap(f => [f.y1, f.y2]), b].filter((y, k, a) => a.indexOf(y) === k).sort((p, q) => p - q);
-  for (let k = 0; k + 1 < cuts.length; k++) v.cote([X(cuts[k + 1]), zc], [X(cuts[k]), zc], 0.0001);
-  v.cote([X(b), zc + 0.55], [X(-b), zc + 0.55], 0.0001);
-  v.cote([X(0) + 0.6, G.dessous(0)], [X(0) + 0.6, G.dessus(0)], -0.0001, fmtCote(G.dessus(0) - G.dessous(0)));
+  const surTrottoir = y => (G.g.footways || []).some(f => y >= Math.min(f.y1, f.y2) - 1e-9 && y <= Math.max(f.y1, f.y2) + 1e-9);
+  const haut = y => [X(y), G.dessus(y) + (surTrottoir(y) ? TROTTOIR : G.tRev)];
+  for (let k = 0; k + 1 < cuts.length; k++) v.coteH(haut(cuts[k + 1]), haut(cuts[k]), zc);
+  v.coteH(haut(b), haut(-b), zc + 0.55);
+  v.coteV([X(0), G.dessous(0)], [X(0), G.dessus(0)], X(0) + 0.6, fmtCote(G.dessus(0) - G.dessous(0)));
   if (ch && ch.joue > 0) {
-    v.cote([X(-b), G.dessous(-b)], [X(-b), G.dessus(-b)], -0.35, fmtCote(G.dessus(-b) - G.dessous(-b)));
-    v.cote([X(-b + ch.joue), G.dessous(0) - 0.35], [X(-b), G.dessous(0) - 0.35], 0.0001);
+    v.coteV([X(-b), G.dessous(-b)], [X(-b), G.dessus(-b)], X(-b) + 0.35, fmtCote(G.dessus(-b) - G.dessous(-b)));
+    v.coteH([X(-b + ch.joue), G.dessous(-b + ch.joue)], [X(-b), G.dessous(-b)], G.dessous(0) - 0.35);
   }
   // dévers
   const dv = G.g.devers;
@@ -220,7 +225,7 @@ function vueCoupe(G, st, { titre, appui = null }) {
     // entraxes des appareils
     const yb = ap.yb.slice().sort((p, q) => q - p);
     const zr = zT - hc - 1.0;
-    for (let k = 0; k + 1 < yb.length; k++) v.cote([X(yb[k]), zr], [X(yb[k + 1]), zr], -0.0001);
+    for (let k = 0; k + 1 < yb.length; k++) v.coteH([X(yb[k]), zT], [X(yb[k + 1]), zT], zr);
     v.texte('TEXTES', [0, zr - 0.75], `${ap.yb.length} appareils ${ap.label} sur bossages de ${fmtCote(hBos)}`, { h: 2.5, ancre: 'c', v: 'h' });
     if (nv) {
       v.niveau([0.5, G.dessus(0) + G.tRev], nv.zCh);

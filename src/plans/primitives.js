@@ -27,6 +27,25 @@ export function primitivesVue(vue, f, k, kd) {
       for (const [a, b] of g.lignes) P(c, { t: 'L', a, b });
       const L = Math.hypot(e.b[0] - e.a[0], e.b[1] - e.a[1]);
       P('TEXTES', { t: 'T', p: g.texte.p, s: e.texte ?? L.toFixed(2).replace('.', ','), h: 2.5 * k, ancre: 'c', v: g.texte.v, angle: g.texte.angle });
+    } else if (e.t === 'coteH' || e.t === 'coteV') {
+      // attaches de l'objet à la ligne de cote (jour de 1 mm, dépassement de 1,5 mm), traits obliques, texte au-dessus
+      const H = e.t === 'coteH', A = f(e.a), B = f(e.b);
+      const A2 = H ? f([e.a[0], e.z]) : f([e.x, e.a[1]]), B2 = H ? f([e.b[0], e.z]) : f([e.x, e.b[1]]);
+      const att = (S, Q) => {
+        const dx = Q[0] - S[0], dy = Q[1] - S[1], L = Math.hypot(dx, dy);
+        if (L < 1.2 * k) return;
+        const u = [dx / L, dy / L];
+        P(c, { t: 'L', a: [S[0] + u[0] * k, S[1] + u[1] * k], b: [Q[0] + u[0] * 1.5 * k, Q[1] + u[1] * 1.5 * k] });
+      };
+      att(A, A2); att(B, B2);
+      const d = [B2[0] - A2[0], B2[1] - A2[1]], L = Math.hypot(...d) || 1, u = [d[0] / L, d[1] / L];
+      P(c, { t: 'L', a: [A2[0] - u[0] * 1.5 * k, A2[1] - u[1] * 1.5 * k], b: [B2[0] + u[0] * 1.5 * k, B2[1] + u[1] * 1.5 * k] });
+      const tk = 1.2 * k, o = [(u[0] - u[1]) / Math.SQRT2 * tk, (u[1] + u[0]) / Math.SQRT2 * tk];
+      for (const Q of [A2, B2]) P(c, { t: 'L', a: [Q[0] - o[0], Q[1] - o[1]], b: [Q[0] + o[0], Q[1] + o[1]] });
+      const Lr = H ? Math.abs(e.b[0] - e.a[0]) : Math.abs(e.b[1] - e.a[1]);
+      const mid = [(A2[0] + B2[0]) / 2, (A2[1] + B2[1]) / 2];
+      P('TEXTES', H ? { t: 'T', p: [mid[0], mid[1] + 0.9 * k], s: e.texte ?? Lr.toFixed(2).replace('.', ','), h: 2.5 * k, ancre: 'c', v: 'b', angle: 0 }
+        : { t: 'T', p: [mid[0] - 0.9 * k, mid[1]], s: e.texte ?? Lr.toFixed(2).replace('.', ','), h: 2.5 * k, ancre: 'c', v: 'b', angle: 90 });
     } else if (e.t === 'niveau') {
       const p = f(e.p), s = 2.2 * k;
       P(c, { t: 'P', pts: [p, [p[0] - s, p[1] + s * 1.2], [p[0] + s, p[1] + s * 1.2]], ferme: true });

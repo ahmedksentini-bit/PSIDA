@@ -11,6 +11,7 @@
  *   { t: 'texte', p, s, h, ancre: 'g'|'c'|'d', v: 'b'|'m'|'h', angle (deg), gras }
  *   { t: 'hachure', pts }                         (béton coupé : hachures à 45°)
  *   { t: 'cote', a, b, d, texte? }                cote alignée a → b, ligne de cote décalée de d (m, à gauche de a→b)
+ *   { t: 'coteH', a, b, z } / { t: 'coteV', a, b, x }   cote horizontale / verticale attachée à l'objet
  *   { t: 'niveau', p, z, s? }                     repère de niveau (triangle + cote)
  *   { t: 'repere', p, n, cible? }                 bulle de repère d'armature (n), flèche vers cible
  */
@@ -52,6 +53,10 @@ export class Vue {
   texte(calque, p, s, { h = 2.5, ancre = 'g', v = 'b', angle = 0, gras = false } = {}) { return this._add(calque, { t: 'texte', p, s: String(s), h, ancre, v, angle, gras }); }
   hachure(pts) { return this._add('HACHURES', { t: 'hachure', pts }); }
   cote(a, b, d, texte = null) { return this._add('COTES', { t: 'cote', a, b, d, texte }); }
+  /** Cote horizontale entre les points a et b (attaches sur l'objet), ligne de cote à l'ordonnée z (m). */
+  coteH(a, b, z, texte = null) { return this._add('COTES', { t: 'coteH', a, b, z, texte }); }
+  /** Cote verticale entre a et b, ligne de cote à l'abscisse x (m). */
+  coteV(a, b, x, texte = null) { return this._add('COTES', { t: 'coteV', a, b, x, texte }); }
   niveau(p, z, s = null) { return this._add('NIVEAUX', { t: 'niveau', p, z, s }); }
   repere(p, n, cible = null) { return this._add('REPERES', { t: 'repere', p, n, cible }); }
   /** Étendue en m (avec une marge pour les cotes et les textes). */
@@ -62,6 +67,8 @@ export class Vue {
       if (e.t === 'ligne') { ajoute(e.a); ajoute(e.b); } else if (e.t === 'poly' || e.t === 'hachure') e.pts.forEach(ajoute);
       else if (e.t === 'cercle' || e.t === 'arc') { ajoute([e.c[0] - e.r, e.c[1] - e.r]); ajoute([e.c[0] + e.r, e.c[1] + e.r]); }
       else if (e.t === 'cote') { ajoute(e.a); ajoute(e.b); const n = normaleG(e.a, e.b); ajoute([e.a[0] + n[0] * e.d, e.a[1] + n[1] * e.d]); ajoute([e.b[0] + n[0] * e.d, e.b[1] + n[1] * e.d]); }
+      else if (e.t === 'coteH') { ajoute(e.a); ajoute(e.b); ajoute([e.a[0], e.z]); ajoute([e.b[0], e.z]); }
+      else if (e.t === 'coteV') { ajoute(e.a); ajoute(e.b); ajoute([e.x, e.a[1]]); ajoute([e.x, e.b[1]]); }
       else if (e.p) ajoute(e.p);
     }
     return { x0: x0 - marge, y0: y0 - marge, x1: x1 + marge, y1: y1 + marge };
