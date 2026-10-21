@@ -6,7 +6,7 @@ import { primitivesFeuille } from './primitives.js';
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const DASH = { DASHED: '3 1.5', CENTER: '9 1.5 1.5 1.5', CONTINUOUS: null };
-const COUL = { 1: '#c81e1e', 3: '#0a7a2f', 5: '#1f4fbf', 6: '#9b2c9b', 7: '#111111', 8: '#6b7280' };
+const COUL = { 1: '#c81e1e', 3: '#0a7a2f', 4: '#0e7490', 5: '#1f4fbf', 6: '#9b2c9b', 7: '#111111', 8: '#6b7280' };
 export const POLICE = 'DejaVu Sans Condensed, Arial Narrow, Arial, sans-serif';
 
 /**

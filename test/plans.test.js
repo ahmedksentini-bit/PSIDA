@@ -117,3 +117,37 @@ test('Appuis de l\'exemple 1 : niveaux du plan de nivellement, pile sur pieux', 
   assert.equal(Q.pieux.n, A.nF * A.nP);
   assert.ok(/pointe/.test(feuilleSVG(planCoffrageAppui(s1, 2))));
 });
+
+import { planEquipements, lireEquipements, familleJoint, controleCharges, souffleJoints, bordGeom, metreEquipements } from '../src/plans/equipements.js';
+import { geometrie } from '../src/plans/geometrie.js';
+
+test('Équipements : familles de joints selon le souffle (Cerema 2016, § 1.3.2)', () => {
+  assert.match(familleJoint(0.008), /sous revêtement/);
+  assert.match(familleJoint(0.015), /revêtement amélioré/);
+  assert.match(familleJoint(0.045), /lèvres/);
+  assert.match(familleJoint(0.120), /cantilever/);
+});
+
+test('Équipements : géométrie, poids, souffle, métré et feuille dédiée', () => {
+  const eq = lireEquipements(formDefaults()), G = geometrie(st);
+  const B = bordGeom(G, eq, 1);
+  assert.ok(B.corniche && B.longrine && B.dispositif && B.gardeCorps && B.bordure);
+  // corniche : aire du profil en L = L·t + e·(H − t)
+  const C = controleCharges(st, eq);
+  const corn = C[0].P.lignes.find(l => l[0] === 'Corniche')[1];
+  assert.ok(Math.abs(corn - 25 * (eq.cornL * eq.cornT + eq.cornE * eq.cornT + eq.cornE * (eq.cornH - eq.cornT))) < 1e-6);
+  assert.ok(C[0].saisi > 0 && C[0].ecart != null);
+  const J = souffleJoints(st, eq);
+  assert.ok(J.every(j => j.W > 0 && Math.abs(j.W - (2 * j.vT + j.vRF)) < 1e-12));
+  const M = metreEquipements(st, eq, G), L = G.uB - G.uA;
+  assert.ok(Math.abs(M.find(m => m[0] === 'Corniches')[2] - 2 * L) < 1e-9);
+  const F = planEquipements(st, eq, { numero: 'E-1' });
+  assert.equal(F.vues.length, 5);
+  const svg = feuilleSVG(F), D = lireDXF(feuilleDXF(F));
+  assert.ok(svg.includes('TABLIER — ÉQUIPEMENTS') && /joint à revêtement amélioré|joint à lèvres|sous revêtement/.test(svg));
+  assert.deepEqual(D.fin, ['0', 'EOF']);
+  assert.ok(D.paires.some(p => p[0] === '2' && p[1] === 'EQUIPEMENTS'));
+  // coffrage avec équipements : calque EQUIPEMENTS dans les coupes
+  const Fc = planCoffrage(st, {}, eq);
+  assert.ok(Fc.vues.some(p => p.vue.ents.some(e => e.calque === 'EQUIPEMENTS')));
+});

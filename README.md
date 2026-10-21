@@ -390,3 +390,8 @@ coupe dans l'axe (mur de front, sommier, garde-grève, mur en retour et dalle de
 et chevêtre des piles ; pieux et leur inclinaison), vue en plan de la fondation alignée sous l'élévation, niveaux du plan
 de nivellement, quantités de béton par élément et des pieux (src/plans/appuis.js) ; plans du tablier : cotes attachées
 à l'ouvrage, bulles de repères sans chevauchement ; manuel § 26.5.
+v0.68 : équipements du tablier (src/plans/equipements.js) — corniches, dispositifs de retenue et longrines d'ancrage,
+garde-corps, bordures et remplissage des trottoirs, étanchéité et couche de roulement, joints de chaussée (souffle
+2 v_T + v_RF, famille selon le guide Cerema 2016), gargouilles (retombée 0,50 m, fiche MEMOAR X-2) ; dessinés dans les
+coupes et la vue en plan du coffrage ; feuille « Équipements » (détails des bords, du joint et de la gargouille, schéma
+d'évacuation des eaux, métré) ; contrôle des poids propres par rapport aux charges linéaires du calcul.

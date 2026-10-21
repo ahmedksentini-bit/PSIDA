@@ -6,6 +6,7 @@
 import { planCoffrage } from '../src/plans/coffrage.js';
 import { planFerraillage } from '../src/plans/ferraillage.js';
 import { planCoffrageAppui, appuisDisponibles } from '../src/plans/appuis.js';
+import { planEquipements, lireEquipements, controleCharges, souffleJoints } from '../src/plans/equipements.js';
 import { feuilleSVG } from '../src/plans/svg.js';
 import { feuilleDXF, octetsCp1252 } from '../src/plans/dxf.js';
 
@@ -21,8 +22,14 @@ function cartouche(numero) {
   };
 }
 
+/** Paramètres des équipements (champs eq_* du formulaire ; hauteur du dispositif par défaut : onglet Dispositifs de retenue). */
+function equipements() {
+  const d = {}; document.querySelectorAll('[name^="eq_"], [name="dr_hDR"]').forEach(e => { d[e.name] = e.value; });
+  return lireEquipements(d);
+}
 const PLANS = {
-  coffrage: { titre: 'Plan de coffrage', fichier: 'coffrage', num: () => val('plan_num_cof') || 'TAB-COF-01', faire: (st, c) => planCoffrage(st, c) },
+  coffrage: { titre: 'Plan de coffrage', fichier: 'coffrage', num: () => val('plan_num_cof') || 'TAB-COF-01', faire: (st, c) => planCoffrage(st, c, equipements()) },
+  equipements: { titre: 'Équipements', fichier: 'equipements', num: () => val('plan_num_eq') || 'TAB-EQU-01', faire: (st, c) => planEquipements(st, equipements(), c) },
   ferraillage: { titre: 'Plan de ferraillage', fichier: 'ferraillage', num: () => val('plan_num_fer') || 'TAB-FER-01', faire: (st, c) => planFerraillage(st, c) },
 };
 
@@ -42,7 +49,7 @@ const nomFichier = (st, k, ext) => { const P = plan(st, k); return `${P.num().re
 /** Plans disponibles pour l'état de calcul : le ferraillage seulement pour une dalle armée calculée. */
 export function plansDisponibles(st) {
   if (!st || !st.deck) return [];
-  return [...(st.rebar && st.rebar.marks ? ['coffrage', 'ferraillage'] : ['coffrage']), ...appuisDisponibles(st).map(i => `appui-${i}`)];
+  return [...(st.rebar && st.rebar.marks ? ['coffrage', 'ferraillage'] : ['coffrage']), 'equipements', ...appuisDisponibles(st).map(i => `appui-${i}`)];
 }
 
 export function renderPlans(st) {
@@ -55,6 +62,7 @@ export function renderPlans(st) {
   if (!dispo.includes('ferraillage')) msg.push('Dalle précontrainte ou ferraillage indisponible : seul le plan de coffrage du tablier est proposé (le câblage et les aciers passifs sont dans l\'onglet Précontrainte).');
   if (!dispo.some(k => k.startsWith('appui-'))) msg.push('Plans des appuis : calcul des appuis indisponible (voir l\'onglet Appuis et fondations).');
   $('#plans-info').innerHTML = msg.join(' ');
+  infoEquipements(st);
   $('#plan-apercu').innerHTML = '';
 }
 
@@ -68,6 +76,18 @@ function apercu(st) {
   } catch (e) { $('#plan-apercu').innerHTML = `<p class="small"><span class="badge warn">ATTENTION</span> ${e.message}</p>`; }
 }
 
+/** Contrôle rapide : poids des équipements / charges linéaires saisies, souffle et famille des joints. */
+function infoEquipements(st) {
+  const box = $('#eq-info'); if (!box || !st || !st.deck) return;
+  try {
+    const eq = equipements(), C = controleCharges(st, eq), J = souffleJoints(st, eq);
+    const f = x => x.toFixed(2).replace('.', ',');
+    const cote = c => `côté ${c.sg > 0 ? 'y > 0' : 'y < 0'} : équipements ${f(c.P.total)} kN/m, charges saisies ${f(c.saisi)} kN/m${c.ecart != null ? ` (${c.ecart >= 0 ? '+' : ''}${(c.ecart * 100).toFixed(0)} %)` : ''}`;
+    const alerte = C.some(c => c.ecart != null && Math.abs(c.ecart) > 0.10);
+    box.innerHTML = `${alerte ? '<span class="badge warn">ATTENTION</span> ' : '<span class="badge ok">OK</span> '}${C.map(cote).join(' ; ')}. Joints : ${J.map(j => `${j.i === 0 ? 'C0' : 'C' + j.i} ${j.W != null ? (j.W * 1000).toFixed(0) + ' mm' : '—'}, ${j.type}`).join(' ; ')}.`;
+  } catch (e) { box.textContent = 'Équipements : ' + e.message; }
+}
+
 export function initPlans(getState) {
   if (!$('#plans-box')) return;
   const avec = f => async () => {
@@ -76,6 +96,7 @@ export function initPlans(getState) {
     try { await f(st); } catch (e) { alert('Plans : ' + e.message); console.error(e); } finally { if (bouton) bouton.disabled = false; }
   };
   $('#plan-voir').addEventListener('click', avec(st => apercu(st)));
+  document.querySelectorAll('.eq-box input, .eq-box select').forEach(e => e.addEventListener('change', () => { const st = getState(); if (st && st.deck) infoEquipements(st); }));
   $('#plan-type').addEventListener('change', () => { $('#plan-apercu').innerHTML = ''; });
   $('#plan-dxf').addEventListener('click', avec(st => {
     const k = $('#plan-type').value, F = feuille(st, k);

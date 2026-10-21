@@ -25,6 +25,7 @@ export const CALQUES = {
   TEXTES: { couleur: 7, ep: 0.18, type: 'CONTINUOUS' },
   HACHURES: { couleur: 8, ep: 0.13, type: 'CONTINUOUS' },
   APPAREILS: { couleur: 5, ep: 0.35, type: 'CONTINUOUS' },
+  EQUIPEMENTS: { couleur: 4, ep: 0.35, type: 'CONTINUOUS' },
   ACIERS: { couleur: 1, ep: 0.5, type: 'CONTINUOUS' },
   ACIERS_COUPES: { couleur: 1, ep: 0.35, type: 'CONTINUOUS' },
   REPERES: { couleur: 6, ep: 0.25, type: 'CONTINUOUS' },

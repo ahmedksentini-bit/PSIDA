@@ -8,6 +8,7 @@
  */
 import { Vue, Feuille, fmtCote, fmtNiv } from './dessin.js';
 import { geometrie, courbeU } from './geometrie.js';
+import { dessinerBord, bordGeom, gargouilles } from './equipements.js';
 
 const GG = { e: 0.30, joint: 0.05 };   // garde-grève : épaisseur, joint de chaussée (m)
 const TROTTOIR = 0.20;                // hauteur des bordures de trottoir (m)
@@ -36,7 +37,7 @@ function niveauxLigne(G, i) {
 }
 
 /* ------------------------------------------------------------------------------------------------ vue en plan */
-function vuePlan(G) {
+function vuePlan(G, eq = null) {
   const v = new Vue('VUE EN PLAN'), { b, uA, uB, x0, n } = G;
   // contour
   const gauche = courbeU(G, b, uA, uB, x0), droite = courbeU(G, -b, uA, uB, x0).reverse();
@@ -45,6 +46,13 @@ function vuePlan(G) {
   const ch = G.g.chamfer;
   if (ch && ch.joue > 0) for (const s of [-1, 1]) v.poly('VUES', courbeU(G, s * (b - ch.joue), uA, uB, x0));
   for (const fw of G.g.footways || []) for (const y of [fw.y1, fw.y2]) if (Math.abs(Math.abs(y) - b) > 1e-6) v.poly('VUES', courbeU(G, y, uA, uB, x0));
+  // équipements : nu extérieur des corniches, axe des dispositifs de retenue, gargouilles
+  if (eq) for (const sg of [1, -1]) {
+    const B = bordGeom(G, eq, sg);
+    if (B.corniche) v.poly('EQUIPEMENTS', courbeU(G, sg * (b + eq.cornE), uA, uB, x0));
+    if (B.dispositif) v.poly('EQUIPEMENTS', courbeU(G, B.dispositif.y, uA, uB, x0));
+  }
+  if (eq) for (const g of gargouilles(G, eq)) v.cercle('EQUIPEMENTS', G.pt(g.u, g.y), eq.gargD / 2 + 0.05);
   // axe longitudinal et lignes d'appui
   v.poly('AXES', courbeU(G, 0, uA - 1.5, uB + 1.5, x0));
   x0.forEach((u, i) => {
@@ -175,7 +183,7 @@ function vueElevation(G, st) {
 }
 
 /* ------------------------------------------------------------------------------------- coupes transversales */
-function vueCoupe(G, st, { titre, appui = null }) {
+function vueCoupe(G, st, { titre, appui = null, eq = null }) {
   const v = new Vue(titre), { b } = G, X = y => -y;
   const pr = profilDalle(G), ch = G.g.chamfer;
   const poly = pr.poly.map(([y, z]) => [X(y), z]);
@@ -184,13 +192,14 @@ function vueCoupe(G, st, { titre, appui = null }) {
   const rd = G.g.roadway || { y1: -b, y2: b };
   const Yr = []; for (let y = rd.y1; y <= rd.y2 + 1e-9; y += 0.5) Yr.push(y); if (Yr[Yr.length - 1] < rd.y2) Yr.push(rd.y2);
   v.poly('VUES', Yr.map(y => [X(y), G.dessus(y) + G.tRev]));
-  for (const fw of G.g.footways || []) {
+  if (eq) for (const sg of [1, -1]) dessinerBord(v, G, eq, sg);
+  else for (const fw of G.g.footways || []) {
     const z1 = G.dessus(fw.y1), z2 = G.dessus(fw.y2);
     v.poly('COFFRAGE', [[X(fw.y1), z1], [X(fw.y1), z1 + TROTTOIR], [X(fw.y2), z2 + TROTTOIR], [X(fw.y2), z2]]);
   }
   // axe
   // cotes : largeur totale, trottoirs / chaussée, épaisseurs
-  const zc = Math.max(...pr.haut.map(p => p[1])) + TROTTOIR + 0.9;
+  const zc = Math.max(...pr.haut.map(p => p[1])) + (eq ? Math.max(eq.hDR, eq.hGC) + 0.25 : TROTTOIR) + 0.9;
   v.ligne('AXES', [0, zc + 1.3], [0, G.dessous(0) - (appui != null ? 1.6 : 0.6)]);
   v.texte('TEXTES', [0, zc + 1.45], 'Axe', { h: 2.5, ancre: 'c' });
   const cuts = [-b, ...(G.g.footways || []).flatMap(f => [f.y1, f.y2]), b].filter((y, k, a) => a.indexOf(y) === k).sort((p, q) => p - q);
@@ -283,7 +292,7 @@ function tableauQuantites(Q) {
 }
 
 /* --------------------------------------------------------------------------------------------- la feuille */
-export function planCoffrage(st, cartouche = {}) {
+export function planCoffrage(st, cartouche = {}, eq = null) {
   const G = geometrie(st);
   const L = G.uB - G.uA, format = L > 70 ? 'A0' : 'A1';
   const F = new Feuille(format, { titre: 'TABLIER — PLAN DE COFFRAGE', cartouche: { ...cartouche } });
@@ -291,7 +300,7 @@ export function planCoffrage(st, cartouche = {}) {
   // bandes : plan (haut, 42 %), coupe longitudinale (milieu, 26 %), coupes transversales + notes (bas)
   const hb = (y1 - y0);
   const yPlan = y0 + hb * 0.50, yElev = y0 + hb * 0.27;
-  const plan = vuePlan(G), elev = vueElevation(G, st);
+  const plan = vuePlan(G, eq), elev = vueElevation(G, st);
   F.placerDans(plan, [x0, yPlan, x1 - x0, y1 - yPlan]);
   F.placerDans(elev, [x0, yElev, x1 - x0, yPlan - yElev]);
   // même échelle pour le plan et la coupe longitudinale (lecture en correspondance)
@@ -299,9 +308,9 @@ export function planCoffrage(st, cartouche = {}) {
   for (const pl of F.vues) if (pl.vue.echelle !== e) { pl.vue.echelle = e; }
   F.vues = []; F.placerDans(plan, [x0, yPlan, x1 - x0, y1 - yPlan], { auto: false }); F.placerDans(elev, [x0, yElev, x1 - x0, yPlan - yElev], { auto: false });
   // coupes transversales
-  const ca = vueCoupe(G, st, { titre: 'COUPE A-A (en travée)' });
+  const ca = vueCoupe(G, st, { titre: 'COUPE A-A (en travée)', eq });
   const iB = Math.min(1, G.n - 1);
-  const cb = vueCoupe(G, st, { titre: `COUPE B-B (sur ${G.nomLigne(iB)})`, appui: iB });
+  const cb = vueCoupe(G, st, { titre: `COUPE B-B (sur ${G.nomLigne(iB)})`, appui: iB, eq });
   const wz = (x1 - wc - 6 - x0) / 2;
   F.placerDans(ca, [x0, y0, wz, yElev - y0]);
   F.placerDans(cb, [x0 + wz, y0, wz, yElev - y0]);
