@@ -7,7 +7,8 @@ import { nivellement } from './nivellement.js';
  * Unités : m, kN, kN·m, MPa (p*_l, E_M en MPa).
  */
 import { Axe } from '../geom/axe.js';
-import { forceCentrifuge, qvEC } from '../geom/centrifuge.js';
+import { forceCentrifuge, qvEC, forceCentrifugeF61 } from '../geom/centrifuge.js';
+import { BC } from '../loads_f61.js';
 import { neopreneFlexibility, cantileverFlexibility, horizontalDistribution, brakingF61Deck, headCombinationsBAEL, headCombinationsEC } from './actions.js';
 import { designShaft, pierCap, buckling, chevetreTorsion } from './pier.js';
 import { gardeGreve, murEnRetour, earthPressure, earthPressureUpper, videCombos, dalleTransition, Ka } from './abutment.js';
@@ -266,7 +267,8 @@ export function computeSupports(st, input = {}) {
   // égales aux raideurs longitudinales)
   const rTrace = deck.g.trace ? new Axe(deck.g.trace.segments).rayonMin() : Infinity;
   const Qv = qvEC(st.ec && st.ec.alpha ? st.ec.alpha.aQ : [1, 1, 1], st.ec && st.ec.lanes ? st.ec.lanes.n : 3);
-  const centrifuge = Number.isFinite(rTrace) ? { r: rTrace, Qv, Qtk: forceCentrifuge({ r: rTrace, Qv }) } : null;
+  const centrifuge = Number.isFinite(rTrace) ? { r: rTrace, Qv, Qtk: forceCentrifuge({ r: rTrace, Qv }),
+    F61: f61 ? forceCentrifugeF61({ r: rTrace, nv: f61.nv, bc: BC.bc[f61.classe] || BC.bc[1], delta: Math.max(1, ...(f61.deltaBc || [1])), Ltot }) : null } : null;
   const RFsaisi = Math.max(0, st.p.concept.epsSlow ?? 2.5e-4), epsT = 1e-5 * (st.p.concept.dTu ?? 30);
   const RF = dp && dp.shorten ? dp.shorten.total : RFsaisi;
   const R = (res, i) => (res ? Math.max(0, res.Rmax[i]) : 0);
@@ -324,6 +326,8 @@ export function computeSupports(st, input = {}) {
     const QF = [
       { label: 'A(l) + trottoirs', N: q * (R(f61.A, i) + tr), H: h * brk.A * bB, gU: 1.605, gS: 1.2 },
       { label: 'Bc + trottoirs', N: q * (R(f61.Bc, i) + tr), H: h * brk.Bc * bB, gU: 1.605, gS: 1.2 },
+      // ouvrage courbe : force centrifuge du Bc (art. 7), non cumulée avec le freinage (art. 7.3)
+      ...(centrifuge && centrifuge.F61 && centrifuge.F61.F ? [{ label: 'Bc + trottoirs + centrifuge', N: q * (R(f61.Bc, i) + tr), H: 0, Hy: h * centrifuge.F61.F * bB, gU: 1.605, gS: 1.2 }] : []),
       ...(f61.Bt ? [{ label: 'Bt + trottoirs', N: q * (R(f61.Bt, i) + tr), H: 0, gU: 1.605, gS: 1.2 }] : []),
       ...(f61.Mc120 ? [{ label: 'Mc120 + trottoirs', N: q * (R(f61.Mc120, i) + tr), H: 0, gU: 1.35, gS: 1.0 }] : []),
     ];
@@ -363,7 +367,7 @@ export function computeSupports(st, input = {}) {
     const tr = R(f61.trottoir, i);
     const bB = distB.braking(1)[i], bE = distE.braking(1)[i];
     const QQ = code === 'BAEL'
-      ? [{ label: 'A(l)', res: f61.A, add: tr, g: 1.605, H: brk.A * bB / nb }, { label: 'Bc', res: f61.Bc, add: tr, g: 1.605, H: brk.Bc * bB / nb },
+      ? [{ label: 'A(l)', res: f61.A, add: tr, g: 1.605, H: brk.A * bB / nb }, { label: 'Bc', res: f61.Bc, add: tr, g: 1.605, H: Math.max(brk.Bc, centrifuge && centrifuge.F61 ? centrifuge.F61.F : 0) * bB / nb },
         ...(f61.Mc120 ? [{ label: 'Mc120', res: f61.Mc120, add: tr, g: 1.35, H: 0 }] : [])]
       : [{ label: 'gr1a', res: ec.gr1a, add: 0, g: 1.35, H: 0 }, { label: centrifuge && centrifuge.Qtk ? 'gr2 (freinage + centrifuge)' : 'gr2 (freinage)', noT: true, res: ec.gr1a, frac: R(ec.gr1a, i) > 0 ? (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)) / R(ec.gr1a, i) : 0, add: 0, g: 1.35, H: Math.hypot(bearings.H, centrifuge ? centrifuge.Qtk : 0) * bE / nb }];
     // gradient thermique (réactions hyperstatiques N_θ du gradient, réparties sur les n appareils) : ψ₀ = 0,6 avec le trafic

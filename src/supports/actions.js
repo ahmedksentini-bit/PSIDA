@@ -57,8 +57,8 @@ export function headCombinationsBAEL({ G, Q = [], RF = { H: 0 }, TLD = { H: 0 },
   if (envelope) return headCombinationsBAEL({ G, Q: Q.map(q => ({ ...q, H: Math.abs(q.H) })), RF: { H: Math.abs(RF.H) }, TLD: { H: Math.abs(TLD.H) }, TCD: { H: Math.abs(TCD.H) } });
   const out = [];
   for (const q of Q) {
-    out.push({ label: `ELU ${q.label}`, ls: 'ELU', Nsus: 1.35 * G.N + (G.P || 0), Ninst: q.gU * q.N, Hinst: q.gU * q.H, Hsus: 1.35 * RF.H + 0.78 * TLD.H });
-    out.push({ label: `ELS ${q.label}`, ls: 'ELS', Nsus: G.N + (G.P || 0), Ninst: q.gS * q.N, Hinst: q.gS * q.H, Hsus: RF.H + 0.6 * TLD.H });
+    out.push({ label: `ELU ${q.label}`, ls: 'ELU', Nsus: 1.35 * G.N + (G.P || 0), Ninst: q.gU * q.N, Hinst: q.gU * q.H, Hsus: 1.35 * RF.H + 0.78 * TLD.H, ...(q.Hy ? { Hy: q.gU * Math.abs(q.Hy) } : {}) });
+    out.push({ label: `ELS ${q.label}`, ls: 'ELS', Nsus: G.N + (G.P || 0), Ninst: q.gS * q.N, Hinst: q.gS * q.H, Hsus: RF.H + 0.6 * TLD.H, ...(q.Hy ? { Hy: q.gS * Math.abs(q.Hy) } : {}) });
   }
   out.push({ label: 'ELU température', ls: 'ELU', Nsus: 1.35 * G.N + (G.P || 0), Ninst: 0, Hinst: 1.35 * TCD.H, Hsus: 1.35 * (RF.H + TLD.H) });
   out.push({ label: 'ELS température', ls: 'ELS', Nsus: G.N + (G.P || 0), Ninst: 0, Hinst: TCD.H, Hsus: RF.H + TLD.H });

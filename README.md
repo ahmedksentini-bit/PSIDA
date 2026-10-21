@@ -350,3 +350,6 @@ LWPOLYLINE à renflements, POLYLINE —, lignes d'appui radiales sur un autre ; 
 l'axe, vue en plan) ; plaque DKT maillée le long de l'axe (abscisse curviligne, déport ; charges pondérées par
 J = 1 − κ y, moments dans le repère local) ; force centrifuge EN 1991-2 § 4.4.2 dans le groupe gr2 (effort transversal en
 tête, moment en pied, fondations, appareils). Fichier d'essai : exemples/ouvrage_courbe.dxf (tools/dxf_courbe.mjs).
+v0.60 : ouvrage courbe — forces centrifuges du Fascicule 61 titre II art. 7 (système Bc, (R + 150)/(6R + 350) ou 80/R,
+δ_B et b_c, combinaison « Bc + centrifuge » sans freinage) ; cartes de la plaque (flèche, m_x, m_y, m_xy, surfaces
+d'influence) dessinées en vue en plan pour un ouvrage courbe ; manuel : chapitre 21 « l'ouvrage courbe ».

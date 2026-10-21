@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { lireDXF, ecrireDXF } from '../src/geom/dxf.js';
 import { Axe, stationsAppuis } from '../src/geom/axe.js';
-import { forceCentrifuge, qvEC } from '../src/geom/centrifuge.js';
+import { forceCentrifuge, qvEC, coefCentrifugeF61, forceCentrifugeF61 } from '../src/geom/centrifuge.js';
 import { dxfCourbe } from '../tools/dxf_courbe.mjs';
 import { analyserDXF } from '../web/trace_view.js';
 import { formDefaults } from '../tools/formdefaults.mjs';
@@ -59,6 +59,13 @@ test('Force centrifuge EN 1991-2 tableau 4.3', () => {
   assert.equal(qvEC([0.9, 0.8, 0.8], 2), 2 * (0.9 * 300 + 0.8 * 200));
 });
 
+test('Forces centrifuges Fascicule 61 titre II art. 7 (système Bc)', () => {
+  proche(coefCentrifugeF61(400), 0.2, 1e-12, 'continuité à 400 m'); proche(coefCentrifugeF61(800), 0.1, 1e-12, '80/R');
+  proche(coefCentrifugeF61(60), 210 / 710, 1e-12, 'R = 60 m');
+  const f = forceCentrifugeF61({ r: 60, nv: 3, bc: [1.2, 1.1, 0.95, 0.8, 0.7], delta: 1.1, Ltot: 46 });
+  assert.equal(f.nf, 3); proche(f.F, 3 * 0.95 * 2 * 300 * 210 / 710 * 1.1, 1e-9, 'F');
+});
+
 test('Plaque sur axe courbe : équilibre, R → ∞ = ouvrage droit, appareils extérieurs plus chargés', () => {
   const st = compute(parseData(formDefaults()));
   const kv = st.bearings.rows.map(r => raideurAppareil(r.sel.bd, r.sel.n));
@@ -90,4 +97,9 @@ test('Calcul complet d\'un ouvrage courbe : tracé lu dans le formulaire, plaque
   assert.ok(c && c.Hy > 0 && c.Myb > 0, 'effort transversal en tête et moment en pied');
   const sHy = st.supports.lines.reduce((s, L) => s + (L.EC.base.find(b => /centrifuge/.test(b.label) && b.ls === 'ELS') || { Hy: 0 }).Hy, 0);
   proche(sHy, 240, 1, 'somme des efforts centrifuges ELS sur les lignes');
+  // Fascicule 61 : combinaison Bc + centrifuge sans freinage
+  const F = st.supports.centrifuge.F61, cb = L.BAEL.base.find(b => /centrifuge/.test(b.label) && b.ls === 'ELS');
+  assert.ok(F.F > 0 && cb && cb.Hy > 0 && cb.Hinst === 0, 'Bc + centrifuge (F61)');
+  const sF = st.supports.lines.reduce((s, L) => s + (L.BAEL.base.find(b => /centrifuge/.test(b.label) && b.ls === 'ELS') || { Hy: 0 }).Hy, 0);
+  proche(sF, 1.2 * F.F, 1, 'somme F61 (γ = 1,2 à l\'ELS)');
 });

@@ -16,6 +16,7 @@ function champsPermanents(st) {
 }
 
 function carte(div, M, champ, { titre, unite, echelle = 1, symetrique = false }) {
+  if (M.geo) return carteCourbe(div, M, champ, { titre, unite, echelle, symetrique });
   const { P, ys, deck } = M, { ink, grid } = theme(), cot = M.cot || 0;
   // ouvrage biais : la grille (s, y) est rééchantillonnée sur une grille régulière en x (x = s + y·cot ψ), vide hors dalle
   const sx = M.xs, h = Math.min(...sx.slice(1).map((v, k) => v - sx[k])), xMin = sx[0] + Math.min(0, -deck.b * cot), xMax = sx[sx.length - 1] + Math.max(0, deck.b * cot);
@@ -36,6 +37,40 @@ function carte(div, M, champ, { titre, unite, echelle = 1, symetrique = false })
   Plotly.newPlot(div, data, layout, CONFIG);
 }
 
+/** Interpolation bilinéaire du champ nodal sur la grille (s, y) de la plaque ; null hors dalle. */
+function interpSY(M, champ, x, y) {
+  const { P, xs, ys } = M;
+  if (x < xs[0] - 1e-9 || x > xs[xs.length - 1] + 1e-9 || y < ys[0] - 1e-9 || y > ys[ys.length - 1] + 1e-9) return null;
+  const loc = (a, t) => { let k = 0; while (k < a.length - 2 && a[k + 1] < t) k++; return [k, Math.min(1, Math.max(0, (t - a[k]) / (a[k + 1] - a[k])))]; };
+  const [i, r] = loc(xs, x), [j, q] = loc(ys, y);
+  return (champ[P.idx(i, j)] * (1 - r) * (1 - q) + champ[P.idx(i + 1, j)] * r * (1 - q) + champ[P.idx(i, j + 1)] * (1 - r) * q + champ[P.idx(i + 1, j + 1)] * r * q);
+}
+
+/** Ouvrage courbe : carte dessinée en plan (X, Y du DXF ramenés à l'origine de l'axe), grille régulière projetée sur l'axe. */
+function carteCourbe(div, M, champ, { titre, unite, echelle = 1, symetrique = false }) {
+  const { P, xs, ys, deck, geo } = M, { ink, grid } = theme();
+  const O = geo.pt(xs[0], 0), b = deck.b;
+  const bord = [];
+  for (const y of [ys[0], ys[ys.length - 1]]) for (let k = 0; k <= 100; k++) bord.push(geo.pt(xs[0] + (xs[xs.length - 1] - xs[0]) * k / 100, y));
+  const X0 = Math.min(...bord.map(p => p[0])), X1 = Math.max(...bord.map(p => p[0])), Y0 = Math.min(...bord.map(p => p[1])), Y1 = Math.max(...bord.map(p => p[1]));
+  const pas = Math.max(0.25, (X1 - X0) / 220);
+  const gx = Array.from({ length: Math.ceil((X1 - X0) / pas) + 1 }, (_, m) => X0 + m * pas), gy = Array.from({ length: Math.ceil((Y1 - Y0) / pas) + 1 }, (_, m) => Y0 + m * pas);
+  // projection : départ de la recherche au point voisin déjà projeté (balayage par lignes) pour rester rapide
+  const z = gy.map(Y => gx.map(X => {
+    const pr = geo.axe.projeter([X, Y]); const v = interpSY(M, champ, pr.s - geo.s0, pr.y);
+    return v === null || Math.abs(pr.y) > b + 1e-9 ? null : v * echelle;
+  }));
+  const vmax = Math.max(...z.flat().filter(v => v !== null).map(Math.abs));
+  const ap = P.appuis.map(a => geo.pt(xs[a.i], ys[a.j]));
+  const ax = Array.from({ length: 101 }, (_, k) => geo.pt(xs[0] + (xs[xs.length - 1] - xs[0]) * k / 100, 0));
+  const data = [{ type: 'heatmap', x: gx.map(v => v - O[0]), y: gy.map(v => v - O[1]), z, colorscale: symetrique ? 'RdBu' : 'Viridis', reversescale: symetrique, zmid: symetrique ? 0 : undefined, zmin: symetrique ? -vmax : undefined, zmax: symetrique ? vmax : undefined, colorbar: { title: unite, thickness: 12 }, hoverongaps: false, hovertemplate: '%{z:.1f} ' + unite + '<extra></extra>' },
+    { type: 'scatter', mode: 'lines', x: ax.map(p => p[0] - O[0]), y: ax.map(p => p[1] - O[1]), line: { color: ink, width: 1, dash: 'dashdot' }, hoverinfo: 'skip' },
+    { type: 'scatter', mode: 'markers', x: ap.map(p => p[0] - O[0]), y: ap.map(p => p[1] - O[1]), marker: { symbol: 'square', size: 7, color: ink, line: { color: '#fff', width: 1 } }, name: 'appareils', hovertemplate: 'appareil<extra></extra>' }];
+  const layout = { title: { text: titre + ' — vue en plan', font: { size: 14 } }, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: ink, size: 12 }, margin: { l: 55, r: 10, t: 40, b: 45 },
+    xaxis: { title: { text: 'X [m]' }, gridcolor: grid, range: [X0 - O[0] - 1, X1 - O[0] + 1], constrain: 'domain' }, yaxis: { title: { text: 'Y [m]' }, gridcolor: grid, range: [Y0 - O[1] - 1, Y1 - O[1] + 1], scaleanchor: 'x', scaleratio: 1, constrain: 'domain' }, showlegend: false, height: Math.max(300, 120 + 760 * (Y1 - Y0 + 2) / (X1 - X0 + 2)) };
+  Plotly.newPlot(div, data, layout, CONFIG);
+}
+
 export function renderPlaque(st) {
   const card = document.getElementById('card-plaque');
   if (!card) return;
@@ -45,6 +80,7 @@ export function renderPlaque(st) {
   const M = PL.M, P = M.P, G = st.guyon;
   const kv = P.appuis.filter(a => a.rang === 0).map(a => a.k);
   let h = `<p class="small">Dalle de Kirchhoff d'épaisseur variable (chanfreins), bords libres sur les quatre côtés, abouts compris, appuyée sur ${M.nb} appareils par ligne (entraxe ${f2(M.a)} m) modélisés en ressorts verticaux de raideur ${kv.map(k => (Number.isFinite(k) ? (k / 1000).toFixed(0) + ' MN/m' : 'rigide')).join(' / ')} (élastomère fretté choisi au premier passage, guide Sétra 2007). ${M.moteur === 'df' ? 'Différences finies énergétiques' : 'Éléments finis de plaque mince DKT (Batoz, Bathe et Ho, 1980), 3 degrés de liberté par nœud,'} sur une grille de ${P.nx} × ${P.ny} = ${P.n} nœuds (pas ≤ ${f2(M.h)} m, lignes d'appui, sections et fibres sur la grille${M.cot ? `, mailles en parallélogrammes suivant le biais ψ = ${f0(M.psi)} gr` : ''}) ; E = ${f0(M.E)} MPa, ν = ${M.nu}. Surfaces d'influence par réciprocité de Maxwell-Betti (${PL.cibles.length} grandeurs : m_x, m_y, m_xy aux sections × fibres, réactions des appareils, moyennes de m_y et m_xy sur les bandes de chevêtre) ; enveloppes de trafic en long avec les mêmes convois et arrangements que le modèle poutre. Dimensionnement sur les moments de Wood-Armer ${M.alphaT < 100 ? `pour armatures biaises (aciers transversaux à α = ${f0(M.alphaT)} gr de l'axe : m_x* = m_x − 2 m_xy cot α + m_y cot²α ± |t|, m_α* = m_y/sin²α ± |t|, t = (m_xy − m_y cot α)/sin α)` : '(m_x ± |m_xy|, m_y ± |m_xy|)'}${M.cot ? ' ; m_x, m_y et m_xy des tableaux sont dans ce repère des armatures' : ''}.</p>`;
+  if (M.geo) h += `<p class="small">Ouvrage courbe : plaque maillée le long de l'axe (x = abscisse curviligne depuis C0, y = déport à gauche), nœuds placés à leur position en plan, charges réparties pondérées par J = 1 − κ y, moments m_x, m_y, m_xy dans le repère local (tangente, rayon) ; cartes dessinées en plan. Rayon minimal ${f0(M.geo.axe.rayonMin())} m.</p>`;
   if (G) {
     const keys = st.keys;
     const row = (lab, a, b, fmt = f0) => `<tr><td>${lab}</td><td>${fmt(b)}</td><td>${fmt(a)}</td><td>${Number.isFinite(a / b) ? ((a / b - 1) * 100).toFixed(0) + ' %' : '–'}</td></tr>`;
