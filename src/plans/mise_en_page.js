@@ -15,29 +15,28 @@
  *   poser(F, zone)                     place tableaux et notes dans la colonne (zone = [x, y, w, h])
  * }
  */
-import { Feuille, ECHELLES } from './dessin.js';
+import { Feuille, ECHELLES, VUE_PAD, VUE_TITRE, largeurTitreVue, hautBande, CADRE } from './dessin.js';
 
-const GAPX = 12, GAPY = 6, TITRE = 12, GMAX = 25;
+const GAPX = 6, GAPY = 5, GMAX = 20;
 
 /** Boîte d'une vue à son échelle courante (mm papier) : dessin + titre + échelles graphiques. */
 export function boiteVue(v) {
   const E = v.etendue(), sx = 1000 / v.echelle, sy = v.echelleV ? 1000 / v.echelleV : sx;
   const w = (E.x1 - E.x0) * sx, h = (E.y1 - E.y0) * sy;
-  const tl = v.titre.length + (v.echelleV ? 40 : 16), wt = 0.62 * 3.5 * tl + 8 + (v.echelleV ? 150 : 75);
-  return { w: Math.max(w, wt), h: h + TITRE, wd: w, hd: h };
+  return { w: Math.max(w, largeurTitreVue(v)) + 2 * VUE_PAD, h: h + VUE_TITRE + 2 * VUE_PAD, wd: w, hd: h };
 }
 
 /** Essaie de ranger les vues dans le format : positions, ou null si elles ne tiennent pas. */
-function ranger(format, spec) {
+function ranger(format, spec, enHaut = false) {
   const F = new Feuille(format, {});
-  const x0 = 23, x1 = F.W - 12, y0 = 12, y1 = F.H - 12;
+  const x0 = CADRE.x0 + 1.5, x1 = F.W - CADRE.d - 1.5, y0 = hautBande() + 1, y1 = F.H - CADRE.d - 1.5;
   const cw = spec.colonne ? spec.colonne.largeur : 0, ch = spec.colonne ? Math.min(spec.colonne.hauteur, y1 - y0) : 0;
-  const xr = x1 - cw - 8, yc = y0 + ch;   // limite gauche de la colonne réservée, haut de la colonne
+  const xr = x1 - cw - 8, cb = enHaut ? y1 - ch : y0, ct = enHaut ? y1 : y0 + ch;   // colonne réservée : x ≥ xr, cb ≤ y ≤ ct
   const rangs = spec.rangees.map(r => r.map(v => ({ v, b: boiteVue(v) })));
   // vues d'une rangée (hauts alignés) : une vue qui descend dans la hauteur de la colonne doit rester à sa gauche ;
   // écart uniforme (≤ 40 mm) le plus grand possible, bloc centré dans la marge restante
   const placerRangee = (r, haut) => {
-    const lim = r.map(q => (haut - q.b.h < yc - 1e-6 ? xr : x1) - x0);
+    const lim = r.map(q => (haut - q.b.h < ct - 1e-6 && haut > cb + 1e-6 ? xr : x1) - x0);
     let cum = 0, g = 40;
     const W = r.map((q, i) => { cum += q.b.w; return cum; });
     for (let i = 0; i < r.length; i++) {
@@ -47,7 +46,10 @@ function ranger(format, spec) {
     if (r.length > 1 && g < GAPX - 1e-6) return null;
     if (r.length === 1) g = 0;
     const off = Math.min(...r.map((q, i) => lim[i] - W[i] - g * i)) / 2;
-    return r.map((q, i) => ({ vue: q.v, x: x0 + off + W[i] - q.b.w + g * i, y: haut - TITRE - q.b.hd }));
+    return r.map((q, i) => {
+      const bx = x0 + off + W[i] - q.b.w + g * i;
+      return { vue: q.v, x: bx + (q.b.w - q.b.wd) / 2, y: haut - VUE_PAD - VUE_TITRE - q.b.hd, boite: [bx, haut - q.b.h, q.b.w, q.b.h] };
+    });
   };
   const essayer = (ecart, marge) => {
     let y = y1 - marge; const out = [];
@@ -69,23 +71,29 @@ function ranger(format, spec) {
     const p2 = essayer(g, marge) || essayer(g, 0) || essayer(0, 0);
     if (p2) placees = p2;
   }
-  return { F, placees, colonne: [x1 - cw, y0, cw, ch] };
+  return { F, placees, colonne: [x1 - cw, cb, cw, ch], enHaut };
 }
 
 /** Feuille mise en page (formats essayés dans l'ordre), échelles agrandies au mieux. */
 export function composer(spec, formats = ['A3', 'A2', 'A1', 'A0']) {
+  const fi = spec.cartouche && spec.cartouche.format;
+  if (fi && fi !== 'auto' && ['A3', 'A2', 'A1', 'A0'].includes(fi)) formats = [fi];   // format imposé (carte des plans)
+  else formats = ['A3', 'A2', 'A1', 'A0'].filter(f => formats.includes(f) || f === 'A3');
   const gs = spec.groupes;
   const fixer = (g, e) => {
     if (g.refaire) {   // vues dont le dessin dépend de l'échelle (décalages papier) : reconstruites
-      const nv = g.refaire(e);
+      g._cache = g._cache || {}; const nv = g._cache[e] || (g._cache[e] = g.refaire(e));   // mêmes objets pour une même échelle
+      for (const v of nv) v.echelle = e;
       spec.rangees = spec.rangees.map(r => r.map(v => { const k = g.vues.indexOf(v); return k >= 0 ? nv[k] : v; }));
+      const rem = v => { const k = g.vues.indexOf(v); return k >= 0 ? nv[k] : v; };
+      if (spec.aligner) spec.aligner = spec.aligner.map(a => ({ ref: rem(a.ref), vue: rem(a.vue) }));
       g.vues = nv; return;
     }
     for (const v of g.vues) { if (v.echelleV) v.echelleV = ECHELLES.filter(x => x <= e / 3).pop() || 10; v.echelle = e; } };
   let res = null;
   for (const f of formats) {
     for (const g of gs) fixer(g, g.cible);
-    res = ranger(f, spec);
+    res = ranger(f, spec) || (spec.colonne ? ranger(f, spec, true) : null);
     if (res) {
       // agrandissement : chaque groupe passe à l'échelle supérieure tant que la feuille tient
       let progres = true;
@@ -95,7 +103,7 @@ export function composer(spec, formats = ['A3', 'A2', 'A1', 'A0']) {
           const e = g.vues[0].echelle, plus = ECHELLES.filter(x => x < e && x >= (g.min || 10)).pop();
           if (!plus) continue;
           fixer(g, plus);
-          const r2 = ranger(f, spec);
+          const r2 = ranger(f, spec, res.enHaut) || ranger(f, spec, !res.enHaut);
           if (r2) { res = r2; progres = true; } else fixer(g, e);
         }
       }
@@ -104,7 +112,7 @@ export function composer(spec, formats = ['A3', 'A2', 'A1', 'A0']) {
   }
   if (!res) {   // rien ne tient à l'échelle cible : plus grand format, échelles réduites jusqu'à ce que ça tienne
     const f = formats[formats.length - 1];
-    for (let k = 0; k < 8 && !res; k++) { for (const g of gs) { const e = g.vues[0].echelle, moins = ECHELLES.find(x => x > e); if (moins) fixer(g, moins); } res = ranger(f, spec); }
+    for (let k = 0; k < 8 && !res; k++) { for (const g of gs) { const e = g.vues[0].echelle, moins = ECHELLES.find(x => x > e); if (moins) fixer(g, moins); } res = ranger(f, spec) || (spec.colonne ? ranger(f, spec, true) : null); }
     if (!res) throw new Error('mise en page impossible');
   }
   const F = res.F;
@@ -113,7 +121,14 @@ export function composer(spec, formats = ['A3', 'A2', 'A1', 'A0']) {
   // projections alignées (ex. vue en plan sous l'élévation : mêmes abscisses)
   for (const { ref, vue } of spec.aligner || []) {
     const pr = F.vues.find(p => p.vue === ref), pv = F.vues.find(p => p.vue === vue);
-    if (pr && pv && pr.vue.echelle === pv.vue.echelle) pv.x = pr.x + (vue.etendue().x0 - ref.etendue().x0) * 1000 / ref.echelle;
+    if (pr && pv && pr.vue.echelle === pv.vue.echelle) {
+      const nx = pr.x + (vue.etendue().x0 - ref.etendue().x0) * 1000 / ref.echelle, dx = nx - pv.x;
+      const b = pv.boite, xmin = CADRE.x0 + 1.5;
+      const nb = b && [b[0] + dx, b[1], b[2], b[3]], xmax = F.W - CADRE.d - 1.5;
+      const recouvre = nb && F.vues.some(q => q !== pv && q.boite && nb[0] < q.boite[0] + q.boite[2] && q.boite[0] < nb[0] + nb[2] && nb[1] < q.boite[1] + q.boite[3] && q.boite[1] < nb[1] + nb[3]);
+      const col = nb && res.colonne && res.colonne[2] > 0 && nb[0] + nb[2] > res.colonne[0] - 8 && nb[1] < res.colonne[1] + res.colonne[3] && nb[1] + nb[3] > res.colonne[1];
+      if (!b || (nb[0] >= xmin && nb[0] + nb[2] <= xmax && !recouvre && !col)) { pv.x = nx; if (b) pv.boite = nb; }
+    }
   }
   if (spec.poser) spec.poser(F, res.colonne);
   return F;

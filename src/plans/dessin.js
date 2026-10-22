@@ -31,9 +31,14 @@ export const CALQUES = {
   REPERES: { couleur: 6, ep: 0.25, type: 'CONTINUOUS' },
   CARTOUCHE: { couleur: 7, ep: 0.35, type: 'CONTINUOUS' },
   TABLEAUX: { couleur: 7, ep: 0.18, type: 'CONTINUOUS' },
+  CADRES: { couleur: 8, ep: 0.25, type: 'DASHED' },        // cadre tireté autour de chaque vue
 };
 
 export const FORMATS = { A0: [1189, 841], A1: [841, 594], A2: [594, 420], A3: [420, 297] };
+/** Cadre de la feuille (marge de reliure 20 mm à gauche, 10 mm ailleurs) ; cartouche en bande sur toute la largeur du bas. */
+export const CADRE = { x0: 20, y0: 10, d: 10, bande: 34, mention: 6 };
+/** Haut de la zone réservée au cartouche et à la mention à l'entrepreneur (mm papier). */
+export const hautBande = () => CADRE.y0 + CADRE.bande + CADRE.mention;
 export const ECHELLES = [10, 20, 25, 50, 75, 100, 125, 150, 200, 250, 500, 1000];
 
 /** Plus grande échelle normalisée qui fait tenir une étendue [L, H] (m) dans un cadre [W, H] (mm). */
@@ -71,7 +76,20 @@ export class Vue {
       else if (e.t === 'cote') { ajoute(e.a); ajoute(e.b); const n = normaleG(e.a, e.b); ajoute([e.a[0] + n[0] * e.d, e.a[1] + n[1] * e.d]); ajoute([e.b[0] + n[0] * e.d, e.b[1] + n[1] * e.d]); }
       else if (e.t === 'coteH') { ajoute(e.a); ajoute(e.b); ajoute([e.a[0], e.z]); ajoute([e.b[0], e.z]); }
       else if (e.t === 'coteV') { ajoute(e.a); ajoute(e.b); ajoute([e.x, e.a[1]]); ajoute([e.x, e.b[1]]); }
-      else if (e.p) ajoute(e.p);
+      else if (e.t === 'texte' && this.echelle) {
+        // emprise du texte (police condensée) : largeur 0,53 h par caractère, à l'échelle de la vue
+        const kx = this.echelle / 1000, ky = (this.echelleV || this.echelle) / 1000, w = 0.53 * e.h * e.s.length * (e.gras ? 1.12 : 1), hh = e.h;
+        const vert = Math.abs(Math.abs(e.angle || 0) - 90) < 1;
+        const [W, H] = vert ? [hh * kx, w * ky] : [w * kx, hh * ky];
+        const ax = vert ? 0.5 : (e.ancre === 'c' ? 0.5 : e.ancre === 'd' ? 1 : 0), ay = vert ? (e.ancre === 'c' ? 0.5 : 0) : (e.v === 'm' ? 0.5 : e.v === 'h' ? 1 : 0);
+        ajoute([e.p[0] - ax * W, e.p[1] - ay * H]); ajoute([e.p[0] + (1 - ax) * W, e.p[1] + (1 - ay) * H]);
+      } else if (e.t === 'niveau' && this.echelle) {
+        const kx = this.echelle / 1000, ky = (this.echelleV || this.echelle) / 1000, n = (e.s ? e.s.length + 7 : 6);
+        ajoute(e.p); ajoute([e.p[0] + (3.1 + 0.53 * 2.2 * n) * kx, e.p[1] + 6 * ky]);
+      } else if (e.t === 'repere' && this.echelle) {
+        const k = this.echelle / 1000, ky = (this.echelleV || this.echelle) / 1000; ajoute([e.p[0] - 3 * k, e.p[1] - 3 * ky]); ajoute([e.p[0] + 3 * k, e.p[1] + 3 * ky]);
+        if (e.cible) ajoute(e.cible);
+      } else if (e.p) ajoute(e.p);
     }
     return { x0: x0 - marge, y0: y0 - marge, x1: x1 + marge, y1: y1 + marge };
   }
@@ -107,26 +125,21 @@ export class Feuille {
    */
   boites() {
     const B = [];
-    for (const pl of this.vues) {
-      const v = pl.vue, E = v.etendue(), sx = 1000 / v.echelle, sy = v.echelleV ? 1000 / v.echelleV : sx;
-      const w = (E.x1 - E.x0) * sx, h = (E.y1 - E.y0) * sy;
-      const tv = v.titre.length + 30, wt = 0.52 * 3.5 * tv + 8 + (v.echelleV ? 150 : 75);
-      B.push({ nom: v.titre, x: pl.x, y: pl.y, w: Math.max(w, wt), h: h + 10 });
-    }
+    for (const pl of this.vues) { const [x, y, w, h] = boiteVuePlacee(pl); B.push({ nom: pl.vue.titre, x, y, w, h }); }
     for (const t of this.tableaux) {
       const W = t.cols.reduce((s, c) => s + c.w, 0), H = (t.lignes.length + 1 + (t.titre ? 1 : 0)) * (t.hl || 6);
       B.push({ nom: t.titre || 'tableau', x: t.x, y: t.y, w: W, h: H });
     }
     for (const n of this.notes) {
-      const W = Math.max(...n.lignes.map(l => 0.52 * n.h * l.length)), H = n.lignes.length * n.h * 1.6;
-      B.push({ nom: 'notes', x: n.x, y: n.y - H + n.h, w: W, h: H });
+      const [x, y, w, h] = boiteNote(n);
+      B.push({ nom: 'notes', x, y, w, h });
     }
-    B.push({ nom: 'cartouche', x: this.W - 10 - 180, y: 10, w: 180, h: 76 });
+    B.push({ nom: 'cartouche', x: CADRE.x0, y: CADRE.y0, w: this.W - CADRE.d - CADRE.x0, h: CADRE.bande + CADRE.mention - 1 });
     return B;
   }
   valide() {
     const B = this.boites(), pb = [], m = 0.5;
-    for (const b of B) if (b.x < 20 - m || b.y < 10 - m || b.x + b.w > this.W - 10 + m || b.y + b.h > this.H - 10 + m) pb.push(`hors cadre : ${b.nom}`);
+    for (const b of B) if (b.x < CADRE.x0 - m || b.y < CADRE.y0 - m || b.x + b.w > this.W - CADRE.d + m || b.y + b.h > this.H - CADRE.d + m) pb.push(`hors cadre : ${b.nom}`);
     for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++) {
       const a = B[i], b = B[j];
       if (a.x < b.x + b.w - m && b.x < a.x + a.w - m && a.y < b.y + b.h - m && b.y < a.y + a.h - m) pb.push(`chevauchement : ${a.nom} / ${b.nom}`);
@@ -134,6 +147,23 @@ export class Feuille {
     return { ok: pb.length === 0, problemes: pb };
   }
   note(lignes, x, y, h = 2.5) { this.notes.push({ lignes, x, y, h }); return this; }
+}
+
+/** Marges du cadre tireté d'une vue et hauteur réservée au titre (titre, « Ech : 1/50 », échelle graphique). */
+export const VUE_PAD = 4, VUE_TITRE = 15;
+/** Largeur du titre d'une vue et de sa ligne d'échelle (mm papier). */
+export function largeurTitreVue(v) { return Math.max(0.6 * 3.8 * v.titre.length + 4, v.echelleV ? 215 : 100); }
+/** Cadre tireté d'une vue placée : [x, y, w, h] (mm papier) ; pl.boite si la mise en page l'a fixé. */
+export function boiteVuePlacee(pl) {
+  if (pl.boite) return pl.boite;
+  const v = pl.vue, E = v.etendue(), sx = 1000 / v.echelle, sy = v.echelleV ? 1000 / v.echelleV : sx;
+  const w = (E.x1 - E.x0) * sx, h = (E.y1 - E.y0) * sy, wt = largeurTitreVue(v), W = Math.max(w, wt);
+  return [pl.x - (W - w) / 2 - VUE_PAD, pl.y - VUE_PAD, W + 2 * VUE_PAD, h + VUE_TITRE + 2 * VUE_PAD];
+}
+/** Encadré d'un bloc de notes (« NOTA ») : [x, y, w, h]. */
+export function boiteNote(n) {
+  const W = Math.max(...n.lignes.map(l => 0.52 * n.h * l.length)), H = n.lignes.length * n.h * 1.6;
+  return [n.x - 2, n.y - H + n.h - 2, W + 4, H + 3];
 }
 
 /**

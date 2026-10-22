@@ -20,7 +20,7 @@ const fr = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : 
 
 /** Valeurs par défaut (champs eq_* du formulaire). */
 export const EQ_DEFAUTS = {
-  corn: 'prefa', cornH: 0.60, cornL: 0.40, cornE: 0.12, cornT: 0.15,
+  corn: 'prefa', cornH: 0.60, cornL: 0.25, cornE: 0.12, cornT: 0.15,
   dr: 'barriere', hDR: 1.00, drY: 0.30, lgB: 0.50, lgH: 0.30, pDR: 0.65,
   gc: 'auto', hGC: 1.00, pGC: 0.50,
   hTrot: 0.15, bordB: 0.15, gTrot: 22,
@@ -60,9 +60,16 @@ export function bordGeom(G, eq, sg) {
   // dispositif de retenue
   const dr = eq.dr;
   if (dr === 'barriere' || dr === 'glissiere') {
-    const c = b - eq.drY, base = zSur(c);
-    out.longrine = { poly: [[c - eq.lgB / 2, base], [c + eq.lgB / 2, base], [c + eq.lgB / 2, base + eq.lgH], [c - eq.lgB / 2, base + eq.lgH]].map(([d, z]) => [Y(d), z]), c, base, top: base + eq.lgH, B: eq.lgB, H: eq.lgH };
-    out.dispositif = { type: dr, y: Y(c), base: base + eq.lgH, haut: out.zRef + eq.hDR };
+    // longrine coulée en place sur la dalle ; si elle recouvre le talon de la corniche, elle l'enrobe (sous-face en
+    // gradin : dalle puis dessus du talon), sans vide sous la longrine
+    // avec une corniche préfabriquée : contre-corniche coulée en place sur la dalle, contre le talon de la corniche
+    // (disposition courante des dossiers d'ouvrages, barrière BN4 boulonnée dans la contre-corniche) ; sinon axe à drY du bord
+    const d1 = corn ? b - eq.cornL : b - eq.drY + eq.lgB / 2, d0 = d1 - eq.lgB, c = (d0 + d1) / 2, zD = G.dessus(Y(d0));
+    const dT = corn ? b - eq.cornL : Infinity, zT = corn ? zE + eq.cornT : -Infinity;
+    const top = Math.max(zD + eq.lgH, corn && d1 > dT ? zT + 0.10 : -Infinity), base = zD;
+    const bas = corn && d1 > dT + 1e-9 ? (d0 >= dT - 1e-9 ? [[d0, zT], [d1, zT]] : [[d0, zD], [dT, G.dessus(Y(dT))], [dT, zT], [d1, zT]]) : [[d0, zD], [d1, G.dessus(Y(d1))]];
+    out.longrine = { poly: [...bas, [d1, top], [d0, top]].map(([d, z]) => [Y(d), z]), c, base, top, B: eq.lgB, H: top - zD };
+    out.dispositif = { type: dr, y: Y(c), base: top, haut: out.zRef + eq.hDR };
   } else if (dr === 'gba') {
     const c = b - eq.drY, base = zSur(c), Wb = 0.60, Wt = 0.20, H = eq.hDR;
     out.dispositif = { type: 'gba', poly: [[c + Wb / 2, base], [c + Wb / 2, base + 0.08], [c + Wt / 2, base + H], [c - Wt / 2, base + H], [c - Wb / 2 + 0.05, base + 0.25], [c - Wb / 2, base + 0.08], [c - Wb / 2, base]].map(([d, z]) => [Y(d), z]), y: Y(c), base, haut: base + H, aire: (Wb + Wt) / 2 * H };
@@ -130,7 +137,7 @@ export function poidsBord(G, eq, sg) {
   const B = bordGeom(G, eq, sg), P = [];
   const aire = poly => Math.abs(poly.reduce((s, p, k) => { const q = poly[(k + 1) % poly.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0)) / 2;
   if (B.corniche) P.push(['Corniche', 25 * aire(B.corniche.poly)]);
-  if (B.longrine) P.push(['Longrine d\'ancrage', 25 * aire(B.longrine.poly)]);
+  if (B.longrine) P.push([B.corniche ? 'Contre-corniche' : 'Longrine d\'ancrage', 25 * aire(B.longrine.poly)]);
   if (B.dispositif) P.push([`Dispositif de retenue (${eq.dr === 'gba' ? 'GBA' : eq.dr})`, eq.dr === 'gba' ? 24 * B.dispositif.aire : eq.pDR]);
   if (B.gardeCorps) P.push(['Garde-corps', eq.pGC]);
   if (B.bordure) P.push(['Bordure', 24 * aire(B.bordure.poly)]);
@@ -154,7 +161,7 @@ export function dessinerBord(v, G, eq, sg, { detail = false, dMin = 0 } = {}) {
     const p = P(B.corniche.poly); v.poly('EQUIPEMENTS', p, true); v.hachure(p);
     notes.push([p[3], `Corniche ${B.corniche.type === 'prefa' ? 'préfabriquée' : 'coulée en place'} (h ${fr(eq.cornH)})`]);
   }
-  if (B.longrine) { const p = P(B.longrine.poly); v.poly('EQUIPEMENTS', p, true); v.hachure(p); notes.push([p[2], `Longrine d'ancrage ${fr(eq.lgB)} × ${fr(eq.lgH)}`]); }
+  if (B.longrine) { const p = P(B.longrine.poly); v.poly('EQUIPEMENTS', p, true); v.hachure(p); notes.push([p[2], `${B.corniche ? 'Contre-corniche coulée en place' : 'Longrine d\'ancrage'} ${fr(eq.lgB)} × ${fr(eq.lgH)}`]); }
   const D = B.dispositif;
   if (D) {
     if (D.type === 'gba') { const p = P(D.poly); v.poly('EQUIPEMENTS', p, true); v.hachure(p); notes.push([[X(D.y), D.haut], `GBA (profil indicatif), h ${fr(eq.hDR)}`]); }
@@ -204,7 +211,7 @@ function etiquettes(v, notes, { xTxt, z0, pas, ancre }) {
 }
 
 /* ------------------------------------------------------------------------------------ vues de détail */
-function vueDetailBord(G, eq, sg) {
+export function vueDetailBord(G, eq, sg) {
   const v = new Vue(`DÉTAIL ${sg > 0 ? 'A' : 'B'} — BORD ${sg > 0 ? 'GAUCHE (y > 0)' : 'DROIT (y < 0)'} DU TABLIER`), X = y => -y, b = G.b;
   // dalle (sur 2,5 m depuis le bord), chanfrein, rupture
   const d0 = Math.max(0, b - 2.5), ys = [];
@@ -331,13 +338,13 @@ export function planEquipements(st, eq = EQ_DEFAUTS, cartouche = {}) {
   const Lt = G.uB - G.uA;
   const F = composer({ titre: 'TABLIER — ÉQUIPEMENTS', cartouche,
     rangees: [[dA, dB], [dJ, dG], [sA]],
-    groupes: [{ vues: [dA, dB], cible: 20, min: 10 }, { vues: [dJ, dG], cible: 20, min: 5 }, { vues: [sA], cible: Lt <= 60 ? 200 : 500, min: 100 }],
-    colonne: { largeur: 182, hauteur: 76 + 6 + hC + 5 + hM + 4 + hn + 4 },
+    groupes: [{ vues: [dA, dB], cible: 25, min: 10 }, { vues: [dJ, dG], cible: 25, min: 5 }, { vues: [sA], cible: Lt <= 60 ? 200 : 500, min: 100 }],
+    colonne: { largeur: 182, hauteur: 2 + hC + 5 + hM + 4 + hn + 4 },
     poser: (F, [x, y]) => {
       const xt = F.W - 10 - 162;
-      F.tableau(tC, xt, y + 76 + 6);
-      F.tableau(tM, xt, y + 76 + 6 + hC + 5);
-      F.note(notes, xt - 4, y + 76 + 6 + hC + 5 + hM + 4 + hn - 2.1 * 0.6, 2.1);
+      F.tableau(tC, xt, y + 2);
+      F.tableau(tM, xt, y + 2 + hC + 5);
+      F.note(notes, xt - 4, y + 2 + hC + 5 + hM + 4 + hn - 2.1 * 0.6, 2.1);
       F.notes[F.notes.length - 1].titreGras = true;
     } });
   F.cartouche.echelles = F.cartouche.echelles || [...new Set(F.vues.map(p => '1/' + p.vue.echelle))].join(' ; ');

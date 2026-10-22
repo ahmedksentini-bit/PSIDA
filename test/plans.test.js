@@ -40,22 +40,22 @@ test('Bordereau : tous les repères, masse proche du métré, récapitulatif coh
   for (const l of L) { assert.ok(['00', '11', '21', '51'].includes(l.code)); assert.ok(l.L > 0 && l.nombre > 0 && l.L <= 12000 + 2 * 1000, `${l.repere} : L = ${l.L}`); }
 });
 
-test('Plan de coffrage : quatre vues, quantités, DXF et SVG lisibles', () => {
+test('Plan de coffrage : coupes transversales, quantités, DXF et SVG lisibles', () => {
   const F = planCoffrage(st, { projet: 'Essai', numero: 'X-01' });
-  assert.equal(F.format, 'A1'); assert.equal(F.vues.length, 4);
+  assert.ok(['A3', 'A2'].includes(F.format)); assert.equal(F.vues.length, 2);
   const Q = quantitesCoffrage(st);
   // dalle rectangulaire 12 × 0,70 sans chanfreins, longueur 46 m : 386,4 m³
   assert.ok(Math.abs(Q.beton - 12 * 0.7 * 46) < 1e-6, `béton ${Q.beton}`);
   const dxf = feuilleDXF(F), D = lireDXF(dxf);
   assert.deepEqual(D.sections, ['HEADER', 'TABLES', 'BLOCKS', 'ENTITIES']);
   assert.deepEqual(D.fin, ['0', 'EOF']);
-  assert.equal(D.compte('BLOCK'), 4); assert.equal(D.compte('INSERT'), 4);
+  assert.equal(D.compte('BLOCK'), 2); assert.equal(D.compte('INSERT'), 2);
   assert.equal(D.compte('POLYLINE'), D.compte('SEQEND'));
   const oct = octetsCp1252(dxf); assert.ok(oct.every(b => b < 256));
   assert.ok(!/[^\x00-\xff]/.test(dxf.replace(/[€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]/g, '')), 'caractère hors ANSI 1252 non échappé');
   const svg = feuilleSVG(F);
   assert.ok(svg.startsWith('<svg') && svg.endsWith('</svg>'));
-  assert.ok(svg.includes('TABLIER — PLAN DE COFFRAGE') && svg.includes('Essai'));
+  assert.ok(svg.includes('TABLIER — COFFRAGE') && svg.includes('Essai'));
 });
 
 test('Plan de ferraillage : vues, bordereau dans la feuille, vue dilatée hors bloc DXF', () => {
@@ -71,15 +71,15 @@ test('Plan de ferraillage : vues, bordereau dans la feuille, vue dilatée hors b
 
 test('Dalle précontrainte : coffrage seul, le plan de ferraillage passif est refusé', () => {
   const s3 = compute(parseData(donnees(EXEMPLES[2])));
-  assert.ok(planCoffrage(s3).vues.length === 4);
+  assert.ok(planCoffrage(s3).vues.length === 2);
   assert.throws(() => planFerraillage(s3), /dalle armée/);
 });
 
 test('Ouvrage courbe (exemple 1) : contour courbe, rayon indiqué, niveaux du nivellement', () => {
   const s1 = compute(parseData(donnees(EXEMPLES[0])));
-  const F = planCoffrage(s1), svg = feuilleSVG(F);
+  const F = planEnsemble(s1), svg = feuilleSVG(F);
   assert.ok(/rayon minimal/.test(svg));
-  assert.ok(/\+100,[0-9]{2}/.test(svg), 'niveaux NGF');
+  assert.ok(/\+?10[0-9],[0-9]{2}/.test(svg), 'niveaux NGF');
   const plan = F.vues[0].vue, contour = plan.ents.find(e => e.t === 'poly' && e.ferme && e.calque === 'COFFRAGE');
   assert.ok(contour.pts.length > 40);
 });
@@ -91,19 +91,21 @@ test('Outils de dessin : hachures et choix d\'échelle', () => {
 });
 
 import { planCoffrageAppui, geometrieAppui, quantitesAppui } from '../src/plans/appuis.js';
+import { planEnsemble } from '../src/plans/ensemble.js';
+import { planNivellement, niveauxAppui } from '../src/plans/nivellement.js';
 
 test('Appuis : un plan de coffrage par ligne, géométrie et quantités cohérentes', () => {
   for (let i = 0; i < st.deck.beam.x0.length; i++) {
     const A = geometrieAppui(st, i), F = planCoffrageAppui(st, i, { numero: 'A-' + i });
-    assert.equal(F.vues.length, 3);
-    assert.ok(['A1', 'A2'].includes(F.format));
+    assert.equal(F.vues.length, 4);
+    assert.ok(['A3', 'A2', 'A1'].includes(F.format));
     // niveaux : tête − chevêtre − fût (ou mur) = dessus de semelle ; semelle d'épaisseur h_s
     const Hc = A.kind === 'pile' ? A.H : A.Hm;
     assert.ok(Math.abs(A.zT - A.hc - Hc - A.zDS) < 1e-9 && Math.abs(A.zDS - A.zSS - A.hs) < 1e-9);
     const Q = quantitesAppui(A);
     assert.ok(Math.abs(Q.lignes[0][1] - A.B * A.Lf * A.hs) < 1e-9);
     const D = lireDXF(feuilleDXF(F));
-    assert.deepEqual(D.fin, ['0', 'EOF']); assert.equal(D.compte('BLOCK'), 3);
+    assert.deepEqual(D.fin, ['0', 'EOF']); assert.equal(D.compte('BLOCK'), 4);
     assert.ok(feuilleSVG(F).includes(`${A.kind === 'culee' ? 'CULÉE' : 'PILE'} ${A.nom}`));
   }
 });
@@ -201,8 +203,8 @@ test('Mise en page automatique : plus petit format, vues sans chevauchement, éc
     const svg = feuilleSVG(F), nb = F.vues.reduce((s, p) => s + (p.vue.echelleV ? 2 : 1), 0);
     assert.ok((svg.match(/>\d+(,\d+)? m</g) || []).length >= nb, F.titre + ' : échelles graphiques');
   }
-  // le coffrage des appuis de l'exemple tient en A2 au 1/50
-  assert.equal(feuilles[3].format, 'A2'); assert.equal(feuilles[3].vues[0].vue.echelle, 50);
+  // le coffrage des appuis de l'exemple tient en A2 (au 1/75 au moins)
+  assert.equal(feuilles[3].format, 'A2'); assert.ok(feuilles[3].vues[0].vue.echelle <= 75);
   // culée apparente : voile frontal, frettes et aciers d'éclatement sous appareils, sections suffisantes
   const { marks } = reperesAppui(app, 0);
   for (const p of ['vfV', 'vfH', 'fret', 'eclP', 'eclL']) assert.ok(marks.some(m => m.pos === p), p);
@@ -210,4 +212,25 @@ test('Mise en page automatique : plus petit format, vues sans chevauchement, éc
   assert.ok(marks.find(m => m.pos === 'fret').prov >= R.As - 1e-12);
   assert.ok(marks.find(m => m.pos === 'eclP').prov >= R.planes[0].Ae - 1e-12);
   assert.ok(marks.find(m => m.pos === 'eclL').prov >= R.planes[1].Ae - 1e-12);
+});
+
+test('Plan d\'ensemble, tableau de nivellement, cartouche en bande et format imposé', () => {
+  const E = planEnsemble(st, { phase: 'APD', lot: '5', maitreOuvrage: 'Direction X ; Service Y', bureau: 'BET Z' });
+  assert.equal(E.vues.length, 2); assert.ok(E.valide().ok, E.valide().problemes.join(' | '));
+  assert.equal(E.format, 'A3');
+  // vue en plan alignée sur la coupe longitudinale : même échelle, axes des appuis aux mêmes abscisses
+  const [p, c] = E.vues; assert.equal(p.vue.echelle, c.vue.echelle);
+  const svg = feuilleSVG(E);
+  for (const s of ['PHASE', 'APD', 'Direction X', 'Service Y', 'BET Z', 'NOTA :', 'C0', 'P1', 'CARACTÉRISTIQUES']) assert.ok(svg.includes(s), s);
+  assert.ok(/stroke-dasharray/.test(svg), 'cadres tiretés');
+  // format imposé
+  assert.equal(planEnsemble(st, { format: 'A1' }).format, 'A1');
+  // nivellement : une ligne par appui, niveaux décroissants de la chaussée au fond de semelle
+  const N = planNivellement(st, {}); assert.equal(N.tableaux[0].lignes.length, st.deck.beam.x0.length);
+  for (let i = 0; i < st.deck.beam.x0.length; i++) {
+    const z = Object.fromEntries(niveauxAppui(geometrieAppui(st, i)).map(([, s, v]) => [s, v]));
+    assert.ok(z.Zch > z.Zsf && z.Zsf > z.Zb && z.Zb > z.Zc && z.Zc > z.Zs && z.Zs > z.Zf);
+  }
+  // le garde-grève ne recouvre jamais le bossage, même avec un about nul
+  const A = geometrieAppui(st, 0); assert.ok(-A.xGGav >= A.ap.a / 2 + 0.05 + 0.10 - 1e-9);
 });

@@ -4,7 +4,7 @@
  * Coordonnées « papier » en mm (y vers le haut) ; pour le DXF, chaque vue à échelle unique est aussi rendue en
  * coordonnées réelles (mm de l'ouvrage) dans un bloc inséré à l'échelle 1/échelle.
  */
-import { transfo, geomCote, hachuresPoly, normaleG, fmtNiv } from './dessin.js';
+import { transfo, geomCote, hachuresPoly, normaleG, fmtNiv, CADRE, VUE_PAD, boiteVuePlacee, boiteNote } from './dessin.js';
 
 /**
  * Primitives d'une vue. `f` transforme un point réel (m) en coordonnées de sortie ; `k` = mm de sortie par mm papier
@@ -93,37 +93,75 @@ export function primitivesTableau(tab) {
 export const largeurTableau = tab => tab.cols.reduce((s, c) => s + c.w, 0);
 export const hauteurTableau = tab => (tab.lignes.length + 1 + (tab.titre ? 1 : 0)) * (tab.hl || 6);
 
-/** Cadre de la feuille (marge de reliure 20 mm à gauche, 10 mm ailleurs) et cartouche en bas à droite. */
+/** Coupe un texte en lignes d'au plus n caractères. */
+function lignesDe(t, n) {
+  const out = []; let l = '';
+  for (const w of String(t || '').split(/\s+/).filter(Boolean)) { if (l && (l + ' ' + w).length > n) { out.push(l); l = w; } else l = l ? l + ' ' + w : w; }
+  if (l) out.push(l); return out;
+}
+
+/**
+ * Cadre de la feuille (marge de reliure 20 mm à gauche, 10 mm ailleurs) et cartouche en bande sur toute la largeur du bas,
+ * à la manière des dossiers d'ouvrages courants : bureau d'études | maître d'ouvrage | projet | phase, ouvrage et titre du
+ * plan | indices (date, établi, vérifié, approuvé, modification) et identification (échelles, format, n° de plan, indice).
+ * Au-dessus : mention de vérification des cotes par l'entrepreneur.
+ */
 export function primitivesCadre(F) {
-  const out = [], L = (a, b, calque = 'CARTOUCHE') => out.push({ calque, t: 'L', a, b });
+  const out = [], L = (a, b, ep) => out.push({ calque: 'CARTOUCHE', t: 'L', a, b, ...(ep ? { ep } : {}) });
+  const R = (x, y, w, h, ep) => out.push({ calque: 'CARTOUCHE', t: 'P', pts: [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], ferme: true, ...(ep ? { ep } : {}) });
   const T = (p, s, h = 2.5, o = {}) => out.push({ calque: 'TEXTES', t: 'T', p, s: String(s ?? ''), h, ancre: 'g', v: 'm', ...o });
-  const x0 = 20, y0 = 10, x1 = F.W - 10, y1 = F.H - 10;
+  const fit = (s, w, h, gras) => Math.min(h, w / ((gras ? 0.6 : 0.53) * Math.max(1, String(s || '').length)));
+  const x0 = CADRE.x0, y0 = CADRE.y0, x1 = F.W - CADRE.d, y1 = F.H - CADRE.d, HB = CADRE.bande;
   out.push({ calque: 'CARTOUCHE', t: 'P', pts: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], ferme: true, ep: 0.7 });
-  // cartouche 180 × 62 mm
-  const c = F.cartouche || {}, w = 180, cx = x1 - w, rows = [
-    ['Maître d\'ouvrage', c.maitreOuvrage], ['Projet', c.projet], ['Ouvrage', c.ouvrage],
-  ];
-  let y = y0 + 62;
-  out.push({ calque: 'CARTOUCHE', t: 'P', pts: [[cx, y0], [x1, y0], [x1, y], [cx, y]], ferme: true, ep: 0.5 });
-  for (const [k, v] of rows) { L([cx, y - 8], [x1, y - 8]); T([cx + 2, y - 4], k, 1.8); T([cx + 34, y - 4], v, 2.6); y -= 8; }
-  // titre du plan
-  L([cx, y - 14], [x1, y - 14]); T([cx + 2, y - 3.2], 'Titre du plan', 1.8); T([cx + w / 2, y - 8.5], F.titre, 4, { ancre: 'c', gras: true }); y -= 14;
-  // ligne : échelles | format | n° | indice | date
-  const cols = [['Échelle(s)', c.echelles, 60], ['Format', F.format, 22], ['N° de plan', c.numero, 46], ['Indice', c.indice || 'A', 18], ['Date', c.date, 34]];
-  let xx = cx;
-  for (const [k, v, ww] of cols) { T([xx + 1.5, y - 3], k, 1.6); T([xx + 1.5, y - 7.5], v, 2.4); xx += ww; if (xx < x1 - 0.1) L([xx, y], [xx, y - 10]); }
-  L([cx, y - 10], [x1, y - 10]); y -= 10;
-  // établi / vérifié / logiciel
-  const cols2 = [['Établi par', c.etabli, 60], ['Vérifié par', c.verifie, 60], ['Calcul', c.logiciel || 'PSIDA', 60]];
-  xx = cx;
-  for (const [k, v, ww] of cols2) { T([xx + 1.5, y - 3], k, 1.6); T([xx + 1.5, y - 7], v, 2.2); xx += ww; if (xx < x1 - 0.1) L([xx, y], [xx, y0]); }
-  // tableau des indices au-dessus du cartouche
-  const yi = y0 + 62;
-  out.push({ calque: 'CARTOUCHE', t: 'P', pts: [[cx, yi], [x1, yi], [x1, yi + 14], [cx, yi + 14]], ferme: true });
-  L([cx, yi + 7], [x1, yi + 7]); L([cx + 18, yi], [cx + 18, yi + 14]); L([cx + 52, yi], [cx + 52, yi + 14]);
-  T([cx + 2, yi + 10.5], 'Indice', 1.8); T([cx + 20, yi + 10.5], 'Date', 1.8); T([cx + 54, yi + 10.5], 'Modification', 1.8);
-  T([cx + 2, yi + 3.5], c.indice || 'A', 2.2); T([cx + 20, yi + 3.5], c.date, 2.2); T([cx + 54, yi + 3.5], c.modification || 'Première émission', 2.2);
-  return { out, zoneCartouche: [cx, y0, w, 62 + 14] };
+  const c = F.cartouche || {}, Wb = x1 - x0, yt = y0 + HB;
+  R(x0, y0, Wb, HB, 0.5);
+  const fr = [0.15, 0.17, 0.19, 0.21], xs = [x0];
+  for (const f of fr) xs.push(xs[xs.length - 1] + f * Wb);
+  xs.push(x1);
+  for (let k = 1; k < xs.length - 1; k++) L([xs[k], y0], [xs[k], yt], 0.5);
+  const lab = (x, y, s) => T([x + 1.2, y - 2], s, 1.5);
+  // 1. bureau d'études
+  { const w = xs[1] - xs[0], cx = (xs[0] + xs[1]) / 2, nom = c.bureau || '';
+    if (nom) T([cx, yt - 9], nom, fit(nom, w - 4, 4.2, true), { ancre: 'c', gras: true });
+    else lab(xs[0], yt, 'Bureau d\'études');
+    lignesDe(c.bureauAdresse, Math.floor((w - 4) / (0.53 * 1.8))).slice(0, 4).forEach((l, k) => T([cx, yt - 16 - k * 2.9], l, 1.8, { ancre: 'c' }));
+    T([cx, y0 + 2.5], `Calcul : ${c.logiciel || 'PSIDA'}`, 1.6, { ancre: 'c' }); }
+  // 2. maître d'ouvrage (lignes séparées par « ; » ou retour à la ligne)
+  { const w = xs[2] - xs[1], cx = (xs[1] + xs[2]) / 2, L0 = String(c.maitreOuvrage || '').split(/\s*[;\n]\s*/).filter(Boolean).slice(0, 5);
+    lab(xs[1], yt, 'Maître d\'ouvrage');
+    L0.forEach((l, k) => { const h = fit(l, w - 3, k === 0 ? 2.8 : 2.1, k === 0); T([cx, yt - 9 - k * 4.2 + (5 - L0.length) * 1.6], l, h, { ancre: 'c', gras: k === 0 }); }); }
+  // 3. projet
+  { const w = xs[3] - xs[2], cx = (xs[2] + xs[3]) / 2, h = 2.4, P = lignesDe(c.projet, Math.floor((w - 4) / (0.6 * h))).slice(0, 5);
+    lab(xs[2], yt, 'Projet');
+    P.forEach((l, k) => T([cx, yt - 10 - k * 3.8 + (5 - P.length) * 1.5], l, h, { ancre: 'c', gras: true })); }
+  // 4. phase et lot ; ouvrage ; titre du plan
+  { const w = xs[4] - xs[3], cx = (xs[3] + xs[4]) / 2, yp = yt - 8;
+    L([xs[3], yp], [xs[4], yp]); L([cx, yp], [cx, yt]);
+    T([xs[3] + 1.5, yt - 4], 'PHASE :', 1.8); T([xs[3] + 14, yt - 4], c.phase || '', fit(c.phase, w / 2 - 15, 3.2, true), { gras: true });
+    T([cx + 1.5, yt - 4], 'LOT :', 1.8); T([cx + 11, yt - 4], c.lot || '—', fit(c.lot || '—', w / 2 - 12, 3, true), { gras: true });
+    if (c.ouvrage) T([cx, yp - 4], c.ouvrage, fit(c.ouvrage, w - 4, 2.4), { ancre: 'c' });
+    const tl = lignesDe(F.titre, Math.max(12, Math.floor((w - 4) / (0.6 * 3.2)))).slice(0, 3);
+    tl.forEach((l, k) => T([cx, y0 + 4 + (tl.length - 1 - k) * 4.6 + (3 - tl.length) * 2], l, fit(l, w - 3, 3.2, true), { ancre: 'c', gras: true })); }
+  // 5. indices (haut) et identification du plan (bas)
+  { const xa = xs[4], w = x1 - xa, ym = y0 + HB / 2;
+    L([xa, ym], [x1, ym], 0.5);
+    const ci = [['Ind.', 0.08, c.indice || 'A'], ['Date', 0.17, c.date], ['Établi', 0.14, c.etabli], ['Vérifié', 0.14, c.verifie], ['Approuvé', 0.14, c.approuve], ['Modification', 0.33, c.modification || 'Première émission']];
+    const yh = yt - 5.5; L([xa, yh], [x1, yh]); const yr = yh - 5.8; L([xa, yr], [x1, yr]);
+    let xx = xa;
+    for (const [k, f, v] of ci) {
+      const ww = f * w; T([xx + ww / 2, yt - 2.75], k, 1.6, { ancre: 'c', gras: true }); if (v) T([xx + ww / 2, yh - 2.9], v, fit(v, ww - 1.5, 2.1), { ancre: 'c' });
+      xx += ww; if (xx < x1 - 0.1) L([xx, ym], [xx, yt]);
+    }
+    const cj = [['Échelle(s)', 0.31, c.echelles], ['Format', 0.12, F.format], ['N° de plan', 0.43, c.numero], ['Ind.', 0.14, c.indice || 'A']];
+    xx = xa;
+    for (const [k, f, v] of cj) {
+      const ww = f * w; T([xx + 1.2, ym - 2], k, 1.5); if (v) T([xx + ww / 2, ym - 9.5], v, fit(v, ww - 2, k === 'N° de plan' || k === 'Ind.' ? 3.4 : 2.3, true), { ancre: 'c', gras: k !== 'Échelle(s)' });
+      xx += ww; if (xx < x1 - 0.1) L([xx, y0], [xx, ym]);
+    }
+  }
+  // mention au-dessus du cartouche
+  if (c.mention !== false) T([x0 + 1.5, yt + CADRE.mention / 2], 'Nota : l\'entrepreneur est tenu de vérifier toutes les cotes avant exécution ; il signalera au maître d\'œuvre toute erreur ou omission.', 2.1, { gras: false });
+  return { out, zoneCartouche: [x0, y0, Wb, HB + CADRE.mention] };
 }
 
 /** Largeur approchée d'un texte (police condensée), mm. */
@@ -133,6 +171,8 @@ export const largeurTexte = (s, h) => 0.52 * h * String(s).length;
  * Échelle graphique : barre de 4 segments alternés (pleins / vides) d'une longueur réelle « ronde » de 30 à 70 mm papier,
  * graduée 0 – L/2 – L (m). (x, y) : coin bas-gauche, mm papier.
  */
+export const longueurEchelle = den => [0.2, 0.5, 1, 2, 5, 10, 20, 50, 100].find(l => l * 1000 / den >= 30) || 100;
+export const largeurEchelle = den => longueurEchelle(den) * 1000 / den;
 export function echelleGraphique(x, y, den, lib = '') {
   const out = [], kmm = 1000 / den;
   const L = [0.2, 0.5, 1, 2, 5, 10, 20, 50, 100].find(l => l * kmm >= 30) || 100, W = L * kmm, h = 1.4;
@@ -153,14 +193,19 @@ export function primitivesFeuille(F, { blocsDXF = false } = {}) {
   papier.push(...primitivesCadre(F).out);
   F.vues.forEach((pl, i) => {
     const { f, E } = transfo(pl), v = pl.vue;
-    // titre de la vue, souligné, avec l'échelle
-    const tv = v.titre + (v.echelleV ? ` — échelles ${'1/' + v.echelle} (long.), ${'1/' + v.echelleV} (haut.)` : ` — échelle 1/${v.echelle}`);
-    const [x0, y0] = f([E.x0, E.y0]), [x1, y1] = f([E.x1, E.y1]);
-    papier.push({ calque: 'TEXTES', t: 'T', p: [x0, y1 + 6], s: tv, h: 3.5, ancre: 'g', v: 'b', gras: true });
-    papier.push({ calque: 'TEXTES', t: 'L', a: [x0, y1 + 5.2], b: [x0 + Math.min(x1 - x0, 3.5 * 0.55 * tv.length), y1 + 5.2] });
-    // échelle(s) graphique(s), à droite du titre
-    let xe = x0 + 0.62 * 3.5 * tv.length + 8;   // titre en gras : chasse plus large
-    for (const [den, lib] of v.echelleV ? [[v.echelle, 'long.'], [v.echelleV, 'haut.']] : [[v.echelle, '']]) { papier.push(...echelleGraphique(xe, y1 + 6.2, den, lib)); xe += 75; }
+    // cadre tireté ; titre centré, en gras, souligné ; « Ech : 1/50 » et échelle(s) graphique(s) dessous
+    const [x0, y0] = f([E.x0, E.y0]), [bx, by, bw, bh] = boiteVuePlacee(pl), cx = bx + bw / 2, yT = by + bh - VUE_PAD - 4;
+    papier.push({ calque: 'CADRES', t: 'P', pts: [[bx, by], [bx + bw, by], [bx + bw, by + bh], [bx, by + bh]], ferme: true });
+    const lt = 0.6 * 3.8 * v.titre.length;
+    papier.push({ calque: 'TEXTES', t: 'T', p: [cx, yT], s: v.titre, h: 3.8, ancre: 'c', v: 'b', gras: true });
+    papier.push({ calque: 'TEXTES', t: 'L', a: [cx - lt / 2, yT - 0.9], b: [cx + lt / 2, yT - 0.9], ep: 0.3 });
+    const te = v.echelleV ? `Ech : 1/${v.echelle} (long.) — 1/${v.echelleV} (haut.)` : `Ech : 1/${v.echelle}`;
+    const barres = v.echelleV ? [[v.echelle, 'long.'], [v.echelleV, 'haut.']] : [[v.echelle, '']];
+    const wte = 0.53 * 2.5 * te.length, wb = barres.reduce((s, [d, l]) => s + largeurEchelle(d) + (l ? 10 : 0) + 6, 0);
+    let xe = cx - (wte + wb) / 2, ye = yT - 7.5;
+    papier.push({ calque: 'TEXTES', t: 'T', p: [xe, ye], s: te, h: 2.5, ancre: 'g', v: 'b' });
+    xe += wte + 6;
+    for (const [den, lib] of barres) { papier.push(...echelleGraphique(xe, ye, den, lib)); xe += largeurEchelle(den) + (lib ? 10 : 0) + 6; }
     if (blocsDXF && !v.echelleV) {
       const kd = 1000;   // mm réels par m
       blocs.push({ nom: `VUE_${i + 1}`, prims: primitivesVue(v, p => [(p[0] - E.x0) * kd, (p[1] - E.y0) * kd], v.echelle, kd), x: x0, y: y0, sx: 1 / v.echelle, sy: 1 / v.echelle });
@@ -168,6 +213,9 @@ export function primitivesFeuille(F, { blocsDXF = false } = {}) {
   });
   for (const t of F.tableaux) papier.push(...primitivesTableau(t));
   papier.push(...(F.papier || []));
-  for (const n of F.notes) n.lignes.forEach((s, k) => papier.push({ calque: 'TEXTES', t: 'T', p: [n.x, n.y - k * n.h * 1.6], s, h: n.h, ancre: 'g', v: 'h', gras: k === 0 && n.titreGras }));
+  for (const n of F.notes) {
+    n.lignes.forEach((s, k) => papier.push({ calque: 'TEXTES', t: 'T', p: [n.x, n.y - k * n.h * 1.6], s: k === 0 && n.titreGras && s === 'NOTES' ? 'NOTA :' : s, h: n.h, ancre: 'g', v: 'h', gras: k === 0 && n.titreGras }));
+    if (n.titreGras) { const [x, y, w, h] = boiteNote(n); papier.push({ calque: 'CARTOUCHE', t: 'P', pts: [[x, y], [x + w, y], [x + w, y + h], [x, y + h]], ferme: true, ep: 0.35 }); }
+  }
   return { papier, blocs };
 }

@@ -6,6 +6,8 @@
 import { planCoffrage } from '../src/plans/coffrage.js';
 import { planFerraillage } from '../src/plans/ferraillage.js';
 import { planCoffrageAppui, appuisDisponibles } from '../src/plans/appuis.js';
+import { planEnsemble } from '../src/plans/ensemble.js';
+import { planNivellement } from '../src/plans/nivellement.js';
 import { planFerraillageAppui } from '../src/plans/ferraillageAppuis.js';
 import { planEquipements, lireEquipements, controleCharges, souffleJoints } from '../src/plans/equipements.js';
 import { feuilleSVG } from '../src/plans/svg.js';
@@ -20,6 +22,8 @@ function cartouche(numero) {
     maitreOuvrage: val('plan_mo'), projet: val('plan_projet'), ouvrage: val('plan_ouvrage'), numero,
     indice: val('plan_indice') || 'A', date: val('plan_date') || d.toLocaleDateString('fr-FR'),
     etabli: val('plan_etabli'), verifie: val('plan_verifie'), modification: val('plan_modif') || 'Première émission',
+    approuve: val('plan_approuve'), bureau: val('plan_be'), bureauAdresse: val('plan_be_adr'), phase: val('plan_phase'), lot: val('plan_lot'),
+    format: val('plan_format') || 'auto',
   };
 }
 
@@ -29,7 +33,9 @@ function equipements() {
   return lireEquipements(d);
 }
 const PLANS = {
-  coffrage: { titre: 'Plan de coffrage', fichier: 'coffrage', num: () => val('plan_num_cof') || 'TAB-COF-01', faire: (st, c) => planCoffrage(st, c, equipements()) },
+  ensemble: { titre: 'Vue en plan et coupe longitudinale', fichier: 'ensemble', num: () => val('plan_num_ens') || 'OA-ENS-01', faire: (st, c) => planEnsemble(st, c, equipements()) },
+  coffrage: { titre: 'Coffrage : coupes transversales et détails', fichier: 'coffrage', num: () => val('plan_num_cof') || 'TAB-COF-01', faire: (st, c) => planCoffrage(st, c, equipements()) },
+  nivellement: { titre: 'Tableau de dimensionnement et nivellement des appuis', fichier: 'nivellement', num: () => val('plan_num_niv') || 'APP-NIV-01', faire: (st, c) => planNivellement(st, c) },
   equipements: { titre: 'Équipements', fichier: 'equipements', num: () => val('plan_num_eq') || 'TAB-EQU-01', faire: (st, c) => planEquipements(st, equipements(), c) },
   ferraillage: { titre: 'Plan de ferraillage', fichier: 'ferraillage', num: () => val('plan_num_fer') || 'TAB-FER-01', faire: (st, c) => planFerraillage(st, c) },
 };
@@ -51,14 +57,14 @@ const nomFichier = (st, k, ext) => { const P = plan(st, k); return `${P.num().re
 /** Plans disponibles pour l'état de calcul : le ferraillage seulement pour une dalle armée calculée. */
 export function plansDisponibles(st) {
   if (!st || !st.deck) return [];
-  return [...(st.rebar && st.rebar.marks ? ['coffrage', 'ferraillage'] : ['coffrage']), 'equipements', ...appuisDisponibles(st).flatMap(i => [`appui-${i}`, `appuiF-${i}`])];
+  return [...(appuisDisponibles(st).length ? ['ensemble'] : []), ...(st.rebar && st.rebar.marks ? ['coffrage', 'ferraillage'] : ['coffrage']), 'equipements', ...(appuisDisponibles(st).length ? ['nivellement'] : []), ...appuisDisponibles(st).flatMap(i => [`appui-${i}`, `appuiF-${i}`])];
 }
 
 export function renderPlans(st) {
   const box = $('#plans-box'); if (!box) return;
   const dispo = plansDisponibles(st);
   const sel = $('#plan-type'), prev = sel.value;
-  sel.innerHTML = dispo.map(k => `<option value="${k}">${PLANS[k] ? 'Tablier — ' + PLANS[k].titre.toLowerCase() : plan(st, k).titre}</option>`).join('');
+  sel.innerHTML = dispo.map(k => `<option value="${k}">${k === 'ensemble' ? 'Ouvrage — ' + PLANS[k].titre.toLowerCase() : k === 'nivellement' ? 'Appuis — ' + PLANS[k].titre.toLowerCase().replace(' des appuis', '') : PLANS[k] ? 'Tablier — ' + PLANS[k].titre.toLowerCase() : plan(st, k).titre}</option>`).join('');
   if (dispo.includes(prev)) sel.value = prev;
   const msg = [];
   if (!dispo.includes('ferraillage')) msg.push('Dalle précontrainte ou ferraillage indisponible : seul le plan de coffrage du tablier est proposé (le câblage et les aciers passifs sont dans l\'onglet Précontrainte).');

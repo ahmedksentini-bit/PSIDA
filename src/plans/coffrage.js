@@ -9,7 +9,7 @@
 import { Vue, Feuille, fmtCote, fmtNiv } from './dessin.js';
 import { composer } from './mise_en_page.js';
 import { geometrie, courbeU } from './geometrie.js';
-import { dessinerBord, bordGeom, gargouilles } from './equipements.js';
+import { dessinerBord, bordGeom, gargouilles, vueDetailBord } from './equipements.js';
 
 const GG = { e: 0.30, joint: 0.05 };   // garde-grève : épaisseur, joint de chaussée (m)
 const TROTTOIR = 0.20;                // hauteur des bordures de trottoir (m)
@@ -38,7 +38,7 @@ function niveauxLigne(G, i) {
 }
 
 /* ------------------------------------------------------------------------------------------------ vue en plan */
-function vuePlan(G, eq = null) {
+export function vuePlan(G, eq = null) {
   const v = new Vue('VUE EN PLAN'), { b, uA, uB, x0, n } = G;
   // contour
   const gauche = courbeU(G, b, uA, uB, x0), droite = courbeU(G, -b, uA, uB, x0).reverse();
@@ -294,21 +294,23 @@ function tableauQuantites(Q) {
 
 /* --------------------------------------------------------------------------------------------- la feuille */
 export function planCoffrage(st, cartouche = {}, eq = null) {
-  const G = geometrie(st), L = G.uB - G.uA;
-  const plan = vuePlan(G, eq), elev = vueElevation(G, st);
+  // coupes transversales en travée et sur appui, détail du bord (vue en plan et coupe longitudinale : feuille d'ensemble)
+  const G = geometrie(st);
   const ca = vueCoupe(G, st, { titre: 'COUPE A-A (en travée)', eq });
   const iB = Math.min(1, G.n - 1);
   const cb = vueCoupe(G, st, { titre: `COUPE B-B (sur ${G.nomLigne(iB)})`, appui: iB, eq });
+  const det = eq ? vueDetailBord(G, eq, 1) : null;
+  if (det) det.titre = 'DÉTAIL 1 — BORD DU TABLIER';
   const Q = quantitesCoffrage(st, G), tq = tableauQuantites(Q), hq = (tq.lignes.length + 2) * 6;
   const notes = notesCoffrage(st, G), hn = notes.length * 2.1 * 1.6;
   const F = composer({
-    titre: 'TABLIER — PLAN DE COFFRAGE', cartouche,
-    rangees: [[plan], [elev], [ca, cb]],
-    groupes: [{ vues: [plan, elev], cible: L <= 60 ? 100 : L <= 130 ? 200 : 250, min: 50 }, { vues: [ca, cb], cible: 2 * G.b <= 14 ? 50 : 75, min: 20 }],
-    colonne: { largeur: 182, hauteur: 76 + 6 + hq + 6 + hn + 4 },
+    titre: 'TABLIER — COFFRAGE : COUPES TRANSVERSALES ET DÉTAILS', cartouche,
+    rangees: [[ca, cb], ...(det ? [[det]] : [])],
+    groupes: [{ vues: [ca, cb], cible: 2 * G.b <= 14 ? 50 : 75, min: 20 }, ...(det ? [{ vues: [det], cible: 25, min: 10 }] : [])],
+    colonne: { largeur: 182, hauteur: 2 + hq + 6 + hn + 4 },
     poser: (F, [x, y]) => {
-      F.tableau(tq, F.W - 10 - 162, y + 76 + 6);
-      F.note(notes, F.W - 10 - 182 + 2, y + 76 + 6 + hq + 6 + hn - 2.1 * 0.6, 2.1);
+      F.tableau(tq, F.W - 10 - 162, y + 2);
+      F.note(notes, F.W - 10 - 182 + 2, y + 2 + hq + 6 + hn - 2.1 * 0.6, 2.1);
       F.notes[F.notes.length - 1].titreGras = true;
     },
   });

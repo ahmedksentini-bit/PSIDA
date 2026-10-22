@@ -12,7 +12,7 @@
  * Longueurs d'ancrage et de recouvrement : EN 1992-1-1 § 8.4 et 8.7 (src/rebar.js, anchorage). Bordereau ISO 4066.
  */
 import { Vue, Feuille, fmtCote } from './dessin.js';
-import { geometrieAppui, vueElevation, vueCoupe } from './appuis.js';
+import { geometrieAppui, vueElevation, vueCoupe, couperNote } from './appuis.js';
 import { longueurCoupe, rayonCintrage, croquisForme, recapitulatif } from './bordereau.js';
 import { composer } from './mise_en_page.js';
 import { placerBordereau } from './ferraillage.js';
@@ -434,18 +434,19 @@ export function planFerraillageAppui(st, i, cartouche = {}) {
     '4. Bordereau ISO 4066 ; code 99 : cerce circulaire (longueur développée, recouvrement compris).',
     '5. Frettes et éclatement sous appareils : A_s = 0,04 R / f_su par appareil ; plans Δ′ et Δ répartis de 0,1 d à d.',
     '6. Plan type à valider : vérifier l\'encombrement des nappes et les zones de bétonnage.',
+    ...(A.alerte ? couperNote('7. ATTENTION — ' + A.alerte, 110) : []),
   ], hn = N.length * 2.2 * 1.6;
   // élévation et coupe en haut, sections en bas ; bordereau, notes et cartouche dans la colonne de droite
   const el = dessinerElevation(A, marks), cp = dessinerCoupe(A, marks), secs = dessinerSections(A, marks);
   let R = R0;
   const F = composer({ titre: `${A.kind === 'culee' ? 'CULÉE' : 'PILE'} ${A.nom} — PLAN DE FERRAILLAGE`, cartouche,
     rangees: [[el, cp], ...(secs.length ? [secs] : [])],
-    groupes: [{ vues: [el, cp], cible: 50, min: 20 }, ...[secs.filter(v => !v.vueDeFace), secs.filter(v => v.vueDeFace)].filter(g => g.length).map(g => ({ vues: g, cible: g[0].vueDeFace ? 50 : 25, min: g[0].vueDeFace ? 25 : 10 }))],
-    colonne: { largeur: wb + 16, hauteur: 76 + 8 + hb + 8 + hn + 4 },
+    groupes: [{ vues: [el, cp], cible: 75, min: 20 }, ...[secs.filter(v => !v.vueDeFace), secs.filter(v => v.vueDeFace)].filter(g => g.length).map(g => ({ vues: g, cible: g[0].vueDeFace ? 50 : 25, min: g[0].vueDeFace ? 25 : 10 }))],
+    colonne: { largeur: wb + 16, hauteur: 2 + hb + 8 + hn + 4 },
     poser: (F, [x, y]) => {
       const xb = F.W - 10 - wb - 3;
-      ({ R } = placerBordereau(F, lignes, [xb, y + 76 + 8, wb, hb]));
-      F.note(N, xb, y + 76 + 8 + hb + 8 + hn - 2.2 * 0.6, 2.2);
+      ({ R } = placerBordereau(F, lignes, [xb, y + 2, wb, hb]));
+      F.note(N, xb, y + 2 + hb + 8 + hn - 2.2 * 0.6, 2.2);
       F.notes[F.notes.length - 1].titreGras = true;
     } }, ['A2', 'A1', 'A0']);
   F.cartouche.echelles = F.cartouche.echelles || [...new Set(F.vues.map(p => '1/' + p.vue.echelle))].join(' ; ');

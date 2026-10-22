@@ -408,3 +408,11 @@ puis échelles agrandies d'un cran normalisé tant que la feuille le permet ; co
 tableaux, notes et bordereau ; vue en plan alignée sous l'élévation ; échelle graphique sous le titre de chaque vue (deux
 pour les vues dilatées). Ferraillage des appuis complété : frettes de surface (0,04 R / f_su par appareil), aciers
 d'éclatement dans les plans Δ′ et Δ (répartis de 0,1 d à d), voile frontal des piles-culées apparentes ; manuel § 26.
+v0.72 : présentation des plans selon les dossiers d'ouvrages courants — cartouche en bande sur toute la largeur (bureau
+d'études, maître d'ouvrage, projet, phase et lot, ouvrage et titre, indices avec visas, échelles, format, n° de plan),
+mention de vérification des cotes, cadre tireté et « Ech : 1/50 » sous chaque vue, encadré NOTA ; A3 essayé d'abord,
+format imposé possible. Nouvelles feuilles : vue en plan – coupe longitudinale de l'ouvrage (appuis complets, terrain
+naturel, talus, dalles de transition, bulles d'axes, caractéristiques géométriques) et tableau de dimensionnement et
+nivellement des appuis ; tableau de calage et détail bossage / plot de vérinage sur les feuilles d'appui ; coffrage du
+tablier réduit aux coupes transversales et au détail du bord. Corrections : garde-grève toujours derrière le bossage
+(alerte si l'about est trop court), contre-corniche coulée en place contre la corniche préfabriquée.

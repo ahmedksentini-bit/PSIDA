@@ -260,12 +260,12 @@ export function planFerraillage(st, cartouche = {}) {
   const notes = notesFerraillage(st, G, R0), hn = notes.length * 2.2 * 1.6;
   const F = composer({ titre: 'TABLIER — PLAN DE FERRAILLAGE', cartouche,
     rangees: [[vl], [vd]],
-    groupes: [{ vues: [vl], cible: Lt <= 60 ? 100 : 200, min: 50, refaire: e => [vueLongitudinale(G, st, marks, e, eV(e))] }, { vues: [vd], cible: 2 * G.b <= 14 ? 25 : 50, min: 20 }],
-    colonne: { largeur: Math.max(182, wb + 3), hauteur: 76 + 8 + hb + 8 + hn + 4 },
+    groupes: [{ vues: [vl], cible: Lt <= 60 ? 200 : 500, min: 50, refaire: e => [vueLongitudinale(G, st, marks, e, eV(e))] }, { vues: [vd], cible: 2 * G.b <= 14 ? 25 : 50, min: 20 }],
+    colonne: { largeur: Math.max(182, wb + 3), hauteur: 2 + hb + 8 + hn + 4 },
     poser: (F, [x, y, w]) => {
       const xb = F.W - 10 - wb - 3;
-      const { R } = placerBordereau(F, lignes, [xb, y + 76 + 8, wb, hb]);
-      F.note(notesFerraillage(st, G, R), xb, y + 76 + 8 + hb + 8 + hn - 2.2 * 0.6, 2.2);
+      const { R } = placerBordereau(F, lignes, [xb, y + 2, wb, hb]);
+      F.note(notesFerraillage(st, G, R), xb, y + 2 + hb + 8 + hn - 2.2 * 0.6, 2.2);
       F.notes[F.notes.length - 1].titreGras = true;
     } }, ['A2', 'A1', 'A0']);
   const L = F.vues.find(p => p.vue.echelleV).vue, D = F.vues.find(p => !p.vue.echelleV).vue;
