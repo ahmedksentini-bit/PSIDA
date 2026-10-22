@@ -457,3 +457,9 @@ dessinées en direct avant tout calcul, éléments rattachés aux champs (cligno
 sol de fondation (src/cadre/solProfil.js) : profils pressiométrique (guide PICF-EL annexe 2, Terzaghi et Peck),
 pénétrométrique statique (Sanglerat, Ménard), pénétrométrique dynamique (q_d/q_c du site ou par défaut) et SPT
 (V_s d'Imai et Tonouchi) ; manuel § 27.2 et 27.2 bis.
+v0.82 : cadres — portance sous le radier et sous les semelles du portique (src/cadre/portance.js) par les méthodes
+directes du Fascicule 62 titre V et de la NF P94-261 (pressiomètre k_p·p*_le, pénétromètre statique k_c·q_ce ; module
+src/geotech de fond.ksr-infra.org) ; ESOL au pénétromètre statique par la méthode directe de Schmertmann (NF P94-261
+annexe I), sans corrélation de module ; pénétromètre dynamique ramené au statique par q_d/q_c seulement ; séisme conforme
+à NF EN 1998-2, 6.7.3 (inertie, q = 1) et 6.7.4 (pont-cadre sous grande couverture : γ_s = v_g/v_s,
+v_g = S·T_C·a_g/(2π)), choix automatique selon le remblai ; manuel § 27.2 bis et 27.9.

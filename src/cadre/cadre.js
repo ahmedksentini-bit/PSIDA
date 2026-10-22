@@ -187,6 +187,8 @@ export function resoudreCadre(g, s, sol = null, opts = {}) {
     radiers: ouvert ? [] : Array.from({ length: n }, (_, i) => barre(`Radier ${i + 1}`, r.barres[iRad(n, i)])),
     voiles: Array.from({ length: n + 1 }, (_, j) => barre((j === 0 || j === n) ? `Piédroit ${j === 0 ? 'gauche' : 'droit'}` : `Voile ${j}`, r.barres[iV(j)])),
     pG: p0, pD: p0 + pente * largeurCalc(g), residu: (ouvert || rotule) ? 0 : r.residu,
+    // résultantes des charges appliquées (hors poids du radier et des voiles) : V vers le bas, H vers +x, M au centre du radier
+    charge: { V: W, H: net, M: Mx - W * largeurCalc(g) / 2 },
     // déplacement horizontal moyen de la tête relativement au pied (distorsion du cadre)
     deriveTete: Array.from({ length: n + 1 }, (_, j) => r.u[3 * nHaut(n, j)] - r.u[3 * nBas(j)]).reduce((a, b) => a + b, 0) / (n + 1),
   };

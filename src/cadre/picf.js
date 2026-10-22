@@ -405,7 +405,7 @@ export function calculPicf(geomIn, hypIn = {}, opts = {}) {
       sisme.verifs.push(v);
     }
     const nR = sisme.verifs.filter(v => v.renforce).length;
-    alertes.push(`Séisme : ${sisme.combinaisons} combinaisons (G + P + E, deux sens, ±k_v, K₀ max ou min, approches A et B en enveloppe) ; matériaux ${h.code === 'EC2' ? 'γc = 1,5 et γs = 1,15 (NF EN 1998-1, 5.2.4)' : 'γb = 1,15 et γs = 1,0 (situation accidentelle BAEL)'} ; ${nR ? `${nR} section(s) renforcée(s) par le séisme` : 'aucune section renforcée par le séisme'}. Les pressions hydrodynamiques de l'eau contenue ne sont pas prises en compte ; les charges d'exploitation n'entrent pas dans la combinaison sismique (ψ₂ = 0 pour le trafic routier, NF EN 1998-2, 4.1.2${portee === 'rail' ? ' ; pour une voie ferrée, le terme ψ₂·Q de NF EN 1998-2, 4.1.2 n’est pas encore ajouté' : ''}).`);
+    alertes.push(`Séisme : ${sisme.combinaisons} combinaisons (G + P + E, deux sens, ±k_v, K₀ max ou min, ${sisme.approche === 'enveloppe' ? 'approches A et B en enveloppe' : 'approche ' + sisme.approche}) ; matériaux ${h.code === 'EC2' ? 'γc = 1,5 et γs = 1,15 (NF EN 1998-1, 5.2.4)' : 'γb = 1,15 et γs = 1,0 (situation accidentelle BAEL)'} ; ${nR ? `${nR} section(s) renforcée(s) par le séisme` : 'aucune section renforcée par le séisme'}. Les pressions hydrodynamiques de l'eau contenue ne sont pas prises en compte ; les charges d'exploitation n'entrent pas dans la combinaison sismique (ψ₂ = 0 pour le trafic routier, NF EN 1998-2, 4.1.2${portee === 'rail' ? ' ; pour une voie ferrée, le terme ψ₂·Q de NF EN 1998-2, 4.1.2 n’est pas encore ajouté' : ''}).`);
   }
   const res = {
     geom, h, cadre: g, combos, frames, cas, effets, sections, deltaB: dB, deltaMc: dMc, poids, marstonK: mars.K, marstonNote: mars.message,

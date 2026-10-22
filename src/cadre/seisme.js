@@ -34,6 +34,12 @@ export const S_SOL = { z14: { A: 1, B: 1.35, C: 1.5, D: 1.6, E: 1.8 }, z5: { A: 
 export const VS_INDICATIF = { A: 900, B: 500, C: 250, D: 150, E: 150 };
 /** NF EN 1998-5 tableau 4.1 : (a_g·S/g ; G/G_max). Interpolation linéaire. */
 const G_RED = [[0.0, 1.0], [0.10, 0.80], [0.20, 0.50], [0.30, 0.36]];
+/** NF EN 1998-5 tableau 4.1 : (a_g·S/g ; v_s/v_s,max). */
+const VS_RED = [[0.0, 1.0], [0.10, 0.90], [0.20, 0.70], [0.30, 0.60]];
+/** T_C (s) : annexe nationale française (zones 1 à 4, zone 5) ; spectre de type 1 recommandé par l'EN 1998-1 en saisie directe. */
+export const TC = { z14: { A: 0.2, B: 0.25, C: 0.4, D: 0.6, E: 0.45 }, z5: { A: 0.4, B: 0.5, C: 0.6, D: 0.8, E: 0.5 }, type1: { A: 0.4, B: 0.5, C: 0.6, D: 0.8, E: 0.5 } };
+const interp = (T, x) => { if (x >= T[T.length - 1][0]) return T[T.length - 1][1]; for (let i = 1; i < T.length; i++) if (x <= T[i][0]) { const [a0, r0] = T[i - 1], [a1, r1] = T[i]; return r0 + (r1 - r0) * (x - a0) / (a1 - a0); } return 1; };
+export const reductionVs = agSg => interp(VS_RED, agSg);
 
 const fr = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : '—');
 
@@ -51,11 +57,13 @@ export const rapportDistorsion = (F, nu) => 4 * (1 - nu) * F / (3 - 4 * nu + F);
 export function actionSismique(s) {
   if (s.mode === 'direct') {
     const ag = s.ag, S = s.S;
-    return { ag, S, agS: ag * S, kh: ag * S / G_ACC, classe: s.classeSol, source: `a_g = ${fr(ag)} m/s² et S = ${fr(S)} saisis` };
+    const Tc = s.Tc > 0 ? s.Tc : TC.type1[s.classeSol || 'B'];
+    return { ag, S, Tc, agS: ag * S, kh: ag * S / G_ACC, classe: s.classeSol, source: `a_g = ${fr(ag)} m/s², S = ${fr(S)} et T_C = ${fr(Tc)} s saisis ou de type 1` };
   }
   const zone = s.zone || 3, cat = s.categorie || 'III', classe = s.classeSol || 'B';
   const gI = GAMMA_I[cat] ?? 1.0, agR = AGR[zone], ag = gI * agR, S = (zone === 5 ? S_SOL.z5 : S_SOL.z14)[classe];
-  return { ag, S, agS: ag * S, kh: ag * S / G_ACC, gI, agR, zone, cat, classe, soumis: zone > 1 && cat !== 'I',
+  const Tc = (zone === 5 ? TC.z5 : TC.z14)[classe];
+  return { ag, S, Tc, agS: ag * S, kh: ag * S / G_ACC, gI, agR, zone, cat, classe, soumis: zone > 1 && cat !== 'I',
     source: `zone ${zone} (a_gR = ${fr(agR)} m/s²), catégorie ${cat} (γ_I = ${fr(gI)}), sol ${classe} (S = ${fr(S)}) : a_g = ${fr(ag)} m/s², a_g·S = ${fr(ag * S)} m/s²` };
 }
 
@@ -80,7 +88,7 @@ export function calculSismique(ctx, sIn) {
   const casA = sg => C.plus(C.plus(C.forceTete(n, sg * Fi), C.bandesVoile(n, Array.from({ length: n + 1 }, (_, j) => ({ ...voiles(j), q: sg * voiles(j).q })))),
     C.bandesVoile(n, [{ voile: sg > 0 ? 0 : n, z0: 0, l: hc, q: sg * dP }]));
   const vert = sv => C.vertical(n, sv * kv * (qTrav + qRem));
-  notes.push(`Approche A (inertie et poussée dynamique) : inertie de la traverse et du remblai k_h·(${fr(qTrav + qRem, 3)} t/m²)·${fr(L)} m = ${fr(Fi)} t/ml en tête, inertie des voiles k_h·ρ_b·e ; incrément de poussée d'un ouvrage rigide ΔP_d = α·S·γ·H² (NF EN 1998-5, annexe E.9) avec H = ${fr(Htot)} m, soit ${fr(dP, 3)} t/m² uniforme sur un piédroit.`);
+  const notesA = `Approche A (NF EN 1998-2, 6.7.3 : ouvrage enterré, q = 1, inertie sous a_g·S sans amplification spectrale) : inertie de la traverse et du remblai k_h·(${fr(qTrav + qRem, 3)} t/m²)·${fr(L)} m = ${fr(Fi)} t/ml en tête, inertie des voiles k_h·ρ_b·e ; incrément de poussée d'un ouvrage rigide ΔP_d = α·S·γ·H² (NF EN 1998-5, annexe E.9) avec H = ${fr(Htot)} m, soit ${fr(dP, 3)} t/m² uniforme sur un piédroit.`;
 
   // ── B : distorsion imposée ─────────────────────────────────────────────────────────────────────────────
   const Ei = 11000 * Math.cbrt(h.fc28) * T_PAR_MPA;                                       // module instantané (t/m²)
@@ -88,15 +96,22 @@ export function calculSismique(ctx, sIn) {
   const unite = C.resoudreCadre(g, C.forceTete(n, 1), null, { ...optsB, ouvert });
   const Ks = Ei * 1 / unite.deriveTete;                                                    // t/m par m d'ouvrage (E = 1 dans le solveur)
   const Vs = sIn.Vs > 0 ? sIn.Vs : VS_INDICATIF[A.classe || 'C'] || 250, nu = sIn.nu ?? 0.35, rho = h.rhoR;     // t/m³
-  const Gmax = rho * Vs * Vs / G_ACC, Gred = reductionG(A.agS / G_ACC), Gs = Gmax * Gred;  // t/m²
-  const zm = geom.Hr + geom.et + geom.H / 2, sigv = rho * zm, tau = (A.agS / G_ACC) * sigv * rd(zm), gam = tau / Gs, dff = gam * hc;
+  const rv = reductionVs(A.agS / G_ACC), vs = Vs * rv, Gs = rho * vs * vs / G_ACC, Gred = rv * rv;   // t/m²
+  const vg = A.S * A.Tc * A.ag / (2 * Math.PI), gam = vg / vs, dff = gam * hc;                       // NF EN 1998-2, 6.7.4 (6.17) et (6.18)
   const Fl = (Gs / Ks) * (L / hc), R = rapportDistorsion(Fl, nu), ds = R * dff, Pb = Ks * ds;
-  notes.push(`Approche B (distorsion imposée, FHWA-NHI-10-034 § 13.5) : V_s = ${Vs.toFixed(0)} m/s${sIn.vsSource === 'profil' ? ' (corrélation du profil)' : sIn.Vs > 0 ? '' : ' (indicatif, à mesurer)'}, G = ρV_s²·${fr(Gred)} = ${fr(Gs / T_PAR_MPA, 1)} MPa ; à mi-hauteur z = ${fr(zm)} m, τ = ${fr(tau, 3)} t/m² (r_d = ${fr(rd(zm), 3)}), γ_ff = ${(gam * 1e3).toFixed(3).replace('.', ',')} ‰, Δ_ff = ${(dff * 1000).toFixed(2).replace('.', ',')} mm ; K_s = ${fr(Ks, 0)} t/m (E_i = ${(Ei / T_PAR_MPA).toFixed(0)} MPa), F = ${fr(Fl, 3)}, R = ${fr(R, 3)} (ν = ${fr(nu)}), Δ_s = ${(ds * 1000).toFixed(2).replace('.', ',')} mm, force en tête ${fr(Pb)} t/ml.`);
+  const notesB = `Approche B (compatibilité cinématique, NF EN 1998-2, 6.7.4) : vitesse maximale du sol v_g = S·T_C·a_g/(2π) = ${fr(vg, 3)} m/s (T_C = ${fr(A.Tc)} s) ; V_s,max = ${Vs.toFixed(0)} m/s${sIn.vsSource === 'profil' ? ' (corrélation du profil)' : sIn.Vs > 0 ? '' : ' (indicatif, à mesurer)'}, réduite à v_s = ${vs.toFixed(0)} m/s (×${fr(rv)}, NF EN 1998-5 tableau 4.1) ; distorsion du sol en champ libre γ_s = v_g/v_s = ${(gam * 1e3).toFixed(3).replace('.', ',')} ‰, soit Δ_ff = ${(dff * 1000).toFixed(2).replace('.', ',')} mm sur la hauteur ; interaction cadre-sol par le rapport de distorsion de Penzien (FHWA-NHI-10-034 § 13.5) : G = ρv_s² = ${fr(Gs / T_PAR_MPA, 1)} MPa, K_s = ${fr(Ks, 0)} t/m (E_i = ${(Ei / T_PAR_MPA).toFixed(0)} MPa), F = ${fr(Fl, 3)}, R = ${fr(R, 3)} (ν = ${fr(nu)}), Δ_s = ${(ds * 1000).toFixed(2).replace('.', ',')} mm, force en tête ${fr(Pb)} t/ml.`;
 
   // ── Combinaisons ─────────────────────────────────────────────────────────────────────────────────────
   const barres = accesseurs(n, !!ouvert);
   const frames = [], noms = [];
-  const appr = sIn.approche || 'enveloppe', avecA = appr !== 'B', avecB = appr !== 'A';
+  // NF EN 1998-2, 6.7.4(1) : remblai dépassant 50 % de la portée → réponse inertielle négligée, compatibilité cinématique ;
+  // sinon 6.7.3 (culée enterrée, q = 1, inertie sous a_g·S, poussée sismique des terres).
+  const grandeCouverture = geom.Hr > 0.5 * geom.B;
+  const appr = sIn.approche === 'A' || sIn.approche === 'B' || sIn.approche === 'enveloppe' ? sIn.approche : (grandeCouverture ? 'B' : 'A');
+  const avecA = appr !== 'B', avecB = appr !== 'A';
+  if (avecA) notes.push(notesA);
+  if (avecB) notes.push(notesB);
+  notes.push(`Choix de l'approche : remblai ${fr(geom.Hr)} m ${grandeCouverture ? '>' : '≤'} 50 % de l'ouverture (${fr(0.5 * geom.B)} m) → ${grandeCouverture ? 'ouvrage sous grande couverture (NF EN 1998-2, 6.7.4) : réponse inertielle négligée, approche B' : 'NF EN 1998-2, 6.7.3 : inertie et poussée sismique, approche A'}${sIn.approche && sIn.approche !== 'auto' ? ` ; choix imposé par l'utilisateur : ${appr === 'enveloppe' ? 'enveloppe A et B' : 'approche ' + appr}` : ''}.`);
   for (const [pNom, P] of [['K₀ max', pMax], ['K₀ min', pMin]])
     for (const sg of [1, -1]) for (const sv of [1, -1]) {
       if (avecA) frames.push({ f: resoudre(C.plus(C.plus(C.plus(gVert, P), casA(sg)), vert(sv))), nom: `A ${sg > 0 ? '+x' : '−x'}, k_v ${sv > 0 ? '+' : '−'}, ${pNom}`, B: null });
@@ -115,7 +130,6 @@ export function calculSismique(ctx, sIn) {
     effets.push({ barre: nb, ou: ns, Mmax, Mmin, V: Vmax, cMax, cMin });
   }
   const parA = effets.filter(e => e.cMax.startsWith('A') || e.cMin.startsWith('A')).length, parB = effets.filter(e => e.cMax.startsWith('B') || e.cMin.startsWith('B')).length;
-  notes.push(`Enveloppe retenue : ${appr === 'enveloppe' ? 'approches A et B (la plus défavorable section par section)' : `approche ${appr} seule (choix de l'utilisateur)`} ; ${parA} section(s) commandée(s) par A, ${parB} par B.`);
-  if (avecA && geom.Hr > geom.H + geom.et + (ouvert ? 0 : geom.er)) notes.push('Remblai plus épais que l\'ouvrage : l\'approche A, qui reporte toute l\'inertie du remblai sur la traverse, est très prudente ; sous forte couverture, le comportement est commandé par la déformation du terrain (approche B), et retenir « B seule » se justifie.');
-  return { action: A, approche: appr, parA, parB, kh, kv, dP, Fi, Ks, Gs, Vs, nu, gam, dff, F: Fl, R, ds, Pb, effets, notes, combinaisons: frames.length };
+  notes.push(`Enveloppe retenue : ${appr === 'enveloppe' ? 'approches A et B (la plus défavorable section par section)' : `approche ${appr} seule (${sIn.approche === appr ? 'choix de l\'utilisateur' : 'règle de NF EN 1998-2, 6.7.3 / 6.7.4'})`} ; ${parA} section(s) commandée(s) par A, ${parB} par B.`);
+  return { action: A, approche: appr, grandeCouverture, vg, vs, parA, parB, kh, kv, dP, Fi, Ks, Gs, Vs, nu, gam, dff, F: Fl, R, ds, Pb, effets, notes, combinaisons: frames.length };
 }

@@ -4,8 +4,8 @@
  *  - PRESSIOMÈTRE (E_M, p*_l) : annexe 2 du guide SETRA « Programme de calcul PICF-EL » — module de réaction de
  *    Terzaghi et Peck k = E_M·λ, λ = 1/(2·α·B₀)·((B + 0,30)/(2B))², B₀ = 0,32 m, puis ESOL = 2·k·B (portage BVTrace) ;
  *    α de structure : sables et graviers 1/3, limons 1/2, argiles normalement consolidées 2/3, surconsolidé 1 ;
- *  - PÉNÉTROMÈTRE STATIQUE (q_c) : module œdométrique M = α_S·q_c (Sanglerat, 1972), valeur centrale des fourchettes
- *    selon la nature du sol et q_c, module pressiométrique équivalent E_M = α·M (Ménard), puis la voie pressiométrique ;
+ *  - PÉNÉTROMÈTRE STATIQUE (q_c) : méthode directe de Schmertmann (NF P94-261, annexe I) — tassement du radier sous une
+ *    pression d'essai, k = Δq/s, ESOL = 2·k·B ; aucune corrélation vers un module ;
  *  - PÉNÉTROMÈTRE DYNAMIQUE (q_d, formule des Hollandais) : q_c ≈ q_d / r, rapport r = q_d/q_c à caler si possible sur un
  *    sondage statique voisin (valeurs par défaut prudentes : sables 1,0 ; limons 1,5 ; argiles 2,0), puis comme ci-dessus.
  *    Le nombre de coups N₂₀ d'un pénétromètre dynamique lourd (DPSH, énergie voisine du SPT) peut être donné en plus :
@@ -19,6 +19,8 @@
  *   pressio : « z E_M p*_l nature » (MPa) ; cpt : « z q_c nature » (MPa) ; dpt : « z q_d nature [N₂₀] » (MPa) ;
  *   spt : « z N nature ». Nature : argile, argileSurconsolidee, limon, sable, grave, roche.
  */
+import { schmertmann } from '../geotech/tassements.js';
+
 export const B0 = 0.32;
 const NATURES = ['argile', 'argileSurconsolidee', 'limon', 'sable', 'grave', 'roche'];
 export const ALPHA_STRUCTURE = { sable: 1 / 3, grave: 1 / 3, limon: 0.5, argile: 2 / 3, argileSurconsolidee: 1, roche: 1 };
@@ -26,14 +28,6 @@ export const RAPPORT_QD_QC = { sable: 1.0, grave: 1.0, limon: 1.5, argile: 2.0, 
 
 const fr = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : '—');
 const num = w => (w === undefined || w === '-' ? NaN : Number(String(w).replace(',', '.')));
-
-/** α_S de Sanglerat (valeur centrale de la fourchette) selon la nature et q_c [MPa]. */
-export function alphaSanglerat(nature, qc) {
-  if (nature === 'argile' || nature === 'argileSurconsolidee') return qc < 0.7 ? 5.5 : qc < 2 ? 3.5 : 1.75;
-  if (nature === 'limon') return qc < 2 ? 4.5 : 1.5;
-  if (nature === 'sable') return qc < 5 ? 2.0 : qc < 10 ? 2.0 - 0.5 * (qc - 5) / 5 : 1.5;
-  return 1.5;                                                         // graves, roches altérées
-}
 
 /** Lecture d'un profil : lignes « z valeur(s) nature ». */
 export function lireProfil(texte, type) {
@@ -71,16 +65,19 @@ export function solDepuisProfil(type, texte, B, opts = {}) {
     esol = 2 * k * B;
     notes.push(`ESOL depuis le pressiomètre (guide PICF-EL, annexe 2) : E_M = ${fr(EM, 1)} MPa (moyenne harmonique de ${zone.length} essai(s) sur ${fr(zMax)} m sous le radier), sol ${nat}, α = ${fr(a, 3)} ; λ = 1/(2·α·0,32)·((B + 0,30)/(2B))² = ${fr(lambda, 3)} m⁻¹ pour B = ${fr(B)} m ; k = ${fr(k, 1)} MPa/m ; ESOL = 2·k·B = ${fr(esol, 1)} MPa.`);
   } else if (type === 'cpt' || type === 'dpt') {
-    const lignes = zone.map(p => {
-      const r = type === 'dpt' ? (opts.rapportQd > 0 ? opts.rapportQd : RAPPORT_QD_QC[p.nature]) : 1, qc = type === 'dpt' ? p.qd / r : p.qc, aS = alphaSanglerat(p.nature, qc);
-      return { qc, aS, M: aS * qc, r };
-    });
-    const M = harmonique(lignes.map(l => l.M)), qcm = harmonique(lignes.map(l => l.qc)), a = ALPHA_STRUCTURE[nat], EM = a * M;
-    const r = (B + 0.30) / (2 * B), lambda = 1 / (2 * a * B0) * r * r, k = EM * lambda;
+    // Méthode directe : tassement de Schmertmann (NF P94-261 annexe I) sous une pression d'essai, d'où k = Δq/s et
+    // ESOL = 2·k·B. Pas de corrélation vers un module : seul le pénétromètre dynamique passe par q_c ≈ q_d/r.
+    const qcPts = pts.map(p => ({ z: p.z, qc: type === 'dpt' ? p.qd / (opts.rapportQd > 0 ? opts.rapportQd : RAPPORT_QD_QC[p.nature]) : p.qc }));
+    const L = opts.L > 0 ? opts.L : 10 * B, dq = 100, t = opts.tAns > 0 ? opts.tAns : 10, gam = 20;
+    const couches = qcPts.map((p, i) => ({ z0: i === 0 ? 0 : (qcPts[i - 1].z + p.z) / 2, z1: i === qcPts.length - 1 ? Math.max(p.z, 4 * B) + 1 : (p.z + qcPts[i + 1].z) / 2, qc: p.qc }));
+    const sch = forme => { const zp = forme === 'filante' ? B : B / 2; return schmertmann({ forme, B, q: dq, sigmaV0: 0, sigmaVp: gam * zp, t, couches }); };
+    const sC = sch('carree').s, sF = sch('filante').s, rap = Math.min(Math.max(L / B, 1), 10), sMm = sC + (sF - sC) * (rap - 1) / 9;
+    const k = dq / 1000 / (sMm / 1000);             // MPa/m
     esol = 2 * k * B;
-    notes.push(`ESOL depuis le pénétromètre ${type === 'dpt' ? 'dynamique' : 'statique'} : ${type === 'dpt' ? `q_c ≈ q_d / r avec r = ${opts.rapportQd > 0 ? fr(opts.rapportQd) + ' (saisi)' : 'rapport par défaut selon la nature (sables 1,0, limons 1,5, argiles 2,0)'} ; ` : ''}module œdométrique M = α_S·q_c (Sanglerat, 1972, valeur centrale des fourchettes), q_c moyen ${fr(qcm)} MPa, M = ${fr(M, 1)} MPa (moyenne harmonique de ${zone.length} mesure(s) sur ${fr(zMax)} m sous le radier, sol dominant ${nat}) ; module pressiométrique équivalent E_M = α·M = ${fr(EM, 1)} MPa (Ménard, E = E_M/α, α = ${fr(a, 3)}) ; puis comme pour le pressiomètre : λ = ${fr(lambda, 3)} m⁻¹, k = ${fr(k, 1)} MPa/m, ESOL = 2·k·B = ${fr(esol, 1)} MPa.`);
+    const qcm = harmonique(couches.filter(c => c.z0 < 2 * B).map(c => c.qc));
+    notes.push(`ESOL depuis le pénétromètre ${type === 'dpt' ? 'dynamique' : 'statique'}, méthode directe de Schmertmann (NF P94-261, annexe I ; E = 2,5 q_c en semelle carrée, 3,5 q_c en filante) : ${type === 'dpt' ? `q_c ≈ q_d / r avec r = ${opts.rapportQd > 0 ? fr(opts.rapportQd) + ' (saisi)' : 'valeur par défaut selon la nature (sables 1,0, limons 1,5, argiles 2,0)'}, ` : ''}q_c moyen ${fr(qcm)} MPa sur 2B ; sous Δq = ${dq} kPa et t = ${t} ans, tassement ${fr(sMm, 1)} mm pour un radier ${fr(B)} × ${fr(L)} m (interpolation carrée/filante sur L/B = ${fr(rap, 1)}) ; k = Δq/s = ${fr(k, 1)} MPa/m ; ESOL = 2·k·B = ${fr(esol, 1)} MPa.`);
     if (type === 'dpt') {
-      notes.push('Pénétromètre dynamique seul : corrélation indirecte (q_d → q_c → M). Elle suffit au calcul des efforts du cadre (le guide admet ±50 % sur ESOL), mais ni à la portance ni au tassement ; un sondage statique ou pressiométrique, même unique, permet de caler le rapport q_d/q_c du site.');
+      notes.push('Pénétromètre dynamique seul : le seul pas indirect est q_c ≈ q_d/r. Il suffit au calcul des efforts du cadre (le guide admet ±50 % sur ESOL), mais ni à la portance ni au tassement ; un sondage statique ou pressiométrique, même unique, permet de caler le rapport q_d/q_c du site.');
       const Ns = zone.filter(p => p.N > 0).map(p => p.N);
       if (Ns.length) { const N = Ns.reduce((s, x) => s + x, 0) / Ns.length; vs = vsImai(N); notes.push(`V_s ≈ 96,9·N^0,314 = ${vs.toFixed(0)} m/s (Imai et Tonouchi, 1982) avec N ≈ N₂₀ moyen = ${fr(N, 1)} coups (pénétromètre dynamique lourd assimilé au SPT : hypothèse).`); }
     }

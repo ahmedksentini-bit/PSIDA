@@ -5,6 +5,7 @@
 import { calculPicf, calculPicfBlocs } from './picf.js';
 import { epaisseurPicf } from './details.js';
 import { solDepuisProfil } from './solProfil.js';
+import { portanceCadre } from './portance.js';
 
 const num = (v, d = null) => { if (v === undefined || v === null || String(v).trim() === '') return d; const x = Number(String(v).replace(',', '.')); return Number.isFinite(x) ? x : d; };
 
@@ -33,24 +34,41 @@ export function parseCadre(d) {
     gabarit: { hauteur: num(d.cf_gabH, 0), largeur: num(d.cf_gabL, 0), epaisseurChaussee: num(d.cf_ech, null) ?? undefined },
     choc: { F: num(d.cf_chocF, null) ?? undefined, beff: num(d.cf_chocBeff, 0) },
     seisme: { actif: d.cf_sis === 'oui', mode: d.cf_sisMode === 'direct' ? 'direct' : 'zone', zone: Math.round(num(d.cf_zone, 3)), categorie: d.cf_cat || 'III', classeSol: d.cf_solEC8 || 'B',
-      ag: num(d.cf_ag, 1.0), S: num(d.cf_S, 1.2), Vs: num(d.cf_Vs, 0), nu: num(d.cf_nuSol, 0.35), approche: d.cf_sisAppr || 'enveloppe' },
+      ag: num(d.cf_ag, 1.0), S: num(d.cf_S, 1.2), Vs: num(d.cf_Vs, 0), nu: num(d.cf_nuSol, 0.35), approche: d.cf_sisAppr || 'auto', Tc: num(d.cf_Tc, 0) },
   };
   // Sol : table indicative, ESOL saisi, ou profil d'essais (pressiomètre, pénétromètres statique ou dynamique, SPT)
   const src = d.cf_solSrc || 'table';
   if (src === 'table') hyp.esol = 0;
   if (['pressio', 'cpt', 'dpt', 'spt'].includes(src)) {
     const Bradier = geom.n * geom.B + (geom.n - 1) * geom.ei + 2 * geom.ep;
-    const r = solDepuisProfil(src, d.cf_profil || '', Bradier, { rapportQd: num(d.cf_rqd, 0) });
+    const r = solDepuisProfil(src, d.cf_profil || '', Bradier, { rapportQd: num(d.cf_rqd, 0), L: geom.L });
     hyp.notesSol = r.notes;
     if (r.esol > 0) { hyp.esol = r.esol; hyp.esolSource = `ESOL ${r.esol.toFixed(1).replace('.', ',')} MPa tiré du profil ${({ pressio: 'pressiométrique', cpt: 'pénétrométrique statique', dpt: 'pénétrométrique dynamique', spt: 'SPT' })[src]}`; }
     if (r.vs > 0 && !(opts.seisme.Vs > 0)) { opts.seisme.Vs = r.vs; opts.seisme.vsSource = 'profil'; }
     if (r.nature) hyp.natureProfil = r.nature;
   }
+  if (['pressio', 'cpt', 'dpt'].includes(src)) opts.portance = { type: src, texte: d.cf_profil || '', rapportQd: num(d.cf_rqd, 0),
+    referentiel: d.cf_refGeo === 'F62' ? 'F62' : d.cf_refGeo === 'EC7' ? 'EC7' : (hyp.code === 'EC2' ? 'EC7' : 'F62'),
+    D: num(d.cf_Dfond, 0), gamma: num(d.cf_gSol, 20), Bs: num(d.cf_Bsem, 0), hs: num(d.cf_hsem, 0) };
   return { geom, hyp, opts, type };
+}
+
+/** Portance (si un profil pressiométrique ou pénétrométrique est fourni) : ajoutée au résultat de chaque bloc. */
+function ajouterPortance(r, opts) {
+  if (!opts.portance) return r;
+  const p = portanceCadre(r, opts.portance);
+  r.portance = p;
+  r.alertes.push(...p.notes);
+  if (p.erreur) r.alertes.push(`Portance non vérifiée : ${p.erreur}.`);
+  else {
+    for (const v of p.synthese) if (!v.ok) r.reserves.push(`PORTANCE NON VÉRIFIÉE — ${v.fondation}, ${v.etat} : taux ${Number.isFinite(v.taux) ? v.taux.toFixed(2).replace('.', ',') : '∞'} (${v.combinaison}${v.detail ? ', ' + v.detail : ''}). REMÈDE : élargir le radier ou la semelle, descendre l'assise, ou substituer le sol de fondation.`);
+    if (!p.ok) { r.ok = false; r.statut = `AVANT-PROJET seulement — ${r.reserves.length} réserve(s) bloquante(s) à lever`; }
+  }
+  return r;
 }
 
 /** Calcul : un PICF de plus de trois cellules est découpé en blocs monolithiques ; un PIPO est calculé d'un seul tenant. */
 export function computeCadre(inp) {
-  if (inp.type === 'picf') { const r = calculPicfBlocs(inp.geom, inp.hyp, inp.opts); if (r.split.refus) throw new Error(r.split.refus); return { ...r, inp }; }
-  return { blocs: [calculPicf(inp.geom, inp.hyp, inp.opts)], split: null, inp };
+  if (inp.type === 'picf') { const r = calculPicfBlocs(inp.geom, inp.hyp, inp.opts); if (r.split.refus) throw new Error(r.split.refus); r.blocs.forEach(b => ajouterPortance(b, inp.opts)); return { ...r, inp }; }
+  return { blocs: [ajouterPortance(calculPicf(inp.geom, inp.hyp, inp.opts), inp.opts)], split: null, inp };
 }

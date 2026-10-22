@@ -134,3 +134,19 @@ test('Assistant de saisie : coupe, plan et synthèse dessinés sans calcul', asy
     assert.ok(S.planCadreSVG(lu).includes('data-k="cf_biais') && S.syntheseCadreHTML(lu).includes('<li>'));
   }
 });
+
+test('Portance (F62 et NF P94-261) et choix sismique de NF EN 1998-2 (6.7.3 / 6.7.4)', async () => {
+  const { portanceCadre, resistanceNette } = await import('../src/cadre/portance.js');
+  const R = resistanceNette({ type: 'pressio', texte: '0 1 1 argile\n10 1 1 argile', B: 3.6, forme: 'rectangulaire', L: 15, referentiel: 'EC7' });
+  proche(R.qnet, 800 * R.k / 0.8, 1e-9); proche(R.k, 0.8, 1e-9);                 // argile, De = 0 : k_p = k₀ = 0,8
+  const r = calculPicf({ n: 1, B: 3, H: 2.5, L: 15, e: 0.3, Hr: 1.5 }, { sol: 'winkler', hEau: 1.5 });
+  for (const ref of ['EC7', 'F62']) {
+    const p = portanceCadre(r, { type: 'cpt', texte: '0.5 1.2 argile\n2 1.8 argile\n5 2.5 argile', referentiel: ref, D: 0.5 });
+    assert.ok(p.synthese.length >= 2 && p.synthese.every(v => Number.isFinite(v.taux)));
+    assert.ok(!p.verifs.some(v => /^Phas/.test(v.combinaison)));
+  }
+  const peu = calculPicf({ n: 1, B: 3, H: 2.5, L: 15, e: 0.3, Hr: 1.0 }, { sol: 'winkler', hEau: 1 }, { seisme: { actif: true, zone: 4 } });
+  const beaucoup = calculPicf({ n: 1, B: 3, H: 2.5, L: 15, e: 0.3, Hr: 3.0 }, { sol: 'winkler', hEau: 1 }, { seisme: { actif: true, zone: 4 } });
+  assert.equal(peu.sisme.approche, 'A'); assert.equal(beaucoup.sisme.approche, 'B');
+  const a = beaucoup.sisme.action; proche(beaucoup.sisme.vg, a.S * a.Tc * a.ag / (2 * Math.PI), 1e-12);   // (6.18)
+});
