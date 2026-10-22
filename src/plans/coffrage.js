@@ -221,6 +221,14 @@ function vueCoupe(G, st, { titre, appui = null, eq = null }) {
   const surTrottoir = y => (G.g.footways || []).some(f => y >= Math.min(f.y1, f.y2) - 1e-9 && y <= Math.max(f.y1, f.y2) + 1e-9);
   const haut = y => [X(y), G.dessus(y) + (surTrottoir(y) ? TROTTOIR : G.tRev)];
   for (let k = 0; k + 1 < cuts.length; k++) v.coteH(haut(cuts[k + 1]), haut(cuts[k]), zc);
+  if (eq && appui == null) {   // chaîne de détail du bord gauche : corniche, dispositif, trottoir, chaussée
+    const B = bordGeom(G, eq, 1), pts = [b + (B.corniche ? eq.cornE : 0), b];
+    if (B.corniche) pts.push(b - eq.cornL);
+    if (B.longrine) pts.push(B.longrine.c - eq.lgB / 2);
+    if (B.fw) pts.push(Math.min(Math.abs(B.fw.y1), Math.abs(B.fw.y2)));
+    const u = [...new Set(pts.map(d => +d.toFixed(4)))].sort((p2, q2) => q2 - p2), zd = G.dessus(b) + (eq ? Math.max(eq.hDR, eq.hGC) : 0) + 0.25;
+    for (let k = 0; k + 1 < u.length; k++) v.coteH([X(u[k]), G.dessus(Math.min(u[k], b))], [X(u[k + 1]), G.dessus(u[k + 1])], zd);
+  }
   v.coteH(haut(b), haut(-b), zc + 0.45);
   v.coteV([X(0), G.dessous(0)], [X(0), G.dessus(0)], X(0) + 0.6, fmtCote(G.dessus(0) - G.dessous(0)));
   if (ch && ch.joue > 0) {

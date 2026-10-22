@@ -14,6 +14,7 @@
  */
 import { Vue, Feuille, fmtCote } from './dessin.js';
 import { composer } from './mise_en_page.js';
+import { couperNote } from './appuis.js';
 import { geometrie, courbeU } from './geometrie.js';
 
 const fr = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : '—');
@@ -21,12 +22,13 @@ const fr = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : 
 /** Valeurs par défaut (champs eq_* du formulaire). */
 export const EQ_DEFAUTS = {
   corn: 'prefa', cornH: 0.60, cornL: 0.25, cornE: 0.20, cornT: 0.15,
-  dr: 'barriere', hDR: 1.00, drY: 0.30, lgB: 0.50, lgH: 0.30, pDR: 0.65,
+  dr: 'barriere', drPos: 'rive', hDR: 1.00, drY: 0.30, lgB: 0.50, lgH: 0.30, pDR: 0.65,
   gc: 'auto', hGC: 1.00, pGC: 0.50,
   hTrot: 0.15, bordB: 0.15, gTrot: 22,
   etanType: 'FPA', etanE: 0.03,
   jointW: null, jointType: '',
   garg: 'gargouilles', gargPas: 20, gargD: 0.10, gargDep: 0.50,
+  canL: 0.50,
 };
 
 const ETAN = { FPA: 'feuille préfabriquée monocouche et asphalte', chape: 'chape mince adhérente', asphalte: 'asphalte coulé (chape épaisse)', MCA: 'moyen de complexe d\'asphalte' };
@@ -51,42 +53,67 @@ export function bordGeom(G, eq, sg) {
   const Y = y => sg * y;   // distance à l'axe (≥ 0) → ordonnée y
   const corn = eq.corn !== 'aucune';
   // corniche : talon sur la dalle, face vue légèrement inclinée, nez chanfreiné, larmier (goutte d'eau) sous le nez
+  // niveau fini commun : la corniche et la contre-corniche (longrine en rive) arasées au même niveau, comme dans les dossiers
+  const longRive = (eq.dr === 'barriere' || eq.dr === 'glissiere') && !(fw && eq.drPos === 'bordure');
+  const hFini = corn && longRive ? Math.max(eq.cornT, eq.lgH) : eq.cornT;
+  out.hFini = hFini;
   if (corn) {
-    const zt = zE + eq.cornT, zb = zt - eq.cornH, E = eq.cornE, ch = Math.min(0.04, E / 3), lm = Math.min(0.025, E / 5);
+    const zt = zE + hFini, zb = zt - eq.cornH, E = eq.cornE, ch = Math.min(0.04, E / 3), lm = Math.min(0.025, E / 5);
     out.corniche = { type: eq.corn, poly: [[b - eq.cornL, zE], [b - eq.cornL, zt], [b + E - ch, zt], [b + E, zt - ch], [b + E - 0.02, zb + ch],
       [b + E - 0.02 - ch, zb], [b + E * 0.45 + lm, zb], [b + E * 0.45 + lm, zb + lm], [b + E * 0.45, zb + lm], [b + E * 0.45, zb], [b, zb], [b, zE]].map(([d, z]) => [Y(d), z]) };
   } else out.corniche = null;
-  const zSur = d => G.dessus(Y(d)) + (corn && d > b - eq.cornL + 1e-9 ? eq.cornT : 0);   // dessus du support (dalle ou talon)
+  const zSur = d => G.dessus(Y(d)) + (corn && d > b - eq.cornL + 1e-9 ? hFini : 0);   // dessus du support (dalle ou talon)
   // trottoir : bordure côté chaussée, remplissage jusqu'à la longrine ou à la corniche
   const dIn = fw ? Math.min(Math.abs(fw.y1), Math.abs(fw.y2)) : null;
   const zRoute = d => G.dessus(Y(d)) + G.tRev;
   const zTrot = fw ? zRoute(dIn) + eq.hTrot : null;
-  out.zRef = fw ? zTrot : zRoute(b - Math.max(eq.drY, 0.5));   // niveau de référence de la hauteur du dispositif
-  // dispositif de retenue
-  const dr = eq.dr;
-  if (dr === 'barriere' || dr === 'glissiere') {
+  // position du dispositif : en rive (trottoir éventuel côté chaussée) ou à la bordure (trottoir derrière le dispositif)
+  const dr = eq.dr, aBordure = !!fw && eq.drPos === 'bordure' && (dr === 'barriere' || dr === 'glissiere');
+  out.zRef = aBordure ? zRoute(dIn) : fw ? zTrot : zRoute(b - Math.max(eq.drY, 0.5));   // niveau de référence de la hauteur du dispositif
+  out.alertes = [];
+  if (aBordure) {
+    // longrine à la place de la bordure, dispositif côté chaussée ; trottoir entre la longrine et la corniche
+    const d0 = dIn, d1 = dIn + eq.lgB, c = (d0 + d1) / 2, zD = G.dessus(Y(d0)), top = Math.max(zD + eq.lgH, zTrot + 0.05);
+    out.longrine = { poly: [[d0, zD], [d1, G.dessus(Y(d1))], [d1, top], [d0, top]].map(([d, z]) => [Y(d), z]), c, base: zD, top, B: eq.lgB, H: top - zD, aBordure: true };
+    out.dispositif = { type: dr, y: Y(c), base: top, haut: out.zRef + eq.hDR };
+  } else if (dr === 'barriere' || dr === 'glissiere') {
     // longrine coulée en place sur la dalle ; si elle recouvre le talon de la corniche, elle l'enrobe (sous-face en
     // gradin : dalle puis dessus du talon), sans vide sous la longrine
     // avec une corniche préfabriquée : contre-corniche coulée en place sur la dalle, contre le talon de la corniche
     // (disposition courante des dossiers d'ouvrages, barrière BN4 boulonnée dans la contre-corniche) ; sinon axe à drY du bord
     const d1 = corn ? b - eq.cornL : b - eq.drY + eq.lgB / 2, d0 = d1 - eq.lgB, c = (d0 + d1) / 2, zD = G.dessus(Y(d0));
-    const dT = corn ? b - eq.cornL : Infinity, zT = corn ? zE + eq.cornT : -Infinity;
-    const top = Math.max(zD + eq.lgH, corn && d1 > dT ? zT + 0.10 : -Infinity), base = zD;
+    const dT = corn ? b - eq.cornL : Infinity, zT = corn ? zE + hFini : -Infinity;
+    const top = corn ? zE + hFini : zD + eq.lgH, base = zD;   // arasée au niveau fini de la corniche
     const bas = corn && d1 > dT + 1e-9 ? (d0 >= dT - 1e-9 ? [[d0, zT], [d1, zT]] : [[d0, zD], [dT, G.dessus(Y(dT))], [dT, zT], [d1, zT]]) : [[d0, zD], [d1, G.dessus(Y(d1))]];
     out.longrine = { poly: [...bas, [d1, top], [d0, top]].map(([d, z]) => [Y(d), z]), c, base, top, B: eq.lgB, H: top - zD };
     out.dispositif = { type: dr, y: Y(c), base: top, haut: out.zRef + eq.hDR };
+    // trottoir côté chaussée devant un dispositif en rive : le dispositif doit assurer aussi la fonction de garde-corps
+    if (fw && dr === 'barriere') out.dispositif.mixte = true;
+    if (fw && dr === 'glissiere') out.alertes.push('Trottoir côté chaussée devant une glissière en rive : la glissière n\'assure pas la fonction de garde-corps ; prévoir une barrière avec fonction garde-corps ou placer le dispositif à la bordure.');
   } else if (dr === 'gba') {
     const c = b - eq.drY, base = zSur(c), Wb = 0.60, Wt = 0.20, H = eq.hDR;
     out.dispositif = { type: 'gba', poly: [[c + Wb / 2, base], [c + Wb / 2, base + 0.08], [c + Wt / 2, base + H], [c - Wt / 2, base + H], [c - Wb / 2 + 0.05, base + 0.25], [c - Wb / 2, base + 0.08], [c - Wb / 2, base]].map(([d, z]) => [Y(d), z]), y: Y(c), base, haut: base + H, aire: (Wb + Wt) / 2 * H };
   }
   // garde-corps : seul, ou en rive en plus du dispositif (trottoir)
-  const gcAvec = dr === 'gc' || eq.gc === 'oui' || (eq.gc === 'auto' && fw && dr !== 'gc' && dr !== 'aucun');
+  // automatique : seulement s'il protège un trottoir accessible (dispositif à la bordure, aucun dispositif, GBA trop basse) ;
+  // jamais derrière une barrière en rive, qui assure elle-même la fonction de garde-corps
+  const gcAvec = dr === 'gc' || eq.gc === 'oui' || (eq.gc === 'auto' && !!fw && (aBordure || dr === 'aucun' || dr === 'gba'));
   if (gcAvec) {
     // sur la corniche (au-delà de la longrine) ou en rive de la dalle
-    const d = corn ? b + eq.cornE / 2 : b - 0.06, base = corn ? zE + eq.cornT : zSur(d);
+    const d = corn ? b + eq.cornE / 2 : b - 0.06, base = corn ? zE + hFini : zSur(d);
     out.gardeCorps = { y: Y(d), base, haut: Math.max(base, out.zRef) + eq.hGC, h: eq.hGC };
   }
-  if (fw) {
+  if (fw && aBordure) {
+    // trottoir derrière le dispositif : remplissage de la longrine à la corniche, largeur libre contrôlée (1,40 m)
+    const zBase = d => G.dessus(Y(d)) + eq.etanE, d0 = dIn + eq.lgB, d1 = corn ? b - eq.cornL : b - 0.10;
+    out.bordure = null;
+    out.remplissage = { poly: [[d0, zBase(d0)], [d0, zTrot], [d1, zTrot], [d1, zBase(d1)]].map(([d, z]) => [Y(d), z]), aire: (d1 - d0) * (zTrot - zBase((d0 + d1) / 2)) };
+    out.fourreaux = [0.30, 0.55].map(t => d0 + (d1 - d0) * t).filter(d => d < d1 - 0.1).map(d => [Y(d), zBase(d) + 0.12]);
+    out.filEau = dIn;
+    const libre = (corn ? b + eq.cornE / 2 - 0.05 : b - 0.10) - d0;
+    out.largeurLibre = libre;
+    if (libre < 1.40 - 1e-9) out.alertes.push(`Trottoir derrière le dispositif : largeur libre ${fr(libre)} m < 1,40 m (cheminement accessible) ; vérifier aussi la largeur de fonctionnement du dispositif.`);
+  } else if (fw) {
     const obst = out.longrine ? out.longrine.c - eq.lgB / 2 : out.dispositif && out.dispositif.type === 'gba' ? b - eq.drY - 0.30 : corn ? b - eq.cornL : b;
     const zBase = d => G.dessus(Y(d)) + eq.etanE;
     out.bordure = { poly: [[dIn, zBase(dIn)], [dIn, zTrot - 0.03], [dIn + 0.03, zTrot], [dIn + eq.bordB, zTrot], [dIn + eq.bordB, zBase(dIn + eq.bordB)]].map(([d, z]) => [Y(d), z]), d: dIn };
@@ -96,6 +123,8 @@ export function bordGeom(G, eq, sg) {
     out.filEau = dIn;
   } else out.filEau = out.longrine ? out.longrine.c - eq.lgB / 2 : out.dispositif ? b - eq.drY - 0.30 : corn ? b - eq.cornL : b;
   out.zFil = zRoute(out.filEau);
+  // caniveau en asphalte coulé le long du fil d'eau (bande de largeur canL, dans l'épaisseur de la couche de roulement)
+  if (eq.canL > 0) out.caniveau = { d0: out.filEau - eq.canL, d1: out.filEau };
   return out;
 }
 
@@ -144,6 +173,7 @@ export function poidsBord(G, eq, sg) {
   if (B.corniche) P.push(['Corniche', 25 * aire(B.corniche.poly)]);
   if (B.longrine) P.push([B.corniche ? 'Contre-corniche' : 'Longrine d\'ancrage', 25 * aire(B.longrine.poly)]);
   if (B.dispositif) P.push([`Dispositif de retenue (${eq.dr === 'gba' ? 'GBA' : eq.dr})`, eq.dr === 'gba' ? 24 * B.dispositif.aire : eq.pDR]);
+  if (B.dispositif && B.dispositif.mixte) P.push(['Panneaux grillagés (fonction garde-corps)', 0.15]);
   if (B.gardeCorps) P.push(['Garde-corps', eq.pGC]);
   if (B.bordure) P.push(['Bordure', 24 * aire(B.bordure.poly)]);
   if (B.remplissage) P.push(['Remplissage du trottoir', eq.gTrot * aire(B.remplissage.poly)]);
@@ -166,7 +196,7 @@ export function dessinerBord(v, G, eq, sg, { detail = false, dMin = 0 } = {}) {
     const p = P(B.corniche.poly); v.poly('EQUIPEMENTS', p, true); v.hachure(p);
     notes.push([p[3], `Corniche ${B.corniche.type === 'prefa' ? 'préfabriquée' : 'coulée en place'} (h ${fr(eq.cornH)})`]);
   }
-  if (B.longrine) { const p = P(B.longrine.poly); v.poly('EQUIPEMENTS', p, true); v.hachure(p); notes.push([p[2], `${B.corniche ? 'Contre-corniche coulée en place' : 'Longrine d\'ancrage'} ${fr(eq.lgB)} × ${fr(eq.lgH)}`]); }
+  if (B.longrine) { const p = P(B.longrine.poly); v.poly('EQUIPEMENTS', p, true); v.hachure(p); notes.push([p[2], `${B.longrine.aBordure ? 'Longrine d\'ancrage (bordure)' : B.corniche ? 'Contre-corniche coulée en place' : 'Longrine d\'ancrage'} ${fr(eq.lgB)} × ${fr(eq.lgH)}`]); }
   const D = B.dispositif;
   if (D) {
     if (D.type === 'gba') { const p = P(D.poly); v.poly('EQUIPEMENTS', p, true); v.hachure(p); notes.push([[X(D.y), D.haut], `GBA (profil indicatif), h ${fr(eq.hDR)}`]); }
@@ -183,13 +213,18 @@ export function dessinerBord(v, G, eq, sg, { detail = false, dMin = 0 } = {}) {
           v.ligne('EQUIPEMENTS', [xf, z], [x + sc * (wt + (D.haut - z) * 0.03), z]);
         }
         for (const dx of [-0.08, 0.08]) v.ligne('EQUIPEMENTS', [x + dx, D.base], [x + dx, D.base - 0.18]);   // tiges d'ancrage
+        if (D.mixte) {   // panneau grillagé en partie arrière (fonction garde-corps, NF P98-405)
+          const xg = x - sc * (wb + 0.02), z1 = D.base + 0.10, z2 = D.haut - 0.04;
+          v.poly('EQUIPEMENTS', [[xg, z1], [xg - sc * 0.02, z1], [xg - sc * 0.02, z2], [xg, z2]], true);
+          for (let z = z1 + 0.08; z < z2; z += 0.08) v.ligne('VUES', [xg, z], [xg - sc * 0.02, z - 0.04]);
+        }
       } else {
         v.poly('EQUIPEMENTS', [[x - 0.05, D.base + 0.025], [x + 0.05, D.base + 0.025], [x + 0.05, D.haut - 0.05], [x - 0.05, D.haut - 0.05]], true);
         const zm = D.base + Math.max(0.35, (D.haut - D.base) * 0.55), xe = x + sc * 0.05, xl = xe + sc * 0.12;
         v.poly('EQUIPEMENTS', [[xe, zm - 0.08], [xl, zm - 0.06], [xl, zm + 0.06], [xe, zm + 0.08]], true);   // écarteur
         v.poly('EQUIPEMENTS', [[xl, zm - 0.155], [xl + sc * 0.05, zm - 0.10], [xl + sc * 0.02, zm], [xl + sc * 0.05, zm + 0.10], [xl, zm + 0.155]]);
       }
-      notes.push([[x, D.haut], `${D.type === 'barriere' ? 'Barrière (type BN4)' : 'Glissière'}, h ${fr(eq.hDR)}`]);
+      notes.push([[x, D.haut], `${D.type === 'barriere' ? (D.mixte ? 'Barrière (type BN4) avec fonction garde-corps (panneaux grillagés, NF P98-405)' : 'Barrière (type BN4)') : 'Glissière'}, h ${fr(eq.hDR)}`]);
     }
   }
   if (B.gardeCorps) {
@@ -207,6 +242,12 @@ export function dessinerBord(v, G, eq, sg, { detail = false, dMin = 0 } = {}) {
     const p = P(B.remplissage.poly); v.poly('VUES', p, true);
     for (const f of B.fourreaux) v.cercle('EQUIPEMENTS', [X(f[0]), f[1]], 0.05);
     notes.push([[(p[0][0] + p[2][0]) / 2, p[1][1]], 'Trottoir : remplissage, fourreaux Ø 100']);
+  }
+  if (B.caniveau && B.caniveau.d0 > dMin) {
+    const { d0, d1 } = B.caniveau, zr = d => G.dessus(sg * d) + G.tRev, ze = d => G.dessus(sg * d) + eq.etanE;
+    const p = P([[sg * d0, ze(d0)], [sg * d1, ze(d1)], [sg * d1, zr(d1) - 0.01], [sg * d0, zr(d0)]]);
+    v.poly('EQUIPEMENTS', p, true); v.pointille(p, 0.8);
+    notes.push([[(p[0][0] + p[1][0]) / 2, p[2][1]], `Caniveau en asphalte coulé, largeur ${fr(eq.canL)}`]);
   }
   // étanchéité et couche de roulement (de l'axe au bord, sous les équipements)
   const dE = B.corniche ? B.b - eq.cornL : B.b, ys = []; for (let d = dMin; d <= dE + 1e-9; d += 0.25) ys.push(Math.min(d, dE));
@@ -241,7 +282,7 @@ function etiquettes(v, notes, { xTxt, z0, pas, ancre }) {
 function rupture(v, x0, x1, z, amp = 0.05) { const xm = (x0 + x1) / 2; v.poly('VUES', [[xm, z - 0.2], [xm, z - amp], [xm + amp, z], [xm - amp, z + amp / 2], [xm, z + amp], [xm, z + 0.2]]); }
 export function vueCorniche(eq) {
   const v = new Vue('CORNICHE PRÉFABRIQUÉE — SECTION ET FERRAILLAGE TYPE'), c = 0.03;
-  const L = eq.cornL, T = eq.cornT, H = eq.cornH, E = eq.cornE, ch = Math.min(0.04, E / 3), lm = Math.min(0.025, E / 5);
+  const L = eq.cornL, T = (eq.dr === 'barriere' || eq.dr === 'glissiere') && eq.drPos !== 'bordure' ? Math.max(eq.cornT, eq.lgH) : eq.cornT, H = eq.cornH, E = eq.cornE, ch = Math.min(0.04, E / 3), lm = Math.min(0.025, E / 5);
   const zt = T, zb = T - H;
   const prof = [[-L, 0], [-L, zt], [E - ch, zt], [E, zt - ch], [E - 0.02, zb + ch], [E - 0.02 - ch, zb], [E * 0.45 + lm, zb], [E * 0.45 + lm, zb + lm], [E * 0.45, zb + lm], [E * 0.45, zb], [0, zb], [0, 0]];
   v.poly('COFFRAGE', prof, true); v.hachure(prof);
@@ -289,8 +330,8 @@ export function vueDetailBord(G, eq, sg) {
   etiquettes(v, notes, { xTxt: X(sg * (b - 1.25)), z0: zTop, pas: 0.13, ancre: sg > 0 ? 'g' : 'd' });
   // cotes : corniche, longrine (position), dispositif, garde-corps
   const zb = G.dessous(sg * b) - 0.35;
-  if (B.corniche) v.coteH([X(sg * (b - eq.cornL)), G.dessus(sg * b) + eq.cornT], [X(sg * (b + eq.cornE)), G.dessus(sg * b) + eq.cornT], G.dessus(sg * b) + eq.cornT + 0.12);
-  if (B.corniche) v.coteV([X(sg * (b + eq.cornE)), G.dessus(sg * b) + eq.cornT - eq.cornH], [X(sg * (b + eq.cornE)), G.dessus(sg * b) + eq.cornT], X(sg * (b + eq.cornE + 0.15)));
+  if (B.corniche) v.coteH([X(sg * (b - eq.cornL)), G.dessus(sg * b) + B.hFini], [X(sg * (b + eq.cornE)), G.dessus(sg * b) + B.hFini], G.dessus(sg * b) + B.hFini + 0.12);
+  if (B.corniche) v.coteV([X(sg * (b + eq.cornE)), G.dessus(sg * b) + B.hFini - eq.cornH], [X(sg * (b + eq.cornE)), G.dessus(sg * b) + B.hFini], X(sg * (b + eq.cornE + 0.15)));
   if (B.longrine) v.coteH([X(sg * (B.longrine.c)), B.longrine.base], [X(sg * b), G.dessus(sg * b)], zb);
   if (B.dispositif) v.coteV([X(B.dispositif.y), B.zRef], [X(B.dispositif.y), B.dispositif.haut], X(B.dispositif.y) + sg * 0.25);
   if (B.fw) { const dI = B.filEau, dO = Math.max(Math.abs(B.fw.y1), Math.abs(B.fw.y2)); v.coteH([X(sg * dI), G.dessus(sg * dI)], [X(sg * dO), G.dessus(sg * dO)], zb - 0.2); }
@@ -359,7 +400,9 @@ export function metreEquipements(st, eq, G = geometrie(st)) {
   if (nb(B => B.dispositif)) lignes.push([`Dispositif de retenue : ${DR[eq.dr]}`, 'ml', nb(B => B.dispositif) * L]);
   if (nb(B => B.longrine)) lignes.push(['Longrines d\'ancrage (béton)', 'm³', nb(B => B.longrine) * L * eq.lgB * eq.lgH]);
   if (nb(B => B.gardeCorps)) lignes.push(['Garde-corps', 'ml', nb(B => B.gardeCorps) * L]);
+  if (nb(B => B.dispositif && B.dispositif.mixte)) lignes.push(['Panneaux grillagés des barrières (fonction garde-corps)', 'ml', nb(B => B.dispositif && B.dispositif.mixte) * L]);
   if (nb(B => B.bordure)) lignes.push(['Bordures de trottoir', 'ml', nb(B => B.bordure) * L]);
+  if (eq.canL > 0) lignes.push([`Caniveaux en asphalte coulé (largeur ${fr(eq.canL)} m)`, 'ml', 2 * L]);
   lignes.push([`Étanchéité (${eq.etanType})`, 'm²', 2 * G.b * L]);
   const rd = G.g.roadway || { y1: -G.b, y2: G.b };
   lignes.push(['Couche de roulement', 'm²', (rd.y2 - rd.y1) * L]);
@@ -395,6 +438,7 @@ export function planEquipements(st, eq = EQ_DEFAUTS, cartouche = {}) {
     '   par le calcul hydraulique (guide Sétra « Assainissement des ponts-routes », 1989).',
     `4. Garde-corps : ${fr(eq.hGC)} m (XP P98-405 : 1,00 m piétons ; 1,20 m avec cycles, Certu 2008).`,
     '5. Écart poids / charges saisies > 10 % : revoir les charges linéaires du calcul.',
+    ...[...new Set([1, -1].flatMap(sg => bordGeom(G, eq, sg).alertes))].flatMap((t, k) => couperNote(`${6 + k}. ATTENTION — ${t}`, 92)),
   ], hn = notes.length * 2.1 * 1.6;
   const Lt = G.uB - G.uA;
   const F = composer({ titre: 'TABLIER — ÉQUIPEMENTS', cartouche,

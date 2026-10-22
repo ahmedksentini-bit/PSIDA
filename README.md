@@ -425,3 +425,8 @@ v0.74 : pile marteau (fût cylindrique unique, chevêtre en console à sous-face
 métré de la forme réelle, aciers inférieurs et cadres suivant la sous-face) ; « vue suivant F » des piles avec flèche sur
 l'élévation ; dalle de transition sur corbeau, pente 5 % ; plan type de la corniche préfabriquée (section et ferraillage
 type) sur la feuille Équipements ; alerte d'about trop court reprise sur la feuille d'ensemble.
+v0.75 : abouts de 0,50 m par défaut ; bord du tablier — dispositif en rive (trottoir côté chaussée : barrière avec fonction
+garde-corps, panneaux grillagés NF P98-405, sans garde-corps séparé) ou à la bordure (trottoir derrière, garde-corps en rive,
+alerte si largeur libre < 1,40 m) ; corniche et contre-corniche arasées au même niveau fini ; caniveau en asphalte coulé au
+fil d'eau ; chaîne de cotes détaillée du bord dans la coupe A-A ; vue en plan des culées avec garde-grève, réservation du
+joint, dalle de transition et bossages.

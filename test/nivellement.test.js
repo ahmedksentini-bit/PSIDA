@@ -38,7 +38,7 @@ test('Sans plan de nivellement : résultats inchangés', () => {
 });
 
 test('Pente du profil en long : composante G·sin α répartie entre les appuis, appareils plus déformés', () => {
-  const plat = { ...formDefaults(), ...cotes, niv_zCh: '105; 105; 105; 105' }, pente = { ...plat, niv_zCh: '105.00; 105.56; 106.28; 106.84' };   // 4 %
+  const plat = { ...formDefaults(), ...cotes, overhangs: '0, 0', niv_zCh: '105; 105; 105; 105' }, pente = { ...plat, niv_zCh: '105.00; 105.56; 106.28; 106.84' };   // 4 %
   const A = compute(parseData(plat)), B = compute(parseData(pente));
   assert.equal(A.supports.pente, null);
   const P = B.supports.pente, L = B.deck.spans, g = B.perm.gTotal;

@@ -244,7 +244,8 @@ export function vueCoupe(A, { longueurPieux = 2.5, vue = false } = {}) {
   // remblai derrière la culée (côté opposé à la travée), jusqu'au niveau du dessus du garde-grève
   if (A.kind === 'culee') {
     const top = A.zT + A.hGG, xd = A.xGGar, xf = -Math.max(xl, A.Lret + 1.5) * 1 + 0, zb = Math.max(A.zTN, A.zDS);
-    const pts = [[X(xd), top], [X(xd - (xl - Math.abs(xd))), top], [X(xd - (xl - Math.abs(xd))), zb], [X(Math.min(xd, xS[0])), zb]];
+    const DT0 = dalleTransition(A), ht = DT0 ? DT0.z0 - DT0.pente * DT0.L - DT0.e - 0.05 : top;
+    const pts = [[X(xd), DT0 ? DT0.z0 - DT0.e - 0.45 : top], [X(DT0 ? xd - DT0.L : xd), ht], [X(xd - (xl - Math.abs(xd))), ht], [X(xd - (xl - Math.abs(xd))), zb], [X(Math.min(xd, xS[0])), zb]];
     v.pointille(pts, 3.2); void xf;
   }
   // axe des appareils
@@ -291,6 +292,20 @@ export function vuePlan(A) {
     const y0 = sg * (w / 2 - A.eRet / 2), xr = A.xGGar;
     const [p, q] = [S * xr, S * (xr - A.Lret)].sort((a, b) => a - b);
     v.poly('VUES', [[y0 - A.eRet / 2, p], [y0 + A.eRet / 2, p], [y0 + A.eRet / 2, q], [y0 - A.eRet / 2, q]], true);
+  }
+  // culées : garde-grève, réservation du joint de chaussée, dalle de transition, bossages (vus de dessus)
+  if (A.kind === 'culee') {
+    const [g0, g1] = [S * A.xGGar, S * A.xGGav].sort((a, b) => a - b);
+    v.poly('COFFRAGE', [[-w / 2, g0], [w / 2, g0], [w / 2, g1], [-w / 2, g1]], true);
+    const xj = S * (A.xGGav + GG.joint), [j0, j1] = [S * A.xGGar, xj].sort((a, b) => a - b);   // dessus du garde-grève et joint
+    const pj = [[-w / 2, j0], [w / 2, j0], [w / 2, j1], [-w / 2, j1]]; v.poly('VUES', pj, true); v.pointille(pj, 1.6);
+    v.texte('TEXTES', [w / 2 - 0.3, S * A.xGGar - S * 0.35], 'Garde-grève et réservation pour joint de chaussée', { h: 2.2, ancre: 'd', v: 'm' });
+    if (A.dalle) {
+      const [d0, d1] = [S * A.xGGar, S * (A.xGGar - A.dalle.L)].sort((a, b) => a - b), yd = w / 2 - A.eRet;
+      v.poly('COFFRAGE', [[-yd, d0], [yd, d0], [yd, d1], [-yd, d1]], true);
+      v.texte('TEXTES', [-yd + 0.3, S > 0 ? d0 + 0.4 : d1 - 0.4], `Dalle de transition ${fr(A.dalle.L)} × ${fr(A.dalle.e)}`, { h: 2.4, ancre: 'g', v: 'm' });
+    }
+    for (const y of A.ap.yb) { const x = X(y), ba = (A.ap.a + 2 * DEB) / 2, bb = (A.ap.b + 2 * DEB) / 2; v.poly('APPAREILS', [[x - bb, -ba], [x + bb, -ba], [x + bb, ba], [x - bb, ba]], true); }
   }
   // pieux (sous la semelle : tirets)
   if (A.pieux) for (let f = 0; f < A.nF; f++) for (let k = 0; k < A.nP; k++) {

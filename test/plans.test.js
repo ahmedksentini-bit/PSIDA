@@ -44,8 +44,8 @@ test('Plan de coffrage : coupes transversales, quantités, DXF et SVG lisibles',
   const F = planCoffrage(st, { projet: 'Essai', numero: 'X-01' });
   assert.ok(['A3', 'A2'].includes(F.format)); assert.equal(F.vues.length, 2);
   const Q = quantitesCoffrage(st);
-  // dalle rectangulaire 12 × 0,70 sans chanfreins, longueur 46 m : 386,4 m³
-  assert.ok(Math.abs(Q.beton - 12 * 0.7 * 46) < 1e-6, `béton ${Q.beton}`);
+  // dalle rectangulaire 12 × 0,70 sans chanfreins, longueur 46 + 2 × 0,50 m (abouts) : 394,8 m³
+  assert.ok(Math.abs(Q.beton - 12 * 0.7 * 47) < 1e-6, `béton ${Q.beton}`);
   const dxf = feuilleDXF(F), D = lireDXF(dxf);
   assert.deepEqual(D.sections, ['HEADER', 'TABLES', 'BLOCKS', 'ENTITIES']);
   assert.deepEqual(D.fin, ['0', 'EOF']);
@@ -133,11 +133,17 @@ test('Équipements : familles de joints selon le souffle (Cerema 2016, § 1.3.2)
 test('Équipements : géométrie, poids, souffle, métré et feuille dédiée', () => {
   const eq = lireEquipements(formDefaults()), G = geometrie(st);
   const B = bordGeom(G, eq, 1);
-  assert.ok(B.corniche && B.longrine && B.dispositif && B.gardeCorps && B.bordure);
+  // trottoir côté chaussée, barrière en rive : la barrière assure la fonction de garde-corps, pas de garde-corps séparé
+  assert.ok(B.corniche && B.longrine && B.dispositif && B.dispositif.mixte && !B.gardeCorps && B.bordure && B.caniveau);
+  // corniche et contre-corniche arasées au même niveau fini
+  assert.ok(Math.abs(Math.max(...B.corniche.poly.map(p => p[1])) - B.longrine.top) < 1e-9);
+  // trottoir derrière la barrière : garde-corps en rive, alerte si la largeur libre est inférieure à 1,40 m
+  const Bb = bordGeom(G, { ...eq, drPos: 'bordure' }, 1);
+  assert.ok(Bb.gardeCorps && Bb.longrine.aBordure && !Bb.dispositif.mixte && Bb.alertes.some(t => /1,40/.test(t)));
   // corniche : aire du profil en L = L·t + e·(H − t)
   const C = controleCharges(st, eq);
   const corn = C[0].P.lignes.find(l => l[0] === 'Corniche')[1];
-  { const nom = 25 * (eq.cornL * eq.cornT + eq.cornE * eq.cornT + eq.cornE * (eq.cornH - eq.cornT)); assert.ok(corn < nom && corn > 0.93 * nom, `corniche ${corn} / ${nom}`); }   // profil réel : chanfreins et larmier;
+  { const T = B.hFini, nom = 25 * (eq.cornL * T + eq.cornE * T + eq.cornE * (eq.cornH - T)); assert.ok(corn < nom && corn > 0.93 * nom, `corniche ${corn} / ${nom}`); }   // profil réel : chanfreins et larmier;
   assert.ok(C[0].saisi > 0 && C[0].ecart != null);
   const J = souffleJoints(st, eq);
   assert.ok(J.every(j => j.W > 0 && Math.abs(j.W - (2 * j.vT + j.vRF)) < 1e-12));
@@ -233,7 +239,7 @@ test('Plan d\'ensemble, tableau de nivellement, cartouche en bande et format imp
     assert.ok(z.Zch > z.Zsf && z.Zsf > z.Zb && z.Zb > z.Zc && z.Zc > z.Zs && z.Zs > z.Zf);
   }
   // le garde-grève ne recouvre jamais le bossage, même avec un about nul
-  const A = geometrieAppui(st, 0); assert.ok(-A.xGGav >= A.ap.a / 2 + 0.05 + 0.10 - 1e-9);
+  const A = geometrieAppui(compute(parseData({ ...formDefaults(), overhangs: '0, 0' })), 0); assert.ok(-A.xGGav >= A.ap.a / 2 + 0.05 + 0.10 - 1e-9);
 });
 
 test('Pile marteau : fût unique, chevêtre en console, quantités et vue suivant F', () => {

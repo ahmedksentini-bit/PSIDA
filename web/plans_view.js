@@ -9,7 +9,8 @@ import { planCoffrageAppui, appuisDisponibles } from '../src/plans/appuis.js';
 import { planEnsemble } from '../src/plans/ensemble.js';
 import { planNivellement } from '../src/plans/nivellement.js';
 import { planFerraillageAppui } from '../src/plans/ferraillageAppuis.js';
-import { planEquipements, lireEquipements, controleCharges, souffleJoints } from '../src/plans/equipements.js';
+import { planEquipements, lireEquipements, controleCharges, souffleJoints, bordGeom } from '../src/plans/equipements.js';
+import { geometrie } from '../src/plans/geometrie.js';
 import { feuilleSVG } from '../src/plans/svg.js';
 import { feuilleDXF, octetsCp1252 } from '../src/plans/dxf.js';
 
@@ -92,7 +93,8 @@ function infoEquipements(st) {
     const f = x => x.toFixed(2).replace('.', ',');
     const cote = c => `côté ${c.sg > 0 ? 'y > 0' : 'y < 0'} : équipements ${f(c.P.total)} kN/m, charges saisies ${f(c.saisi)} kN/m${c.ecart != null ? ` (${c.ecart >= 0 ? '+' : ''}${(c.ecart * 100).toFixed(0)} %)` : ''}`;
     const alerte = C.some(c => c.ecart != null && Math.abs(c.ecart) > 0.10);
-    box.innerHTML = `${alerte ? '<span class="badge warn">ATTENTION</span> ' : '<span class="badge ok">OK</span> '}${C.map(cote).join(' ; ')}. Joints : ${J.map(j => `${j.i === 0 ? 'C0' : 'C' + j.i} ${j.W != null ? (j.W * 1000).toFixed(0) + ' mm' : '—'}, ${j.type}`).join(' ; ')}.`;
+    const G = geometrie(st), al = [...new Set([1, -1].flatMap(sg => bordGeom(G, eq, sg).alertes || []))];
+    box.innerHTML = `${alerte || al.length ? '<span class="badge warn">ATTENTION</span> ' : '<span class="badge ok">OK</span> '}${C.map(cote).join(' ; ')}. Joints : ${J.map(j => `${j.i === 0 ? 'C0' : 'C' + j.i} ${j.W != null ? (j.W * 1000).toFixed(0) + ' mm' : '—'}, ${j.type}`).join(' ; ')}.${al.map(t => ' ' + t).join('')}`;
   } catch (e) { box.textContent = 'Équipements : ' + e.message; }
 }
 
