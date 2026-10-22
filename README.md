@@ -447,3 +447,8 @@ BAEL 91 ou EN 1992-1-1, blocs monolithiques), recoupé sur 2 104 grandeurs de BV
 ferroviaire (EN 1991-2 : LM71, SW/0, SW/2, Φ2/Φ3 réduit pour la couverture, surcharge sur remblai) ; voie franchie route
 ou voie ferrée (gabarit, choc EN 1991-1-7 en situation accidentelle) ; portique ouvert sur appuis encastrés ou articulés
 avec enveloppe des réactions ; note HTML et Word ; avant-propos et chapitre 27 du manuel.
+v0.80 : séisme des cadres et portiques (src/cadre/seisme.js), Eurocode 8, q = 1 — action a_g·S (zones de l'arrêté 2011
+ou saisie directe) ; approche A inertie + poussée dynamique d'ouvrage rigide (NF EN 1998-5, 7.3.2.2 et annexe E.9),
+approche B distorsion imposée par le terrain (Wang 1993, Penzien 2000, FHWA-NHI-10-034 § 13.5 ; G réduit selon
+NF EN 1998-5 tableau 4.1), enveloppe ou approche seule ; combinaisons G + P + E (deux sens, ±k_v, K₀ max/min) ;
+sections renforcées si le séisme gouverne ; manuel § 27.9.

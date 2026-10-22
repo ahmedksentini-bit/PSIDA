@@ -93,3 +93,17 @@ test('Onglet : lecture du formulaire, calcul, blocs et note', () => {
   const p = computeCadre(parseCadre({ cf_type: 'pipo', cf_appui: 'articule', cf_franchie: 'rail', cf_portee: 'route', cf_B: '8', cf_H: '6', cf_Hr: '0.8', cf_gabH: '5.5', cf_chocF: '1500' }));
   assert.ok(p.blocs[0].choc && p.blocs[0].reactions);
 });
+
+test('Séisme : action, rapport de distorsion de Penzien, sections renforcées', async () => {
+  const { actionSismique, rapportDistorsion, reductionG } = await import('../src/cadre/seisme.js');
+  const a = actionSismique({ zone: 3, categorie: 'III', classeSol: 'C' });
+  proche(a.ag, 1.2 * 1.1, 1e-12); proche(a.S, 1.5, 1e-12);
+  proche(rapportDistorsion(3.51, 0.5), 4 * 0.5 * 3.51 / (1 + 3.51), 1e-12);      // exemple WSDOT/FHWA : R = 1,557
+  proche(reductionG(0.15), 0.65, 1e-12);
+  const sans = calculPicf({ n: 1, B: 3, H: 2.5, L: 15, e: 0.3, Hr: 1.5 }, { sol: 'winkler', hEau: 1.5 });
+  const avec = calculPicf({ n: 1, B: 3, H: 2.5, L: 15, e: 0.3, Hr: 1.5 }, { sol: 'winkler', hEau: 1.5 }, { seisme: { actif: true, zone: 5, categorie: 'III', classeSol: 'C' } });
+  assert.ok(avec.sisme.R > 1 && avec.sisme.ds > 0 && avec.sisme.verifs.length === sans.sections.length);
+  assert.ok(avec.sections.some(s => s.sismeGouv) && avec.metre.acier > sans.metre.acier);
+  const B = calculPicf({ n: 1, B: 3, H: 2.5, L: 15, e: 0.3, Hr: 1.5 }, { sol: 'winkler', hEau: 1.5 }, { seisme: { actif: true, zone: 3, approche: 'B' } });
+  assert.equal(B.sisme.parA, 0);
+});

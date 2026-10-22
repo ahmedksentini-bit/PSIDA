@@ -47,12 +47,12 @@ export function valider(g, ouvert = false) {
 
 // ── Jeux de charges ────────────────────────────────────────────────────────────────────────────────
 /** Jeu de charges : v (charge verticale par travée), poussées G/D en pied et en tête, poids d'un voile, sous-pression, bandes. */
-export const jeu = (n, o = {}) => ({ v: o.v || new Array(n).fill(0), gB: o.gB || 0, gH: o.gH || 0, dB: o.dB || 0, dH: o.dH || 0, pv: o.pv || 0, up: o.up || 0, bandes: o.bandes || [], bandesVoile: o.bandesVoile || [] });
+export const jeu = (n, o = {}) => ({ v: o.v || new Array(n).fill(0), gB: o.gB || 0, gH: o.gH || 0, dB: o.dB || 0, dH: o.dH || 0, pv: o.pv || 0, up: o.up || 0, bandes: o.bandes || [], bandesVoile: o.bandesVoile || [], fTop: o.fTop || 0 });
 export const jeuZero = n => jeu(n);
-export const echelle = (s, k) => ({ v: s.v.map(x => x * k), gB: s.gB * k, gH: s.gH * k, dB: s.dB * k, dH: s.dH * k, pv: s.pv * k, up: s.up * k, bandes: s.bandes.map(b => ({ ...b, q: b.q * k })), bandesVoile: (s.bandesVoile || []).map(b => ({ ...b, q: b.q * k })) });
+export const echelle = (s, k) => ({ v: s.v.map(x => x * k), gB: s.gB * k, gH: s.gH * k, dB: s.dB * k, dH: s.dH * k, pv: s.pv * k, up: s.up * k, bandes: s.bandes.map(b => ({ ...b, q: b.q * k })), bandesVoile: (s.bandesVoile || []).map(b => ({ ...b, q: b.q * k })), fTop: (s.fTop || 0) * k });
 export function plus(s, o) {
   if (s.v.length !== o.v.length) throw new Error(`jeux de charges à ${s.v.length} et ${o.v.length} travées`);
-  return { v: s.v.map((x, i) => x + o.v[i]), gB: s.gB + o.gB, gH: s.gH + o.gH, dB: s.dB + o.dB, dH: s.dH + o.dH, pv: s.pv + o.pv, up: s.up + o.up, bandes: [...s.bandes, ...o.bandes], bandesVoile: [...(s.bandesVoile || []), ...(o.bandesVoile || [])] };
+  return { v: s.v.map((x, i) => x + o.v[i]), gB: s.gB + o.gB, gH: s.gH + o.gH, dB: s.dB + o.dB, dH: s.dH + o.dH, pv: s.pv + o.pv, up: s.up + o.up, bandes: [...s.bandes, ...o.bandes], bandesVoile: [...(s.bandesVoile || []), ...(o.bandesVoile || [])], fTop: (s.fTop || 0) + (o.fTop || 0) };
 }
 export const combiner = (n, termes) => termes.reduce((acc, [k, s]) => plus(acc, echelle(s, k)), jeuZero(n));
 export const vertical = (n, q, charges = null) => jeu(n, { v: Array.from({ length: n }, (_, i) => (!charges || charges[i]) ? q : 0) });
@@ -63,6 +63,8 @@ export const bandes = (n, liste) => jeu(n, { bandes: liste });
 /** Bande horizontale sur le voile j (0 = piédroit gauche) : { voile, z0, l, q } — z0 depuis le feuillet moyen du radier
  *  (ou la base d'un portique ouvert), q > 0 dirigé vers +x (vers la droite). Sert au choc de véhicule. */
 export const bandesVoile = (n, liste) => jeu(n, { bandesVoile: liste });
+/** Force horizontale totale F (vers +x) au niveau de la traverse, répartie sur les nœuds de tête au prorata des largeurs tributaires. */
+export const forceTete = (n, F) => jeu(n, { fTop: F });
 
 const centroide = (pB, pH, h) => { const s = pB + pH; return Math.abs(s) < 1e-15 ? h / 2 : h * (pB + 2 * pH) / (3 * s); };
 
@@ -109,8 +111,8 @@ function pressionSol(g, W, Mx) {
  * réactions d'appui sont rendues (H vers +x, V vers le haut, M) pour le dimensionnement des semelles.
  */
 export function resoudreCadre(g, s, sol = null, opts = {}) {
-  const ouvert = opts.ouvert || null;
-  const actif = !ouvert && sol && sol.ks > 0 && sol.E > 0;
+  const ouvert = opts.ouvert || null, rotule = !ouvert && !!opts.rotule;   // rotule : cadre fermé, nœuds du radier articulés (rigidité de distorsion)
+  const actif = !ouvert && !rotule && sol && sol.ks > 0 && sol.E > 0;
   const E = actif ? sol.E : 1;
   const { noeuds, barres, x } = construire(g, actif ? sol.ks : 0, !!ouvert);
   const n = nCell(g);
@@ -152,7 +154,15 @@ export function resoudreCadre(g, s, sol = null, opts = {}) {
     bands.push({ barre: iV(b.voile), w: -b.q, xA: z0, xB: z1 });
     const F = b.q * (z1 - z0); net += F; Mx += F * (z0 + z1) / 2;
   }
-  if (!ouvert && Math.abs(net) > 1e-15) {
+  if (s.fTop) {
+    const L = largeurCalc(g);
+    for (let j = 0; j <= n; j++) {
+      let trib = 0; if (j > 0) trib += portee(g, j - 1) / 2; if (j < n) trib += portee(g, j) / 2;
+      nodales.push({ noeud: nHaut(n, j), Fx: s.fTop * trib / L, Fy: 0, M: 0 });
+    }
+    net += s.fTop; Mx += s.fTop * hc;
+  }
+  if (!ouvert && !rotule && Math.abs(net) > 1e-15) {
     const L = largeurCalc(g);
     for (let j = 0; j <= n; j++) {
       let trib = 0; if (j > 0) trib += portee(g, j - 1) / 2; if (j < n) trib += portee(g, j) / 2;
@@ -160,11 +170,12 @@ export function resoudreCadre(g, s, sol = null, opts = {}) {
     }
   }
   let p0 = 0, pente = 0;
-  if (!actif && !ouvert) {
+  if (!actif && !ouvert && !rotule) {
     [p0, pente] = pressionSol(g, W, Mx);
     for (let i = 0; i < n; i++) charges.push({ barre: iRad(n, i), wA: p0 + pente * x[i], wB: p0 + pente * x[i + 1] });
   }
-  const appuis = ouvert ? Array.from({ length: n + 1 }, (_, j) => ({ noeud: nBas(j), ddl: ouvert === 'articule' ? [0, 1] : [0, 1, 2] })) : null;
+  const appuis = ouvert ? Array.from({ length: n + 1 }, (_, j) => ({ noeud: nBas(j), ddl: ouvert === 'articule' ? [0, 1] : [0, 1, 2] }))
+    : rotule ? Array.from({ length: n + 1 }, (_, j) => ({ noeud: nBas(j), ddl: [0, 1] })) : null;
   const r = resoudrePortique(noeuds, barres, charges, { E, nodales, bandes: bands, appuis });
   if (actif) {
     const ga = r.barres[iRad(n, 0)], dr = r.barres[iRad(n, n - 1)];
@@ -175,9 +186,11 @@ export function resoudreCadre(g, s, sol = null, opts = {}) {
     traverses: Array.from({ length: n }, (_, i) => barre(`Traverse ${i + 1}`, r.barres[iTrav(n, i)])),
     radiers: ouvert ? [] : Array.from({ length: n }, (_, i) => barre(`Radier ${i + 1}`, r.barres[iRad(n, i)])),
     voiles: Array.from({ length: n + 1 }, (_, j) => barre((j === 0 || j === n) ? `Piédroit ${j === 0 ? 'gauche' : 'droit'}` : `Voile ${j}`, r.barres[iV(j)])),
-    pG: p0, pD: p0 + pente * largeurCalc(g), residu: ouvert ? 0 : r.residu,
+    pG: p0, pD: p0 + pente * largeurCalc(g), residu: (ouvert || rotule) ? 0 : r.residu,
+    // déplacement horizontal moyen de la tête relativement au pied (distorsion du cadre)
+    deriveTete: Array.from({ length: n + 1 }, (_, j) => r.u[3 * nHaut(n, j)] - r.u[3 * nBas(j)]).reduce((a, b) => a + b, 0) / (n + 1),
   };
   // Réactions des appuis d'un portique ouvert : force exercée PAR l'appui sur la structure.
-  if (ouvert) out.reactions = Array.from({ length: n + 1 }, (_, j) => { const k = 3 * nBas(j); return { H: r.reactions[k] ?? 0, V: r.reactions[k + 1] ?? 0, M: r.reactions[k + 2] ?? 0 }; });
+  if (ouvert || rotule) out.reactions = Array.from({ length: n + 1 }, (_, j) => { const k = 3 * nBas(j); return { H: r.reactions[k] ?? 0, V: r.reactions[k + 1] ?? 0, M: r.reactions[k + 2] ?? 0 }; });
   return out;
 }

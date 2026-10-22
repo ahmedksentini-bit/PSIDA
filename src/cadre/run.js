@@ -31,6 +31,8 @@ export function parseCadre(d) {
     rail: { alpha: num(d.cf_alpha, 1.0), entretien: d.cf_entretien === 'soigne' ? 'soigne' : 'normal', longueurTraverse: num(d.cf_ltrav, 2.6), ballast: num(d.cf_ballast, 0.30), sw0: d.cf_sw0 !== 'non', sw2: d.cf_sw2 === 'oui', LPhi: num(d.cf_LPhi, 0) },
     gabarit: { hauteur: num(d.cf_gabH, 0), largeur: num(d.cf_gabL, 0), epaisseurChaussee: num(d.cf_ech, null) ?? undefined },
     choc: { F: num(d.cf_chocF, null) ?? undefined, beff: num(d.cf_chocBeff, 0) },
+    seisme: { actif: d.cf_sis === 'oui', mode: d.cf_sisMode === 'direct' ? 'direct' : 'zone', zone: Math.round(num(d.cf_zone, 3)), categorie: d.cf_cat || 'III', classeSol: d.cf_solEC8 || 'B',
+      ag: num(d.cf_ag, 1.0), S: num(d.cf_S, 1.2), Vs: num(d.cf_Vs, 0), nu: num(d.cf_nuSol, 0.35), approche: d.cf_sisAppr || 'enveloppe' },
   };
   return { geom, hyp, opts, type };
 }

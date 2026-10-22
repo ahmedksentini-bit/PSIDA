@@ -126,6 +126,18 @@ export function cadreBlocks(out) {
       table(['Barre', 'Section', 'z choc [m]', 'M [t·m/ml]', 'A_s requis', 'A_s fourni [cm²/ml]', 'τ / τ_lim [MPa]', 'Verdict'],
         r.choc.verifs.map(v => [v.barre, v.ou, F(v.z), F(v.M), v.surarme ? 'surarmé' : F(v.asReq), F(v.asFournie), `${F3(v.tau)} / ${F3(v.tauLim)}`, v.okFlexion && v.okTranchant ? 'OK' : 'NON']), { small: true });
     }
+    if (r.sisme) {
+      const z = r.sisme;
+      h3('Séisme (Eurocode 8, q = 1)');
+      table(['Grandeur', 'Valeur'], [
+        ['a_g·S [m/s²] ; k_h ; k_v', `${F(z.action.agS)} ; ${F3(z.kh)} ; ±${F3(z.kv)}`],
+        ['A — inertie traverse + remblai en tête [t/ml] ; incrément de poussée ΔP_d/H [t/m²]', `${F(z.Fi)} ; ${F3(z.dP)}`],
+        ['B — G [MPa] ; Δ_ff [mm] ; K_s [t/m] ; F ; R ; Δ_s [mm] ; force en tête [t/ml]', `${F1(z.Gs / 101.9716)} ; ${F(z.dff * 1000)} ; ${F0(z.Ks)} ; ${F3(z.F)} ; ${F3(z.R)} ; ${F(z.ds * 1000)} ; ${F(z.Pb)}`],
+      ]);
+      table(['Barre', 'Section', 'M sis. max', 'M sis. min', 'V sis. [t/ml]', 'Combinaison (max)', 'A_s requis M+ / M−', 'Renforcée', 'τ / τ_lim [MPa]'],
+        z.verifs.map(v => [v.barre, v.ou, F(v.Mmax), F(v.Mmin), F(v.V), z.effets.find(e => e.barre === v.barre && e.ou === v.ou).cMax, `${v.surarme ? 'surarmé' : F(v.asM)} / ${F(v.asm)}`, v.renforce ? 'oui' : '—', `${F3(v.tau)} / ${F3(v.lim)}`]), { small: true });
+      comment('Combinaison sismique G + P + E (poussée K₀ max ou min, séisme dans les deux sens, ±k_v). A : inertie et poussée dynamique (NF EN 1998-2, 6.7 ; NF EN 1998-5, 7.3.2.2 et annexe E.9). B : distorsion imposée par le terrain (Wang 1993, Penzien 2000, FHWA-NHI-10-034 § 13.5). Une section dont l\'armature ELS/ELU ne suffit pas au séisme est renforcée (colonne « Renforcée ») et le tableau des armatures en tient compte.');
+    }
     if (r.flottaison) para(r.flottaison.message);
     para(`Avant-métré : ${r.metre.note}`);
     if (r.reserves.length) { h3('Réserves bloquantes'); for (const x of r.reserves) para('RÉSERVE — ' + x); }
@@ -144,6 +156,7 @@ export function cadreNote(out, { version = '' } = {}) {
     blocks: [{ t: 'h1', text: '1. Calcul de structure' }, ...cadreBlocks(out),
       { t: 'h1', text: '2. Références' },
       { t: 'ref', text: 'SETRA, Programme de calcul PICF-EL — guide d\'emploi (déc. 1991, 2ᵉ éd. juillet 1992) : combinaisons, effet Marston (annexe 4), module ESOL (annexe 2), biais (annexe 5).' },
-      { t: 'ref', text: 'Fascicule 61 titre II (charges routières) ; BAEL 91 révisé 99 ; NF EN 1992-1-1 ; NF EN 1991-2 section 6 (charges ferroviaires) ; NF EN 1990 annexe A2 ; NF EN 1991-1-7 (chocs).' }],
+      { t: 'ref', text: 'Fascicule 61 titre II (charges routières) ; BAEL 91 révisé 99 ; NF EN 1992-1-1 ; NF EN 1991-2 section 6 (charges ferroviaires) ; NF EN 1990 annexe A2 ; NF EN 1991-1-7 (chocs).' },
+      { t: 'ref', text: 'Séisme : NF EN 1998-1 et annexe nationale, arrêté du 26 octobre 2011 ; NF EN 1998-2, 6.7 ; NF EN 1998-5, 7.3.2.2, tableau 4.1 et annexe E ; J. Wang, Seismic Design of Tunnels (Parsons Brinckerhoff, 1993) ; J. Penzien, Seismically induced racking of tunnel linings (2000) ; FHWA-NHI-10-034, Technical Manual for Design and Construction of Road Tunnels, chapitre 13.' }],
   };
 }

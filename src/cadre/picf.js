@@ -23,6 +23,7 @@ import * as S from './sections.js';
 import * as Hy from './hydro.js';
 import * as D from './details.js';
 import * as Rail from './rail.js';
+import * as Sis from './seisme.js';
 
 const fr = (x, d = 2) => (isFinite(x) ? x.toFixed(d).replace('.', ',') : String(x));
 
@@ -377,9 +378,37 @@ export function calculPicf(geomIn, hypIn = {}, opts = {}) {
   const effets = effetsCalcul(n, cas, h, !!ouvert);
   const alertes = [...notes];
   const sections = sectionsCalcul(geom, effets, h, alertes);
+
+  // ── Séisme (EN 1998) : enveloppe des approches inertie/poussée et distorsion, sections renforcées si besoin ─────
+  let sisme = null;
+  if (opts.seisme && opts.seisme.actif) {
+    sisme = Sis.calculSismique({ g, geom, h, n, resoudre, ouvert, qTrav, qRem, pMax, pMin, accesseurs, stations: STATIONS, interpoler }, opts.seisme);
+    alertes.push(...sisme.notes);
+    const gb = h.code === 'EC2' ? 1.5 : 1.15, gs = h.code === 'EC2' ? 1.15 : 1.0;
+    sisme.verifs = [];
+    for (const e of sisme.effets) {
+      const sec = sections.find(x => x.barre === e.barre && x.ou === e.ou); if (!sec) continue;
+      const elu = M => h.code === 'EC2' ? S.eluEc2(M, sec.d, h.fc28, h.fe, gb, gs) : S.eluBael(M, sec.d, h.fc28, h.fe, gb, gs);
+      const uM = elu(Math.max(e.Mmax, 0)), um = elu(Math.max(-e.Mmin, 0)), tau = e.V / 100 / sec.d, lim = 0.07 * h.fc28 / gb;
+      const v = { barre: e.barre, ou: e.ou, Mmax: e.Mmax, Mmin: e.Mmin, V: e.V, asM: uM.as, asm: um.as, surarme: uM.surarme || um.surarme, tau, lim, okT: tau <= lim, renforce: false };
+      for (const [u, k, kb] of [[uM, 'asMax', 'barresMax'], [um, 'asMin', 'barresMin']]) {
+        if (!u.surarme && isFinite(u.as) && u.as > sec[k].as + 1e-9) {
+          sec[k] = { as: u.as, alpha: u.alpha, minG: false, detail: `As = ${fr(u.as)} cm²/ml — le séisme gouverne (${u.detail})` };
+          sec[kb] = S.choixBarres(u.as); v.renforce = true; sec.sismeGouv = true;
+        }
+      }
+      if (v.surarme) sec.surarme = true;
+      if (!v.okT) { sec.tranchantOk = false; sec.tranchantMsg = `séisme : τ = ${fr(tau, 3)} MPa > ${fr(lim, 3)} MPa`; }
+      sec.asGouv = Math.max(sec.asMax.as, sec.asMin.as);
+      sec.echec = !sec.tranchantOk || sec.surarme || sec.fissureTrop || !sec.barresMax.ok || !sec.barresMin.ok;
+      sisme.verifs.push(v);
+    }
+    const nR = sisme.verifs.filter(v => v.renforce).length;
+    alertes.push(`Séisme : ${sisme.combinaisons} combinaisons (G + P + E, deux sens, ±k_v, K₀ max ou min, approches A et B en enveloppe) ; matériaux ${h.code === 'EC2' ? 'γc = 1,5 et γs = 1,15 (NF EN 1998-1, 5.2.4)' : 'γb = 1,15 et γs = 1,0 (situation accidentelle BAEL)'} ; ${nR ? `${nR} section(s) renforcée(s) par le séisme` : 'aucune section renforcée par le séisme'}. Les pressions hydrodynamiques de l'eau contenue ne sont pas prises en compte ; les charges d'exploitation n'entrent pas dans la combinaison sismique (ψ₂ = 0 pour le trafic routier, NF EN 1998-2, 4.1.2${portee === 'rail' ? ' ; pour une voie ferrée, le terme ψ₂·Q de NF EN 1998-2, 4.1.2 n’est pas encore ajouté' : ''}).`);
+  }
   const res = {
     geom, h, cadre: g, combos, frames, cas, effets, sections, deltaB: dB, deltaMc: dMc, poids, marstonK: mars.K, marstonNote: mars.message,
-    derivations, balayages, alertes, reserves: [], psrem: qs, ouvert, franchie, portee, rail: rail ? { phi: rail.phi, phiBrut: rail.phiBrut, LPhi: rail.LPhi, bt: rail.bt, sL: rail.sL } : null,
+    derivations, balayages, alertes, reserves: [], psrem: qs, ouvert, franchie, portee, sisme, rail: rail ? { phi: rail.phi, phiBrut: rail.phiBrut, LPhi: rail.LPhi, bt: rail.bt, sL: rail.sL } : null,
     metre: D.avantMetre(g, geom.H, geom.L, sections), propositions: proposerEpaisseurs(h, sections),
   };
 
