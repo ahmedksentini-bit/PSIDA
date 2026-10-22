@@ -432,3 +432,7 @@ fil d'eau ; chaîne de cotes détaillée du bord dans la coupe A-A ; vue en plan
 joint, dalle de transition et bossages.
 v0.76 : dispositif anti-cheminement (vue en plan, taquets) sur la feuille d'appui quand σ_min < 2 MPa, note σ_min sur
 chaque feuille d'appui ; désignations des bandes (trottoir, chaussée) dans la coupe transversale ; manuel § 26.5 et § 26.7.
+v0.77 : feuille « Dispositifs de retenue : plans types » (src/plans/retenue.js) — raccordement barrière de l'ouvrage /
+glissière (zone de transition raidie), extrémité amont enfouie dans le talus, extrémité abaissée et ancrée, queue de carpe
+réservée à la fin de file aval d'une chaussée unidirectionnelle, implantation en remblai ; plans de principe, la notice du
+dispositif certifié fait foi.

@@ -8,6 +8,7 @@ import { planFerraillage } from '../src/plans/ferraillage.js';
 import { planCoffrageAppui, appuisDisponibles } from '../src/plans/appuis.js';
 import { planEnsemble } from '../src/plans/ensemble.js';
 import { planNivellement } from '../src/plans/nivellement.js';
+import { planRetenueTypes } from '../src/plans/retenue.js';
 import { planFerraillageAppui } from '../src/plans/ferraillageAppuis.js';
 import { planEquipements, lireEquipements, controleCharges, souffleJoints, bordGeom } from '../src/plans/equipements.js';
 import { geometrie } from '../src/plans/geometrie.js';
@@ -37,6 +38,7 @@ const PLANS = {
   ensemble: { titre: 'Vue en plan et coupe longitudinale', fichier: 'ensemble', num: () => val('plan_num_ens') || 'OA-ENS-01', faire: (st, c) => planEnsemble(st, c, equipements()) },
   coffrage: { titre: 'Coffrage : coupes transversales et détails', fichier: 'coffrage', num: () => val('plan_num_cof') || 'TAB-COF-01', faire: (st, c) => planCoffrage(st, c, equipements()) },
   nivellement: { titre: 'Tableau de dimensionnement et nivellement des appuis', fichier: 'nivellement', num: () => val('plan_num_niv') || 'APP-NIV-01', faire: (st, c) => planNivellement(st, c) },
+  retenue: { titre: 'Dispositifs de retenue : plans types', fichier: 'retenue', num: () => val('plan_num_ret') || 'TAB-EQU-02', faire: (st, c) => planRetenueTypes(st, equipements(), c) },
   equipements: { titre: 'Équipements', fichier: 'equipements', num: () => val('plan_num_eq') || 'TAB-EQU-01', faire: (st, c) => planEquipements(st, equipements(), c) },
   ferraillage: { titre: 'Plan de ferraillage', fichier: 'ferraillage', num: () => val('plan_num_fer') || 'TAB-FER-01', faire: (st, c) => planFerraillage(st, c) },
 };
@@ -58,7 +60,7 @@ const nomFichier = (st, k, ext) => { const P = plan(st, k); return `${P.num().re
 /** Plans disponibles pour l'état de calcul : le ferraillage seulement pour une dalle armée calculée. */
 export function plansDisponibles(st) {
   if (!st || !st.deck) return [];
-  return [...(appuisDisponibles(st).length ? ['ensemble'] : []), ...(st.rebar && st.rebar.marks ? ['coffrage', 'ferraillage'] : ['coffrage']), 'equipements', ...(appuisDisponibles(st).length ? ['nivellement'] : []), ...appuisDisponibles(st).flatMap(i => [`appui-${i}`, `appuiF-${i}`])];
+  return [...(appuisDisponibles(st).length ? ['ensemble'] : []), ...(st.rebar && st.rebar.marks ? ['coffrage', 'ferraillage'] : ['coffrage']), 'equipements', 'retenue', ...(appuisDisponibles(st).length ? ['nivellement'] : []), ...appuisDisponibles(st).flatMap(i => [`appui-${i}`, `appuiF-${i}`])];
 }
 
 export function renderPlans(st) {

@@ -260,3 +260,10 @@ test('Anti-cheminement : détail et note quand σ_min < 2 MPa', () => {
   assert.ok(svg.includes('DISPOSITIF ANTI-CHEMINEMENT') && /dispositif nécessaire/.test(svg) && F.valide().ok);
   assert.ok(/dispositif non nécessaire/.test(feuilleSVG(planCoffrageAppui(compute(parseData(formDefaults())), 1, {}))));
 });
+
+import { planRetenueTypes } from '../src/plans/retenue.js';
+test('Dispositifs de retenue : plans types (raccordement, extrémités, queue de carpe aval seulement)', () => {
+  const F = planRetenueTypes(st, lireEquipements(formDefaults()), {}), svg = feuilleSVG(F);
+  assert.equal(F.vues.length, 5); assert.ok(F.valide().ok, F.valide().problemes.join(' | '));
+  for (const t of ['RACCORDEMENT', 'ENFOUIE', 'ABAISSÉE', 'AVAL UNIQUEMENT', 'Interdite en extrémité amont']) assert.ok(svg.includes(t), t);
+});
