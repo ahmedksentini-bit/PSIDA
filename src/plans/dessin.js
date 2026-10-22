@@ -31,7 +31,8 @@ export const CALQUES = {
   REPERES: { couleur: 6, ep: 0.25, type: 'CONTINUOUS' },
   CARTOUCHE: { couleur: 7, ep: 0.35, type: 'CONTINUOUS' },
   TABLEAUX: { couleur: 7, ep: 0.18, type: 'CONTINUOUS' },
-  CADRES: { couleur: 8, ep: 0.25, type: 'DASHED' },        // cadre tireté autour de chaque vue
+  CADRES: { couleur: 8, ep: 0.25, type: 'DASHED' },
+  TERRAIN: { couleur: 8, ep: 0.35, type: 'CONTINUOUS' },        // cadre tireté autour de chaque vue
 };
 
 export const FORMATS = { A0: [1189, 841], A1: [841, 594], A2: [594, 420], A3: [420, 297] };
@@ -59,6 +60,21 @@ export class Vue {
   arc(calque, c, r, a0, a1) { return this._add(calque, { t: 'arc', c, r, a0, a1 }); }
   texte(calque, p, s, { h = 2.5, ancre = 'g', v = 'b', angle = 0, gras = false } = {}) { return this._add(calque, { t: 'texte', p, s: String(s), h, ancre, v, angle, gras }); }
   hachure(pts) { return this._add('HACHURES', { t: 'hachure', pts }); }
+  /** Terrain naturel : ligne et petits traits obliques côté sol (cote = −1 : sous la ligne), espacés en mm papier. */
+  terrain(pts, cote = -1) { return this._add('TERRAIN', { t: 'terrain', pts, cote }); }
+  /** Pointillé (béton de propreté, remblai, gros béton) : points répartis dans le polygone, densité en mm papier. */
+  pointille(pts, pas = 2.2) { return this._add('HACHURES', { t: 'pointille', pts, pas }); }
+  /** Fût ou pieu cylindrique vu en élévation : génératrices resserrées vers les bords (ombrage du cylindre). */
+  cylindre(x0, x1, z0, z1, n = 9) {
+    const xc = (x0 + x1) / 2, R = (x1 - x0) / 2;
+    for (let k = 1; k < n; k++) { const x = xc - R * Math.cos(Math.PI * k / n); this.ligne('HACHURES', [x, z0], [x, z1]); }
+    return this;
+  }
+  /** Béton de propreté (ép. e) sous une semelle [x0, x1] dont la sous-face est à z. */
+  proprete(x0, x1, z, e = 0.10) {
+    const p = [[x0 - 0.10, z - e], [x1 + 0.10, z - e], [x1 + 0.10, z], [x0 - 0.10, z]];
+    this.poly('COFFRAGE', p, true); return this.pointille(p, 1.4);
+  }
   cote(a, b, d, texte = null) { return this._add('COTES', { t: 'cote', a, b, d, texte }); }
   /** Cote horizontale entre les points a et b (attaches sur l'objet), ligne de cote à l'ordonnée z (m). */
   coteH(a, b, z, texte = null) { return this._add('COTES', { t: 'coteH', a, b, z, texte }); }
@@ -71,7 +87,7 @@ export class Vue {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     const ajoute = p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); };
     for (const e of this.ents) {
-      if (e.t === 'ligne') { ajoute(e.a); ajoute(e.b); } else if (e.t === 'poly' || e.t === 'hachure') e.pts.forEach(ajoute);
+      if (e.t === 'ligne') { ajoute(e.a); ajoute(e.b); } else if (e.t === 'poly' || e.t === 'hachure' || e.t === 'terrain' || e.t === 'pointille') e.pts.forEach(ajoute);
       else if (e.t === 'cercle' || e.t === 'arc') { ajoute([e.c[0] - e.r, e.c[1] - e.r]); ajoute([e.c[0] + e.r, e.c[1] + e.r]); }
       else if (e.t === 'cote') { ajoute(e.a); ajoute(e.b); const n = normaleG(e.a, e.b); ajoute([e.a[0] + n[0] * e.d, e.a[1] + n[1] * e.d]); ajoute([e.b[0] + n[0] * e.d, e.b[1] + n[1] * e.d]); }
       else if (e.t === 'coteH') { ajoute(e.a); ajoute(e.b); ajoute([e.a[0], e.z]); ajoute([e.b[0], e.z]); }

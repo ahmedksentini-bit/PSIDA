@@ -58,8 +58,9 @@ export function vueCoupeLongitudinale(st, G = geometrie(st), e = 250) {
     if (!A.end) { tn.push([u - A.B / 2 - 1, A.zTN], [u + A.B / 2 + 1, A.zTN]); return; }
     const s = A.sgn;   // +1 : C0 (travée à droite), −1 : dernière culée (travée à gauche)
     const xAr = u + s * A.xGGar, uLoin = xAr - s * Lg, zc = zR(s > 0 ? uA : uB);
-    // remblai d'accès derrière la culée, au niveau de la chaussée
+    // remblai d'accès derrière la culée, au niveau de la chaussée (pointillé jusqu'au terrain naturel)
     v.poly('VUES', [[uLoin, zc], [xAr, zc]]);
+    v.pointille([[xAr, zc - 0.05], [uLoin, zc - 0.05], [uLoin, Math.max(A.zTN, A.zDS)], [xAr, Math.max(A.zTN, A.zDS)]], 3.5);
     if (A.dalle) {
       const zt = zc - 0.6, p = [[xAr, zt], [xAr - s * A.dalle.L, zt], [xAr - s * A.dalle.L, zt - A.dalle.e], [xAr, zt - A.dalle.e]];
       v.poly('COFFRAGE', p, true);
@@ -72,14 +73,15 @@ export function vueCoupeLongitudinale(st, G = geometrie(st), e = 250) {
       // pile-culée : talus 3/2 du bord avant du chevêtre (ou du pied du voile frontal) jusqu'au terrain naturel
       const zDepart = A.type === 'apparente' && A.C.hv > 0 ? A.zT - A.hc - A.C.hv : A.zT - A.hc;
       const xAv = u + s * (A.xChev ? A.xChev[1] : 0.5), xPied = xAv + s * PENTE_TALUS * Math.max(0, zDepart - A.zTN);
-      v.poly('VUES', [[xAv, zDepart], [xPied, A.zTN]]);
+      v.terrain(s > 0 ? [[xAv, zDepart], [xPied, A.zTN]] : [[xPied, A.zTN], [xAv, zDepart]]);
+      v.pointille([[xAv, zDepart - 0.05], [xPied - s * 0.1, A.zTN + 0.02], [xAv, A.zTN + 0.02]], 3.5);
       v.texte('TEXTES', [(xAv + xPied) / 2 + s * 0.4, (zDepart + A.zTN) / 2 + 0.25], '3/2', { h: 2.2, ancre: 'c' });
       tn.push([uLoin, A.zTN], [xPied, A.zTN]);
     }
     v.texte('TEXTES', [uLoin, zc + 1.5 * k], 'remblai d\'accès', { h: 2.2, ancre: s > 0 ? 'g' : 'd' });
   });
   tn.sort((p, q) => p[0] - q[0]);
-  v.poly('VUES', tn);
+  v.terrain(tn);
   v.texte('TEXTES', [tn[0][0], tn[0][1] - 1.2 * k], 'TN', { h: 2.6, ancre: 'g', v: 'h', gras: true });
   // annotations des fondations
   As.forEach((A, i) => {

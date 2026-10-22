@@ -416,3 +416,8 @@ naturel, talus, dalles de transition, bulles d'axes, caractéristiques géométr
 nivellement des appuis ; tableau de calage et détail bossage / plot de vérinage sur les feuilles d'appui ; coffrage du
 tablier réduit aux coupes transversales et au détail du bord. Corrections : garde-grève toujours derrière le bossage
 (alerte si l'about est trop court), contre-corniche coulée en place contre la corniche préfabriquée.
+v0.73 : habillage des plans — terrain naturel hachuré, béton de propreté et remblais en pointillé, fûts et pieux
+cylindriques ombrés, désignations dans les vues (semelle, chevêtre, sommier, garde-grève), profils réalistes des
+équipements (barrière type BN4 avec platine et lisses, glissière à double onde, garde-corps type S8, corniche avec nez et
+larmier, bordure chanfreinée), coupe transversale annotée (lignes de rappel, couche de roulement, flèches de dévers),
+talus 3/2 en terrain.

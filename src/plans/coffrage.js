@@ -193,7 +193,21 @@ function vueCoupe(G, st, { titre, appui = null, eq = null }) {
   const rd = G.g.roadway || { y1: -b, y2: b };
   const Yr = []; for (let y = rd.y1; y <= rd.y2 + 1e-9; y += 0.5) Yr.push(y); if (Yr[Yr.length - 1] < rd.y2) Yr.push(rd.y2);
   v.poly('VUES', Yr.map(y => [X(y), G.dessus(y) + G.tRev]));
-  if (eq) for (const sg of [1, -1]) dessinerBord(v, G, eq, sg);
+  if (eq) for (const sg of [1, -1]) {
+    const { notes } = dessinerBord(v, G, eq, sg);
+    if (sg > 0 && appui == null) {
+      // désignations du bord gauche, à gauche de la coupe, reliées par des lignes de rappel (comme les dossiers d'ouvrages)
+      const xt = X(b) - eq.cornE - 0.9, zs = notes.map(n => n[0][1]).sort((p, q) => q - p);
+      const z0 = Math.max(...zs) + 0.15, pas = 0.32;
+      notes.slice().sort((a2, b2) => b2[0][1] - a2[0][1]).forEach(([p, t], k) => {
+        const z = z0 - k * pas; v.ligne('REPERES', p, [xt + 0.05, z]); v.cercle('REPERES', p, 0.02, true);
+        v.texte('TEXTES', [xt, z], t.replace(/ \(schéma\)/, ''), { h: 2.4, ancre: 'd', v: 'm' });
+      });
+      const yr = -b * 0.25, pz = [X(yr), G.dessus(yr) + G.tRev];
+      v.ligne('REPERES', pz, [X(yr) - 0.6, pz[1] + 0.9]);
+      v.texte('TEXTES', [X(yr) - 0.65, pz[1] + 0.9], `Couche de roulement en béton bitumineux ép. ${fmtCote(G.tRev - eq.etanE).replace(/^0,/, '0,')} m ; étanchéité ép. ${fmtCote(eq.etanE)} m`, { h: 2.4, ancre: 'd', v: 'm' });
+    }
+  }
   else for (const fw of G.g.footways || []) {
     const z1 = G.dessus(fw.y1), z2 = G.dessus(fw.y2);
     v.poly('COFFRAGE', [[X(fw.y1), z1], [X(fw.y1), z1 + TROTTOIR], [X(fw.y2), z2 + TROTTOIR], [X(fw.y2), z2]]);
@@ -217,7 +231,13 @@ function vueCoupe(G, st, { titre, appui = null, eq = null }) {
   const dv = G.g.devers;
   if (dv && dv.p > 0) {
     const ys = dv.profil === 'unique' ? [b * 0.45] : [b * 0.45, -b * 0.45];
-    for (const y of ys) v.texte('TEXTES', [X(y), G.dessus(y) + G.tRev + 0.12], `${dv.p.toFixed(1).replace('.', ',')} %`, { h: 2.5, ancre: 'c' });
+    for (const y of ys) {
+      const z = G.dessus(y) + G.tRev + 0.12, sgn = G.dessus(y + 0.5) < G.dessus(y - 0.5) ? 1 : -1;   // la pente descend vers y + sgn
+      v.texte('TEXTES', [X(y), z], `${dv.p.toFixed(1).replace('.', ',')} %`, { h: 2.5, ancre: 'c' });
+      const xa = X(y + sgn * 0.75), d = X(y + sgn) - X(y) > 0 ? 1 : -1;   // flèche dans le sens de la pente
+      v.poly('TEXTES', [[xa - d * 0.25, z + 0.03], [xa, z + 0.07], [xa - d * 0.25, z + 0.11]], true);
+      v.ligne('TEXTES', [xa - d * 0.55, z + 0.07], [xa, z + 0.07]);
+    }
   }
   if (appui != null) {
     const i = appui, ap = G.appareils[i], nv = niveauxLigne(G, i), zsf = G.dessous(0);
@@ -305,8 +325,8 @@ export function planCoffrage(st, cartouche = {}, eq = null) {
   const notes = notesCoffrage(st, G), hn = notes.length * 2.1 * 1.6;
   const F = composer({
     titre: 'TABLIER — COFFRAGE : COUPES TRANSVERSALES ET DÉTAILS', cartouche,
-    rangees: [[ca, cb], ...(det ? [[det]] : [])],
-    groupes: [{ vues: [ca, cb], cible: 2 * G.b <= 14 ? 50 : 75, min: 20 }, ...(det ? [{ vues: [det], cible: 25, min: 10 }] : [])],
+    rangees: det ? [[ca], [cb, det]] : [[ca, cb]],
+    groupes: [{ vues: [ca, cb], cible: 2 * G.b <= 14 ? 50 : 75, min: 20 }, ...(det ? [{ vues: [det], cible: 25, min: 20 }] : [])],
     colonne: { largeur: 182, hauteur: 2 + hq + 6 + hn + 4 },
     poser: (F, [x, y]) => {
       F.tableau(tq, F.W - 10 - 162, y + 2);

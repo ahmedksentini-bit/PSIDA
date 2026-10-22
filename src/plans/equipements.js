@@ -20,7 +20,7 @@ const fr = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : 
 
 /** Valeurs par défaut (champs eq_* du formulaire). */
 export const EQ_DEFAUTS = {
-  corn: 'prefa', cornH: 0.60, cornL: 0.25, cornE: 0.12, cornT: 0.15,
+  corn: 'prefa', cornH: 0.60, cornL: 0.25, cornE: 0.20, cornT: 0.15,
   dr: 'barriere', hDR: 1.00, drY: 0.30, lgB: 0.50, lgH: 0.30, pDR: 0.65,
   gc: 'auto', hGC: 1.00, pGC: 0.50,
   hTrot: 0.15, bordB: 0.15, gTrot: 22,
@@ -50,7 +50,12 @@ export function bordGeom(G, eq, sg) {
   const out = { sg, fw, b };
   const Y = y => sg * y;   // distance à l'axe (≥ 0) → ordonnée y
   const corn = eq.corn !== 'aucune';
-  out.corniche = corn ? { type: eq.corn, poly: [[b - eq.cornL, zE], [b - eq.cornL, zE + eq.cornT], [b + eq.cornE, zE + eq.cornT], [b + eq.cornE, zE + eq.cornT - eq.cornH], [b, zE + eq.cornT - eq.cornH], [b, zE]].map(([d, z]) => [Y(d), z]) } : null;
+  // corniche : talon sur la dalle, face vue légèrement inclinée, nez chanfreiné, larmier (goutte d'eau) sous le nez
+  if (corn) {
+    const zt = zE + eq.cornT, zb = zt - eq.cornH, E = eq.cornE, ch = Math.min(0.04, E / 3), lm = Math.min(0.025, E / 5);
+    out.corniche = { type: eq.corn, poly: [[b - eq.cornL, zE], [b - eq.cornL, zt], [b + E - ch, zt], [b + E, zt - ch], [b + E - 0.02, zb + ch],
+      [b + E - 0.02 - ch, zb], [b + E * 0.45 + lm, zb], [b + E * 0.45 + lm, zb + lm], [b + E * 0.45, zb + lm], [b + E * 0.45, zb], [b, zb], [b, zE]].map(([d, z]) => [Y(d), z]) };
+  } else out.corniche = null;
   const zSur = d => G.dessus(Y(d)) + (corn && d > b - eq.cornL + 1e-9 ? eq.cornT : 0);   // dessus du support (dalle ou talon)
   // trottoir : bordure côté chaussée, remplissage jusqu'à la longrine ou à la corniche
   const dIn = fw ? Math.min(Math.abs(fw.y1), Math.abs(fw.y2)) : null;
@@ -84,7 +89,7 @@ export function bordGeom(G, eq, sg) {
   if (fw) {
     const obst = out.longrine ? out.longrine.c - eq.lgB / 2 : out.dispositif && out.dispositif.type === 'gba' ? b - eq.drY - 0.30 : corn ? b - eq.cornL : b;
     const zBase = d => G.dessus(Y(d)) + eq.etanE;
-    out.bordure = { poly: [[dIn, zBase(dIn)], [dIn, zTrot], [dIn + eq.bordB, zTrot], [dIn + eq.bordB, zBase(dIn + eq.bordB)]].map(([d, z]) => [Y(d), z]), d: dIn };
+    out.bordure = { poly: [[dIn, zBase(dIn)], [dIn, zTrot - 0.03], [dIn + 0.03, zTrot], [dIn + eq.bordB, zTrot], [dIn + eq.bordB, zBase(dIn + eq.bordB)]].map(([d, z]) => [Y(d), z]), d: dIn };
     const d0 = dIn + eq.bordB, d1 = Math.max(d0 + 0.05, obst);
     out.remplissage = { poly: [[d0, zBase(d0)], [d0, zTrot], [d1, zTrot], [d1, zBase(d1)]].map(([d, z]) => [Y(d), z]), aire: (d1 - d0) * (zTrot - zBase((d0 + d1) / 2)) };
     out.fourreaux = [0.30, 0.55].map(t => d0 + (d1 - d0) * t).filter(d => d < d1 - 0.1).map(d => [Y(d), zBase(d) + 0.12]);
@@ -166,19 +171,36 @@ export function dessinerBord(v, G, eq, sg, { detail = false, dMin = 0 } = {}) {
   if (D) {
     if (D.type === 'gba') { const p = P(D.poly); v.poly('EQUIPEMENTS', p, true); v.hachure(p); notes.push([[X(D.y), D.haut], `GBA (profil indicatif), h ${fr(eq.hDR)}`]); }
     else {
-      const x = X(D.y), w = 0.06, dIn = -sg;   // côté chaussée : vers l'axe
-      v.poly('EQUIPEMENTS', [[x - w, D.base], [x + w, D.base], [x + w, D.haut], [x - w, D.haut]], true);
-      const lis = D.type === 'barriere' ? [D.haut - 0.06, D.haut - 0.45] : [D.base + Math.max(0.35, (D.haut - D.base) * 0.55)];
-      for (const z of lis) { const x0 = x + (dIn > 0 ? -1 : 1) * (w + 0.12); v.poly('EQUIPEMENTS', [[x0 - 0.06, z - (D.type === 'glissiere' ? 0.15 : 0.04)], [x0 + 0.06, z - (D.type === 'glissiere' ? 0.15 : 0.04)], [x0 + 0.06, z + (D.type === 'glissiere' ? 0.15 : 0.04)], [x0 - 0.06, z + (D.type === 'glissiere' ? 0.15 : 0.04)]], true); v.ligne('EQUIPEMENTS', [x0 + (dIn > 0 ? 0.06 : -0.06), z], [x + (dIn > 0 ? -w : w), z]); }
-      notes.push([[x, D.haut], `${D.type === 'barriere' ? 'Barrière' : 'Glissière'} (schéma), h ${fr(eq.hDR)}`]);
+      // poteau (profil effilé), platine, lisses côté chaussée ; glissière : poteau C, écarteur, lisse à double onde
+      const x = X(D.y), dIn = -sg, sc = dIn > 0 ? -1 : 1;   // sc : sens vers la chaussée en abscisse X
+      v.poly('EQUIPEMENTS', [[x - 0.15, D.base], [x + 0.15, D.base], [x + 0.15, D.base + 0.025], [x - 0.15, D.base + 0.025]], true);
+      if (D.type === 'barriere') {
+        const wb = 0.07, wt = 0.04, z0 = D.base + 0.025;
+        v.poly('EQUIPEMENTS', [[x - sc * wb, z0], [x + sc * wb, z0], [x + sc * wt, D.haut], [x - sc * wb * 0.6, D.haut]], true);
+        for (const z of [D.haut - 0.07, D.haut - 0.46]) {
+          const xf = x + sc * (wt + 0.06 + (D.haut - z) * 0.03);
+          v.poly('EQUIPEMENTS', [[xf, z - 0.035], [xf + sc * 0.10, z - 0.035], [xf + sc * 0.10, z + 0.035], [xf, z + 0.035]], true);
+          v.ligne('EQUIPEMENTS', [xf, z], [x + sc * (wt + (D.haut - z) * 0.03), z]);
+        }
+        for (const dx of [-0.08, 0.08]) v.ligne('EQUIPEMENTS', [x + dx, D.base], [x + dx, D.base - 0.18]);   // tiges d'ancrage
+      } else {
+        v.poly('EQUIPEMENTS', [[x - 0.05, D.base + 0.025], [x + 0.05, D.base + 0.025], [x + 0.05, D.haut - 0.05], [x - 0.05, D.haut - 0.05]], true);
+        const zm = D.base + Math.max(0.35, (D.haut - D.base) * 0.55), xe = x + sc * 0.05, xl = xe + sc * 0.12;
+        v.poly('EQUIPEMENTS', [[xe, zm - 0.08], [xl, zm - 0.06], [xl, zm + 0.06], [xe, zm + 0.08]], true);   // écarteur
+        v.poly('EQUIPEMENTS', [[xl, zm - 0.155], [xl + sc * 0.05, zm - 0.10], [xl + sc * 0.02, zm], [xl + sc * 0.05, zm + 0.10], [xl, zm + 0.155]]);
+      }
+      notes.push([[x, D.haut], `${D.type === 'barriere' ? 'Barrière (type BN4)' : 'Glissière'}, h ${fr(eq.hDR)}`]);
     }
   }
   if (B.gardeCorps) {
+    // garde-corps (type S8) : montant, main courante, lisse basse, platine scellée
     const g = B.gardeCorps, x = X(g.y);
-    v.poly('EQUIPEMENTS', [[x - 0.03, g.base], [x + 0.03, g.base], [x + 0.03, g.haut], [x - 0.03, g.haut]], true);
-    v.poly('EQUIPEMENTS', [[x - 0.05, g.haut], [x + 0.05, g.haut], [x + 0.05, g.haut + 0.05], [x - 0.05, g.haut + 0.05]], true);
-    v.ligne('EQUIPEMENTS', [x - 0.04, g.base + 0.12], [x + 0.04, g.base + 0.12]);
-    notes.push([[x, g.haut + 0.05], `Garde-corps h ${fr(eq.hGC)}`]);
+    v.poly('EQUIPEMENTS', [[x - 0.07, g.base], [x + 0.07, g.base], [x + 0.07, g.base + 0.02], [x - 0.07, g.base + 0.02]], true);
+    v.poly('EQUIPEMENTS', [[x - 0.025, g.base + 0.02], [x + 0.025, g.base + 0.02], [x + 0.02, g.haut - 0.03], [x - 0.02, g.haut - 0.03]], true);
+    v.cercle('EQUIPEMENTS', [x, g.haut - 0.02], 0.035);
+    v.poly('EQUIPEMENTS', [[x - 0.03, g.base + 0.10], [x + 0.03, g.base + 0.10], [x + 0.03, g.base + 0.14], [x - 0.03, g.base + 0.14]], true);
+    v.ligne('VUES', [x, g.base + 0.14], [x, g.haut - 0.055]);   // barreaudage (vu)
+    notes.push([[x, g.haut + 0.02], `Garde-corps (type S8) h ${fr(eq.hGC)}`]);
   }
   if (B.bordure) { const p = P(B.bordure.poly); v.poly('EQUIPEMENTS', p, true); notes.push([p[1], `Bordure, vue ${fr(eq.hTrot)}`]); }
   if (B.remplissage) {

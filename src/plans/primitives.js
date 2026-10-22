@@ -20,6 +20,27 @@ export function primitivesVue(vue, f, k, kd) {
     else if (e.t === 'arc') P(c, { t: 'A', c: f(e.c), r: e.r * kd, a0: e.a0 * 180 / Math.PI, a1: e.a1 * 180 / Math.PI });
     else if (e.t === 'texte') P(c, { t: 'T', p: f(e.p), s: e.s, h: e.h * k, ancre: e.ancre, v: e.v, angle: e.angle, gras: e.gras });
     else if (e.t === 'hachure') { const pts = e.pts.map(f); for (const [a, b] of hachuresPoly(pts, 2 * k)) P(c, { t: 'L', a, b }); }
+    else if (e.t === 'terrain') {
+      const pts = e.pts.map(f); P(c, { t: 'P', pts, ferme: false });
+      // traits à 45° de 1,6 mm tous les 2,5 mm, côté sol
+      const pas = 2.5 * k, l = 1.6 * k;
+      for (let i = 0; i + 1 < pts.length; i++) {
+        const a = pts[i], b = pts[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-9) continue;
+        const u = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], n = [-u[1] * -e.cote, u[0] * -e.cote];
+        const d = [(-u[0] - n[0]) * l / Math.SQRT2, (-u[1] - n[1]) * l / Math.SQRT2];
+        for (let s0 = pas / 2; s0 < L; s0 += pas) { const q = [a[0] + u[0] * s0, a[1] + u[1] * s0]; P(c, { t: 'L', a: q, b: [q[0] + d[0], q[1] + d[1]], ep: 0.18 }); }
+      }
+    } else if (e.t === 'pointille') {
+      // points pseudo-aléatoires (suite déterministe) dans le polygone, un par carré de « pas » mm
+      const pts = e.pts.map(f), xs = pts.map(q => q[0]), ys = pts.map(q => q[1]);
+      const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), pas = (e.pas || 2.2) * k;
+      const dedans = (x, y) => { let r = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) r = !r; } return r; };
+      let g = 12345; const rnd = () => (g = (g * 16807) % 2147483647) / 2147483647;
+      for (let y = y0 + pas / 2; y < y1; y += pas) for (let x = x0 + pas / 2; x < x1; x += pas) {
+        const px = x + (rnd() - 0.5) * pas * 0.8, py = y + (rnd() - 0.5) * pas * 0.8;
+        if (dedans(px, py)) P(c, { t: 'C', c: [px, py], r: 0.13 * k, plein: true });
+      }
+    }
     else if (e.t === 'cote') {
       const A = f(e.a), B = f(e.b), n = normaleG(e.a, e.b), A1 = f([e.a[0] + n[0] * e.d, e.a[1] + n[1] * e.d]);
       const dmm = Math.hypot(A1[0] - A[0], A1[1] - A[1]) * Math.sign(e.d || 1);

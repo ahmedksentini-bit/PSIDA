@@ -87,26 +87,32 @@ export function geometrieAppui(st, i) {
 export function vueElevation(A) {
   const v = new Vue(`ÉLÉVATION ${A.kind === 'culee' ? 'DE LA CULÉE' : 'DE LA PILE'} ${A.nom} (vue suivant l'axe de l'ouvrage)`);
   const X = y => -y, w = A.width, G = A.G;
-  // fondation
+  // fondation, béton de propreté
   rect(v, 'COFFRAGE', -A.Lf / 2, A.zSS, A.Lf / 2, A.zDS);
+  v.proprete(-A.Lf / 2, A.Lf / 2, A.zSS);
+  v.texte('TEXTES', [A.Lf * 0.3, (A.zSS + A.zDS) / 2], 'Semelle', { h: 2.6, ancre: 'c', v: 'm' });
   // corps de l'appui
   const zHautCorps = A.zT - A.hc;
   if (A.kind === 'pile' && A.type !== 'colonnes') rect(v, 'COFFRAGE', -A.Lv / 2, A.zDS, A.Lv / 2, A.zT);
   else if (A.kind === 'culee' && A.type === 'remblayee') {
     rect(v, 'COFFRAGE', -w / 2, A.zDS, w / 2, A.zT);
     v.ligne('COFFRAGE', [-w / 2, A.zT - A.hSom], [w / 2, A.zT - A.hSom]);
+    v.texte('TEXTES', [w * 0.3, A.zT - A.hSom / 2], 'Sommier', { h: 2.6, ancre: 'c', v: 'm' });
+    v.texte('TEXTES', [w * 0.3, (A.zDS + A.zT - A.hSom) / 2], 'Mur de front', { h: 2.6, ancre: 'c', v: 'm' });
   } else {
-    for (let j = 0; j < A.nCol; j++) { const y = X(A.colY(j)); rect(v, 'COFFRAGE', y - A.D / 2, A.zDS, y + A.D / 2, zHautCorps); v.ligne('AXES', [y, A.zDS - 0.3], [y, A.zT + 0.4]); }
+    for (let j = 0; j < A.nCol; j++) { const y = X(A.colY(j)); rect(v, 'COFFRAGE', y - A.D / 2, A.zDS, y + A.D / 2, zHautCorps); v.cylindre(y - A.D / 2, y + A.D / 2, A.zDS, zHautCorps); v.ligne('AXES', [y, A.zDS - 0.3], [y, A.zT + 0.4]); }
     rect(v, 'COFFRAGE', -w / 2, zHautCorps, w / 2, A.zT);
+    v.texte('TEXTES', [w * 0.3, (zHautCorps + A.zT) / 2], 'Chevêtre', { h: 2.6, ancre: 'c', v: 'm' });
     if (A.kind === 'culee' && A.type === 'apparente' && A.C.hv > 0) rect(v, 'COFFRAGE', -w / 2, zHautCorps - A.C.hv, w / 2, zHautCorps);
   }
   // garde-grève (culées), vu au-dessus du sommier, derrière les appareils
-  if (A.kind === 'culee') rect(v, 'COFFRAGE', -w / 2, A.zT, w / 2, A.zT + A.hGG);
+  if (A.kind === 'culee') { rect(v, 'COFFRAGE', -w / 2, A.zT, w / 2, A.zT + A.hGG); v.texte('TEXTES', [w * 0.3, A.zT + A.hGG / 2], 'Garde-grève', { h: 2.4, ancre: 'c', v: 'm' }); }
   // bossages et appareils
   for (const y of A.ap.yb) {
     const x = X(y), bb = A.ap.b + 2 * DEB;
     rect(v, 'COFFRAGE', x - bb / 2, A.zT, x + bb / 2, A.zT + A.hBos);
     rect(v, 'APPAREILS', x - A.ap.b / 2, A.zT + A.hBos, x + A.ap.b / 2, A.zSF);
+    v.ligne('APPAREILS', [x - A.ap.b / 2, (A.zT + A.hBos + A.zSF) / 2], [x + A.ap.b / 2, (A.zT + A.hBos + A.zSF) / 2]);
   }
   // tablier (silhouette)
   if (A.kind === 'pile') {
@@ -120,12 +126,13 @@ export function vueElevation(A) {
     const y = A.pieuY(k), Lv = Math.min(A.Lp, 2.5);
     v.poly('COFFRAGE', [[y - A.Dp / 2, A.zSS - Lv], [y - A.Dp / 2, A.zSS], [y + A.Dp / 2, A.zSS], [y + A.Dp / 2, A.zSS - Lv]]);
     rupture(v, y - A.Dp / 2, y + A.Dp / 2, A.zSS - Lv);
+    v.cylindre(y - A.Dp / 2, y + A.Dp / 2, A.zSS - Lv + 0.15, A.zSS - 0.10);
     v.ligne('AXES', [y, A.zSS + 0.2], [y, A.zSS - Lv - 0.3]);
   }
   if (A.pieux) v.texte('TEXTES', [A.pieuY(A.nP - 1) + A.Dp / 2 + 0.25, A.zSS - 1.6], `${A.nF * A.nP} pieux Ø ${fr(A.Dp)}, L = ${fr(A.Lp)}`, { h: 2.5, ancre: 'g' });
   // terrain naturel
   const xT = A.Lf / 2 + 1.2;
-  v.ligne('VUES', [-xT, A.zTN], [xT, A.zTN]);
+  v.terrain([[-xT, A.zTN], [-A.Lf / 2 - 0.15, A.zTN]]); v.terrain([[A.Lf / 2 + 0.15, A.zTN], [xT, A.zTN]]);
   v.texte('TEXTES', [-xT, A.zTN + 0.08], 'TN', { h: 2.4, ancre: 'g' });
   // axe de l'ouvrage
   v.ligne('AXES', [0, A.zSS - (A.pieux ? 3.0 : 0.6)], [0, A.zSF + G.h + 0.8]);
@@ -155,9 +162,13 @@ export function vueCoupe(A, { longueurPieux = 2.5 } = {}) {
   const xs = (a, b) => [Math.min(X(a), X(b)), Math.max(X(a), X(b))];
   const box = (a, b, z0, z1) => { const [p, q] = xs(a, b); coupe(v, p, z0, q, z1); };
   const zH = A.zT - A.hc;
-  // fondation
+  // fondation, béton de propreté
   const xS = [A.xFut - A.B / 2, A.xFut + A.B / 2];
   box(xS[0], xS[1], A.zSS, A.zDS);
+  { const [p, q] = xs(xS[0], xS[1]); v.proprete(p, q, A.zSS); }
+  { const [p, q] = xs(xS[0], xS[1]), xe = S > 0 ? q + 0.10 : p - 0.10, xt = xe + S * 1.0;
+    v.ligne('REPERES', [xe - S * 0.3, A.zSS - 0.05], [xt, A.zSS - 0.55]);
+    v.texte('TEXTES', [xt + S * 0.05, A.zSS - 0.55], 'Béton de propreté ép. 10 cm', { h: 2.2, ancre: S > 0 ? 'g' : 'd', v: 'm' }); }
   if (A.kind === 'pile') {
     if (A.type === 'colonnes') { box(-A.D / 2, A.D / 2, A.zDS, zH); box(-A.lc / 2, A.lc / 2, zH, A.zT); }
     else { const p = [[-A.b / 2, A.zDS], [A.b / 2, A.zDS], [A.bTop / 2, A.zT], [-A.bTop / 2, A.zT]]; v.poly('COFFRAGE', p, true); v.hachure(p); }
@@ -196,11 +207,19 @@ export function vueCoupe(A, { longueurPieux = 2.5 } = {}) {
     const a = [X(x - A.Dp / 2), A.zSS], b = [X(x + A.Dp / 2), A.zSS], c = [X(x + A.Dp / 2 + dx), A.zSS - L], d = [X(x - A.Dp / 2 + dx), A.zSS - L];
     v.poly('COFFRAGE', [d, a]); v.poly('COFFRAGE', [b, c]);
     if (L >= A.Lp - 1e-9) v.poly('COFFRAGE', [d, c]); else rupture(v, Math.min(c[0], d[0]), Math.max(c[0], d[0]), A.zSS - L);
+    if (Math.abs(om) < 1e-6) v.cylindre(Math.min(a[0], b[0]), Math.max(a[0], b[0]), A.zSS - L + 0.15, A.zSS - 0.10, 7);
     v.ligne('AXES', [X(x), A.zSS + 0.2], [X(x + dx * 1.15), A.zSS - L * 1.15]);
   }
   // terrain naturel
   const xm = Math.max(Math.abs(xS[0]), Math.abs(xS[1])) + 1.2, xl = A.kind === 'culee' ? Math.max(xm, A.Lret + 1.5) : xm;
-  v.ligne('VUES', [-xl, A.zTN], [xl, A.zTN]); v.texte('TEXTES', [-xl, A.zTN + 0.08], 'TN', { h: 2.4, ancre: 'g' });
+  { const [p, q] = xs(xS[0], xS[1]); v.terrain([[-xl, A.zTN], [p - 0.15, A.zTN]]); v.terrain([[q + 0.15, A.zTN], [xl, A.zTN]]); }
+  v.texte('TEXTES', [-xl, A.zTN + 0.08], 'TN', { h: 2.4, ancre: 'g' });
+  // remblai derrière la culée (côté opposé à la travée), jusqu'au niveau du dessus du garde-grève
+  if (A.kind === 'culee') {
+    const top = A.zT + A.hGG, xd = A.xGGar, xf = -Math.max(xl, A.Lret + 1.5) * 1 + 0, zb = Math.max(A.zTN, A.zDS);
+    const pts = [[X(xd), top], [X(xd - (xl - Math.abs(xd))), top], [X(xd - (xl - Math.abs(xd))), zb], [X(Math.min(xd, xS[0])), zb]];
+    v.pointille(pts, 3.2); void xf;
+  }
   // axe des appareils
   v.ligne('AXES', [0, A.zSS - (A.pieux ? 3.0 : 0.5)], [0, A.zSF + G.h + 0.6]);
   v.texte('TEXTES', [0, A.zSF + G.h + 0.75], 'axe des appareils', { h: 2.2, ancre: 'c' });
@@ -331,7 +350,7 @@ export function planCoffrageAppui(st, i, cartouche = {}) {
   // élévation et coupe dans l'axe en haut, vue en plan dessous (alignée sur l'élévation), tableaux au-dessus du cartouche
   const F = composer({ titre: `${A.kind === 'culee' ? 'CULÉE' : 'PILE'} ${A.nom} — PLAN DE COFFRAGE`, cartouche,
     rangees: [[el, cp], [pl, db]],
-    groupes: [{ vues: [el, cp, pl], cible: 75, min: 20 }, { vues: [db], cible: 20, min: 5 }],
+    groupes: [{ vues: [el, cp, pl], cible: 75, min: 20 }, { vues: [db], cible: 20, min: 10 }],
     aligner: [{ ref: el, vue: pl }],
     colonne: { largeur: 182, hauteur: 2 + ht + 5 + hc + 6 + hn + 4 },
     poser: (F, [x, y]) => {
@@ -354,8 +373,8 @@ export function vueDetailBossage(A) {
   const bb = b + 2 * DEB, wp = 0.40, ec = 0.15, yp = bb / 2 + ec + wp / 2;   // plot 0,40 × 0,40 à 15 cm du bossage
   const z0 = 0, zB = z0 + hB, zA = zB + hA, yL = -bb / 2 - 0.25, yR = yp + wp / 2 + 0.25;
   // chevêtre (coupé) et tablier (coupé), avec ruptures
-  const ch = [[yL, z0 - 0.25], [yR, z0 - 0.25], [yR, z0], [yL, z0]]; v.poly('COFFRAGE', ch, true); v.hachure(ch);
-  const tb = [[yL, zA], [yR, zA], [yR, zA + 0.20], [yL, zA + 0.20]]; v.poly('COFFRAGE', tb, true); v.hachure(tb);
+  const ch = [[yL, z0 - 0.18], [yR, z0 - 0.18], [yR, z0], [yL, z0]]; v.poly('COFFRAGE', ch, true); v.hachure(ch);
+  const tb = [[yL, zA], [yR, zA], [yR, zA + 0.12], [yL, zA + 0.12]]; v.poly('COFFRAGE', tb, true); v.hachure(tb);
   // bossage, appareil (frettes figurées), plot de vérinage
   rect(v, 'COFFRAGE', -bb / 2, z0, bb / 2, zB);
   rect(v, 'APPAREILS', -b / 2, zB, b / 2, zA);
@@ -365,13 +384,13 @@ export function vueDetailBossage(A) {
   // libellés
   const lab = (p, q, s) => { v.ligne('REPERES', p, q); v.texte('TEXTES', [q[0] + (q[0] >= p[0] ? 0.02 : -0.02), q[1]], s, { h: 2.2, ancre: q[0] >= p[0] ? 'g' : 'd', v: 'm' }); };
   const xl = yR + 0.08;
-  lab([b / 4, zA + 0.10], [xl, zA + 0.30], 'Tablier');
+  lab([b / 4, zA + 0.06], [xl, zA + 0.30], 'Tablier');
   lab([b / 4, (zB + zA) / 2], [xl, zA + 0.14], `Appareil d'appui ${A.ap.label}`);
   lab([-bb / 4, zB / 2], [yL - 0.08, zA + 0.14], `Bossage ${fr(bb * 1000, 0)} × ${fr((A.ap.a + 2 * DEB) * 1000, 0)}, ép. ${fr(hB * 100, 0)} cm`);
   lab([-bb / 4, zB * 0.3], [yL - 0.08, z0 + 0.02], 'micro-béton dosé à 500 kg/m³');
   lab([yp, zB * 0.6], [xl, zB * 0.4], `Plot de vérinage ${fr(wp)} × ${fr(wp)}`);
   lab([yp - wp / 2 - 0.05, z0 - 0.05], [xl, z0 - 0.12], 'Surface de repiquage, épaisseur min. 5 cm');
-  lab([0, z0 - 0.18], [yL - 0.08, z0 - 0.18], A.kind === 'culee' && A.type === 'remblayee' ? 'Sommier' : A.hc > 0 ? 'Chevêtre' : 'Tête de l\'appui');
+  lab([0, z0 - 0.12], [yL - 0.08, z0 - 0.12], A.kind === 'culee' && A.type === 'remblayee' ? 'Sommier' : A.hc > 0 ? 'Chevêtre' : 'Tête de l\'appui');
   // cotes
   v.coteH([-b / 2, zA], [b / 2, zA], zA + 0.30);
   v.coteH([-bb / 2, z0], [bb / 2, z0], z0 - 0.38);

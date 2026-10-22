@@ -137,7 +137,7 @@ test('Équipements : géométrie, poids, souffle, métré et feuille dédiée', 
   // corniche : aire du profil en L = L·t + e·(H − t)
   const C = controleCharges(st, eq);
   const corn = C[0].P.lignes.find(l => l[0] === 'Corniche')[1];
-  assert.ok(Math.abs(corn - 25 * (eq.cornL * eq.cornT + eq.cornE * eq.cornT + eq.cornE * (eq.cornH - eq.cornT))) < 1e-6);
+  { const nom = 25 * (eq.cornL * eq.cornT + eq.cornE * eq.cornT + eq.cornE * (eq.cornH - eq.cornT)); assert.ok(corn < nom && corn > 0.93 * nom, `corniche ${corn} / ${nom}`); }   // profil réel : chanfreins et larmier;
   assert.ok(C[0].saisi > 0 && C[0].ecart != null);
   const J = souffleJoints(st, eq);
   assert.ok(J.every(j => j.W > 0 && Math.abs(j.W - (2 * j.vT + j.vRF)) < 1e-12));
