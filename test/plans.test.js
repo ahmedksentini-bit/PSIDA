@@ -144,7 +144,8 @@ test('Équipements : géométrie, poids, souffle, métré et feuille dédiée', 
   const M = metreEquipements(st, eq, G), L = G.uB - G.uA;
   assert.ok(Math.abs(M.find(m => m[0] === 'Corniches')[2] - 2 * L) < 1e-9);
   const F = planEquipements(st, eq, { numero: 'E-1' });
-  assert.equal(F.vues.length, 5);
+  assert.equal(F.vues.length, 6);   // détails A et B, joint, gargouille, corniche type, schéma d'évacuation
+  assert.ok(feuilleSVG(F).includes('FERRAILLAGE TYPE'));
   const svg = feuilleSVG(F), D = lireDXF(feuilleDXF(F));
   assert.ok(svg.includes('TABLIER — ÉQUIPEMENTS') && /joint à revêtement amélioré|joint à lèvres|sous revêtement/.test(svg));
   assert.deepEqual(D.fin, ['0', 'EOF']);
@@ -233,4 +234,15 @@ test('Plan d\'ensemble, tableau de nivellement, cartouche en bande et format imp
   }
   // le garde-grève ne recouvre jamais le bossage, même avec un about nul
   const A = geometrieAppui(st, 0); assert.ok(-A.xGGav >= A.ap.a / 2 + 0.05 + 0.10 - 1e-9);
+});
+
+test('Pile marteau : fût unique, chevêtre en console, quantités et vue suivant F', () => {
+  const m = compute(parseData({ ...formDefaults(), ap_pileType: 'marteau' }));
+  const A = geometrieAppui(m, 1);
+  assert.ok(A.marteau && A.nCol === 1 && A.hcEnd < A.hc);
+  const Q = quantitesAppui(A), ch = Q.lignes.find(l => /console/.test(l[0]))[1];
+  assert.ok(ch < A.width * A.lc * A.hc && ch > A.width * A.lc * A.hcEnd);
+  const F = planCoffrageAppui(m, 1, {}), svg = feuilleSVG(F);
+  assert.ok(svg.includes('VUE SUIVANT F') && F.valide().ok);
+  const R = planFerraillageAppui(m, 1, {}); assert.ok(R.masse > 0 && R.valide().ok);
 });

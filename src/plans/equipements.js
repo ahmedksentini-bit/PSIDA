@@ -233,6 +233,44 @@ function etiquettes(v, notes, { xTxt, z0, pas, ancre }) {
 }
 
 /* ------------------------------------------------------------------------------------ vues de détail */
+/**
+ * Plan type de la corniche préfabriquée : section au droit d'un élément courant, ferraillage type (cadres suivant le
+ * profil, filants aux angles, attentes de liaison avec la contre-corniche) et réservation du scellement du garde-corps.
+ * Repère : y vers l'extérieur depuis le bord de la dalle, z depuis le dessus de la dalle.
+ */
+function rupture(v, x0, x1, z, amp = 0.05) { const xm = (x0 + x1) / 2; v.poly('VUES', [[xm, z - 0.2], [xm, z - amp], [xm + amp, z], [xm - amp, z + amp / 2], [xm, z + amp], [xm, z + 0.2]]); }
+export function vueCorniche(eq) {
+  const v = new Vue('CORNICHE PRÉFABRIQUÉE — SECTION ET FERRAILLAGE TYPE'), c = 0.03;
+  const L = eq.cornL, T = eq.cornT, H = eq.cornH, E = eq.cornE, ch = Math.min(0.04, E / 3), lm = Math.min(0.025, E / 5);
+  const zt = T, zb = T - H;
+  const prof = [[-L, 0], [-L, zt], [E - ch, zt], [E, zt - ch], [E - 0.02, zb + ch], [E - 0.02 - ch, zb], [E * 0.45 + lm, zb], [E * 0.45 + lm, zb + lm], [E * 0.45, zb + lm], [E * 0.45, zb], [0, zb], [0, 0]];
+  v.poly('COFFRAGE', prof, true); v.hachure(prof);
+  // dalle (amorce) et contre-corniche (amorce)
+  v.poly('VUES', [[-L - 0.6, 0], [0, 0], [0, -0.25], [-L - 0.6, -0.25]]); rupture(v, -L - 0.62, -L - 0.58, -0.12, 0.05);
+  v.poly('VUES', [[-L, 0], [-L - 0.45, 0], [-L - 0.45, zt + 0.15], [-L, zt + 0.15]]);
+  v.texte('TEXTES', [-L - 0.3, -0.13], 'dalle', { h: 2.2, ancre: 'c', v: 'm' }); v.texte('TEXTES', [-L - 0.225, zt + 0.07], 'contre-corniche', { h: 2.0, ancre: 'c', v: 'm' });
+  // cadre suivant le profil (enrobage 3 cm) : voile vertical et talon
+  const cad = [[-L + c, c + 0.01], [-L + c, zt - c], [E - c - 0.01, zt - c], [E - c - 0.03, zb + c], [c, zb + c], [c, c + 0.01]];
+  v.poly('ACIERS', cad, true);
+  for (const p of [cad[1], cad[2], cad[3], cad[4], [c + 0.025, (zt + zb) / 2], [E - c - 0.035, (zt + zb) / 2], [-L / 2, zt - c - 0.012]]) v.cercle('ACIERS_COUPES', [p[0] + (p[0] < 0 ? 0.012 : -0.012) * 0, p[1]], 0.007, true);
+  // attentes de liaison avec la contre-corniche
+  v.poly('ACIERS', [[-L + 0.05, zt - c - 0.02], [-L - 0.35, zt - c - 0.02]]);
+  // réservation du scellement du garde-corps
+  v.poly('VUES', [[E / 2 - 0.05, zt], [E / 2 + 0.05, zt], [E / 2 + 0.05, zt - 0.20], [E / 2 - 0.05, zt - 0.20]], true);
+  // désignations
+  const lab = (p, q, t) => { v.ligne('REPERES', p, q); v.cercle('REPERES', p, 0.006, true); v.texte('TEXTES', [q[0] + 0.02, q[1]], t, { h: 2.2, ancre: 'g', v: 'm' }); };
+  const xl = E + 0.25;
+  lab([E / 2, zt - 0.1], [xl, zt + 0.10], 'Réservation scellement garde-corps (polystyrène)');
+  lab([E - c - 0.02, zt - c], [xl, zt - 0.06], 'Cadres HA 8 e = 0,20 suivant le profil');
+  lab([E - c - 0.035, (zt + zb) / 2], [xl, zt - 0.22], '6 HA 10 filants (angles et faces)');
+  lab([-L - 0.2, zt - c - 0.02], [xl, zt - 0.38], 'Attentes HA 10 e = 0,40 vers la contre-corniche');
+  lab([E * 0.45 + lm / 2, zb + lm / 2], [xl, zb + 0.05], 'Larmier 2,5 × 2,5 cm');
+  // cotes
+  v.coteH([-L, zt], [0, zt], zt + 0.22); v.coteH([0, zt], [E, zt], zt + 0.22); v.coteH([-L, zt], [E, zt], zt + 0.34);
+  v.coteV([E, zt], [E, zb], E + 0.12); v.coteV([-L, 0], [-L, zt], -L - 0.55);
+  return v;
+}
+
 export function vueDetailBord(G, eq, sg) {
   const v = new Vue(`DÉTAIL ${sg > 0 ? 'A' : 'B'} — BORD ${sg > 0 ? 'GAUCHE (y > 0)' : 'DROIT (y < 0)'} DU TABLIER`), X = y => -y, b = G.b;
   // dalle (sur 2,5 m depuis le bord), chanfrein, rupture
@@ -335,6 +373,7 @@ export function planEquipements(st, eq = EQ_DEFAUTS, cartouche = {}) {
   const G = geometrie(st), J = souffleJoints(st, eq);
   const dA = vueDetailBord(G, eq, 1), dB = vueDetailBord(G, eq, -1);
   const dJ = vueDetailJoint(G, st, eq, J[0]), dG = vueDetailGargouille(G, eq), sA = vueAssainissement(G, eq, J);
+  const dC = eq.corn === 'prefa' ? vueCorniche(eq) : null;
   // métré et contrôle des charges, au-dessus du cartouche
   const M = metreEquipements(st, eq, G);
   const tM = { titre: 'MÉTRÉ DES ÉQUIPEMENTS', cols: [{ t: 'Désignation', w: 110, a: 'g' }, { t: 'Unité', w: 18, a: 'c' }, { t: 'Quantité', w: 32, a: 'd' }], lignes: M.map(([d, u, q]) => [d, u, u === 'u' ? String(q) : fr(q, 1)]), hl: 5.5 };
@@ -359,8 +398,8 @@ export function planEquipements(st, eq = EQ_DEFAUTS, cartouche = {}) {
   ], hn = notes.length * 2.1 * 1.6;
   const Lt = G.uB - G.uA;
   const F = composer({ titre: 'TABLIER — ÉQUIPEMENTS', cartouche,
-    rangees: [[dA, dB], [dJ, dG], [sA]],
-    groupes: [{ vues: [dA, dB], cible: 25, min: 10 }, { vues: [dJ, dG], cible: 25, min: 5 }, { vues: [sA], cible: Lt <= 60 ? 200 : 500, min: 100 }],
+    rangees: [[dA, dB], [dJ, dG, ...(dC ? [dC] : [])], [sA]],
+    groupes: [{ vues: [dA, dB], cible: 25, min: 10 }, { vues: [dJ, dG], cible: 25, min: 20 }, ...(dC ? [{ vues: [dC], cible: 20, min: 10 }] : []), { vues: [sA], cible: Lt <= 60 ? 200 : 500, min: 100 }],
     colonne: { largeur: 182, hauteur: 2 + hC + 5 + hM + 4 + hn + 4 },
     poser: (F, [x, y]) => {
       const xt = F.W - 10 - 162;

@@ -12,7 +12,7 @@
  * Longueurs d'ancrage et de recouvrement : EN 1992-1-1 § 8.4 et 8.7 (src/rebar.js, anchorage). Bordereau ISO 4066.
  */
 import { Vue, Feuille, fmtCote } from './dessin.js';
-import { geometrieAppui, vueElevation, vueCoupe, couperNote } from './appuis.js';
+import { geometrieAppui, vueElevation, vueCoupe, couperNote, sousFaceMarteau } from './appuis.js';
 import { longueurCoupe, rayonCintrage, croquisForme, recapitulatif } from './bordereau.js';
 import { composer } from './mise_en_page.js';
 import { placerBordereau } from './ferraillage.js';
@@ -147,7 +147,7 @@ export function reperesAppui(st, i) {
     }
     cad = cad || { nc: 3, phi: 16, t: 0.10, prov: 6 * areaOf(16) / 0.10 };
     const bc = cad.nc > 1 ? (bT - 2 * c) / cad.nc + 0.05 : bT - 2 * c;
-    add({ elem: 'tête', label: `${nom} — cadres (${cad.nc} par cours)`, phi: cad.phi, s: cad.t, code: '51', dims: { A: (hT - 2 * c) * 1000, B: bc * 1000, C: 10 * cad.phi }, nombre: cad.nc * (Math.floor((w - 2 * c) / cad.t) + 1), req: AtMin, prov: cad.prov, pos: 'chevCad' });
+    add({ elem: 'tête', label: `${nom} — cadres (${cad.nc} par cours${A.marteau ? ', hauteur variable : A maximal à l\'encastrement' : ''})`, phi: cad.phi, s: cad.t, code: '51', dims: { A: (hT - 2 * c) * 1000, B: bc * 1000, C: 10 * cad.phi }, nombre: cad.nc * (Math.floor((w - 2 * c) / cad.t) + 1), req: AtMin, prov: cad.prov, pos: 'chevCad' });
   }
   // ---------------------------------------------------------------- garde-grève, murs en retour (culées)
   if (A.kind === 'culee') {
@@ -194,7 +194,7 @@ export function reperesAppui(st, i) {
     };
     const tete = sommierT => (sommierT ? [A.xSom[0], A.xSom[1]] : A.kind === 'pile' ? (A.type === 'colonnes' ? [-A.lc / 2, A.lc / 2] : [-A.bTop / 2, A.bTop / 2]) : [A.xChev[0], A.xChev[1]]);
     const [xa, xb] = tete(A.kind === 'culee' && A.type === 'remblayee'), dT = xb - xa;
-    const hT = A.kind === 'culee' && A.type === 'remblayee' ? A.hSom : A.hc > 0 ? A.hc : Math.min(1.0, A.H || 1);
+    const hT = A.kind === 'culee' && A.type === 'remblayee' ? A.hSom : A.marteau ? A.hcEnd : A.hc > 0 ? A.hc : Math.min(1.0, A.H || 1);
     const Lt = A.kind === 'pile' && A.type !== 'colonnes' ? A.Lv : w;
     // frettes : cadres horizontaux fermés autour de l'empreinte du bossage (2 brins par direction), lits espacés de 6 cm
     const f = choisir(sp2.As, 2, 2);
@@ -224,7 +224,7 @@ const desig = m => (m.pos === 'fret' ? `${m.n} cadres HA${m.phi} / appareil` : m
 /* -------------------------------------------------------------------------------------- dessin des aciers */
 function dessinerCoupe(A, marks) {
   const v = vueCoupe(A); v.titre = `COUPE DANS L'AXE DE L'OUVRAGE — ARMATURES — ${A.nom}`;
-  v.ents = v.ents.filter(e => e.t !== 'hachure');
+  v.ents = v.ents.filter(e => e.t !== 'hachure' && e.t !== 'pointille' && e.calque !== 'HACHURES');
   const S = A.sgn, X = x => S * x, c = 0.05, cS = 0.07, M = p => marks.find(m => m.pos === p);
   const bulles = [];
   const bul = (m, p, cote = 1) => m && bulles.push({ m, p, cote });
@@ -310,7 +310,7 @@ function dessinerCoupe(A, marks) {
 
 function dessinerElevation(A, marks) {
   const v = vueElevation(A); v.titre = `ÉLÉVATION — ARMATURES — ${A.nom}`;
-  v.ents = v.ents.filter(e => e.t !== 'hachure' && e.calque !== 'COTES' && e.t !== 'coteH' && e.t !== 'coteV');
+  v.ents = v.ents.filter(e => e.t !== 'hachure' && e.t !== 'pointille' && e.calque !== 'HACHURES' && e.calque !== 'COTES' && e.t !== 'coteH' && e.t !== 'coteV');
   const X = y => -y, c = 0.05, cS = 0.07, w = A.width, M = p => marks.find(m => m.pos === p), bulles = [];
   const bul = (m, p) => m && bulles.push({ m, p });
   // semelle : répartition // L (ligne), nappe // B (points)
@@ -340,9 +340,14 @@ function dessinerElevation(A, marks) {
   if (mS) {
     const hT = A.kind === 'culee' && A.type === 'remblayee' ? A.hSom : A.hc, zb = A.zT - hT, rt = Math.min(hT - 2 * c, mS.dims.A / 1000);
     v.poly('ACIERS', [[-w / 2 + c, A.zT - c - rt], [-w / 2 + c, A.zT - c], [w / 2 - c, A.zT - c], [w / 2 - c, A.zT - c - rt]]);
-    v.poly('ACIERS', [[-w / 2 + c + 0.03, zb + c + rt], [-w / 2 + c + 0.03, zb + c], [w / 2 - c - 0.03, zb + c], [w / 2 - c - 0.03, zb + c + rt]]);
-    if (mC) { const n = Math.min(60, Math.floor((w - 2 * c) / mC.s)); for (let k = 0; k <= n; k++) { const y = -w / 2 + c + (w - 2 * c) * k / n; v.ligne('ACIERS_COUPES', [y, zb + c], [y, A.zT - c]); } }
-    bul(mS, [w / 4, A.zT - c]); bul(mI, [-w / 4, zb + c]); bul(mC, [0.15, zb + hT / 2]);
+    // sous-face du chevêtre (pile marteau : inclinée vers les extrémités)
+    const zSous = y => { if (!A.marteau) return zb; const P = sousFaceMarteau(A); for (let q = 0; q + 1 < P.length; q++) if (y <= P[q + 1][0] + 1e-9) return P[q][1] + (P[q + 1][1] - P[q][1]) * (y - P[q][0]) / (P[q + 1][0] - P[q][0]); return P[P.length - 1][1]; };
+    if (A.marteau) {
+      const P = sousFaceMarteau(A).map(([y, z]) => [Math.max(-w / 2 + c + 0.03, Math.min(w / 2 - c - 0.03, y)), z + c]);
+      v.poly('ACIERS', [[P[0][0], zSous(P[0][0]) + c + 0.25], ...P, [P[P.length - 1][0], zSous(P[P.length - 1][0]) + c + 0.25]]);
+    } else v.poly('ACIERS', [[-w / 2 + c + 0.03, zb + c + rt], [-w / 2 + c + 0.03, zb + c], [w / 2 - c - 0.03, zb + c], [w / 2 - c - 0.03, zb + c + rt]]);
+    if (mC) { const n = Math.min(60, Math.floor((w - 2 * c) / mC.s)); for (let k = 0; k <= n; k++) { const y = -w / 2 + c + (w - 2 * c) * k / n; v.ligne('ACIERS_COUPES', [y, zSous(y) + c], [y, A.zT - c]); } }
+    bul(mS, [w / 4, A.zT - c]); bul(mI, [-w / 4, zSous(-w / 4) + c]); bul(mC, [0.15, zb + hT / 2]);
   }
   // frettes sous chaque appareil, filantes d'éclatement
   const mF = M('fret'), mE = M('eclL');

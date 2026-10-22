@@ -22,6 +22,24 @@ function rupture(v, x0, x1, z, amp = 0.10) {
   v.poly('COFFRAGE', [[x0 - 0.08, z], [xm - w, z], [xm - w / 2, z + amp], [xm + w / 2, z - amp], [xm + w, z], [x1 + 0.08, z]]);
 }
 
+/**
+ * Dalle de transition et corbeau d'appui, en coordonnées locales de la coupe dans l'axe (x < x_GGar : côté remblai) :
+ * dalle de L × e posée sur un corbeau au dos du garde-grève, dessus à 0,30 m sous la chaussée, pente de 5 % vers le remblai.
+ */
+export function dalleTransition(A) {
+  if (A.kind !== 'culee' || !A.dalle) return null;
+  const xr = A.xGGar, L = A.dalle.L, e = A.dalle.e, z0 = A.zT + A.hGG - 0.30, pente = 0.05;
+  const dalle = [[xr, z0], [xr - L, z0 - pente * L], [xr - L, z0 - pente * L - e], [xr, z0 - e]];
+  const zc = z0 - e, corbeau = [[xr, zc], [xr - 0.30, zc], [xr - 0.30, zc - 0.10], [xr, zc - 0.40]];
+  return { dalle, corbeau, L, e, pente, z0 };
+}
+
+/** Sous-face du chevêtre d'une pile marteau en élévation (X le long de la ligne d'appui) : points de gauche à droite. */
+export function sousFaceMarteau(A) {
+  const w = A.width, zb = A.zT - A.hc, ze = A.zT - A.hcEnd, r = A.D / 2 + 0.10;
+  return [[-w / 2, ze], [-r, zb], [r, zb], [w / 2, ze]];
+}
+
 /** Géométrie complète de la ligne d'appui i. */
 export function geometrieAppui(st, i) {
   const s = st.supports; if (!s || !s.lines) throw new Error('plans des appuis : lancer le calcul des appuis (onglet Appuis et fondations)');
@@ -67,6 +85,8 @@ export function geometrieAppui(st, i) {
     out.Lf = (col ? width : out.Lv) + 1.0;
     out.xFut = 0;
     if (col) { out.nCol = P.nCol; out.D = P.D; out.lc = P.lc; }
+    // pile marteau : sous-face du chevêtre horizontale au droit du fût, puis inclinée jusqu'à la hauteur d'extrémité
+    if (col && P.marteau && P.hc > 0) { out.marteau = true; out.hcEnd = P.hcEnd ?? 0.5 * P.hc; }
   }
   out.B = F.B; out.hs = F.hs;
   out.zSS = out.zDS - F.hs;
@@ -101,8 +121,9 @@ export function vueElevation(A) {
     v.texte('TEXTES', [w * 0.3, (A.zDS + A.zT - A.hSom) / 2], 'Mur de front', { h: 2.6, ancre: 'c', v: 'm' });
   } else {
     for (let j = 0; j < A.nCol; j++) { const y = X(A.colY(j)); rect(v, 'COFFRAGE', y - A.D / 2, A.zDS, y + A.D / 2, zHautCorps); v.cylindre(y - A.D / 2, y + A.D / 2, A.zDS, zHautCorps); v.ligne('AXES', [y, A.zDS - 0.3], [y, A.zT + 0.4]); }
-    rect(v, 'COFFRAGE', -w / 2, zHautCorps, w / 2, A.zT);
-    v.texte('TEXTES', [w * 0.3, (zHautCorps + A.zT) / 2], 'Chevêtre', { h: 2.6, ancre: 'c', v: 'm' });
+    if (A.marteau) v.poly('COFFRAGE', [...sousFaceMarteau(A), [w / 2, A.zT], [-w / 2, A.zT]], true);
+    else rect(v, 'COFFRAGE', -w / 2, zHautCorps, w / 2, A.zT);
+    v.texte('TEXTES', [A.marteau ? 0 : w * 0.3, A.zT - Math.min(A.hc, A.marteau ? A.hcEnd : A.hc) / 2], 'Chevêtre', { h: 2.6, ancre: 'c', v: 'm' });
     if (A.kind === 'culee' && A.type === 'apparente' && A.C.hv > 0) rect(v, 'COFFRAGE', -w / 2, zHautCorps - A.C.hv, w / 2, zHautCorps);
   }
   // garde-grève (culées), vu au-dessus du sommier, derrière les appareils
@@ -134,6 +155,11 @@ export function vueElevation(A) {
   const xT = A.Lf / 2 + 1.2;
   v.terrain([[-xT, A.zTN], [-A.Lf / 2 - 0.15, A.zTN]]); v.terrain([[A.Lf / 2 + 0.15, A.zTN], [xT, A.zTN]]);
   v.texte('TEXTES', [-xT, A.zTN + 0.08], 'TN', { h: 2.4, ancre: 'g' });
+  if (A.kind === 'pile') {   // flèche de la vue suivant F
+    const xf = Math.max(A.Lf / 2, w / 2) + 1.4, zf = (A.zDS + A.zT) / 2;
+    v.ligne('TEXTES', [xf + 1.0, zf], [xf, zf]); v.poly('TEXTES', [[xf, zf], [xf + 0.35, zf + 0.15], [xf + 0.35, zf - 0.15]], true);
+    v.texte('TEXTES', [xf + 1.1, zf], 'F', { h: 4, ancre: 'g', v: 'm', gras: true });
+  }
   // axe de l'ouvrage
   v.ligne('AXES', [0, A.zSS - (A.pieux ? 3.0 : 0.6)], [0, A.zSF + G.h + 0.8]);
   // cotes horizontales
@@ -157,10 +183,11 @@ export function vueElevation(A) {
 }
 
 /* ------------------------------------------------------------------------------ coupe dans l'axe de l'ouvrage */
-export function vueCoupe(A, { longueurPieux = 2.5 } = {}) {
-  const v = new Vue(`COUPE DANS L'AXE DE L'OUVRAGE — ${A.nom}`), G = A.G, S = A.sgn, X = x => S * x;
+export function vueCoupe(A, { longueurPieux = 2.5, vue = false } = {}) {
+  // vue = true : « vue suivant F » d'une pile (parements vus, fûts ombrés) au lieu d'une coupe hachurée
+  const v = new Vue(vue ? `VUE SUIVANT F — ${A.nom}` : `COUPE DANS L'AXE DE L'OUVRAGE — ${A.nom}`), G = A.G, S = A.sgn, X = x => S * x;
   const xs = (a, b) => [Math.min(X(a), X(b)), Math.max(X(a), X(b))];
-  const box = (a, b, z0, z1) => { const [p, q] = xs(a, b); coupe(v, p, z0, q, z1); };
+  const box = (a, b, z0, z1) => { const [p, q] = xs(a, b); if (vue) rect(v, 'COFFRAGE', p, z0, q, z1); else coupe(v, p, z0, q, z1); };
   const zH = A.zT - A.hc;
   // fondation, béton de propreté
   const xS = [A.xFut - A.B / 2, A.xFut + A.B / 2];
@@ -170,8 +197,8 @@ export function vueCoupe(A, { longueurPieux = 2.5 } = {}) {
     v.ligne('REPERES', [xe - S * 0.3, A.zSS - 0.05], [xt, A.zSS - 0.55]);
     v.texte('TEXTES', [xt + S * 0.05, A.zSS - 0.55], 'Béton de propreté ép. 10 cm', { h: 2.2, ancre: S > 0 ? 'g' : 'd', v: 'm' }); }
   if (A.kind === 'pile') {
-    if (A.type === 'colonnes') { box(-A.D / 2, A.D / 2, A.zDS, zH); box(-A.lc / 2, A.lc / 2, zH, A.zT); }
-    else { const p = [[-A.b / 2, A.zDS], [A.b / 2, A.zDS], [A.bTop / 2, A.zT], [-A.bTop / 2, A.zT]]; v.poly('COFFRAGE', p, true); v.hachure(p); }
+    if (A.type === 'colonnes') { box(-A.D / 2, A.D / 2, A.zDS, zH); if (vue) v.cylindre(-A.D / 2, A.D / 2, A.zDS, zH); box(-A.lc / 2, A.lc / 2, zH, A.zT); }
+    else { const p = [[-A.b / 2, A.zDS], [A.b / 2, A.zDS], [A.bTop / 2, A.zT], [-A.bTop / 2, A.zT]]; v.poly('COFFRAGE', p, true); if (!vue) v.hachure(p); }
   } else if (A.type === 'remblayee') {
     box(A.xMur[0], A.xMur[1], A.zDS, A.zT - A.hSom);
     box(A.xSom[0], A.xSom[1], A.zT - A.hSom, A.zT);
@@ -188,10 +215,10 @@ export function vueCoupe(A, { longueurPieux = 2.5 } = {}) {
     const p = [[X(xr), top], [X(xr - A.Lret), top], [X(xr - A.Lret), top - 0.8], [X(xr), Math.max(A.zDS, top - (A.Hm + A.hGG))]];
     v.poly('VUES', p, false);
     v.texte('TEXTES', [X(xr - A.Lret / 2), top + 0.12], `mur en retour, L = ${fr(A.Lret)}, e = ${fr(A.eRet)}`, { h: 2.2, ancre: 'c' });
-    if (A.dalle) {
-      const zt = A.zCh - 0.6, p2 = [[X(xr), zt], [X(xr - A.dalle.L), zt], [X(xr - A.dalle.L), zt - A.dalle.e], [X(xr), zt - A.dalle.e]];
-      v.poly('VUES', p2, true);
-      v.texte('TEXTES', [X(xr - A.dalle.L / 2), zt - A.dalle.e - 0.32], `dalle de transition ${fr(A.dalle.L)} × ${fr(A.dalle.e)}`, { h: 2.2, ancre: 'c' });
+    const DT = dalleTransition(A);
+    if (DT) {
+      for (const pp of [DT.dalle, DT.corbeau]) { const q = pp.map(([x, z]) => [X(x), z]); v.poly('COFFRAGE', q, true); v.hachure(q); }
+      v.texte('TEXTES', [X(xr - DT.L / 2), DT.z0 - DT.pente * DT.L / 2 - DT.e - 0.25], `dalle de transition ${fr(DT.L)} × ${fr(DT.e)}, pente 5 %`, { h: 2.2, ancre: 'c', v: 'h' });
     }
   }
   // bossage, appareil, tablier (silhouette)
@@ -294,7 +321,7 @@ export function quantitesAppui(A) {
   const w = A.width, Q = [];
   Q.push(['Semelle', A.B * A.Lf * A.hs]);
   if (A.kind === 'pile') {
-    if (A.type === 'colonnes') { Q.push([`Colonnes (${A.nCol} × Ø ${fr(A.D)})`, A.nCol * Math.PI * A.D ** 2 / 4 * A.H]); if (A.hc > 0) Q.push(['Chevêtre', w * A.lc * A.hc]); }
+    if (A.type === 'colonnes') { Q.push([A.marteau ? `Fût Ø ${fr(A.D)}` : `Colonnes (${A.nCol} × Ø ${fr(A.D)})`, A.nCol * Math.PI * A.D ** 2 / 4 * A.H]); if (A.hc > 0) Q.push([A.marteau ? 'Chevêtre en console' : 'Chevêtre', A.lc * (A.marteau ? w * A.hcEnd + (A.hc - A.hcEnd) * (A.D + 0.20 + (w - A.D - 0.20) / 2) : w * A.hc)]); }
     else Q.push(['Voile', A.Lv * (A.b + A.bTop) / 2 * A.H]);
   } else if (A.type === 'remblayee') {
     Q.push(['Mur de front', w * A.C.em * (A.Hm - A.hSom)]);
@@ -307,7 +334,7 @@ export function quantitesAppui(A) {
   if (A.kind === 'culee') {
     Q.push(['Garde-grève', w * GG.e * A.hGG]);
     Q.push(['Murs en retour (2)', 2 * A.eRet * A.Lret * (A.Hm + A.hGG) / 2]);
-    if (A.dalle) Q.push(['Dalle de transition', w * A.dalle.L * A.dalle.e]);
+    if (A.dalle) Q.push(['Dalle de transition', w * A.dalle.L * A.dalle.e], ['Corbeau d\'appui de la dalle de transition', w * 0.30 * 0.35]);
   }
   Q.push([`Bossages (${A.ap.yb.length})`, A.ap.yb.length * (A.ap.a + 2 * DEB) * (A.ap.b + 2 * DEB) * A.hBos]);
   const pieux = A.pieux ? { n: A.nF * A.nP, ml: A.nF * A.nP * A.Lp, V: A.nF * A.nP * Math.PI * A.Dp ** 2 / 4 * A.Lp } : null;
@@ -339,7 +366,7 @@ function notes(st, A) {
 /* --------------------------------------------------------------------------------------------- la feuille */
 export function planCoffrageAppui(st, i, cartouche = {}) {
   const A = geometrieAppui(st, i);
-  const el = vueElevation(A), cp = vueCoupe(A), pl = vuePlan(A), db = vueDetailBossage(A);
+  const el = vueElevation(A), cp = vueCoupe(A, { vue: A.kind === 'pile' }), pl = vuePlan(A), db = vueDetailBossage(A);
   const Q = quantitesAppui(A);
   const lignes = Q.lignes.map(([d, v]) => [d, 'm³', fr(v, 2)]);
   lignes.push(Object.assign(['Total béton', 'm³', fr(Q.total, 2)], { gras: true }));
@@ -350,7 +377,7 @@ export function planCoffrageAppui(st, i, cartouche = {}) {
   // élévation et coupe dans l'axe en haut, vue en plan dessous (alignée sur l'élévation), tableaux au-dessus du cartouche
   const F = composer({ titre: `${A.kind === 'culee' ? 'CULÉE' : 'PILE'} ${A.nom} — PLAN DE COFFRAGE`, cartouche,
     rangees: [[el, cp], [pl, db]],
-    groupes: [{ vues: [el, cp, pl], cible: 75, min: 20 }, { vues: [db], cible: 20, min: 10 }],
+    groupes: [{ vues: [el, cp, pl], cible: 75, min: 20 }, { vues: [db], cible: 20, min: 20 }],
     aligner: [{ ref: el, vue: pl }],
     colonne: { largeur: 182, hauteur: 2 + ht + 5 + hc + 6 + hn + 4 },
     poser: (F, [x, y]) => {

@@ -11,7 +11,7 @@
 import { Vue } from './dessin.js';
 import { composer } from './mise_en_page.js';
 import { geometrie } from './geometrie.js';
-import { geometrieAppui, vueCoupe, appuisDisponibles, couperNote } from './appuis.js';
+import { geometrieAppui, vueCoupe, appuisDisponibles, couperNote, dalleTransition } from './appuis.js';
 import { vuePlan } from './coffrage.js';
 
 const fr = (x, d = 2) => x.toFixed(d).replace('.', ',');
@@ -58,14 +58,15 @@ export function vueCoupeLongitudinale(st, G = geometrie(st), e = 250) {
     if (!A.end) { tn.push([u - A.B / 2 - 1, A.zTN], [u + A.B / 2 + 1, A.zTN]); return; }
     const s = A.sgn;   // +1 : C0 (travée à droite), −1 : dernière culée (travée à gauche)
     const xAr = u + s * A.xGGar, uLoin = xAr - s * Lg, zc = zR(s > 0 ? uA : uB);
-    // remblai d'accès derrière la culée, au niveau de la chaussée (pointillé jusqu'au terrain naturel)
-    v.poly('VUES', [[uLoin, zc], [xAr, zc]]);
-    v.pointille([[xAr, zc - 0.05], [uLoin, zc - 0.05], [uLoin, Math.max(A.zTN, A.zDS)], [xAr, Math.max(A.zTN, A.zDS)]], 3.5);
-    if (A.dalle) {
-      const zt = zc - 0.6, p = [[xAr, zt], [xAr - s * A.dalle.L, zt], [xAr - s * A.dalle.L, zt - A.dalle.e], [xAr, zt - A.dalle.e]];
-      v.poly('COFFRAGE', p, true);
-      v.texte('TEXTES', [uLoin, zt - A.dalle.e - 3.5 * k], `dalle de transition ${fr(A.dalle.L)} × ${fr(A.dalle.e)}`, { h: 2.2, ancre: s > 0 ? 'g' : 'd' });
-    }
+    // remblai d'accès derrière la culée : chaussée (corps de chaussée de 0,30 m), dalle de transition et corbeau (repris de
+    // la coupe de l'appui), remblai en pointillé sous la dalle jusqu'au terrain naturel
+    const DT = dalleTransition(A), zb = Math.max(A.zTN, A.zDS), zs = zc - 0.30;
+    v.poly('VUES', [[uLoin, zc], [xAr, zc]]); v.poly('VUES', [[uLoin, zs], [xAr, zs]]);
+    if (DT) {
+      const xL = xAr - s * DT.L, zL = DT.z0 - DT.pente * DT.L - DT.e;
+      v.pointille([[xAr, DT.z0 - DT.e - 0.45], [xL, zL - 0.05], [xL, zs - 0.05], [uLoin, zs - 0.05], [uLoin, zb], [xAr, zb]], 3.5);
+      v.texte('TEXTES', [uLoin, zL - 3.5 * k], `dalle de transition ${fr(DT.L)} × ${fr(DT.e)}`, { h: 2.2, ancre: s > 0 ? 'g' : 'd' });
+    } else v.pointille([[xAr, zs - 0.05], [uLoin, zs - 0.05], [uLoin, zb], [xAr, zb]], 3.5);
     if (A.type === 'remblayee') {
       // le mur de front retient le remblai : terrain naturel devant le mur
       tn.push([uLoin, Math.min(A.zTN, zc - 1)], [u + s * (A.xFut + A.B / 2 + 1), A.zTN]);
@@ -85,9 +86,9 @@ export function vueCoupeLongitudinale(st, G = geometrie(st), e = 250) {
   v.texte('TEXTES', [tn[0][0], tn[0][1] - 1.2 * k], 'TN', { h: 2.6, ancre: 'g', v: 'h', gras: true });
   // annotations des fondations
   As.forEach((A, i) => {
-    const u = x0[i], zb = A.pieux ? A.zSS - (A.Lp <= 8 ? A.Lp : 5) - 0.7 : A.zSS - 0.6;
+    const u = x0[i], zb = A.pieux ? A.zSS - (A.Lp <= 8 ? A.Lp : 5) - 0.7 : A.zSS - 0.10 - 2 * k;
     const t = A.pieux ? `${A.nF * A.nP} pieux Ø ${fr(A.Dp)}, L = ${fr(A.Lp)}` : `semelle ${fr(A.B)} × ${fr(A.Lf)} × ${fr(A.hs)}`;
-    v.texte('TEXTES', [u, zb], t, { h: 2.2, ancre: 'c' });
+    v.texte('TEXTES', [u, zb], t, { h: 2.2, ancre: 'c', v: 'h' });
   });
   // cotes (abouts et travées, longueur totale) puis bulles des appuis, espacées en mm papier
   const zc1 = Math.max(...zTop) + G.tRev + 7 * k, zc2 = zc1 + 7 * k, zMax = zc2 + 9 * k;
@@ -141,6 +142,7 @@ function notesEnsemble(st, G) {
     '2. Cotes en mètres. ' + (niv ? 'Niveaux NGF, rattachés au plan de nivellement.' : 'Niveaux relatifs (m) : ±0,00 = dessus de la dalle à l\'axe.'),
     '3. Terrain naturel, talus et remblais d\'accès : schématiques, à caler sur les profils en long et en travers du projet routier.',
     '4. Coffrage des appuis et du tablier, ferraillage, équipements : plans spécifiques.',
+    ...G.x0.map((_, i) => { try { return geometrieAppui(st, i); } catch { return null; } }).filter(A => A && A.alerte).slice(0, 1).map(A => `5. ATTENTION — ${A.alerte}`),
   ].flatMap(t => couperNote(t, 84))];
 }
 

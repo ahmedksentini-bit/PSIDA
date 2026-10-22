@@ -421,3 +421,7 @@ cylindriques ombrés, désignations dans les vues (semelle, chevêtre, sommier, 
 équipements (barrière type BN4 avec platine et lisses, glissière à double onde, garde-corps type S8, corniche avec nez et
 larmier, bordure chanfreinée), coupe transversale annotée (lignes de rappel, couche de roulement, flèches de dévers),
 talus 3/2 en terrain.
+v0.74 : pile marteau (fût cylindrique unique, chevêtre en console à sous-face inclinée ; calcul d'une pile à une colonne,
+métré de la forme réelle, aciers inférieurs et cadres suivant la sous-face) ; « vue suivant F » des piles avec flèche sur
+l'élévation ; dalle de transition sur corbeau, pente 5 % ; plan type de la corniche préfabriquée (section et ferraillage
+type) sur la feuille Équipements ; alerte d'about trop court reprise sur la feuille d'ensemble.

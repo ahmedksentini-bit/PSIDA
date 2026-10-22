@@ -157,7 +157,12 @@ export function parseSupports(d) {
   const v = (k, def) => (String(d[k] ?? '').trim() === '' ? def : +d[k]);
   const H = nums(d.ap_pileH || '');
   return {
-    pile: { type: d.ap_pileType || 'voile', H: H.length ? H : [6], b: v('ap_pileB', 0.6), bTop: v('ap_pileBtop', null), Lv: v('ap_pileLv', null), hcons: v('ap_hcons', 1.0), nCol: v('ap_nCol', 3), D: v('ap_D', 0.8), hc: v('ap_hc', 0), lc: v('ap_lc', 1.2) },
+    pile: (() => {
+      // pile marteau : fût cylindrique unique et chevêtre en console, calculée comme une pile à une colonne
+      const marteau = d.ap_pileType === 'marteau', hc = v('ap_hc', 0) || (marteau ? 1.5 : 0);
+      return { type: marteau ? 'colonnes' : d.ap_pileType || 'voile', marteau, H: H.length ? H : [6], b: v('ap_pileB', 0.6), bTop: v('ap_pileBtop', null), Lv: v('ap_pileLv', null), hcons: v('ap_hcons', 1.0),
+        nCol: marteau ? 1 : v('ap_nCol', 3), D: v('ap_D', marteau ? 1.2 : 0.8), hc, lc: v('ap_lc', marteau ? 1.6 : 1.2), hcEnd: marteau ? Math.min(hc, v('ap_hcEnd', 0.5 * hc)) : null };
+    })(),
     culee: { type: d.ap_culType || 'remblayee', Hm: v('ap_Hm', 3), em: v('ap_em', 0.8), hGG: v('ap_hGG', null), Lret: v('ap_Lret', 4), nCol: v('ap_culNCol', 3), D: v('ap_culD', 0.8), hc: v('ap_culHc', 1.0), lc: v('ap_culLc', 1.6), hv: v('ap_culHv', 1.0), dalle: (d.ap_dalleGG || 'oui') === 'oui' },
     found: { type: d.ap_found || 'superficielle', pileType: d.ap_pieu || 'fore-boue', B: v('ap_B', 3), hs: v('ap_hs', 1), De: v('ap_De', 1), pileD: v('ap_pileD', 0.8), nPile: v('ap_nPile', 3), nFiles: v('ap_nFiles', 2), sPile: v('ap_sPile', 2.4), Lpile: v('ap_Lpile', 15),
       incl: nums(d.ap_incl || ''), tete: d.ap_tete || 'encastre', pied: d.ap_pied || 'libre', secondOrdre: !!d.ap_pieuSO,
