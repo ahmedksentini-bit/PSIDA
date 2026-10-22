@@ -107,3 +107,30 @@ test('Séisme : action, rapport de distorsion de Penzien, sections renforcées',
   const B = calculPicf({ n: 1, B: 3, H: 2.5, L: 15, e: 0.3, Hr: 1.5 }, { sol: 'winkler', hEau: 1.5 }, { seisme: { actif: true, zone: 3, approche: 'B' } });
   assert.equal(B.sisme.parA, 0);
 });
+
+test('Sol d\'un cadre : ESOL depuis pressiomètre, pénétromètres statique et dynamique ; V_s depuis N', async () => {
+  const { solDepuisProfil, vsImai } = await import('../src/cadre/solProfil.js');
+  const p = solDepuisProfil('pressio', '0.5 10 1 sable\n2 10 1 sable', 3.6);
+  const r = (3.6 + 0.3) / 7.2; proche(p.esol, 2 * 10 * (1 / (2 * (1 / 3) * 0.32)) * r * r * 3.6, 1e-12);   // guide PICF-EL annexe 2
+  const c = solDepuisProfil('cpt', '0.5 4 sable', 3.6), d = solDepuisProfil('dpt', '0.5 4 sable 10', 3.6);
+  proche(c.esol, d.esol, 1e-12);                       // sable : q_d/q_c = 1 par défaut
+  proche(d.vs, vsImai(10), 1e-12); proche(vsImai(10), 96.9 * 10 ** 0.314, 1e-12);
+  const d2 = solDepuisProfil('dpt', '0.5 4 sable', 3.6, { rapportQd: 2 });
+  assert.ok(d2.esol < d.esol);
+  const inp = parseCadre({ cf_solSrc: 'dpt', cf_profil: '0.5 4 sable 10\n1.5 5 sable 12', cf_hEau: '1', cf_sis: 'oui' });
+  assert.ok(inp.hyp.esol > 0 && inp.opts.seisme.Vs > 0);
+  const o = computeCadre(inp).blocs[0];
+  assert.ok(o.alertes.some(a => /pénétromètre dynamique/.test(a)));
+});
+
+test('Assistant de saisie : coupe, plan et synthèse dessinés sans calcul', async () => {
+  const S = await import('../web/cadre_schema.js');
+  const { geometrieCadre } = await import('../src/cadre/picf.js');
+  for (const d of [{ cf_L: '15' }, { cf_L: '12', cf_type: 'pipo', cf_franchie: 'route', cf_portee: 'rail', cf_gabH: '4.75', cf_sis: 'oui' }]) {
+    const inp = parseCadre(d), geom = geometrieCadre(inp.opts.ouvert ? { ...inp.geom, er: 0 } : inp.geom); if (inp.opts.ouvert) geom.er = 0;
+    const lu = { d, inp, geom, setra: { et: true, er: true, ep: true, ei: true } };
+    const c = S.coupeCadreSVG(lu);
+    assert.ok(c.includes('data-k="cf_B') && c.includes('data-k="cf_Hr') && c.includes('data-k="cf_portee'));
+    assert.ok(S.planCadreSVG(lu).includes('data-k="cf_biais') && S.syntheseCadreHTML(lu).includes('<li>'));
+  }
+});

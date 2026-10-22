@@ -14,7 +14,7 @@
     for (var i = 0; i < secs.length; i++) secs[i].classList.toggle('active', secs[i].id === 'tab-' + id);
     var as = document.querySelectorAll('nav.tabs a');
     for (var j = 0; j < as.length; j++) as[j].setAttribute('aria-selected', String(as[j].getAttribute('data-tab') === id));
-    if (id === 'seisme') { var fr = document.getElementById('ec8-frame'); if (fr && !fr.getAttribute('src')) fr.setAttribute('src', fr.getAttribute('data-src') + '?v=' + '0.80'); }
+    if (id === 'seisme') { var fr = document.getElementById('ec8-frame'); if (fr && !fr.getAttribute('src')) fr.setAttribute('src', fr.getAttribute('data-src') + '?v=' + '0.81'); }
     if (push !== false) { var d = hashData(); history.replaceState(null, '', '#' + id + (d ? '/d=' + d : '')); }
     requestAnimationFrame(function () {
       var plots = document.querySelectorAll('#tab-' + id + ' .plot');

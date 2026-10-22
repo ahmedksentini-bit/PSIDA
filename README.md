@@ -452,3 +452,8 @@ ou saisie directe) ; approche A inertie + poussée dynamique d'ouvrage rigide (N
 approche B distorsion imposée par le terrain (Wang 1993, Penzien 2000, FHWA-NHI-10-034 § 13.5 ; G réduit selon
 NF EN 1998-5 tableau 4.1), enveloppe ou approche seule ; combinaisons G + P + E (deux sens, ±k_v, K₀ max/min) ;
 sections renforcées si le séisme gouverne ; manuel § 27.9.
+v0.81 : assistant de saisie des cadres (web/cadre_schema.js) — coupe transversale à l'échelle, vue en plan et synthèse
+dessinées en direct avant tout calcul, éléments rattachés aux champs (clignotement bleu), aide contextuelle ; données du
+sol de fondation (src/cadre/solProfil.js) : profils pressiométrique (guide PICF-EL annexe 2, Terzaghi et Peck),
+pénétrométrique statique (Sanglerat, Ménard), pénétrométrique dynamique (q_d/q_c du site ou par défaut) et SPT
+(V_s d'Imai et Tonouchi) ; manuel § 27.2 et 27.2 bis.

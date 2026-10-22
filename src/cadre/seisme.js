@@ -91,7 +91,7 @@ export function calculSismique(ctx, sIn) {
   const Gmax = rho * Vs * Vs / G_ACC, Gred = reductionG(A.agS / G_ACC), Gs = Gmax * Gred;  // t/m²
   const zm = geom.Hr + geom.et + geom.H / 2, sigv = rho * zm, tau = (A.agS / G_ACC) * sigv * rd(zm), gam = tau / Gs, dff = gam * hc;
   const Fl = (Gs / Ks) * (L / hc), R = rapportDistorsion(Fl, nu), ds = R * dff, Pb = Ks * ds;
-  notes.push(`Approche B (distorsion imposée, FHWA-NHI-10-034 § 13.5) : V_s = ${Vs.toFixed(0)} m/s${sIn.Vs > 0 ? '' : ' (indicatif, à mesurer)'}, G = ρV_s²·${fr(Gred)} = ${fr(Gs / T_PAR_MPA, 1)} MPa ; à mi-hauteur z = ${fr(zm)} m, τ = ${fr(tau, 3)} t/m² (r_d = ${fr(rd(zm), 3)}), γ_ff = ${(gam * 1e3).toFixed(3).replace('.', ',')} ‰, Δ_ff = ${(dff * 1000).toFixed(2).replace('.', ',')} mm ; K_s = ${fr(Ks, 0)} t/m (E_i = ${(Ei / T_PAR_MPA).toFixed(0)} MPa), F = ${fr(Fl, 3)}, R = ${fr(R, 3)} (ν = ${fr(nu)}), Δ_s = ${(ds * 1000).toFixed(2).replace('.', ',')} mm, force en tête ${fr(Pb)} t/ml.`);
+  notes.push(`Approche B (distorsion imposée, FHWA-NHI-10-034 § 13.5) : V_s = ${Vs.toFixed(0)} m/s${sIn.vsSource === 'profil' ? ' (corrélation du profil)' : sIn.Vs > 0 ? '' : ' (indicatif, à mesurer)'}, G = ρV_s²·${fr(Gred)} = ${fr(Gs / T_PAR_MPA, 1)} MPa ; à mi-hauteur z = ${fr(zm)} m, τ = ${fr(tau, 3)} t/m² (r_d = ${fr(rd(zm), 3)}), γ_ff = ${(gam * 1e3).toFixed(3).replace('.', ',')} ‰, Δ_ff = ${(dff * 1000).toFixed(2).replace('.', ',')} mm ; K_s = ${fr(Ks, 0)} t/m (E_i = ${(Ei / T_PAR_MPA).toFixed(0)} MPa), F = ${fr(Fl, 3)}, R = ${fr(R, 3)} (ν = ${fr(nu)}), Δ_s = ${(ds * 1000).toFixed(2).replace('.', ',')} mm, force en tête ${fr(Pb)} t/ml.`);
 
   // ── Combinaisons ─────────────────────────────────────────────────────────────────────────────────────
   const barres = accesseurs(n, !!ouvert);

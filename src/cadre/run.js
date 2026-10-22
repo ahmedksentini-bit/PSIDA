@@ -4,6 +4,7 @@
  */
 import { calculPicf, calculPicfBlocs } from './picf.js';
 import { epaisseurPicf } from './details.js';
+import { solDepuisProfil } from './solProfil.js';
 
 const num = (v, d = null) => { if (v === undefined || v === null || String(v).trim() === '') return d; const x = Number(String(v).replace(',', '.')); return Number.isFinite(x) ? x : d; };
 
@@ -34,6 +35,17 @@ export function parseCadre(d) {
     seisme: { actif: d.cf_sis === 'oui', mode: d.cf_sisMode === 'direct' ? 'direct' : 'zone', zone: Math.round(num(d.cf_zone, 3)), categorie: d.cf_cat || 'III', classeSol: d.cf_solEC8 || 'B',
       ag: num(d.cf_ag, 1.0), S: num(d.cf_S, 1.2), Vs: num(d.cf_Vs, 0), nu: num(d.cf_nuSol, 0.35), approche: d.cf_sisAppr || 'enveloppe' },
   };
+  // Sol : table indicative, ESOL saisi, ou profil d'essais (pressiomètre, pénétromètres statique ou dynamique, SPT)
+  const src = d.cf_solSrc || 'table';
+  if (src === 'table') hyp.esol = 0;
+  if (['pressio', 'cpt', 'dpt', 'spt'].includes(src)) {
+    const Bradier = geom.n * geom.B + (geom.n - 1) * geom.ei + 2 * geom.ep;
+    const r = solDepuisProfil(src, d.cf_profil || '', Bradier, { rapportQd: num(d.cf_rqd, 0) });
+    hyp.notesSol = r.notes;
+    if (r.esol > 0) { hyp.esol = r.esol; hyp.esolSource = `ESOL ${r.esol.toFixed(1).replace('.', ',')} MPa tiré du profil ${({ pressio: 'pressiométrique', cpt: 'pénétrométrique statique', dpt: 'pénétrométrique dynamique', spt: 'SPT' })[src]}`; }
+    if (r.vs > 0 && !(opts.seisme.Vs > 0)) { opts.seisme.Vs = r.vs; opts.seisme.vsSource = 'profil'; }
+    if (r.nature) hyp.natureProfil = r.nature;
+  }
   return { geom, hyp, opts, type };
 }
 

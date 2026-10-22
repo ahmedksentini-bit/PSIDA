@@ -265,10 +265,11 @@ export function calculPicf(geomIn, hypIn = {}, opts = {}) {
   const mars = h.marston ? Sol.marston(geom.Hr, Dext, Hext, h.incompressible) : { K: 1, borne: false, message: 'Alourdissement de Marston non appliqué (option).' };
   const qRem = qRemNu * mars.K;
   notes.push('Effet Marston — ' + mars.message);
+  if (h.notesSol) notes.push(...h.notesSol);
   const gPerm = C.vertical(n, qTrav + qRem * h.remblaiMax + h.qsupMax), gPermMin = C.vertical(n, qTrav + qRem * h.remblaiMin + h.qsupMin);
 
   const esolV = h.esol > 0 ? h.esol : Sol.esolIndicatif(h.nature, h.etat);
-  const esolSrc = h.esol > 0 ? `ESOL saisi : ${fr(h.esol, 1)} MPa` : esolV != null ? `ESOL indicatif ${fr(esolV, 1)} MPa — ${Sol.libelleNature(h.nature)}, ${Sol.libelleEtat(h.nature, h.etat)} (annexe 2 du guide)` : `Le guide ne donne pas de valeur d'ESOL pour ${Sol.libelleNature(h.nature)} ${Sol.libelleEtat(h.nature, h.etat)} : la saisir.`;
+  const esolSrc = h.esolSource ? h.esolSource : h.esol > 0 ? `ESOL saisi : ${fr(h.esol, 1)} MPa` : esolV != null ? `ESOL indicatif ${fr(esolV, 1)} MPa — ${Sol.libelleNature(h.nature)}, ${Sol.libelleEtat(h.nature, h.etat)} (annexe 2 du guide)` : `Le guide ne donne pas de valeur d'ESOL pour ${Sol.libelleNature(h.nature)} ${Sol.libelleEtat(h.nature, h.etat)} : la saisir.`;
   let sol = null;
   if (ouvert) notes.push(`Portique ouvert (PIPO) : piédroits ${ouvert === 'articule' ? 'articulés' : 'encastrés'} sur leurs semelles ; les réactions d'appui sont rendues pour justifier les fondations (portance, glissement, renversement), qui ne le sont pas ici.`);
   else if (h.sol === 'winkler') {
