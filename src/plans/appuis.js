@@ -79,7 +79,7 @@ export function geometrieAppui(st, i) {
 }
 
 /* ------------------------------------------------------------------------- élévation (vue suivant l'axe) */
-function vueElevation(A) {
+export function vueElevation(A) {
   const v = new Vue(`ÉLÉVATION ${A.kind === 'culee' ? 'DE LA CULÉE' : 'DE LA PILE'} ${A.nom} (vue suivant l'axe de l'ouvrage)`);
   const X = y => -y, w = A.width, G = A.G;
   // fondation
@@ -145,7 +145,7 @@ function vueElevation(A) {
 }
 
 /* ------------------------------------------------------------------------------ coupe dans l'axe de l'ouvrage */
-function vueCoupe(A) {
+export function vueCoupe(A) {
   const v = new Vue(`COUPE DANS L'AXE DE L'OUVRAGE — ${A.nom}`), G = A.G, S = A.sgn, X = x => S * x;
   const xs = (a, b) => [Math.min(X(a), X(b)), Math.max(X(a), X(b))];
   const box = (a, b, z0, z1) => { const [p, q] = xs(a, b); coupe(v, p, z0, q, z1); };
@@ -223,7 +223,7 @@ function vueCoupe(A) {
 }
 
 /* ----------------------------------------------------------------------------------- vue en plan de la fondation */
-function vuePlan(A) {
+export function vuePlan(A) {
   const v = new Vue(`VUE EN PLAN — FONDATION ET CORPS DE L'APPUI ${A.nom}`), X = y => -y, S = A.sgn, w = A.width;
   const xS = [A.xFut - A.B / 2, A.xFut + A.B / 2].map(x => S * x).sort((p, q) => p - q);
   rect(v, 'COFFRAGE', -A.Lf / 2, xS[0], A.Lf / 2, xS[1]);

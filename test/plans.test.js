@@ -167,3 +167,23 @@ test('Maillage du modèle en plaque : comptes, SVG et DXF', () => {
   assert.equal((D.match(/\r\nLINE\r\n/g) || []).length, S.aretes);
   assert.equal((D.match(/\r\nCIRCLE\r\n/g) || []).length, S.appuis);
 });
+
+import { planFerraillageAppui, reperesAppui } from '../src/plans/ferraillageAppuis.js';
+
+test('Ferraillage des appuis : repères, minimums PP 73, bordereau et feuille', () => {
+  const v = compute(parseData({ ...formDefaults(), ap_pileType: 'colonnes', ap_hc: '1.0', ap_culType: 'enterree', ap_found: 'pieux' }));
+  for (const s of [st, v]) for (let i = 0; i < 2; i++) {
+    const { A, marks } = reperesAppui(s, i);
+    assert.ok(marks.length >= 5);
+    for (const m of marks) { assert.ok(m.L > 0 && m.nombre > 0 && m.masse > 0, `${m.label}`); if (m.req != null && m.prov != null && Number.isFinite(m.req)) assert.ok(m.prov >= m.req - 1e-9, `${m.label} : ${m.prov} < ${m.req}`); }
+    // colonnes : au moins 20 cm² par colonne (PP73 1.3.2 § 1.1.2)
+    const col = marks.find(m => m.pos === 'verC'); if (col) assert.ok(col.prov >= 20e-4 - 1e-9);
+    // chevêtre / sommier : 0,5 % au moins pour l'ensemble des nappes (§ 2.2.5.1)
+    const sup = marks.find(m => m.pos === 'chevSup'), inf = marks.find(m => m.pos === 'chevInf');
+    if (sup && A.kind === 'pile' && A.lc) assert.ok(sup.prov + inf.prov >= 0.005 * A.lc * A.hc - 1e-9);
+    const F = planFerraillageAppui(s, i, { numero: 'F-' + i });
+    assert.ok(F.masse > 0 && F.vues.length >= 3);
+    const D = lireDXF(feuilleDXF(F)); assert.deepEqual(D.fin, ['0', 'EOF']);
+    assert.ok(feuilleSVG(F).includes('PLAN DE FERRAILLAGE'));
+  }
+});

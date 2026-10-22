@@ -50,7 +50,7 @@ web/vendor/         plotly.min.js (2.35.2, MIT)
 web/vendor/plans/   jsPDF 2.5.2 et svg2pdf.js 2.2.4 (MIT), DejaVu Sans Condensed (licence Bitstream Vera) pour le PDF des plans
 web/plans_view.js   carte « Plans d'exécution » : cartouche, aperçu, téléchargements ; web/plans_pdf.js : feuilles → PDF
 src/plans/          plans d'exécution : dessin.js (vues, feuilles), primitives.js, svg.js, dxf.js (R12), geometrie.js,
-                    coffrage.js, ferraillage.js, bordereau.js (ISO 4066), appuis.js (coffrage des appuis)
+                    coffrage.js, ferraillage.js, bordereau.js (ISO 4066), appuis.js et ferraillageAppuis.js (appuis), equipements.js
 src/linalg.js       Gauss, Gauss-Legendre
 src/beam.js         poutre continue : lignes d'influence M, V, R ; enveloppes UDL / travées entières / convois
 src/guyon.js        Guyon-Massonnet recalculé (plaque isotrope, ν = 0) : K, μ, m_y multi-harmoniques
@@ -398,3 +398,8 @@ d'évacuation des eaux, métré) ; contrôle des poids propres par rapport aux c
 v0.69 : maillage du modèle en plaque (onglet Tablier, web/maillage_view.js) — vue en plan des triangles DKT, appuis-ressorts,
 épaisseur, sections et fibres, nœuds et numéros ; statistiques ; export DXF ; aperçu du maillage sans calcul en plaque ;
 manuel § 20.3 et § 26.6.
+v0.70 : plans de ferraillage des appuis (src/plans/ferraillageAppuis.js) — sections du calcul des appuis, dispositions des
+ferraillages types du Sétra (PP 73 pièce 1.3.2) : fûts (0,2 %, ≥ 20 cm² par colonne ou petit voile), chevêtres et sommiers
+(0,5 % pour l'ensemble des nappes, cadres ≥ 0,2 % en plusieurs cadres par cours), garde-grève type (h ≤ 3 m), murs en retour,
+semelles (0,12 % par nappe, tirants sur pieux), cages et cerces des pieux ; attentes, recouvrements EC2 ; bordereau ISO 4066
+(code 99 : cerces) ; manuel § 26.6.

@@ -5,6 +5,7 @@
  *   11 un retour à 90° (barre en L)  L = A + B − 0,5 r − d
  *   21 deux retours à 90° (U)        L = A + B + C − r − 2d
  *   51 cadre fermé à crochets        L = 2 (A + B + C) − 2,5 r − 5d
+ *   99 forme spéciale (cerce circulaire de pieu ou de colonne) : A = longueur développée, recouvrement compris
  * Cotes A, B, C hors tout (mm, arrondies à 5 mm) ; r = rayon intérieur de cintrage, mandrin de l'EC2 (§ 8.3 :
  * φm = 4φ pour φ ≤ 16 mm, 7φ au-delà, r = φm / 2) ; longueur de coupe L arrondie aux 25 mm supérieurs.
  * Les barres trop longues pour une seule pièce (repères à plusieurs pièces de PSIDA) sont découpées en sous-repères
@@ -22,6 +23,7 @@ export function longueurCoupe(code, { A = 0, B = 0, C = 0 }, phi) {
   if (code === '11') return A + B - 0.5 * r - d;
   if (code === '21') return A + B + C - r - 2 * d;
   if (code === '51') return 2 * (A + B + C) - 2.5 * r - 5 * d;
+  if (code === '99') return A;   // forme spéciale (cerce circulaire) : A = longueur développée, recouvrement compris
   throw new Error('code de forme inconnu : ' + code);
 }
 
@@ -94,6 +96,11 @@ export function croquisForme(code, [x, y, w, hc]) {
   if (code === '51') {
     const Xa = X0 + (X1 - X0) * 0.25, Xb = X1 - (X1 - X0) * 0.25;
     return { traits: [[[Xa + 2, Y1 - 1.4], [Xa, Y1], [Xa, Y0], [Xb, Y0], [Xb, Y1], [Xa, Y1], [Xa + 1.4, Y1 - 2]]], lettres: [['A', [Xa - 1.6, (Y0 + Y1) / 2]], ['B', [(Xa + Xb) / 2, Y0 + 1.2]], ['C', [Xa + 3.4, Y1 - 1.6]]] };
+  }
+  if (code === '99') {
+    const cx = (X0 + X1) / 2, cy = (Y0 + Y1) / 2, r = Math.min(X1 - X0, Y1 - Y0) / 2 * 0.9, pts = [];
+    for (let k = 0; k <= 24; k++) { const a = 2 * Math.PI * k / 22; pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); }
+    return { traits: [pts], lettres: [] };
   }
   return { traits: [], lettres: [] };
 }

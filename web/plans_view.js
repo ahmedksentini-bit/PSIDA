@@ -6,6 +6,7 @@
 import { planCoffrage } from '../src/plans/coffrage.js';
 import { planFerraillage } from '../src/plans/ferraillage.js';
 import { planCoffrageAppui, appuisDisponibles } from '../src/plans/appuis.js';
+import { planFerraillageAppui } from '../src/plans/ferraillageAppuis.js';
 import { planEquipements, lireEquipements, controleCharges, souffleJoints } from '../src/plans/equipements.js';
 import { feuilleSVG } from '../src/plans/svg.js';
 import { feuilleDXF, octetsCp1252 } from '../src/plans/dxf.js';
@@ -37,6 +38,7 @@ const PLANS = {
 function plan(st, k) {
   if (PLANS[k]) return PLANS[k];
   const i = +k.split('-')[1], nom = i === 0 ? 'C0' : i === st.deck.beam.x0.length - 1 ? `C${i}` : `P${i}`;
+  if (k.startsWith('appuiF-')) return { titre: `Appui ${nom} — ferraillage`, fichier: null, num: () => `${val('plan_num_appF') || 'APP-FER'}-${nom}`, faire: (s, c) => planFerraillageAppui(s, i, c) };
   return { titre: `Appui ${nom} — coffrage`, fichier: null, num: () => `${val('plan_num_app') || 'APP-COF'}-${nom}`, faire: (s, c) => planCoffrageAppui(s, i, c) };
 }
 function feuille(st, k) { const P = plan(st, k); return P.faire(st, cartouche(P.num())); }
@@ -49,7 +51,7 @@ const nomFichier = (st, k, ext) => { const P = plan(st, k); return `${P.num().re
 /** Plans disponibles pour l'état de calcul : le ferraillage seulement pour une dalle armée calculée. */
 export function plansDisponibles(st) {
   if (!st || !st.deck) return [];
-  return [...(st.rebar && st.rebar.marks ? ['coffrage', 'ferraillage'] : ['coffrage']), 'equipements', ...appuisDisponibles(st).map(i => `appui-${i}`)];
+  return [...(st.rebar && st.rebar.marks ? ['coffrage', 'ferraillage'] : ['coffrage']), 'equipements', ...appuisDisponibles(st).flatMap(i => [`appui-${i}`, `appuiF-${i}`])];
 }
 
 export function renderPlans(st) {

@@ -200,7 +200,7 @@ const COLS = [
 ];
 const milliers = x => Math.round(x).toLocaleString('fr-FR').replace(/[  ]/g, ' ');
 
-function placerBordereau(F, lignes, [x, y, w, hmax]) {
+export function placerBordereau(F, lignes, [x, y, w, hmax]) {
   const R = recapitulatif(lignes);
   const hl = Math.min(6, Math.max(4.2, (hmax - 16 - (R.diam.length + 3) * 5.5) / (lignes.length + 2)));
   const tab = {
