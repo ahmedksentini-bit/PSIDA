@@ -1,9 +1,8 @@
 /**
- * Feuille « Dispositifs de retenue — plans types » : plans de principe des abords de l'ouvrage, à la manière des plans
- * types des dossiers d'ouvrages : raccordement de la barrière de l'ouvrage à la glissière de la route (zone de transition),
- * extrémités de file (enfouie dans le talus, abaissée et ancrée), queue de carpe réservée à l'extrémité aval d'une chaussée
- * unidirectionnelle, implantation de la glissière en remblai. Dessins de principe : la notice du dispositif certifié
- * (NF EN 1317) fixe les entraxes, les longueurs de transition et les extrémités.
+ * Feuille « Dispositifs de retenue — abords de l'ouvrage » : vue en plan schématique de l'ouvrage et de ses abords (barrière
+ * de l'ouvrage, raccords, glissières, extrémités), élévation de principe du raccord et implantation de la glissière en
+ * remblai. Les raccords et les extrémités sont des dispositifs certifiés : ils renvoient aux fiches techniques du fournisseur
+ * (NF EN 1317). La queue de carpe est interdite en extrémité ; elle ne sert qu'au raccord entre deux dispositifs.
  */
 import { Vue } from './dessin.js';
 import { composer } from './mise_en_page.js';
@@ -14,7 +13,7 @@ const lab = (v, p, q, t, ancre = 'g', r = v.echelle / 1000 * 0.6) => { v.ligne('
 
 /** Élévation du raccordement : barrière de l'ouvrage, transition, glissière courante. */
 function vueRaccordement(eq) {
-  const v = new Vue('RACCORDEMENT DE L\'OUVRAGE À LA ROUTE (élévation, principe)'), h = eq.hDR || 1.0, hg = 0.75;
+  const v = new Vue('RACCORD DE LA BARRIÈRE DE L\'OUVRAGE À LA GLISSIÈRE (élévation, principe)'), h = eq.hDR || 1.0, hg = 0.75;
   // ouvrage : tablier et corniche, culée en amorce
   rect(v, 'COFFRAGE', 0, -0.9, 12, 0); v.hachure([[0, -0.9], [12, -0.9], [12, 0], [0, 0]]);
   v.texte('TEXTES', [6, -0.45], 'tablier (corniche vue)', { h: 2.4, ancre: 'c', v: 'm' });
@@ -30,55 +29,35 @@ function vueRaccordement(eq) {
   // glissière courante
   for (let x = xt - 4; x >= -22; x -= 4) rect(v, 'EQUIPEMENTS', x - 0.03, -0.4, x + 0.03, hg);
   rect(v, 'EQUIPEMENTS', -22, hg - 0.31, xt, hg);
-  v.coteH([xt, hg], [0, hg], 1.6, 'zone de transition (longueur selon la notice)');
+  v.coteH([xt, hg], [0, hg], 1.6, 'raccord : fiche technique du fournisseur (NF EN 1317)');
   v.coteH([-22, hg], [xt, hg], 1.6, 'glissière courante');
-  v.coteH([xt - 4, -0.4], [xt, -0.4], -1.2, 'entraxe courant');
-  v.coteH([-3.5, -0.4], [-2.5, -0.4], -1.2, 'réduit');
   lab(v, [6, h - 0.07], [8, 2.6], `Barrière de l'ouvrage (type BN4), h ${fr(h)}`);
-  lab(v, [-6, hg - 0.2], [-8, 2.6], 'Glissière raidie : entraxe des supports réduit, lisse doublée, raccord rigide sur la barrière', 'd');
+  lab(v, [-6, hg - 0.2], [-8, 2.6], 'Raccord barrière / glissière : dispositif certifié, constitution selon la fiche technique du fournisseur', 'd');
   return v;
 }
 
-/** Extrémité amont enfouie dans le talus (vue en plan). */
-function vueEnfouie() {
-  const v = new Vue('EXTRÉMITÉ AMONT ENFOUIE DANS LE TALUS (vue en plan, principe)');
-  v.ligne('COFFRAGE', [-30, 0], [10, 0]); v.texte('TEXTES', [8, -0.6], 'bord de chaussée', { h: 2.2, ancre: 'd', v: 'h' });
-  v.ligne('AXES', [-30, -3.5], [10, -3.5]); v.texte('TEXTES', [9, -3.9], 'sens de circulation →', { h: 2.4, ancre: 'd', v: 'h' });
-  // glissière : parallèle puis évasée vers le talus, extrémité enfouie
-  const g = [[10, 1.0], [-8, 1.0], [-26, 3.6]];
-  v.poly('EQUIPEMENTS', g); for (let k = 0; k <= 9; k++) { const t = k / 9, p = [g[1][0] + (g[2][0] - g[1][0]) * t, g[1][1] + (g[2][1] - g[1][1]) * t]; v.cercle('EQUIPEMENTS', p, 0.12); }
-  for (let x = 8; x > -8; x -= 4) v.cercle('EQUIPEMENTS', [x, 1.0], 0.12);
-  // crête et pied du talus de déblai
-  v.poly('VUES', [[-30, 3.0], [-14, 3.0]]); v.poly('VUES', [[-30, 5.0], [-12, 5.0]]);
-  v.texte('TEXTES', [-29, 3.3], 'pied du talus de déblai', { h: 2.2, ancre: 'g', v: 'b' }); v.texte('TEXTES', [-29, 5.3], 'crête du talus', { h: 2.2, ancre: 'g', v: 'b' });
-  lab(v, [-25, 3.5], [-22, 8], 'Extrémité ancrée dans le talus (lisse enfouie à hauteur constante)');
-  lab(v, [-15, 2.1], [-6, 6.5], 'Évasement progressif (taux selon la notice)');
-  v.texte('TEXTES', [-10, -1.4], 'L\'extrémité amont ne doit jamais présenter de bout libre face au trafic', { h: 2.4, ancre: 'c', v: 'h', gras: true });
-  return v;
-}
-
-/** Extrémité abaissée et ancrée au sol (élévation). */
-function vueAbaissee(eq) {
-  const v = new Vue('EXTRÉMITÉ ABAISSÉE ET ANCRÉE AU SOL (élévation, principe)'), hg = 0.75;
-  v.terrain([[-16, 0], [6, 0]]);
-  v.poly('EQUIPEMENTS', [[6, hg], [-2, hg], [-12, 0.02]]); v.poly('EQUIPEMENTS', [[6, hg - 0.31], [-2, hg - 0.31], [-11, -0.05]]);
-  for (let x = 4; x >= -10; x -= 2) { const zt = x > -2 ? hg : hg * (x + 12) / 10; rect(v, 'EQUIPEMENTS', x - 0.03, -0.8, x + 0.03, Math.max(0.05, zt)); }
-  rect(v, 'COFFRAGE', -13.2, -0.9, -11.6, 0); v.hachure([[-13.2, -0.9], [-11.6, -0.9], [-11.6, 0], [-13.2, 0]]);
-  lab(v, [-12.4, -0.45], [-14.5, -2.2], 'Massif d\'ancrage', 'd');
-  lab(v, [-7, 0.35], [-6, 2.0], 'Lisse abaissée progressivement jusqu\'au sol');
-  v.coteH([-12, 0], [-2, 0], -1.4, 'longueur d\'abaissement (selon la notice)');
-  return v;
-}
-
-/** Queue de carpe : extrémité aval seulement. */
-function vueQueueCarpe() {
-  const v = new Vue('QUEUE DE CARPE — EXTRÉMITÉ AVAL UNIQUEMENT (vue en plan)');
-  v.ligne('COFFRAGE', [-4, 0], [10, 0]); v.ligne('AXES', [-4, -2.5], [10, -2.5]);
-  v.texte('TEXTES', [-3.5, -2.9], '← sens de circulation (chaussée unidirectionnelle)', { h: 2.4, ancre: 'g', v: 'h' });
-  v.poly('EQUIPEMENTS', [[10, 0.8], [1.0, 0.8], [0.2, 1.3], [0.0, 1.6]]);
-  for (let x = 8; x >= 1; x -= 2) v.cercle('EQUIPEMENTS', [x, 0.8], 0.12);
-  lab(v, [0.1, 1.45], [2.5, 3.2], 'Queue de carpe : fin de file aval, hors de tout choc frontal');
-  v.texte('TEXTES', [3, -4.0], 'Interdite en extrémité amont et sur chaussée bidirectionnelle (bout libre exposé au choc frontal)', { h: 2.4, ancre: 'c', v: 'h', gras: true });
+/** Vue en plan schématique de l'ouvrage et de ses abords : barrière, raccords, glissières, extrémités certifiées. */
+function vueAbords(st) {
+  const v = new Vue('OUVRAGE ET ABORDS — DISPOSITIFS DE RETENUE (vue en plan, schéma)');
+  const L = Math.max(20, (st && st.deck ? st.deck.spans.reduce((a, b) => a + b, 0) : 40)), b = 6, Lr = 12, Lg = 30, Le = 12;
+  // ouvrage, chaussée
+  v.poly('COFFRAGE', [[0, -b], [L, -b], [L, b], [0, b]], true); v.texte('TEXTES', [L / 2, 0], 'OUVRAGE', { h: 3, ancre: 'c', v: 'm', gras: true });
+  v.ligne('VUES', [-Lr - Lg - Le - 4, -b + 0.5], [L + Lr + Lg + Le + 4, -b + 0.5]); v.ligne('VUES', [-Lr - Lg - Le - 4, b - 0.5], [L + Lr + Lg + Le + 4, b - 0.5]);
+  v.ligne('AXES', [-Lr - Lg - Le - 4, 0], [0, 0]); v.ligne('AXES', [L, 0], [L + Lr + Lg + Le + 4, 0]);
+  for (const sg of [-1, 1]) {
+    const y = sg * (b + 0.3);
+    v.ligne('EQUIPEMENTS', [0, y], [L, y]);                                    // barrière de l'ouvrage
+    for (const [x0, x1, kind] of [[-Lr, 0, 'r'], [-Lr - Lg, -Lr, 'g'], [-Lr - Lg - Le, -Lr - Lg, 'e'], [L, L + Lr, 'r'], [L + Lr, L + Lr + Lg, 'g'], [L + Lr + Lg, L + Lr + Lg + Le, 'e']]) {
+      if (kind === 'g') v.ligne('EQUIPEMENTS', [x0, y], [x1, y]);
+      else { const p = [[x0, y - 0.35], [x1, y - 0.35], [x1, y + 0.35], [x0, y + 0.35]]; v.poly('EQUIPEMENTS', p, true); if (kind === 'e') v.hachure(p); }
+    }
+  }
+  const lab2 = (p, q, t) => { v.ligne('REPERES', p, q); v.texte('TEXTES', [q[0], q[1] + (q[1] > 0 ? 0.4 : -0.4)], t, { h: 2.4, ancre: 'c', v: q[1] > 0 ? 'b' : 'h' }); };
+  lab2([L / 2, b + 0.3], [L / 2, b + 4], 'Barrière de l\'ouvrage (type BN4)');
+  lab2([-Lr / 2, b + 0.3], [-Lr / 2, b + 8], 'Raccord barrière / glissière : fiche technique du fournisseur (NF EN 1317)');
+  lab2([-Lr - Lg / 2, b + 0.3], [-Lr - Lg / 2, b + 4], 'Glissière');
+  lab2([-Lr - Lg - Le / 2, -b - 0.3], [-Lr - Lg - Le / 2, -b - 5], 'Extrémité certifiée (NF EN 1317) : fiche technique du fournisseur');
+  v.texte('TEXTES', [L / 2, -b - 9], 'Queue de carpe interdite en extrémité de file ; admise seulement pour le raccord entre deux dispositifs', { h: 2.6, ancre: 'c', v: 'h', gras: true });
   return v;
 }
 
@@ -100,21 +79,19 @@ function vueImplantation() {
 }
 
 export function planRetenueTypes(st, eq, cartouche = {}) {
-  const ra = vueRaccordement(eq), en = vueEnfouie(), ab = vueAbaissee(eq), qc = vueQueueCarpe(), im = vueImplantation();
+  const ab = vueAbords(st), ra = vueRaccordement(eq), im = vueImplantation();
   const notes = [
     'NOTES',
-    '1. Plans de principe. Dispositifs certifiés (NF EN 1317, marquage CE) : la notice du fabricant fait foi pour les entraxes,',
-    '   la longueur et la constitution de la zone de transition, les extrémités et la fiche des supports.',
-    '2. Extrémités amont (et les deux extrémités sur chaussée bidirectionnelle) : enfouies dans le talus, abaissées et ancrées,',
-    '   ou extrémités absorbantes certifiées. Pas de bout libre ni de queue de carpe face au trafic.',
-    '3. La queue de carpe n\'est admise qu\'en fin de file aval d\'une chaussée unidirectionnelle.',
-    '4. Raccordement à la barrière de l\'ouvrage : continuité de la retenue, raidissement progressif de la glissière,',
-    '   sans discontinuité ni point dur ; niveau de retenue de la route au moins égal à celui des abords.',
+    '1. Schémas de principe. Raccords (transitions) et extrémités : dispositifs certifiés selon NF EN 1317, mis en œuvre',
+    '   conformément aux fiches techniques du fournisseur (constitution, longueurs, ancrages, entraxes).',
+    '2. Queue de carpe interdite en extrémité de file ; elle n\'est utilisée que pour le raccord entre deux dispositifs.',
+    '3. Raccord à la barrière de l\'ouvrage : continuité de la retenue, sans discontinuité ni point dur.',
+    '4. Implantation : distance à la crête du talus et fiche des supports selon la largeur de fonctionnement W et la notice.',
   ];
   const hn = notes.length * 2.2 * 1.6;
-  const F = composer({ titre: 'ÉQUIPEMENTS — DISPOSITIFS DE RETENUE : PLANS TYPES', cartouche,
-    rangees: [[ra], [en, ab], [qc, im]],
-    groupes: [{ vues: [ra], cible: 100, min: 50 }, { vues: [en, qc], cible: 250, min: 100 }, { vues: [ab], cible: 100, min: 50 }, { vues: [im], cible: 25, min: 20 }],
+  const F = composer({ titre: 'ÉQUIPEMENTS — DISPOSITIFS DE RETENUE AUX ABORDS : SCHÉMAS DE PRINCIPE', cartouche,
+    rangees: [[ab], [ra, im]],
+    groupes: [{ vues: [ab], cible: 1000, min: 250 }, { vues: [ra], cible: 200, min: 50 }, { vues: [im], cible: 50, min: 20 }],
     colonne: { largeur: 186, hauteur: 2 + hn + 4 },
     poser: (F, [x, y]) => { F.note(notes, F.W - 10 - 184, y + 2 + hn - 2.2 * 0.6, 2.2); F.notes[F.notes.length - 1].titreGras = true; } });
   F.cartouche.echelles = F.cartouche.echelles || 'sans échelle (principe)';

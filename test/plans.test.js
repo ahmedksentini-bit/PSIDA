@@ -262,8 +262,9 @@ test('Anti-cheminement : détail et note quand σ_min < 2 MPa', () => {
 });
 
 import { planRetenueTypes } from '../src/plans/retenue.js';
-test('Dispositifs de retenue : plans types (raccordement, extrémités, queue de carpe aval seulement)', () => {
+test('Dispositifs de retenue aux abords : schémas, renvoi aux fiches techniques, queue de carpe interdite en extrémité', () => {
   const F = planRetenueTypes(st, lireEquipements(formDefaults()), {}), svg = feuilleSVG(F);
-  assert.equal(F.vues.length, 5); assert.ok(F.valide().ok, F.valide().problemes.join(' | '));
-  for (const t of ['RACCORDEMENT', 'ENFOUIE', 'ABAISSÉE', 'AVAL UNIQUEMENT', 'Interdite en extrémité amont']) assert.ok(svg.includes(t), t);
+  assert.equal(F.vues.length, 3); assert.ok(F.valide().ok, F.valide().problemes.join(' | '));
+  for (const t of ['RACCORD', 'fiche technique du fournisseur', 'NF EN 1317', 'Queue de carpe interdite en extrémité']) assert.ok(svg.includes(t), t);
+  assert.ok(!/fin de file aval/.test(svg));
 });

@@ -436,3 +436,7 @@ v0.77 : feuille « Dispositifs de retenue : plans types » (src/plans/retenue.js
 glissière (zone de transition raidie), extrémité amont enfouie dans le talus, extrémité abaissée et ancrée, queue de carpe
 réservée à la fin de file aval d'une chaussée unidirectionnelle, implantation en remblai ; plans de principe, la notice du
 dispositif certifié fait foi.
+v0.78 : feuille « Dispositifs de retenue aux abords : schémas de principe » revue — vue en plan de l'ouvrage et de ses
+abords (barrière, raccords, glissières, extrémités) ; raccords et extrémités renvoyés aux fiches techniques du fournisseur
+(dispositifs certifiés NF EN 1317) ; queue de carpe interdite en extrémité, admise seulement pour le raccord entre deux
+dispositifs ; vues d'extrémités enfouie, abaissée et queue de carpe supprimées.
