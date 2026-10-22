@@ -45,6 +45,7 @@ export function echelleQuiTient([L, H], [W, Hc]) {
 export class Vue {
   constructor(titre, { echelle = 50, echelleV = null } = {}) {
     this.titre = titre; this.echelle = echelle; this.echelleV = echelleV; this.ents = [];
+    this.echelleMax = null;   // échelle la plus petite admise (dénominateur) pour le choix du format
   }
   _add(calque, e) { this.ents.push({ ...e, calque }); return this; }
   ligne(calque, a, b) { return this._add(calque, { t: 'ligne', a, b }); }
@@ -100,6 +101,38 @@ export class Feuille {
     return this;
   }
   tableau(tab, x, y) { this.tableaux.push({ ...tab, x, y }); return this; }
+  /**
+   * Boîtes occupées (mm papier) : vues (étendue à l'échelle, titre et échelles graphiques compris), tableaux, notes,
+   * cartouche ; contrôle de mise en page : chevauchements et sorties du cadre.
+   */
+  boites() {
+    const B = [];
+    for (const pl of this.vues) {
+      const v = pl.vue, E = v.etendue(), sx = 1000 / v.echelle, sy = v.echelleV ? 1000 / v.echelleV : sx;
+      const w = (E.x1 - E.x0) * sx, h = (E.y1 - E.y0) * sy;
+      const tv = v.titre.length + 30, wt = 0.52 * 3.5 * tv + 8 + (v.echelleV ? 150 : 75);
+      B.push({ nom: v.titre, x: pl.x, y: pl.y, w: Math.max(w, wt), h: h + 10 });
+    }
+    for (const t of this.tableaux) {
+      const W = t.cols.reduce((s, c) => s + c.w, 0), H = (t.lignes.length + 1 + (t.titre ? 1 : 0)) * (t.hl || 6);
+      B.push({ nom: t.titre || 'tableau', x: t.x, y: t.y, w: W, h: H });
+    }
+    for (const n of this.notes) {
+      const W = Math.max(...n.lignes.map(l => 0.52 * n.h * l.length)), H = n.lignes.length * n.h * 1.6;
+      B.push({ nom: 'notes', x: n.x, y: n.y - H + n.h, w: W, h: H });
+    }
+    B.push({ nom: 'cartouche', x: this.W - 10 - 180, y: 10, w: 180, h: 76 });
+    return B;
+  }
+  valide() {
+    const B = this.boites(), pb = [], m = 0.5;
+    for (const b of B) if (b.x < 20 - m || b.y < 10 - m || b.x + b.w > this.W - 10 + m || b.y + b.h > this.H - 10 + m) pb.push(`hors cadre : ${b.nom}`);
+    for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++) {
+      const a = B[i], b = B[j];
+      if (a.x < b.x + b.w - m && b.x < a.x + a.w - m && a.y < b.y + b.h - m && b.y < a.y + a.h - m) pb.push(`chevauchement : ${a.nom} / ${b.nom}`);
+    }
+    return { ok: pb.length === 0, problemes: pb };
+  }
   note(lignes, x, y, h = 2.5) { this.notes.push({ lignes, x, y, h }); return this; }
 }
 
@@ -150,3 +183,4 @@ export function geomCote(A, B, dmm, { attache = 2, deborde = 2, tick = 1.5 } = {
   const mid = [(A2[0] + B2[0]) / 2 + n[0] * s * 1.0, (A2[1] + B2[1]) / 2 + n[1] * s * 1.0];
   return { lignes, texte: { p: mid, angle: ang, v: s > 0 ? 'b' : 'h' } };
 }
+

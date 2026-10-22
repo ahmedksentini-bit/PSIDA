@@ -7,6 +7,7 @@
  * gauche du dessin (x = −y).
  */
 import { Vue, Feuille, fmtCote, fmtNiv } from './dessin.js';
+import { composer } from './mise_en_page.js';
 import { geometrie, courbeU } from './geometrie.js';
 import { dessinerBord, bordGeom, gargouilles } from './equipements.js';
 
@@ -199,14 +200,14 @@ function vueCoupe(G, st, { titre, appui = null, eq = null }) {
   }
   // axe
   // cotes : largeur totale, trottoirs / chaussée, épaisseurs
-  const zc = Math.max(...pr.haut.map(p => p[1])) + (eq ? Math.max(eq.hDR, eq.hGC) + 0.25 : TROTTOIR) + 0.9;
-  v.ligne('AXES', [0, zc + 1.3], [0, G.dessous(0) - (appui != null ? 1.6 : 0.6)]);
-  v.texte('TEXTES', [0, zc + 1.45], 'Axe', { h: 2.5, ancre: 'c' });
+  const zc = Math.max(...pr.haut.map(p => p[1])) + (eq ? Math.max(eq.hDR, eq.hGC) + 0.30 : TROTTOIR + 0.5) + 0.3;
+  v.ligne('AXES', [0, zc + 0.75], [0, G.dessous(0) - (appui != null ? 1.2 : 0.4)]);
+  v.texte('TEXTES', [0, zc + 0.85], 'Axe', { h: 2.5, ancre: 'c' });
   const cuts = [-b, ...(G.g.footways || []).flatMap(f => [f.y1, f.y2]), b].filter((y, k, a) => a.indexOf(y) === k).sort((p, q) => p - q);
   const surTrottoir = y => (G.g.footways || []).some(f => y >= Math.min(f.y1, f.y2) - 1e-9 && y <= Math.max(f.y1, f.y2) + 1e-9);
   const haut = y => [X(y), G.dessus(y) + (surTrottoir(y) ? TROTTOIR : G.tRev)];
   for (let k = 0; k + 1 < cuts.length; k++) v.coteH(haut(cuts[k + 1]), haut(cuts[k]), zc);
-  v.coteH(haut(b), haut(-b), zc + 0.55);
+  v.coteH(haut(b), haut(-b), zc + 0.45);
   v.coteV([X(0), G.dessous(0)], [X(0), G.dessus(0)], X(0) + 0.6, fmtCote(G.dessus(0) - G.dessous(0)));
   if (ch && ch.joue > 0) {
     v.coteV([X(-b), G.dessous(-b)], [X(-b), G.dessus(-b)], X(-b) + 0.35, fmtCote(G.dessus(-b) - G.dessous(-b)));
@@ -228,14 +229,14 @@ function vueCoupe(G, st, { titre, appui = null, eq = null }) {
       rect(v, 'COFFRAGE', X(y) - ap.b / 2 - 0.10, zT, X(y) + ap.b / 2 + 0.10, zl - ap.h);
     }
     // chevêtre ou sommier, sur la largeur du tablier
-    const hc = P.hc || 0.8, xa = X(b) - 0.2, xb = X(-b) + 0.2;
-    v.poly('COFFRAGE', [[xa, zT - hc - 0.4], [xa, zT], [xb, zT], [xb, zT - hc - 0.4]]);
-    rupture(v, xa, xb, zT - hc - 0.4);
+    const hc = Math.min(P.hc || 0.8, 1.0), xa = X(b) - 0.2, xb = X(-b) + 0.2;
+    v.poly('COFFRAGE', [[xa, zT - hc - 0.25], [xa, zT], [xb, zT], [xb, zT - hc - 0.25]]);
+    rupture(v, xa, xb, zT - hc - 0.25);
     // entraxes des appareils
     const yb = ap.yb.slice().sort((p, q) => q - p);
-    const zr = zT - hc - 1.0;
+    const zr = zT - hc - 0.65;
     for (let k = 0; k + 1 < yb.length; k++) v.coteH([X(yb[k]), zT], [X(yb[k + 1]), zT], zr);
-    v.texte('TEXTES', [0, zr - 0.75], `${ap.yb.length} appareils ${ap.label} sur bossages de ${fmtCote(hBos)}`, { h: 2.5, ancre: 'c', v: 'h' });
+    v.texte('TEXTES', [0, zr - 0.45], `${ap.yb.length} appareils ${ap.label} sur bossages de ${fmtCote(hBos)}`, { h: 2.5, ancre: 'c', v: 'h' });
     if (nv) {
       v.niveau([0.5, G.dessus(0) + G.tRev], nv.zCh);
       v.niveau([X(yb[yb.length - 1]) + ap.b / 2 + 0.4, zT], nv.zT);
@@ -293,35 +294,24 @@ function tableauQuantites(Q) {
 
 /* --------------------------------------------------------------------------------------------- la feuille */
 export function planCoffrage(st, cartouche = {}, eq = null) {
-  const G = geometrie(st);
-  const L = G.uB - G.uA, format = L > 70 ? 'A0' : 'A1';
-  const F = new Feuille(format, { titre: 'TABLIER — PLAN DE COFFRAGE', cartouche: { ...cartouche } });
-  const W = F.W, H = F.H, x0 = 20, x1 = W - 10, y0 = 10, y1 = H - 10, wc = 180;
-  // bandes : plan (haut, 42 %), coupe longitudinale (milieu, 26 %), coupes transversales + notes (bas)
-  const hb = (y1 - y0);
-  const yPlan = y0 + hb * 0.50, yElev = y0 + hb * 0.27;
+  const G = geometrie(st), L = G.uB - G.uA;
   const plan = vuePlan(G, eq), elev = vueElevation(G, st);
-  F.placerDans(plan, [x0, yPlan, x1 - x0, y1 - yPlan]);
-  F.placerDans(elev, [x0, yElev, x1 - x0, yPlan - yElev]);
-  // même échelle pour le plan et la coupe longitudinale (lecture en correspondance)
-  const e = Math.max(plan.echelle, elev.echelle);
-  for (const pl of F.vues) if (pl.vue.echelle !== e) { pl.vue.echelle = e; }
-  F.vues = []; F.placerDans(plan, [x0, yPlan, x1 - x0, y1 - yPlan], { auto: false }); F.placerDans(elev, [x0, yElev, x1 - x0, yPlan - yElev], { auto: false });
-  // coupes transversales
   const ca = vueCoupe(G, st, { titre: 'COUPE A-A (en travée)', eq });
   const iB = Math.min(1, G.n - 1);
   const cb = vueCoupe(G, st, { titre: `COUPE B-B (sur ${G.nomLigne(iB)})`, appui: iB, eq });
-  const wz = (x1 - wc - 6 - x0) / 2;
-  F.placerDans(ca, [x0, y0, wz, yElev - y0]);
-  F.placerDans(cb, [x0 + wz, y0, wz, yElev - y0]);
-  const ec = Math.max(ca.echelle, cb.echelle); ca.echelle = cb.echelle = ec;
-  F.vues.splice(-2); F.placerDans(ca, [x0, y0, wz, yElev - y0], { auto: false }); F.placerDans(cb, [x0 + wz, y0, wz, yElev - y0], { auto: false });
-  // notes et quantités au-dessus du cartouche
-  const Q = quantitesCoffrage(st, G), tq = tableauQuantites(Q);
-  const hq = (tq.lignes.length + 2) * 6;
-  F.tableau(tq, x1 - wc + 10, y0 + 76 + 6);
-  F.note(notesCoffrage(st, G), x1 - wc + 4, y0 + 76 + 6 + hq + 4 + 8 * 2.4 * 1.6, 2.4);
-  F.notes[F.notes.length - 1].titreGras = true;
+  const Q = quantitesCoffrage(st, G), tq = tableauQuantites(Q), hq = (tq.lignes.length + 2) * 6;
+  const notes = notesCoffrage(st, G), hn = notes.length * 2.1 * 1.6;
+  const F = composer({
+    titre: 'TABLIER — PLAN DE COFFRAGE', cartouche,
+    rangees: [[plan], [elev], [ca, cb]],
+    groupes: [{ vues: [plan, elev], cible: L <= 60 ? 100 : L <= 130 ? 200 : 250, min: 50 }, { vues: [ca, cb], cible: 2 * G.b <= 14 ? 50 : 75, min: 20 }],
+    colonne: { largeur: 182, hauteur: 76 + 6 + hq + 6 + hn + 4 },
+    poser: (F, [x, y]) => {
+      F.tableau(tq, F.W - 10 - 162, y + 76 + 6);
+      F.note(notes, F.W - 10 - 182 + 2, y + 76 + 6 + hq + 6 + hn - 2.1 * 0.6, 2.1);
+      F.notes[F.notes.length - 1].titreGras = true;
+    },
+  });
   F.cartouche.echelles = F.cartouche.echelles || [...new Set(F.vues.map(p => '1/' + p.vue.echelle))].join(' ; ');
   return F;
 }

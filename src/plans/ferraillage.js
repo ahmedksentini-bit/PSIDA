@@ -6,6 +6,7 @@
  */
 import { Vue, Feuille, ECHELLES, echelleQuiTient, fmtCote } from './dessin.js';
 import { geometrie } from './geometrie.js';
+import { composer } from './mise_en_page.js';
 import { bordereau, recapitulatif, croquisForme, rayonCintrage } from './bordereau.js';
 
 const fr = (x, d = 0) => x.toFixed(d).replace('.', ',');
@@ -223,6 +224,7 @@ export function placerBordereau(F, lignes, [x, y, w, hmax]) {
   };
   const Hr = (rec.lignes.length + 2) * rec.hl;
   F.tableau(rec, x, y0 - 6 - Hr);
+  if (y0 - 6 - Hr < y - 0.5) F.deborde = true;
   return { R, bas: y0 - 6 - Hr };
 }
 
@@ -244,26 +246,29 @@ function notesFerraillage(st, G, R) {
 export function planFerraillage(st, cartouche = {}) {
   if (!st.rebar || !st.rebar.marks) throw new Error('plan de ferraillage : pas de ferraillage de dalle armée calculé');
   const G = geometrie(st), marks = st.rebar.marks;
-  const lignes = bordereau(st);
-  const Lt = G.uB - G.uA, format = Lt > 60 || lignes.length > 60 ? 'A0' : 'A1';
-  const F = new Feuille(format, { titre: 'TABLIER — PLAN DE FERRAILLAGE', cartouche: { ...cartouche } });
-  const W = F.W, H = F.H, x0 = 20, x1 = W - 10, y0 = 10, y1 = H - 10, wc = 180, wb = COLS.reduce((s, c) => s + c.w, 0);
-  // colonne de droite : bordereau et récapitulatif au-dessus du cartouche
-  const xb = x1 - wb - 3;
-  const { R, bas } = placerBordereau(F, lignes, [xb, y0 + 76 + 8, wb, y1 - (y0 + 76 + 8) - 4]);
-  // zone de gauche : coupe longitudinale (haut), demi-coupes (bas)
-  const wl = xb - 8 - x0, ySep = y0 + (y1 - y0) * 0.50;
-  const e = echelleQuiTient([Lt + 8, 0.1], [wl - 28, 1000]);
-  const vl = vueLongitudinale(G, st, marks, e, ECHELLES.filter(q => q <= e / 3).pop() || 10);
-  F.placerDans(vl, [x0, ySep, wl, y1 - ySep], { auto: false });
+  const lignes = bordereau(st), R0 = recapitulatif(lignes);
+  const Lt = G.uB - G.uA;
+  const eV = e => ECHELLES.filter(q => q <= e / 3).pop() || 10;
+  const vl = vueLongitudinale(G, st, marks, 100, eV(100));
   // sections : milieu de la plus grande travée, première pile (ou C0)
   const spans = G.x0.slice(1).map((u, j) => u - G.x0[j]), jT = spans.indexOf(Math.max(...spans));
   const iA = G.n > 2 ? 1 : 0;
   const vd = vueDemiCoupes(G, st, marks, { xT: (G.x0[jT] + G.x0[jT + 1]) / 2, jT, xA: G.x0[iA], iA });
-  F.placerDans(vd, [x0, y0 + 40, wl, ySep - y0 - 40]);
-  if (vd.echelle > 25 && vd.echelle < 50) { /* garder l'échelle choisie */ }
-  F.note(notesFerraillage(st, G, R), x0 + 6, y0 + 36, 2.2);
-  F.notes[F.notes.length - 1].titreGras = true;
-  F.cartouche.echelles = F.cartouche.echelles || `1/${vl.echelle} (long.) ; 1/${vl.echelleV} (haut.) ; 1/${vd.echelle}`;
+  // colonne de droite : cartouche, bordereau, récapitulatif, notes
+  const wb = COLS.reduce((s, c) => s + c.w, 0), hl = 4.6;
+  const hb = (lignes.length + 2) * hl + 6 + (R0.diam.length + 3) * 5.5;
+  const notes = notesFerraillage(st, G, R0), hn = notes.length * 2.2 * 1.6;
+  const F = composer({ titre: 'TABLIER — PLAN DE FERRAILLAGE', cartouche,
+    rangees: [[vl], [vd]],
+    groupes: [{ vues: [vl], cible: Lt <= 60 ? 100 : 200, min: 50, refaire: e => [vueLongitudinale(G, st, marks, e, eV(e))] }, { vues: [vd], cible: 2 * G.b <= 14 ? 25 : 50, min: 20 }],
+    colonne: { largeur: Math.max(182, wb + 3), hauteur: 76 + 8 + hb + 8 + hn + 4 },
+    poser: (F, [x, y, w]) => {
+      const xb = F.W - 10 - wb - 3;
+      const { R } = placerBordereau(F, lignes, [xb, y + 76 + 8, wb, hb]);
+      F.note(notesFerraillage(st, G, R), xb, y + 76 + 8 + hb + 8 + hn - 2.2 * 0.6, 2.2);
+      F.notes[F.notes.length - 1].titreGras = true;
+    } }, ['A2', 'A1', 'A0']);
+  const L = F.vues.find(p => p.vue.echelleV).vue, D = F.vues.find(p => !p.vue.echelleV).vue;
+  F.cartouche.echelles = F.cartouche.echelles || `1/${L.echelle} (long.) ; 1/${L.echelleV} (haut.) ; 1/${D.echelle}`;
   return F;
 }

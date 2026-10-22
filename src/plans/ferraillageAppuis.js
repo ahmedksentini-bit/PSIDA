@@ -13,7 +13,8 @@
  */
 import { Vue, Feuille, fmtCote } from './dessin.js';
 import { geometrieAppui, vueElevation, vueCoupe } from './appuis.js';
-import { longueurCoupe, rayonCintrage, croquisForme } from './bordereau.js';
+import { longueurCoupe, rayonCintrage, croquisForme, recapitulatif } from './bordereau.js';
+import { composer } from './mise_en_page.js';
 import { placerBordereau } from './ferraillage.js';
 import { chooseBars, areaOf, anchorage, massPerM } from '../rebar.js';
 
@@ -171,6 +172,41 @@ export function reperesAppui(st, i) {
       add({ elem: 'murs en retour', label: 'Murs en retour — treillis minimal (2 faces, 2 sens, ×2)', phi: mr.phi, s: mr.s, code: '00', dims: { A: Lr * 1000 }, nombre: 2 * 2 * (Math.floor(hh / mr.s) + 1 + Math.floor(Lr / mr.s) + 1), prov: mr.As, pos: 'retM', note: 'barres de longueur L et h' });
     }
   }
+  // ---------------------------------------------------------------- voile frontal (culée apparente sur colonnes)
+  if (A.kind === 'culee' && A.type === 'apparente' && A.C.hv > 0) {
+    const hv = A.C.hv, ev = 0.30, hcT = Math.max(A.hc - c, 0.2);
+    // minimum des voiles (PP73 1.3.2 : 0,2 % pour les deux faces), verticales ancrées dans le chevêtre
+    const vv = chooseBars(0.001 * ev, { phiMin: 10, phiMax: 16, sMax: 0.20, sMin: 0.15 });
+    add({ elem: 'voile frontal', label: 'Voile frontal — verticales (2 faces), ancrées dans le chevêtre', phi: vv.phi, s: vv.s, code: '00', dims: { A: (hv - c + Math.min(anc(vv.phi).lbd, hcT)) * 1000 }, nombre: 2 * (Math.floor((w - 2 * c) / vv.s + 1e-9) + 1), req: 0.001 * ev, prov: vv.As, pos: 'vfV' });
+    const vh = chooseBars(Math.max(0.5 * vv.As, 0.0005 * ev), { phiMin: 10, phiMax: 12, sMax: 0.20, sMin: 0.20 });
+    add({ elem: 'voile frontal', label: 'Voile frontal — horizontales (U par face)', phi: vh.phi, s: vh.s, code: '21', dims: { A: (ev - 2 * c) * 1000, B: (w - 2 * c) * 1000, C: (ev - 2 * c) * 1000 }, nombre: 2 * (Math.floor((hv - 2 * c) / vh.s + 1e-9) + 1), prov: vh.As, pos: 'vfH' });
+  }
+  // ---------------------------------------------------------------- frettes et aciers d'éclatement sous appareils
+  // pression localisée (calcul de la tête d'appui, onglet Appuis) : frettage de surface A_s = 0,04 R / f_su par
+  // appareil ; éclatement dans les plans Δ′ (épaisseur de l'appui) et Δ (ligne d'appareils), réparti de 0,1 d à d
+  const hk = R.headChk;
+  if (hk && !hk.error && hk.split && hk.split.planes) {
+    const sp2 = hk.split, nb = A.ap.yb.length, [pD1, pD] = sp2.planes;
+    const choisir = (As, nMin, brins) => {
+      let best = null;
+      for (const phi of [10, 12, 14, 16]) for (let n = nMin; n <= 8; n++) { const prov = brins * n * areaOf(phi); if (prov + 1e-9 >= As && (!best || prov < best.prov - 1e-9)) best = { phi, n, prov }; }
+      return best || { phi: 16, n: 8, prov: brins * 8 * areaOf(16) };
+    };
+    const tete = sommierT => (sommierT ? [A.xSom[0], A.xSom[1]] : A.kind === 'pile' ? (A.type === 'colonnes' ? [-A.lc / 2, A.lc / 2] : [-A.bTop / 2, A.bTop / 2]) : [A.xChev[0], A.xChev[1]]);
+    const [xa, xb] = tete(A.kind === 'culee' && A.type === 'remblayee'), dT = xb - xa;
+    const hT = A.kind === 'culee' && A.type === 'remblayee' ? A.hSom : A.hc > 0 ? A.hc : Math.min(1.0, A.H || 1);
+    const Lt = A.kind === 'pile' && A.type !== 'colonnes' ? A.Lv : w;
+    // frettes : cadres horizontaux fermés autour de l'empreinte du bossage (2 brins par direction), lits espacés de 6 cm
+    const f = choisir(sp2.As, 2, 2);
+    const Af = Math.min(hk.ab + 0.10, dT - 2 * c), Bf = Math.min(hk.bb + 0.10, (hk.pitch || 9) - 0.10);
+    add({ elem: 'tête', label: `Frettes de surface sous appareils (${f.n} lits par appareil, ${nb} appareils)`, phi: f.phi, code: '51', dims: { A: Af * 1000, B: Bf * 1000, C: 10 * f.phi }, nombre: f.n * nb, req: sp2.As, prov: f.prov, pos: 'fret', n: f.n, dA: Af, dB: Bf });
+    // plan Δ′ : épingles en U traversant l'épaisseur de l'appui, sous chaque appareil
+    const u = choisir(pD1.Ae, 2, 1), legU = Math.max(0.15, Math.min(0.30, Bf / 2));
+    add({ elem: 'tête', label: `Éclatement plan Δ′ — U dans l'épaisseur (${u.n} par appareil, de ${fr(0.1 * pD1.d)} à ${fr(Math.min(pD1.d, hT))} m)`, phi: u.phi, code: '21', dims: { A: legU * 1000, B: (dT - 2 * c) * 1000, C: legU * 1000 }, nombre: u.n * nb, req: pD1.Ae, prov: u.prov, pos: 'eclP', n: u.n, z0: 0.1 * pD1.d, z1: Math.min(pD1.d, hT - c) });
+    // plan Δ : barres filantes le long de la ligne d'appareils, deux faces, réparties en hauteur
+    const e2 = choisir(pD.Ae, 2, 2);
+    add({ elem: 'tête', label: `Éclatement plan Δ — filantes 2 faces (${e2.n} par face, de ${fr(0.1 * pD.d)} à ${fr(Math.min(pD.d, hT))} m)`, phi: e2.phi, code: '00', dims: { A: (Lt - 2 * c) * 1000 }, nombre: 2 * e2.n, req: pD.Ae, prov: e2.prov, pos: 'eclL', n: e2.n, z0: 0.1 * pD.d, z1: Math.min(pD.d, hT - c) });
+  }
   // longueurs de coupe et masses
   for (const m of out) {
     const d = { A: r5(m.dims.A || 0), B: r5(m.dims.B || 0), C: r5(m.dims.C || 0) };
@@ -182,7 +218,8 @@ export function reperesAppui(st, i) {
 
 /** Lignes du bordereau (format de placerBordereau). */
 const lignesBordereau = marks => marks.map(m => ({ repere: String(m.mark), mark: m.mark, phi: m.phi, code: m.code, A: m.dims.A, B: ['11', '21', '51'].includes(m.code) ? m.dims.B : null, C: ['21', '51'].includes(m.code) ? m.dims.C : null, L: m.L, nombre: m.nombre, total: m.total, masse: m.masse }));
-const desig = m => (m.s ? `HA${m.phi} e=${esp(m.s)}` : `${m.n || m.nombre} HA${m.phi}`);
+const desig = m => (m.pos === 'fret' ? `${m.n} cadres HA${m.phi} / appareil` : m.pos === 'eclP' ? `${m.n} U HA${m.phi} / appareil` : m.pos === 'eclL' ? `${m.n} HA${m.phi} / face`
+  : m.s ? `HA${m.phi} e=${esp(m.s)}` : `${m.n || m.nombre} HA${m.phi}`);
 
 /* -------------------------------------------------------------------------------------- dessin des aciers */
 function dessinerCoupe(A, marks) {
@@ -220,6 +257,29 @@ function dessinerCoupe(A, marks) {
     v.poly('ACIERS', [[X(xa + c), zb + c], [X(xb - c), zb + c], [X(xb - c), A.zT - c], [X(xa + c), A.zT - c]], true);
     for (const [m, z] of [[mS, A.zT - c - 0.02], [mI, zb + c + 0.02]]) if (m) { const n = Math.min(m.n || 4, 12); for (let k = 0; k < n; k++) v.cercle('ACIERS_COUPES', [X(xa + c + 0.02 + (xb - xa - 2 * c - 0.04) * k / Math.max(1, n - 1)), z], 0.014, true); }
     bul(mS, [X((xa + xb) / 2), A.zT - c - 0.02]); bul(mI, [X((xa + xb) / 2), zb + c + 0.02], -1); bul(mC, [X(xb - c), (zb + A.zT) / 2]);
+  }
+  // frettes et éclatement sous appareils (appareil dans l'axe x = 0)
+  const mF = M('fret'), mU = M('eclP'), mE = M('eclL');
+  if (mF) {
+    for (let k = 0; k < mF.n; k++) { const z = A.zT - c - 0.01 - k * 0.06; v.ligne('ACIERS', [X(-mF.dA / 2), z], [X(mF.dA / 2), z]); }
+    bul(mF, [X(mF.dA / 2), A.zT - c - 0.01]);
+  }
+  const xt = A.kind === 'culee' && A.type === 'remblayee' ? A.xSom : A.kind === 'pile' ? (A.type === 'colonnes' ? [-A.lc / 2, A.lc / 2] : [-A.bTop / 2, A.bTop / 2]) : A.xChev;
+  if (mU) {
+    for (let k = 0; k < mU.n; k++) { const z = A.zT - mU.z0 - (mU.z1 - mU.z0) * (mU.n > 1 ? k / (mU.n - 1) : 0.5); v.poly('ACIERS', [[X(xt[0] + c + 0.03), z - 0.04], [X(xt[0] + c + 0.03), z], [X(xt[1] - c - 0.03), z], [X(xt[1] - c - 0.03), z - 0.04]]); }
+    bul(mU, [X(xt[0] + 0.35 * (xt[1] - xt[0])), A.zT - (mU.z0 + mU.z1) / 2]);
+  }
+  if (mE) {
+    for (let k = 0; k < mE.n; k++) { const z = A.zT - mE.z0 - (mE.z1 - mE.z0) * (mE.n > 1 ? k / (mE.n - 1) : 0.5); for (const xx of [xt[0] + c + 0.035, xt[1] - c - 0.035]) v.cercle('ACIERS_COUPES', [X(xx), z], 0.011, true); }
+    bul(mE, [X(xt[1] - c - 0.035), A.zT - (mE.z0 + mE.z1) / 2]);
+  }
+  // voile frontal (culée apparente) : à l'arrière du chevêtre, sous celui-ci
+  const vV = M('vfV'), vH = M('vfH');
+  if (vV) {
+    const zb = A.zT - A.hc, zv = zb - A.C.hv, xr = A.xGGar + c, xa2 = A.xGGar + 0.30 - c, za = zb + (vV.dims.A / 1000 - (A.C.hv - c));
+    v.poly('ACIERS', [[X(xr), zv + c], [X(xr), za]]); v.poly('ACIERS', [[X(xa2), zv + c], [X(xa2), za]]);
+    if (vH) { const n = Math.max(2, Math.floor((A.C.hv - 2 * c) / vH.s)); for (let k = 0; k <= n; k++) { const z = zv + c + (A.C.hv - 2 * c) * k / n; v.cercle('ACIERS_COUPES', [X(xr + 0.02), z], 0.009, true); v.cercle('ACIERS_COUPES', [X(xa2 - 0.02), z], 0.009, true); } }
+    bul(vV, [X(xr), zv + A.C.hv * 0.4]); bul(vH, [X(xa2 - 0.02), zv + A.C.hv * 0.7]);
   }
   // garde-grève
   const gAr = M('ggAr'), gAv = M('ggAv'), gH = M('ggH');
@@ -284,6 +344,22 @@ function dessinerElevation(A, marks) {
     if (mC) { const n = Math.min(60, Math.floor((w - 2 * c) / mC.s)); for (let k = 0; k <= n; k++) { const y = -w / 2 + c + (w - 2 * c) * k / n; v.ligne('ACIERS_COUPES', [y, zb + c], [y, A.zT - c]); } }
     bul(mS, [w / 4, A.zT - c]); bul(mI, [-w / 4, zb + c]); bul(mC, [0.15, zb + hT / 2]);
   }
+  // frettes sous chaque appareil, filantes d'éclatement
+  const mF = M('fret'), mE = M('eclL');
+  if (mF) { for (const yb of A.ap.yb) for (let k = 0; k < mF.n; k++) { const z = A.zT - c - 0.01 - k * 0.06; v.ligne('ACIERS', [X(yb) - mF.dB / 2, z], [X(yb) + mF.dB / 2, z]); } bul(mF, [X(A.ap.yb[0]) + mF.dB / 2, A.zT - c - 0.01]); }
+  if (mE) {
+    const Lt = A.kind === 'pile' && A.type !== 'colonnes' ? A.Lv : w;
+    for (let k = 0; k < mE.n; k++) { const z = A.zT - mE.z0 - (mE.z1 - mE.z0) * (mE.n > 1 ? k / (mE.n - 1) : 0.5); v.ligne('ACIERS', [-Lt / 2 + c, z], [Lt / 2 - c, z]); }
+    bul(mE, [-Lt / 2 + 0.6 * Lt, A.zT - (mE.z0 + mE.z1) / 2]);
+  }
+  // voile frontal : verticales et horizontales
+  const vV = M('vfV'), vH = M('vfH');
+  if (vV) {
+    const zb = A.zT - A.hc, zv = zb - A.C.hv, n = Math.min(60, Math.floor((w - 2 * c) / vV.s));
+    for (let k = 0; k <= n; k += 2) { const y = -w / 2 + c + (w - 2 * c) * k / n; v.ligne('ACIERS', [y, zv + c], [y, zb + 0.2]); }
+    if (vH) { const m = Math.max(2, Math.floor((A.C.hv - 2 * c) / vH.s)); for (let k = 0; k <= m; k++) { const z = zv + c + (A.C.hv - 2 * c) * k / m; v.ligne('ACIERS_COUPES', [-w / 2 + c, z], [w / 2 - c, z]); } }
+    bul(vV, [-w / 2 + 0.15 * w, zv + A.C.hv * 0.5]); bul(vH, [w / 2 - 0.15 * w, zv + A.C.hv * 0.3]);
+  }
   // garde-grève : verticales arrière (traits), horizontales
   const gAr = M('ggAr'), gH = M('ggH');
   if (gAr) {
@@ -339,6 +415,7 @@ function dessinerSections(A, marks) {
     if (rH) { v.repere([Lr + 0.5, -hh / 4], rH.mark, [Lr - c - 0.05, -hh / 4]); v.texte('TEXTES', [Lr + 0.75, -hh / 4], desig(rH), { h: 2.4, ancre: 'g', v: 'm' }); }
     v.coteH([0, 0], [Lr, 0], 0.25);
     v.texte('TEXTES', [-0.1, -hh / 2], 'mur de front', { h: 2.2, ancre: 'd', v: 'm', angle: 90 });
+    v.vueDeFace = true;
     vues.push(v);
   }
   return vues;
@@ -347,29 +424,30 @@ function dessinerSections(A, marks) {
 /* --------------------------------------------------------------------------------------------- la feuille */
 export function planFerraillageAppui(st, i, cartouche = {}) {
   const { A, marks, code, mat } = reperesAppui(st, i);
-  const F = new Feuille('A1', { titre: `${A.kind === 'culee' ? 'CULÉE' : 'PILE'} ${A.nom} — PLAN DE FERRAILLAGE`, cartouche: { ...cartouche } });
-  const x0 = 20, x1 = F.W - 10, y0 = 10, y1 = F.H - 10;
-  const lignes = lignesBordereau(marks), wb = 166, xb = x1 - wb - 3;
-  const { R } = placerBordereau(F, lignes, [xb, y0 + 76 + 8, wb, y1 - (y0 + 76 + 8) - 4]);
-  // élévation sur toute la largeur en haut ; coupe et sections en bas
-  const wl = xb - 8 - x0, yM = y0 + (y1 - y0) * 0.50;
-  const el = dessinerElevation(A, marks), cp = dessinerCoupe(A, marks);
-  const cE = [x0, yM, wl, y1 - yM], cC = [x0, y0 + 38, wl * 0.5, yM - y0 - 38];
-  F.placerDans(el, cE); F.placerDans(cp, cC);
-  const e = Math.max(el.echelle, cp.echelle); el.echelle = cp.echelle = e;
-  F.vues = []; F.placerDans(el, cE, { auto: false }); F.placerDans(cp, cC, { auto: false });
-  const secs = dessinerSections(A, marks), ws = wl * 0.5 / Math.max(1, secs.length);
-  secs.forEach((v, k) => F.placerDans(v, [x0 + wl * 0.5 + k * ws, y0 + 38, ws, yM - y0 - 38]));
-  F.note([
+  const lignes = lignesBordereau(marks), R0 = recapitulatif(lignes), wb = 166, hl = 4.6;
+  const hb = (lignes.length + 2) * hl + 6 + (R0.diam.length + 3) * 5.5;
+  const N = [
     'NOTES',
     `1. Aciers HA (f_yk = ${mat.fyk} MPa). Enrobage ${fr(mat.c * 100, 1)} cm, ${fr(mat.c * 100 + 2, 1)} cm contre le sol ; pieux 7 cm.`,
     `2. Sections calculées : onglet Appuis et fondations (${code === 'EC' ? 'Eurocodes' : 'BAEL'}) ; dispositions : Sétra PP 73, pièce 1.3.2 (ferraillages types).`,
     '3. Ancrages et recouvrements : EN 1992-1-1 § 8.4 et 8.7 ; recouvrements des verticales au-dessus des attentes.',
     '4. Bordereau ISO 4066 ; code 99 : cerce circulaire (longueur développée, recouvrement compris).',
-    '5. Frettes et aciers d\'éclatement sous appareils : onglet Appuis (tête d\'appui), à ajouter au plan.',
+    '5. Frettes et éclatement sous appareils : A_s = 0,04 R / f_su par appareil ; plans Δ′ et Δ répartis de 0,1 d à d.',
     '6. Plan type à valider : vérifier l\'encombrement des nappes et les zones de bétonnage.',
-  ], x0 + 4, y0 + 36, 2.2);
-  F.notes[F.notes.length - 1].titreGras = true;
+  ], hn = N.length * 2.2 * 1.6;
+  // élévation et coupe en haut, sections en bas ; bordereau, notes et cartouche dans la colonne de droite
+  const el = dessinerElevation(A, marks), cp = dessinerCoupe(A, marks), secs = dessinerSections(A, marks);
+  let R = R0;
+  const F = composer({ titre: `${A.kind === 'culee' ? 'CULÉE' : 'PILE'} ${A.nom} — PLAN DE FERRAILLAGE`, cartouche,
+    rangees: [[el, cp], ...(secs.length ? [secs] : [])],
+    groupes: [{ vues: [el, cp], cible: 50, min: 20 }, ...[secs.filter(v => !v.vueDeFace), secs.filter(v => v.vueDeFace)].filter(g => g.length).map(g => ({ vues: g, cible: g[0].vueDeFace ? 50 : 25, min: g[0].vueDeFace ? 25 : 10 }))],
+    colonne: { largeur: wb + 16, hauteur: 76 + 8 + hb + 8 + hn + 4 },
+    poser: (F, [x, y]) => {
+      const xb = F.W - 10 - wb - 3;
+      ({ R } = placerBordereau(F, lignes, [xb, y + 76 + 8, wb, hb]));
+      F.note(N, xb, y + 76 + 8 + hb + 8 + hn - 2.2 * 0.6, 2.2);
+      F.notes[F.notes.length - 1].titreGras = true;
+    } }, ['A2', 'A1', 'A0']);
   F.cartouche.echelles = F.cartouche.echelles || [...new Set(F.vues.map(p => '1/' + p.vue.echelle))].join(' ; ');
   F.masse = R.masse;
   return F;

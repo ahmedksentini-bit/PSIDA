@@ -187,3 +187,27 @@ test('Ferraillage des appuis : repères, minimums PP 73, bordereau et feuille', 
     assert.ok(feuilleSVG(F).includes('PLAN DE FERRAILLAGE'));
   }
 });
+
+import { planEquipements as planEq2, lireEquipements as lireEq2 } from '../src/plans/equipements.js';
+
+test('Mise en page automatique : plus petit format, vues sans chevauchement, échelles graphiques', () => {
+  const app = compute(parseData({ ...formDefaults(), ap_pileType: 'colonnes', ap_hc: '1.0', ap_culType: 'apparente', ap_culHv: '1.5' }));
+  const feuilles = [planCoffrage(st, {}), planFerraillage(st, {}), planEq2(st, lireEq2(formDefaults()), {}), planCoffrageAppui(st, 0, {}), planFerraillageAppui(st, 1, {}), planFerraillageAppui(app, 0, {})];
+  for (const F of feuilles) {
+    const V = F.valide(); assert.ok(V.ok, F.titre + ' : ' + V.problemes.join(' | '));
+    assert.ok(!F.deborde, F.titre + ' : bordereau hors cadre');
+    assert.ok(['A3', 'A2', 'A1', 'A0'].includes(F.format));
+    // une échelle graphique par vue (deux pour une vue à échelles dilatées) : libellés « 0 » et « m »
+    const svg = feuilleSVG(F), nb = F.vues.reduce((s, p) => s + (p.vue.echelleV ? 2 : 1), 0);
+    assert.ok((svg.match(/>\d+(,\d+)? m</g) || []).length >= nb, F.titre + ' : échelles graphiques');
+  }
+  // le coffrage des appuis de l'exemple tient en A2 au 1/50
+  assert.equal(feuilles[3].format, 'A2'); assert.equal(feuilles[3].vues[0].vue.echelle, 50);
+  // culée apparente : voile frontal, frettes et aciers d'éclatement sous appareils, sections suffisantes
+  const { marks } = reperesAppui(app, 0);
+  for (const p of ['vfV', 'vfH', 'fret', 'eclP', 'eclL']) assert.ok(marks.some(m => m.pos === p), p);
+  const R = app.supports.lines[0].EC.headChk.split;
+  assert.ok(marks.find(m => m.pos === 'fret').prov >= R.As - 1e-12);
+  assert.ok(marks.find(m => m.pos === 'eclP').prov >= R.planes[0].Ae - 1e-12);
+  assert.ok(marks.find(m => m.pos === 'eclL').prov >= R.planes[1].Ae - 1e-12);
+});

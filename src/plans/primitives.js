@@ -126,6 +126,24 @@ export function primitivesCadre(F) {
   return { out, zoneCartouche: [cx, y0, w, 62 + 14] };
 }
 
+/** Largeur approchée d'un texte (police condensée), mm. */
+export const largeurTexte = (s, h) => 0.52 * h * String(s).length;
+
+/**
+ * Échelle graphique : barre de 4 segments alternés (pleins / vides) d'une longueur réelle « ronde » de 30 à 70 mm papier,
+ * graduée 0 – L/2 – L (m). (x, y) : coin bas-gauche, mm papier.
+ */
+export function echelleGraphique(x, y, den, lib = '') {
+  const out = [], kmm = 1000 / den;
+  const L = [0.2, 0.5, 1, 2, 5, 10, 20, 50, 100].find(l => l * kmm >= 30) || 100, W = L * kmm, h = 1.4;
+  out.push({ calque: 'TEXTES', t: 'P', pts: [[x, y], [x + W, y], [x + W, y + h], [x, y + h]], ferme: true, ep: 0.18 });
+  for (let k = 0; k < 4; k += 2) out.push({ calque: 'TEXTES', t: 'L', a: [x + k * W / 4, y + h / 2], b: [x + (k + 1) * W / 4, y + h / 2], ep: h });
+  const t = (xx, s) => out.push({ calque: 'TEXTES', t: 'T', p: [xx, y + h + 0.8], s, h: 1.8, ancre: 'c', v: 'b' });
+  t(x, '0'); t(x + W / 2, String(L / 2).replace('.', ',')); t(x + W, `${String(L).replace('.', ',')} m`);
+  if (lib) out.push({ calque: 'TEXTES', t: 'T', p: [x + W + 2, y], s: lib, h: 1.8, ancre: 'g', v: 'b' });
+  return out;
+}
+
 /**
  * Feuille complète en primitives papier ; `blocs` : vues à échelle unique, en mm réels, avec leur point d'insertion.
  * `blocsDXF` = true : les vues à échelle unique ne sont pas mises à plat sur la feuille (elles sont dans les blocs).
@@ -140,6 +158,9 @@ export function primitivesFeuille(F, { blocsDXF = false } = {}) {
     const [x0, y0] = f([E.x0, E.y0]), [x1, y1] = f([E.x1, E.y1]);
     papier.push({ calque: 'TEXTES', t: 'T', p: [x0, y1 + 6], s: tv, h: 3.5, ancre: 'g', v: 'b', gras: true });
     papier.push({ calque: 'TEXTES', t: 'L', a: [x0, y1 + 5.2], b: [x0 + Math.min(x1 - x0, 3.5 * 0.55 * tv.length), y1 + 5.2] });
+    // échelle(s) graphique(s), à droite du titre
+    let xe = x0 + 0.62 * 3.5 * tv.length + 8;   // titre en gras : chasse plus large
+    for (const [den, lib] of v.echelleV ? [[v.echelle, 'long.'], [v.echelleV, 'haut.']] : [[v.echelle, '']]) { papier.push(...echelleGraphique(xe, y1 + 6.2, den, lib)); xe += 75; }
     if (blocsDXF && !v.echelleV) {
       const kd = 1000;   // mm réels par m
       blocs.push({ nom: `VUE_${i + 1}`, prims: primitivesVue(v, p => [(p[0] - E.x0) * kd, (p[1] - E.y0) * kd], v.echelle, kd), x: x0, y: y0, sx: 1 / v.echelle, sy: 1 / v.echelle });

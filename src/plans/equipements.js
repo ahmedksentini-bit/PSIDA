@@ -13,6 +13,7 @@
  *  - garde-corps : XP P98-405 (1,00 m pour les piétons), Sétra guide GC § 3.4.3, Certu 2008 § 3.6.2 (1,20 m pour les cycles).
  */
 import { Vue, Feuille, fmtCote } from './dessin.js';
+import { composer } from './mise_en_page.js';
 import { geometrie, courbeU } from './geometrie.js';
 
 const fr = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : '—');
@@ -303,17 +304,8 @@ export function metreEquipements(st, eq, G = geometrie(st)) {
 
 export function planEquipements(st, eq = EQ_DEFAUTS, cartouche = {}) {
   const G = geometrie(st), J = souffleJoints(st, eq);
-  const F = new Feuille('A1', { titre: 'TABLIER — ÉQUIPEMENTS', cartouche: { ...cartouche } });
-  const x0 = 20, x1 = F.W - 10, y0 = 10, y1 = F.H - 10, wc = 180;
-  const yH = y0 + (y1 - y0) * 0.52, xC = x0 + (x1 - x0) * 0.5;
   const dA = vueDetailBord(G, eq, 1), dB = vueDetailBord(G, eq, -1);
-  F.placerDans(dA, [x0, yH, xC - x0, y1 - yH]); F.placerDans(dB, [xC, yH, x1 - xC, y1 - yH]);
-  const e = Math.max(dA.echelle, dB.echelle, 10); dA.echelle = dB.echelle = e;
-  F.vues = []; F.placerDans(dA, [x0, yH, xC - x0, y1 - yH], { auto: false }); F.placerDans(dB, [xC, yH, x1 - xC, y1 - yH], { auto: false });
-  const yM = y0 + (y1 - y0) * 0.24, w3 = (x1 - wc - 8 - x0) / 2;
   const dJ = vueDetailJoint(G, st, eq, J[0]), dG = vueDetailGargouille(G, eq), sA = vueAssainissement(G, eq, J);
-  F.placerDans(dJ, [x0, yM, w3, yH - yM]); F.placerDans(dG, [x0 + w3, yM, w3, yH - yM]);
-  F.placerDans(sA, [x0, y0, x1 - wc - 8 - x0, yM - y0]);
   // métré et contrôle des charges, au-dessus du cartouche
   const M = metreEquipements(st, eq, G);
   const tM = { titre: 'MÉTRÉ DES ÉQUIPEMENTS', cols: [{ t: 'Désignation', w: 110, a: 'g' }, { t: 'Unité', w: 18, a: 'c' }, { t: 'Quantité', w: 32, a: 'd' }], lignes: M.map(([d, u, q]) => [d, u, u === 'u' ? String(q) : fr(q, 1)]), hl: 5.5 };
@@ -325,10 +317,7 @@ export function planEquipements(st, eq = EQ_DEFAUTS, cartouche = {}) {
   tC.lignes.push(['Charges linéaires saisies', ...C.map(c => fr(c.saisi, 2))]);
   tC.lignes.push(Object.assign(['Écart', ...C.map(c => (c.ecart == null ? '—' : (c.ecart >= 0 ? '+' : '') + fr(c.ecart * 100, 0) + ' %'))], { gras: true }));
   const hM = (tM.lignes.length + 2) * 5.5, hC = (tC.lignes.length + 2) * 5.5;
-  const xt = x1 - 162;
-  F.tableau(tC, xt, y0 + 76 + 6);
-  F.tableau(tM, xt, y0 + 76 + 6 + hC + 5);
-  F.note([
+  const notes = [
     'NOTES',
     '1. Dimensions des équipements : valeurs paramétrées (carte « Plans d\'exécution »),',
     '   formes des dispositifs schématiques : la fiche du modèle retenu fait foi.',
@@ -338,8 +327,19 @@ export function planEquipements(st, eq = EQ_DEFAUTS, cartouche = {}) {
     '   par le calcul hydraulique (guide Sétra « Assainissement des ponts-routes », 1989).',
     `4. Garde-corps : ${fr(eq.hGC)} m (XP P98-405 : 1,00 m piétons ; 1,20 m avec cycles, Certu 2008).`,
     '5. Écart poids / charges saisies > 10 % : revoir les charges linéaires du calcul.',
-  ], xt - 4, y0 + 76 + 6 + hC + 5 + hM + 4 + 9 * 2.1 * 1.6, 2.1);
-  F.notes[F.notes.length - 1].titreGras = true;
+  ], hn = notes.length * 2.1 * 1.6;
+  const Lt = G.uB - G.uA;
+  const F = composer({ titre: 'TABLIER — ÉQUIPEMENTS', cartouche,
+    rangees: [[dA, dB], [dJ, dG], [sA]],
+    groupes: [{ vues: [dA, dB], cible: 20, min: 10 }, { vues: [dJ, dG], cible: 20, min: 5 }, { vues: [sA], cible: Lt <= 60 ? 200 : 500, min: 100 }],
+    colonne: { largeur: 182, hauteur: 76 + 6 + hC + 5 + hM + 4 + hn + 4 },
+    poser: (F, [x, y]) => {
+      const xt = F.W - 10 - 162;
+      F.tableau(tC, xt, y + 76 + 6);
+      F.tableau(tM, xt, y + 76 + 6 + hC + 5);
+      F.note(notes, xt - 4, y + 76 + 6 + hC + 5 + hM + 4 + hn - 2.1 * 0.6, 2.1);
+      F.notes[F.notes.length - 1].titreGras = true;
+    } });
   F.cartouche.echelles = F.cartouche.echelles || [...new Set(F.vues.map(p => '1/' + p.vue.echelle))].join(' ; ');
   return F;
 }

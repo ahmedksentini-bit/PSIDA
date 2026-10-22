@@ -403,3 +403,8 @@ ferraillages types du Sétra (PP 73 pièce 1.3.2) : fûts (0,2 %, ≥ 20 cm² pa
 (0,5 % pour l'ensemble des nappes, cadres ≥ 0,2 % en plusieurs cadres par cours), garde-grève type (h ≤ 3 m), murs en retour,
 semelles (0,12 % par nappe, tirants sur pieux), cages et cerces des pieux ; attentes, recouvrements EC2 ; bordereau ISO 4066
 (code 99 : cerces) ; manuel § 26.6.
+v0.71 : mise en page automatique des plans (src/plans/mise_en_page.js) — plus petit format où les vues tiennent (A3 → A0),
+puis échelles agrandies d'un cran normalisé tant que la feuille le permet ; colonne réservée au-dessus du cartouche pour les
+tableaux, notes et bordereau ; vue en plan alignée sous l'élévation ; échelle graphique sous le titre de chaque vue (deux
+pour les vues dilatées). Ferraillage des appuis complété : frettes de surface (0,04 R / f_su par appareil), aciers
+d'éclatement dans les plans Δ′ et Δ (répartis de 0,1 d à d), voile frontal des piles-culées apparentes ; manuel § 26.

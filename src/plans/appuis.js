@@ -9,6 +9,7 @@
  * Niveaux : NGF du plan de nivellement, sinon relatifs (±0,00 = dessus de la dalle à l'axe).
  */
 import { Vue, Feuille, fmtCote, fmtNiv } from './dessin.js';
+import { composer } from './mise_en_page.js';
 import { geometrie } from './geometrie.js';
 
 const GG = { e: 0.30, joint: 0.05 }, DEB = 0.05;   // garde-grève, joint ; débord des bossages
@@ -307,48 +308,26 @@ function notes(st, A) {
 /* --------------------------------------------------------------------------------------------- la feuille */
 export function planCoffrageAppui(st, i, cartouche = {}) {
   const A = geometrieAppui(st, i);
-  // A2 si les vues tiennent au 1/50, sinon A1
-  let F = feuilleAppui(st, A, 'A2', cartouche);
-  if (F.vues.some(p => p.vue.echelle > 50)) F = feuilleAppui(st, A, 'A1', cartouche);
-  return F;
-}
-
-function feuilleAppui(st, A, format, cartouche) {
-  const F = new Feuille(format, { titre: `${A.kind === 'culee' ? 'CULÉE' : 'PILE'} ${A.nom} — PLAN DE COFFRAGE`, cartouche: { ...cartouche } });
-  const x0 = 20, x1 = F.W - 10, y0 = 10, y1 = F.H - 10, wc = 180;
   const el = vueElevation(A), cp = vueCoupe(A), pl = vuePlan(A);
-  // colonne de gauche : élévation au-dessus de la vue en plan (même échelle, mêmes abscisses) ;
-  // colonne de droite : coupe dans l'axe, puis notes, quantités et cartouche
   const Q = quantitesAppui(A);
   const lignes = Q.lignes.map(([d, v]) => [d, 'm³', fr(v, 2)]);
   lignes.push(Object.assign(['Total béton', 'm³', fr(Q.total, 2)], { gras: true }));
   if (Q.pieux) lignes.push([`Pieux (${Q.pieux.n} × Ø ${fr(A.Dp)})`, 'ml', fr(Q.pieux.ml, 1)], ['Béton des pieux', 'm³', fr(Q.pieux.V, 2)]);
   const tab = { titre: `QUANTITÉS — ${A.nom}`, cols: [{ t: 'Désignation', w: 104, a: 'g' }, { t: 'Unité', w: 22, a: 'c' }, { t: 'Quantité', w: 34, a: 'd' }], lignes };
-  const ht = (lignes.length + 2) * 6, hn = 7 * 2.2 * 1.6, yBasDroite = y0 + 76 + 6 + ht + 6 + hn + 4;
-  const xD = x1 - Math.max(wc, (x1 - x0) * 0.42);
-  const Eel = el.etendue(), Epl = pl.etendue(), hEl = Eel.y1 - Eel.y0, hPl = Epl.y1 - Epl.y0;
-  const yS = y0 + (y1 - y0) * hPl / (hEl + hPl);
-  for (const [v, c] of [[el, [x0, yS, xD - x0, y1 - yS]], [pl, [x0, y0, xD - x0, yS - y0]], [cp, [xD, yBasDroite, x1 - xD, y1 - yBasDroite]]]) F.placerDans(v, c);
-  const e = Math.max(...F.vues.map(p => p.vue.echelle));
-  for (const v of [el, cp, pl]) v.echelle = e;
-  F.vues = [];
-  F.vues.push({ vue: el, ...posCentree(el, [x0, yS, xD - x0, y1 - yS]) });
-  const pe = F.vues[0], sx = 1000 / e;
-  // vue en plan alignée sous l'élévation (mêmes abscisses)
-  const ppl = posCentree(pl, [x0, y0, xD - x0, yS - y0]); ppl.x = pe.x + (Epl.x0 - Eel.x0) * sx;
-  F.vues.push({ vue: pl, ...ppl });
-  F.vues.push({ vue: cp, ...posCentree(cp, [xD, yBasDroite, x1 - xD, y1 - yBasDroite]) });
-  F.tableau(tab, x1 - 166, y0 + 76 + 6);
-  F.note(notes(st, A), x1 - wc + 2, y0 + 76 + 6 + ht + 6 + hn, 2.2);
-  F.notes[F.notes.length - 1].titreGras = true;
-  F.cartouche.echelles = F.cartouche.echelles || `1/${e}`;
+  const N = notes(st, A), ht = (lignes.length + 2) * 6, hn = N.length * 2.2 * 1.6;
+  // élévation et coupe dans l'axe en haut, vue en plan dessous (alignée sur l'élévation), tableaux au-dessus du cartouche
+  const F = composer({ titre: `${A.kind === 'culee' ? 'CULÉE' : 'PILE'} ${A.nom} — PLAN DE COFFRAGE`, cartouche,
+    rangees: [[el, cp], [pl]],
+    groupes: [{ vues: [el, cp, pl], cible: 50, min: 20 }],
+    aligner: [{ ref: el, vue: pl }],
+    colonne: { largeur: 182, hauteur: 76 + 6 + ht + 6 + hn + 4 },
+    poser: (F, [x, y]) => {
+      F.tableau(tab, F.W - 10 - 166, y + 76 + 6);
+      F.note(N, F.W - 10 - 180 + 2, y + 76 + 6 + ht + 6 + hn - 2.2 * 0.6, 2.2);
+      F.notes[F.notes.length - 1].titreGras = true;
+    } });
+  F.cartouche.echelles = F.cartouche.echelles || `1/${el.echelle}`;
   return F;
-}
-
-/** Position (coin bas-gauche, mm) d'une vue centrée dans un cadre, à son échelle actuelle. */
-function posCentree(vue, [x, y, w, h]) {
-  const E = vue.etendue(), s = 1000 / vue.echelle;
-  return { x: x + (w - (E.x1 - E.x0) * s) / 2, y: y + (h - 8 - (E.y1 - E.y0) * s) / 2, cadre: [x, y, w, h] };
 }
 
 /** Lignes d'appui pour lesquelles un plan est disponible. */
