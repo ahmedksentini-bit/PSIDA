@@ -430,3 +430,5 @@ garde-corps, panneaux grillagés NF P98-405, sans garde-corps séparé) ou à la
 alerte si largeur libre < 1,40 m) ; corniche et contre-corniche arasées au même niveau fini ; caniveau en asphalte coulé au
 fil d'eau ; chaîne de cotes détaillée du bord dans la coupe A-A ; vue en plan des culées avec garde-grève, réservation du
 joint, dalle de transition et bossages.
+v0.76 : dispositif anti-cheminement (vue en plan, taquets) sur la feuille d'appui quand σ_min < 2 MPa, note σ_min sur
+chaque feuille d'appui ; désignations des bandes (trottoir, chaussée) dans la coupe transversale ; manuel § 26.5 et § 26.7.

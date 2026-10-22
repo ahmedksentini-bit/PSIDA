@@ -48,7 +48,7 @@ export function geometrieAppui(st, i) {
   const hBos = nvL ? nvL.hBos : 0.10, hApp = ap.h;
   const zT = nvL ? nvL.zT : -G.h - hApp - hBos, zSF = zT + hBos + hApp, zCh = nvL ? nvL.zCh : G.tRev;
   const F = sp.found, pieux = F.type !== 'superficielle';
-  const out = { i, nom: G.nomLigne(i), end, sgn: i === 0 ? 1 : -1, width, ap, hBos, hApp, zT, zSF, zCh, niv: !!nvL, G, F, pieux };
+  const out = { i, nom: G.nomLigne(i), end, sgn: i === 0 ? 1 : -1, width, ap, hBos, hApp, zT, zSF, zCh, niv: !!nvL, G, F, pieux, st };
   if (end) {
     const C = sp.culee, rem = C.type === 'remblayee';
     out.kind = 'culee'; out.type = C.type; out.C = C;
@@ -375,6 +375,7 @@ function notes(st, A) {
     A.kind === 'culee' ? '5. Remblai technique contigu à la culée, drainage et barbacanes à définir. Murs en retour suspendus.' : '5. Parements vus : coffrage soigné ; arêtes chanfreinées 2 × 2 cm.',
     A.pieux ? `6. Pieux ${st.p.supports.found.pileType || 'forés'} Ø ${fr(A.Dp)} m, recépage à la cote de sous-face de semelle.` : '6. Fond de fouille à réceptionner (portance du sol à vérifier à l\'ouverture).',
     ...(A.alerte ? couperNote('7. ATTENTION — ' + A.alerte) : []),
+    ...(A.st && A.st.bearings && A.st.bearings.rows[A.i] && A.st.bearings.rows[A.i].sel ? [((sl) => `${A.alerte ? 8 : 7}. Anti-cheminement : σ_min = ${fr(sl.sigMin, 1)} MPa ${sl.antiCheminement ? '< 2 MPa, dispositif nécessaire (détail)' : '≥ 2 MPa, dispositif non nécessaire'}.`)(A.st.bearings.rows[A.i].sel)] : []),
   ];
 }
 
@@ -382,6 +383,7 @@ function notes(st, A) {
 export function planCoffrageAppui(st, i, cartouche = {}) {
   const A = geometrieAppui(st, i);
   const el = vueElevation(A), cp = vueCoupe(A, { vue: A.kind === 'pile' }), pl = vuePlan(A), db = vueDetailBossage(A);
+  const sel = st.bearings && st.bearings.rows[i] && st.bearings.rows[i].sel, dac = sel && sel.antiCheminement ? vueAntiCheminement(A, sel) : null;
   const Q = quantitesAppui(A);
   const lignes = Q.lignes.map(([d, v]) => [d, 'm³', fr(v, 2)]);
   lignes.push(Object.assign(['Total béton', 'm³', fr(Q.total, 2)], { gras: true }));
@@ -391,8 +393,8 @@ export function planCoffrageAppui(st, i, cartouche = {}) {
   const N = notes(st, A), ht = (lignes.length + 2) * 5, hn = N.length * 2.2 * 1.6;
   // élévation et coupe dans l'axe en haut, vue en plan dessous (alignée sur l'élévation), tableaux au-dessus du cartouche
   const F = composer({ titre: `${A.kind === 'culee' ? 'CULÉE' : 'PILE'} ${A.nom} — PLAN DE COFFRAGE`, cartouche,
-    rangees: [[el, cp], [pl, db]],
-    groupes: [{ vues: [el, cp, pl], cible: 75, min: 20 }, { vues: [db], cible: 20, min: 20 }],
+    rangees: [[el, cp], [pl, db, ...(dac ? [dac] : [])]],
+    groupes: [{ vues: [el, cp, pl], cible: 75, min: 20 }, { vues: [db, ...(dac ? [dac] : [])], cible: 20, min: 20 }],
     aligner: [{ ref: el, vue: pl }],
     colonne: { largeur: 182, hauteur: 2 + ht + 5 + hc + 6 + hn + 4 },
     poser: (F, [x, y]) => {
@@ -441,6 +443,30 @@ export function vueDetailBossage(A) {
   v.coteV([-bb / 2, z0], [-bb / 2, zB], -bb / 2 - 0.10);
   v.coteV([-b / 2, zB], [-b / 2, zA], -bb / 2 - 0.10);
   v.ligne('AXES', [0, z0 - 0.30], [0, zA + 0.42]);
+  return v;
+}
+
+/**
+ * Dispositif anti-cheminement (vue en plan) : nécessaire quand la contrainte minimale sur l'appareil est inférieure à 2 MPa
+ * (guide Sétra des appareils d'appui en élastomère fretté, 2007). Taquets en plats soudés sur une platine scellée dans le
+ * bossage, sur les quatre côtés de l'appareil, avec un jeu de 2 cm ; dimensions indicatives, à justifier.
+ */
+export function vueAntiCheminement(A, sel) {
+  const v = new Vue(`DISPOSITIF ANTI-CHEMINEMENT — ${A.nom}`), a = A.ap.a, b = A.ap.b, ja = 0.02, ep = 0.04;
+  const ba = a + 2 * DEB + 0.10, bb = b + 2 * DEB + 0.10;   // bossage élargi pour recevoir les taquets
+  rect(v, 'COFFRAGE', -bb / 2, -ba / 2, bb / 2, ba / 2);
+  const ap = [[-b / 2, -a / 2], [b / 2, -a / 2], [b / 2, a / 2], [-b / 2, a / 2]]; v.poly('APPAREILS', ap, true); v.hachure(ap);
+  const tq = [[-b / 2 + 0.03, a / 2 + ja, b / 2 - 0.03, a / 2 + ja + ep], [-b / 2 + 0.03, -a / 2 - ja - ep, b / 2 - 0.03, -a / 2 - ja],
+    [b / 2 + ja, -a / 2 + 0.03, b / 2 + ja + ep, a / 2 - 0.03], [-b / 2 - ja - ep, -a / 2 + 0.03, -b / 2 - ja, a / 2 - 0.03]];
+  for (const [x0, y0, x1, y1] of tq) { rect(v, 'EQUIPEMENTS', x0, y0, x1, y1); v.cercle('EQUIPEMENTS', [(x0 + x1) / 2, (y0 + y1) / 2], 0.008); }
+  v.ligne('AXES', [-bb / 2 - 0.08, 0], [bb / 2 + 0.08, 0]); v.ligne('AXES', [0, -ba / 2 - 0.08], [0, ba / 2 + 0.08]);
+  const lab = (p, q, t) => { v.ligne('REPERES', p, q); v.texte('TEXTES', [q[0] + 0.02, q[1]], t, { h: 2.2, ancre: 'g', v: 'm' }); };
+  const xl = bb / 2 + 0.12;
+  lab([b / 4, a / 2 + ja + ep / 2], [xl, a / 2 + 0.12], 'Taquet : plat 40 mm soudé sur platine scellée, jeu 20 mm');
+  lab([b / 4, 0], [xl, 0.02], `Appareil d'appui ${A.ap.label}`);
+  lab([bb / 2 - 0.02, -ba / 2 + 0.03], [xl, -a / 2 - 0.05], 'Bossage élargi');
+  v.texte('TEXTES', [0, -ba / 2 - 0.14], `σ_min = ${fr(sel.sigMin, 1)} MPa < 2 MPa : dispositif nécessaire ; dimensions indicatives, à justifier`, { h: 2.2, ancre: 'c', v: 'h' });
+  v.coteH([-b / 2, a / 2], [b / 2, a / 2], ba / 2 + 0.08); v.coteV([-bb / 2, -ba / 2], [-bb / 2, ba / 2], -bb / 2 - 0.1);
   return v;
 }
 

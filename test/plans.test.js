@@ -252,3 +252,11 @@ test('Pile marteau : fût unique, chevêtre en console, quantités et vue suivan
   assert.ok(svg.includes('VUE SUIVANT F') && F.valide().ok);
   const R = planFerraillageAppui(m, 1, {}); assert.ok(R.masse > 0 && R.valide().ok);
 });
+
+test('Anti-cheminement : détail et note quand σ_min < 2 MPa', () => {
+  const s2 = compute(parseData(formDefaults()));
+  const sel = s2.bearings.rows[1].sel; sel.antiCheminement = true; sel.sigMin = 1.6;
+  const F = planCoffrageAppui(s2, 1, {}), svg = feuilleSVG(F);
+  assert.ok(svg.includes('DISPOSITIF ANTI-CHEMINEMENT') && /dispositif nécessaire/.test(svg) && F.valide().ok);
+  assert.ok(/dispositif non nécessaire/.test(feuilleSVG(planCoffrageAppui(compute(parseData(formDefaults())), 1, {}))));
+});

@@ -215,12 +215,17 @@ function vueCoupe(G, st, { titre, appui = null, eq = null }) {
   // axe
   // cotes : largeur totale, trottoirs / chaussée, épaisseurs
   const zc = Math.max(...pr.haut.map(p => p[1])) + (eq ? Math.max(eq.hDR, eq.hGC) + 0.30 : TROTTOIR + 0.5) + 0.3;
-  v.ligne('AXES', [0, zc + 0.75], [0, G.dessous(0) - (appui != null ? 1.2 : 0.4)]);
-  v.texte('TEXTES', [0, zc + 0.85], 'Axe', { h: 2.5, ancre: 'c' });
+  v.ligne('AXES', [0, zc + 1.05], [0, G.dessous(0) - (appui != null ? 1.2 : 0.4)]);
+  v.texte('TEXTES', [0, zc + 1.15], 'Axe', { h: 2.5, ancre: 'c' });
   const cuts = [-b, ...(G.g.footways || []).flatMap(f => [f.y1, f.y2]), b].filter((y, k, a) => a.indexOf(y) === k).sort((p, q) => p - q);
   const surTrottoir = y => (G.g.footways || []).some(f => y >= Math.min(f.y1, f.y2) - 1e-9 && y <= Math.max(f.y1, f.y2) + 1e-9);
   const haut = y => [X(y), G.dessus(y) + (surTrottoir(y) ? TROTTOIR : G.tRev)];
   for (let k = 0; k + 1 < cuts.length; k++) v.coteH(haut(cuts[k + 1]), haut(cuts[k]), zc);
+  // désignations des bandes du profil en travers (trottoirs, chaussée), au-dessus des cotes
+  for (let k = 0; k + 1 < cuts.length; k++) {
+    const ym = (cuts[k] + cuts[k + 1]) / 2, w = cuts[k + 1] - cuts[k];
+    v.texte('TEXTES', [X(ym), zc + 0.22], surTrottoir(ym) ? (w >= 1.2 ? 'TROTTOIR' : 'TROT.') : 'CHAUSSÉE', { h: 2.4, ancre: 'c', v: 'b', gras: true });
+  }
   if (eq && appui == null) {   // chaîne de détail du bord gauche : corniche, dispositif, trottoir, chaussée
     const B = bordGeom(G, eq, 1), pts = [b + (B.corniche ? eq.cornE : 0), b];
     if (B.corniche) pts.push(b - eq.cornL);
@@ -229,7 +234,7 @@ function vueCoupe(G, st, { titre, appui = null, eq = null }) {
     const u = [...new Set(pts.map(d => +d.toFixed(4)))].sort((p2, q2) => q2 - p2), zd = G.dessus(b) + (eq ? Math.max(eq.hDR, eq.hGC) : 0) + 0.25;
     for (let k = 0; k + 1 < u.length; k++) v.coteH([X(u[k]), G.dessus(Math.min(u[k], b))], [X(u[k + 1]), G.dessus(u[k + 1])], zd);
   }
-  v.coteH(haut(b), haut(-b), zc + 0.45);
+  v.coteH(haut(b), haut(-b), zc + 0.75);
   v.coteV([X(0), G.dessous(0)], [X(0), G.dessus(0)], X(0) + 0.6, fmtCote(G.dessus(0) - G.dessous(0)));
   if (ch && ch.joue > 0) {
     v.coteV([X(-b), G.dessous(-b)], [X(-b), G.dessus(-b)], X(-b) + 0.35, fmtCote(G.dessus(-b) - G.dessous(-b)));
