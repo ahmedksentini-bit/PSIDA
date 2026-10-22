@@ -150,3 +150,31 @@ test('Portance (F62 et NF P94-261) et choix sismique de NF EN 1998-2 (6.7.3 / 6.
   assert.equal(peu.sisme.approche, 'A'); assert.equal(beaucoup.sisme.approche, 'B');
   const a = beaucoup.sisme.action; proche(beaucoup.sisme.vg, a.S * a.Tc * a.ag / (2 * Math.PI), 1e-12);   // (6.18)
 });
+
+test('Plans du cadre : repères cohérents avec le calcul, feuilles valides, DXF et SVG', async () => {
+  const { reperesCadre, planCoffrageCadre, planFerraillageCadre, quantitesCadre } = await import('../src/plans/cadre.js');
+  const { feuilleSVG } = await import('../src/plans/svg.js');
+  const { feuilleDXF } = await import('../src/plans/dxf.js');
+  const { areaOf } = await import('../src/rebar.js');
+  for (const [g, h, o] of [[{ n: 2, B: 3, H: 2.5, L: 15, et: 0.3, er: 0.35, ep: 0.3, ei: 0.25, Hr: 1.2 }, {}, {}],
+    [{ n: 3, B: 2, H: 2, L: 12, biais: 75, et: 0.25, er: 0.25, ep: 0.25, ei: 0.2, Hr: 0.3 }, { code: 'EC2' }, {}],
+    [{ n: 1, B: 8, H: 5, L: 12, e: 0.5, Hr: 1 }, {}, { ouvert: 'encastre' }]]) {
+    const r = calculPicf(g, h, o), { marks } = reperesCadre(r);
+    // chaque repère calculé fournit au moins la section demandée (tolérance d'arrondi)
+    for (const m of marks) if (m.req != null && m.s) assert.ok(areaOf(m.phi) / m.s * 1e4 + 1e-6 >= (m.pos.endsWith('ChA') || m.pos.endsWith('ChM') ? m.req - (m.prov - areaOf(m.phi) / m.s * 1e4) : m.req) - 1e-6, `${m.label} : ${m.req}`);
+    // toutes les barres tiennent dans une longueur commerciale
+    for (const m of marks) assert.ok(m.L <= 12000 + 25, `${m.label} : L = ${m.L}`);
+    // faces intérieures de la traverse : au moins la plus forte section positive des traverses
+    const tInt = Math.min(...marks.filter(m => m.pos === 'trInt').map(m => m.prov));
+    const reqT = Math.max(...r.sections.filter(s => s.barre.startsWith('Traverse')).map(s => s.asMax.as));
+    assert.ok(tInt + 1e-6 >= reqT * 0.999 || marks.filter(m => m.pos === 'trInt').length > 1);
+    const masse = marks.reduce((s, m) => s + m.masse, 0), Q = quantitesCadre(r, masse);
+    const sb = Math.sin((g.biais ?? 90) * Math.PI / 180);   // l'avant-métré du calcul ne réduit pas la section biaise par sin φ
+    assert.ok(Math.abs(Q.beton - r.metre.beton * sb) / r.metre.beton < 0.03, `béton ${Q.beton} / ${r.metre.beton}`);
+    assert.ok(Q.ratio > 40 && Q.ratio < 250, `ratio ${Q.ratio}`);
+    for (const F of [planCoffrageCadre(r, {}), planFerraillageCadre(r, {})]) {
+      assert.ok(F.valide().ok, F.valide().problemes.join(' ; '));
+      assert.ok(feuilleSVG(F).length > 1000); assert.match(feuilleDXF(F), /ACIERS|COFFRAGE/);
+    }
+  }
+});

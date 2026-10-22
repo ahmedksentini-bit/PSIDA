@@ -18,7 +18,7 @@ import { feuilleDXF, octetsCp1252 } from '../src/plans/dxf.js';
 const $ = s => document.querySelector(s);
 const val = n => { const e = document.querySelector(`[name="${n}"]`); return e ? e.value.trim() : ''; };
 
-function cartouche(numero) {
+export function cartouche(numero) {
   const d = new Date();
   return {
     maitreOuvrage: val('plan_mo'), projet: val('plan_projet'), ouvrage: val('plan_ouvrage'), numero,

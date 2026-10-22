@@ -463,3 +463,9 @@ src/geotech de fond.ksr-infra.org) ; ESOL au pénétromètre statique par la mé
 annexe I), sans corrélation de module ; pénétromètre dynamique ramené au statique par q_d/q_c seulement ; séisme conforme
 à NF EN 1998-2, 6.7.3 (inertie, q = 1) et 6.7.4 (pont-cadre sous grande couverture : γ_s = v_g/v_s,
 v_g = S·T_C·a_g/(2π)), choix automatique selon le remblai ; manuel § 27.2 bis et 27.9.
+v0.83 : cadres — plans d'exécution (src/plans/cadre.js, web/cadre_plans.js) : feuille de coffrage (coupe parallèle aux
+têtes cotée, vue en plan biaise, quantités béton, coffrages, aciers, ratio) et feuille de ferraillage (coupe transversale
+armée avec repères, coupe longitudinale partielle, bordereau de façonnage ISO 4066, récapitulatif par diamètre, notes) pour
+chaque bloc PICF ou pour le PIPO ; sections tirées du calcul, faces extérieures en nappe filante + chapeaux sur nœuds,
+faces intérieures par cellule, répartition et renforts de goussets du guide PICF-EL, ancrages BAEL A.6.1,23 ou EC2 § 8.4 ;
+export SVG, DXF et PDF avec le cartouche commun ; manuel § 27.11.
