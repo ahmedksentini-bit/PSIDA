@@ -469,3 +469,8 @@ armée avec repères, coupe longitudinale partielle, bordereau de façonnage ISO
 chaque bloc PICF ou pour le PIPO ; sections tirées du calcul, faces extérieures en nappe filante + chapeaux sur nœuds,
 faces intérieures par cellule, répartition et renforts de goussets du guide PICF-EL, ancrages BAEL A.6.1,23 ou EC2 § 8.4 ;
 export SVG, DXF et PDF avec le cartouche commun ; manuel § 27.11.
+v0.84 : calcul par phases avec fluage et retrait (src/phasage) — ossature plane, méthode pas à pas (Bažant), lois de
+l'EN 1992-1-1 (§ 3.1.2, § 3.1.4, annexe B, âge corrigé selon le ciment) ; barres activées par phase, appuis ajoutés ou
+retirés (réaction restituée), liaisons de clavage ; validé sur les solutions fermées de Dischinger (changement de schéma,
+retrait gêné), sur l'équation intégrale de Volterra résolue indépendamment et sur le coefficient de vieillissement χ ≈ 0,8.
+Moteur seul : l'interface et les sections composées (dalle coulée sur poutres, précontrainte) suivent.
