@@ -440,3 +440,10 @@ v0.78 : feuille « Dispositifs de retenue aux abords : schémas de principe » r
 abords (barrière, raccords, glissières, extrémités) ; raccords et extrémités renvoyés aux fiches techniques du fournisseur
 (dispositifs certifiés NF EN 1317) ; queue de carpe interdite en extrémité, admise seulement pour le raccord entre deux
 dispositifs ; vues d'extrémités enfouie, abaissée et queue de carpe supprimées.
+v0.79 : onglet « Cadres et portiques » (src/cadre) — cadres fermés PICF à une ou plusieurs cellules et portiques ouverts
+PIPO sous remblai, portage du moteur C# de BVTrace (programme SETRA PICF-EL : effet Marston, sol élastique ESOL, poussées
+K₀ max/min et phasage, situations hydrauliques et flottaison, Fascicule 61 diffusé et balayé, pondération effet par effet,
+BAEL 91 ou EN 1992-1-1, blocs monolithiques), recoupé sur 2 104 grandeurs de BVTrace (test/cadre.test.js) ; voie portée
+ferroviaire (EN 1991-2 : LM71, SW/0, SW/2, Φ2/Φ3 réduit pour la couverture, surcharge sur remblai) ; voie franchie route
+ou voie ferrée (gabarit, choc EN 1991-1-7 en situation accidentelle) ; portique ouvert sur appuis encastrés ou articulés
+avec enveloppe des réactions ; note HTML et Word ; avant-propos et chapitre 27 du manuel.

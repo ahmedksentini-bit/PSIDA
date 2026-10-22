@@ -1,0 +1,4429 @@
+[
+  {
+    "id": "oh309",
+    "deltaB": 1.1674601735526486,
+    "deltaMc": 1.1706280193236713,
+    "poids": 1525,
+    "marston": 1.0757493120752142,
+    "status": "AVANT-PROJET seulement \u2014 2 r\u00E9serve(s) bloquante(s) \u00E0 lever",
+    "reserves": 2,
+    "ncomb": 17,
+    "ncas": 10,
+    "cas": [
+      {
+        "Name": "Poids propre traverse (1.25 t/m\u00B2)",
+        "ta": -3.3804086538461555,
+        "tm": 5.408653846153845,
+        "ra": 3.3804086538461533,
+        "pG": 1.25,
+        "pD": 1.25,
+        "nsw": 0
+      },
+      {
+        "Name": "Remblai \u00D71.1 (7.1 t/m\u00B2, Marston \u00D71.076)",
+        "ta": -19.200573659034774,
+        "tm": 30.720917854455635,
+        "ra": 19.200573659034774,
+        "pG": 7.099945459696414,
+        "pD": 7.099945459696414,
+        "nsw": 0
+      },
+      {
+        "Name": "Remblai \u00D70.9 (5.809 t/m\u00B2)",
+        "ta": -15.709560266482994,
+        "tm": 25.135296426372797,
+        "ra": 15.709560266482997,
+        "pG": 5.809046285206157,
+        "pD": 5.809046285206157,
+        "nsw": 0
+      },
+      {
+        "Name": "Pouss\u00E9e max (K\u2080 = 0.5, surcharge 1 t/m\u00B2)",
+        "ta": -6.659951672789695,
+        "tm": -6.659951672789696,
+        "ra": 7.20463166054364,
+        "pG": 0,
+        "pD": 0,
+        "nsw": 0
+      },
+      {
+        "Name": "Pouss\u00E9e min (K\u2080 = 0.25)",
+        "ta": -3.0633492338307424,
+        "tm": -3.0633492338307464,
+        "ra": 3.335689227707722,
+        "pG": 0,
+        "pD": 0,
+        "nsw": 0
+      },
+      {
+        "Name": "A(l) toutes trav\u00E9es charg\u00E9es (2.076 t/m\u00B2, l = 7.5 m)",
+        "ta": -5.614598742603552,
+        "tm": 8.983357988165684,
+        "ra": 5.614598742603549,
+        "pG": 2.0761538461538462,
+        "pD": 2.0761538461538462,
+        "nsw": 0
+      },
+      {
+        "Name": "Bc \u2014 toutes trav\u00E9es charg\u00E9es (0.63 t/m\u00B2 sur bande de 6.75 m, 9 positions)",
+        "ta": -1.7070994497216294,
+        "tm": 2.676914788205385,
+        "ra": 1.504267623165469,
+        "pG": 0.5668220428834929,
+        "pD": 0.5668220428834929,
+        "nsw": 9
+      },
+      {
+        "Name": "Bt \u2014 toutes trav\u00E9es charg\u00E9es (0.745 t/m\u00B2 sur bande de 6.6 m, 11 positions)",
+        "ta": -2.011665884389701,
+        "tm": 3.1497369881588497,
+        "ra": 1.7331871338522562,
+        "pG": 0.655416237783943,
+        "pD": 0.655416237783943,
+        "nsw": 11
+      },
+      {
+        "Name": "Mc120 \u2014 toutes trav\u00E9es charg\u00E9es (1.247 t/m\u00B2)",
+        "ta": -3.3733768831945534,
+        "tm": 5.397403013111289,
+        "ra": 3.3733768831945548,
+        "pG": 1.2473998074746084,
+        "pD": 1.2473998074746084,
+        "nsw": 0
+      },
+      {
+        "Name": "Construction (6.25 t/ml par voile)",
+        "ta": 0.885345107991841,
+        "tm": 0.8853451079918412,
+        "ra": 5.39255664645338,
+        "pG": 1.6666666666666667,
+        "pD": 1.6666666666666667,
+        "nsw": 0
+      }
+    ],
+    "combos": [
+      {
+        "Name": "ELS G\u002B \u002B Pmax",
+        "ta": -29.240933985670623,
+        "tmax": 29.468166832254973,
+        "w": -4.935148979547591
+      },
+      {
+        "Name": "ELS G\u002B \u002B Pmin",
+        "ta": -25.64433154671167,
+        "tmax": 33.06476927121394,
+        "w": -14.436751543650162
+      },
+      {
+        "Name": "ELS G\u2212 \u002B Pmax",
+        "ta": -25.749920593118844,
+        "tmax": 23.882770067789906,
+        "w": -1.4441355869958237
+      },
+      {
+        "Name": "ELS G\u2212 \u002B Pmin",
+        "ta": -22.153318154159905,
+        "tmax": 27.47937250674886,
+        "w": -10.945738151098391
+      },
+      {
+        "Name": "ELU G\u002B \u002B Pmax",
+        "ta": -39.475260880655355,
+        "tmax": 39.78202522354424,
+        "w": -6.662451122389257
+      },
+      {
+        "Name": "ELU G\u2212 \u002B Pmax",
+        "ta": -25.749920593118844,
+        "tmax": 23.882770067789906,
+        "w": -1.4441355869958237
+      },
+      {
+        "Name": "ELS A(l) \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -35.97845247679487,
+        "tmax": 40.247762826111114,
+        "w": -11.672667470671843
+      },
+      {
+        "Name": "ELU A(l) \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -48.45861886882101,
+        "tmax": 54.15481988201904,
+        "w": -15.645809110554929
+      },
+      {
+        "Name": "ELS Bc \u2014 toutes trav\u00E9es charg\u00E9es, empreinte de 6.75 m \u00E0 0.38 m de l\u0027about",
+        "ta": -31.289453325336574,
+        "tmax": 32.68033304777664,
+        "w": -6.861969223279864
+      },
+      {
+        "Name": "ELU Bc \u2014 toutes trav\u00E9es charg\u00E9es, empreinte de 6.75 m \u00E0 0.38 m de l\u0027about",
+        "ta": -42.20662000020997,
+        "tmax": 44.06491351090648,
+        "w": -9.23154478069894
+      },
+      {
+        "Name": "ELS Bt \u2014 toutes trav\u00E9es charg\u00E9es, empreinte de 6.6 m \u00E0 0.45 m de l\u0027about",
+        "ta": -31.654933046938268,
+        "tmax": 33.24769567299536,
+        "w": -7.182060790492763
+      },
+      {
+        "Name": "ELU Bt \u2014 toutes trav\u00E9es charg\u00E9es, empreinte de 6.6 m \u00E0 0.45 m de l\u0027about",
+        "ta": -42.69392629567885,
+        "tmax": 44.82139701119807,
+        "w": -9.65833353698283
+      },
+      {
+        "Name": "ELS Mc120 \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -32.614310868865175,
+        "tmax": 34.865352752227594,
+        "w": -8.308525862742147
+      },
+      {
+        "Name": "ELU Mc120 \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -44.02931967296799,
+        "tmax": 47.06822621550724,
+        "w": -11.216509914701895
+      },
+      {
+        "Name": "Phasage \u2014 remblai c\u00F4t\u00E9 gauche seul",
+        "ta": 8.779712005962153,
+        "tmax": 8.937233387508211,
+        "w": 12.109687982039762
+      },
+      {
+        "Name": "Phasage \u2014 remblai c\u00F4t\u00E9 droit seul",
+        "ta": -21.66722778131595,
+        "tmax": 8.937233387508204,
+        "w": -2.582043751270529
+      },
+      {
+        "Name": "Phase de construction",
+        "ta": 0.885345107991841,
+        "tmax": 0.8853451079918414,
+        "w": -2.2536057692307687
+      }
+    ],
+    "effets": [
+      {
+        "Bar": "Traverse 1",
+        "Where": "About A",
+        "MomentSlsMax": -22.15331815415989,
+        "MomentSlsMin": -35.978452476794885,
+        "MomentUlsMax": -22.15331815415989,
+        "MomentUlsMin": -48.45861886882103,
+        "ShearUlsMax": 54.72852196663618,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "1/4",
+        "MomentSlsMax": 24.789226529974183,
+        "MomentSlsMin": 11.475518801522998,
+        "MomentUlsMax": 34.43095067119644,
+        "MomentUlsMin": 9.144535716046605,
+        "ShearUlsMax": 27.36426098331809,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 43.846252052577555,
+        "MomentSlsMin": 23.883998599736948,
+        "MomentUlsMax": 60.08494534305715,
+        "MomentUlsMin": 21.55301551426055,
+        "ShearUlsMax": 0.041816748330730825,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "3/4",
+        "MomentSlsMax": 24.789226529974194,
+        "MomentSlsMin": 11.475518801523004,
+        "MomentUlsMax": 34.430950671196456,
+        "MomentUlsMin": 9.14453571604661,
+        "ShearUlsMax": 27.364260983318086,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "About B",
+        "MomentSlsMax": -22.15331815415989,
+        "MomentSlsMin": -35.978452476794885,
+        "MomentUlsMax": -22.15331815415989,
+        "MomentUlsMin": -48.45861886882103,
+        "ShearUlsMax": 54.72852196663617,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About A",
+        "MomentSlsMax": 36.52313246454882,
+        "MomentSlsMin": 22.42565814803687,
+        "MomentUlsMax": 49.19393685228884,
+        "MomentUlsMin": 22.42565814803687,
+        "ShearUlsMax": 54.72852196663617,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "1/4",
+        "MomentSlsMax": -10.930838813769059,
+        "MomentSlsMin": -24.516886536097207,
+        "MomentUlsMax": -8.409217732578785,
+        "MomentUlsMin": -34.158610677319466,
+        "ShearUlsMax": 27.36426098331809,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": -23.339318611983007,
+        "MomentSlsMin": -43.57391205870058,
+        "MomentUlsMax": -20.817697530792735,
+        "MomentUlsMin": -59.812605349180174,
+        "ShearUlsMax": 0.2134166358716684,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "3/4",
+        "MomentSlsMax": -10.93083881376907,
+        "MomentSlsMin": -24.51688653609722,
+        "MomentUlsMax": -8.409217732578796,
+        "MomentUlsMin": -34.15861067731949,
+        "ShearUlsMax": 27.36426098331809,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About B",
+        "MomentSlsMax": 36.52313246454882,
+        "MomentSlsMin": 22.425658148036874,
+        "MomentUlsMax": 49.19393685228884,
+        "MomentUlsMin": 22.425658148036874,
+        "ShearUlsMax": 54.72852196663618,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About A",
+        "MomentSlsMax": -22.425658148036863,
+        "MomentSlsMin": -36.523132464548844,
+        "MomentUlsMax": -22.425658148036863,
+        "MomentUlsMin": -49.193936852288864,
+        "ShearUlsMax": 27.749081178968684,
+        "NormalSlsMinT": 26.471423569523093
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "1/4",
+        "MomentSlsMax": -6.425032146434299,
+        "MomentSlsMin": -23.42839018949367,
+        "MomentUlsMax": -1.992304275571101,
+        "MomentUlsMin": -33.57757349604343,
+        "ShearUlsMax": 11.854940553968683,
+        "NormalSlsMinT": 26.471423569523093
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": -1.4441355869958166,
+        "MomentSlsMin": -21.174270034774423,
+        "MomentUlsMax": 4.73190607967085,
+        "MomentUlsMin": -31.323453341324175,
+        "ShearUlsMax": 1.6488803213440202,
+        "NormalSlsMinT": 26.471423569523093
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "3/4",
+        "MomentSlsMax": -8.752301527557329,
+        "MomentSlsMin": -24.592024880055167,
+        "MomentUlsMax": -5.13411794008719,
+        "MomentUlsMin": -34.741208186604915,
+        "ShearUlsMax": 12.438333446344021,
+        "NormalSlsMinT": 26.471423569523093
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About B",
+        "MomentSlsMax": -22.153318154159898,
+        "MomentSlsMin": -35.97845247679487,
+        "MomentUlsMax": -22.153318154159898,
+        "MomentUlsMin": -48.45861886882101,
+        "ShearUlsMax": 20.67544282134402,
+        "NormalSlsMinT": 26.471423569523093
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About A",
+        "MomentSlsMax": 36.52313246454881,
+        "MomentSlsMin": 22.42565814803685,
+        "MomentUlsMax": 49.19393685228883,
+        "MomentUlsMin": 22.42565814803685,
+        "ShearUlsMax": 27.749081178968673,
+        "NormalSlsMinT": 26.47142356952309
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "1/4",
+        "MomentSlsMax": 23.428390189493655,
+        "MomentSlsMin": 6.425032146434303,
+        "MomentUlsMax": 33.5775734960434,
+        "MomentUlsMin": 1.992304275571108,
+        "ShearUlsMax": 11.854940553968671,
+        "NormalSlsMinT": 26.47142356952309
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 21.174270034774423,
+        "MomentSlsMin": 1.4441355869958379,
+        "MomentUlsMax": 31.323453341324168,
+        "MomentUlsMin": -4.731906079670825,
+        "ShearUlsMax": 1.6488803213440313,
+        "NormalSlsMinT": 26.47142356952309
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "3/4",
+        "MomentSlsMax": 24.59202488005518,
+        "MomentSlsMin": 8.752301527557357,
+        "MomentUlsMax": 34.74120818660493,
+        "MomentUlsMin": 5.134117940087224,
+        "ShearUlsMax": 12.438333446344032,
+        "NormalSlsMinT": 26.47142356952309
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About B",
+        "MomentSlsMax": 35.978452476794914,
+        "MomentSlsMin": 22.153318154159923,
+        "MomentUlsMax": 48.45861886882106,
+        "MomentUlsMin": 22.153318154159923,
+        "ShearUlsMax": 20.67544282134403,
+        "NormalSlsMinT": 26.47142356952309
+      }
+    ],
+    "sections": [
+      {
+        "Bar": "Traverse 1",
+        "Where": "About A",
+        "EffectiveDepthM": 0.442,
+        "amax": 5.33715,
+        "amin": 47.0560078952476,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": null,
+        "tau": 1.2382018544487823,
+        "ok": false,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.4375,
+        "amax": 32.061891279754896,
+        "amin": 5.2828125,
+        "bmax": "HA16\u002BHA25 altern\u00E9s e = 10 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.625468822475842,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.442,
+        "amax": 58.10887341721242,
+        "amin": 5.33715,
+        "bmax": null,
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.0009460802789758105,
+        "ok": false,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.4375,
+        "amax": 32.06189127975491,
+        "amin": 5.2828125,
+        "bmax": "HA16\u002BHA25 altern\u00E9s e = 10 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.6254688224758419,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "About B",
+        "EffectiveDepthM": 0.442,
+        "amax": 5.33715,
+        "amin": 47.0560078952476,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": null,
+        "tau": 1.238201854448782,
+        "ok": false,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About A",
+        "EffectiveDepthM": 0.442,
+        "amax": 47.81482386338912,
+        "amin": 5.33715,
+        "bmax": null,
+        "bmin": "HA12 e = 20 cm",
+        "tau": 1.238201854448782,
+        "ok": false,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.44,
+        "amax": 5.313000000000001,
+        "amin": 31.48920283700987,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA16\u002BHA25 altern\u00E9s e = 10 cm",
+        "tau": 0.6219150223481384,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.442,
+        "amax": 5.33715,
+        "amin": 57.7230684679263,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": null,
+        "tau": 0.004828430675829601,
+        "ok": false,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.44,
+        "amax": 5.313000000000001,
+        "amin": 31.4892028370099,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA16\u002BHA25 altern\u00E9s e = 10 cm",
+        "tau": 0.6219150223481384,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About B",
+        "EffectiveDepthM": 0.442,
+        "amax": 47.81482386338912,
+        "amin": 5.33715,
+        "bmax": null,
+        "bmin": "HA12 e = 20 cm",
+        "tau": 1.2382018544487823,
+        "ok": false,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About A",
+        "EffectiveDepthM": 0.4375,
+        "amax": 5.2828125,
+        "amin": 48.37099785265869,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": null,
+        "tau": 0.6342647126621414,
+        "ok": false,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.4375,
+        "amax": 5.2828125,
+        "amin": 30.20508780817002,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA20 e = 10 cm",
+        "tau": 0.2709700698049985,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.4375,
+        "amax": 5.2828125,
+        "amin": 27.147252399466144,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA20 e = 10 cm",
+        "tau": 0.03768869305929189,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.44,
+        "amax": 5.313000000000001,
+        "amin": 31.591197188365516,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA16\u002BHA25 altern\u00E9s e = 10 cm",
+        "tau": 0.28268939650781866,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About B",
+        "EffectiveDepthM": 0.4375,
+        "amax": 5.2828125,
+        "amin": 47.603025897474744,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": null,
+        "tau": 0.47258155020214904,
+        "ok": false,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About A",
+        "EffectiveDepthM": 0.4375,
+        "amax": 48.37099785265865,
+        "amin": 5.2828125,
+        "bmax": null,
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.634264712662141,
+        "ok": false,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.4375,
+        "amax": 30.205087808170003,
+        "amin": 5.2828125,
+        "bmax": "HA20 e = 10 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.2709700698049982,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.4375,
+        "amax": 27.147252399466144,
+        "amin": 5.2828125,
+        "bmax": "HA20 e = 10 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.03768869305929214,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.44,
+        "amax": 31.591197188365538,
+        "amin": 5.313000000000001,
+        "bmax": "HA16\u002BHA25 altern\u00E9s e = 10 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.28268939650781894,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About B",
+        "EffectiveDepthM": 0.4375,
+        "amax": 47.603025897474794,
+        "amin": 5.2828125,
+        "bmax": null,
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.47258155020214926,
+        "ok": false,
+        "wk": null
+      }
+    ],
+    "metre": {
+      "ConcreteM3": 260,
+      "SteelKg": 66428.21569092252
+    },
+    "props": [
+      {
+        "Bar": "Traverse",
+        "ProposedM": 0.74
+      },
+      {
+        "Bar": "Radier",
+        "ProposedM": 0.74
+      },
+      {
+        "Bar": "Pi\u00E9droit",
+        "ProposedM": 0.74
+      }
+    ],
+    "flot": null,
+    "sweeps": [
+      {
+        "System": "Bc",
+        "SweptTm": 1.718918367595903,
+        "UniformTm": 1.7031912346258793,
+        "WorstBar": "Traverse 1",
+        "WorstWhere": "About A"
+      },
+      {
+        "System": "Bt",
+        "SweptTm": 2.0273410558877467,
+        "UniformTm": 2.014158838251026,
+        "WorstBar": "Pi\u00E9droit gauche",
+        "WorstWhere": "About B"
+      }
+    ]
+  },
+  {
+    "id": "bi_winkler",
+    "deltaB": 1.1964637953866097,
+    "deltaMc": 1.205986603410226,
+    "poids": 475.14375,
+    "marston": 1.0344754031761225,
+    "status": "Note d\u0027ex\u00E9cution \u2014 aucune r\u00E9serve bloquante",
+    "reserves": 0,
+    "ncomb": 33,
+    "ncas": 21,
+    "cas": [
+      {
+        "Name": "Poids propre traverse (0.75 t/m\u00B2)",
+        "ta": -0.23726587185620118,
+        "tm": 0.43051576920357126,
+        "ra": 0.18862958764046223,
+        "pG": -0.7715935662443283,
+        "pD": -0.7715935886873366,
+        "nsw": 0
+      },
+      {
+        "Name": "Remblai \u00D71.1 (2.731 t/m\u00B2, Marston \u00D71.034)",
+        "ta": -0.8639688937382874,
+        "tm": 1.567660068200314,
+        "ra": 0.6868669939130981,
+        "pG": -2.8096448706610366,
+        "pD": -2.8096449523839637,
+        "nsw": 0
+      },
+      {
+        "Name": "Remblai \u00D70.9 (2.234 t/m\u00B2)",
+        "ta": -0.7068836403313297,
+        "tm": 1.282630964891165,
+        "ra": 0.5619820859288995,
+        "pG": -2.2988003487226663,
+        "pD": -2.298800415586879,
+        "nsw": 0
+      },
+      {
+        "Name": "Pouss\u00E9e max (K\u2080 = 0.5, surcharge 1 t/m\u00B2)",
+        "ta": -1.3709798625051919,
+        "tm": -0.2853510120451763,
+        "ra": 1.5945293828906122,
+        "pG": 0.08275382567762095,
+        "pD": 0.08275382808464689,
+        "nsw": 0
+      },
+      {
+        "Name": "Pouss\u00E9e min (K\u2080 = 0.25)",
+        "ta": -0.578074448980131,
+        "tm": -0.11902893816972498,
+        "ra": 0.6777862628713277,
+        "pG": 0.036021196218941315,
+        "pD": 0.03602119726667477,
+        "nsw": 0
+      },
+      {
+        "Name": "A(l) trav\u00E9e 1 charg\u00E9e (2.587 t/m\u00B2, l = 3.28 m)",
+        "ta": -1.1331988090416094,
+        "tm": 1.939393104169492,
+        "ra": 0.7132424731944091,
+        "pG": -3.3640149373340664,
+        "pD": 0.7027453557160346,
+        "nsw": 0
+      },
+      {
+        "Name": "Bc \u2014 trav\u00E9e 1 charg\u00E9e (1.886 t/m\u00B2)",
+        "ta": -0.826224517253479,
+        "tm": 1.4140273696654746,
+        "ra": 0.5200309190212751,
+        "pG": -2.452730796622522,
+        "pD": 0.5123773848382882,
+        "nsw": 0
+      },
+      {
+        "Name": "Bt \u2014 trav\u00E9e 1 charg\u00E9e (2.202 t/m\u00B2)",
+        "ta": -0.9644829039819163,
+        "tm": 1.650647245785461,
+        "ra": 0.6070516190990114,
+        "pG": -2.8631647597146177,
+        "pD": 0.5981173612545865,
+        "nsw": 0
+      },
+      {
+        "Name": "Mc120 \u2014 trav\u00E9e 1 charg\u00E9e (2.609 t/m\u00B2)",
+        "ta": -1.1430736218394442,
+        "tm": 1.9562931782714732,
+        "ra": 0.7194577426123216,
+        "pG": -3.393329314908625,
+        "pD": 0.7088691521556996,
+        "nsw": 0
+      },
+      {
+        "Name": "A(l) trav\u00E9e 2 charg\u00E9e (2.587 t/m\u00B2, l = 3.28 m)",
+        "ta": 0.3148554845574161,
+        "tm": -0.4545200246292376,
+        "ra": -0.06264842594207254,
+        "pG": 0.7027453699447631,
+        "pD": -3.364015000512535,
+        "nsw": 0
+      },
+      {
+        "Name": "Bc \u2014 trav\u00E9e 2 charg\u00E9e (1.886 t/m\u00B2)",
+        "ta": 0.2295637082014519,
+        "tm": -0.3313942663326076,
+        "ra": -0.045677479598178694,
+        "pG": 0.5123773952125708,
+        "pD": -2.452730842686461,
+        "nsw": 0
+      },
+      {
+        "Name": "Bt \u2014 trav\u00E9e 2 charg\u00E9e (2.202 t/m\u00B2)",
+        "ta": 0.2679783367734019,
+        "tm": -0.3868489710495664,
+        "ra": -0.05332103713876091,
+        "pG": 0.5981173733648756,
+        "pD": -2.863164813486783,
+        "nsw": 0
+      },
+      {
+        "Name": "Mc120 \u2014 trav\u00E9e 2 charg\u00E9e (2.609 t/m\u00B2)",
+        "ta": 0.31759916814017997,
+        "tm": -0.45848075960378,
+        "ra": -0.06319435087009229,
+        "pG": 0.7088691665084192,
+        "pD": -3.3933293786376364,
+        "nsw": 0
+      },
+      {
+        "Name": "A(l) toutes trav\u00E9es charg\u00E9es (2.171 t/m\u00B2, l = 6.55 m)",
+        "ta": -0.6867109598632698,
+        "tm": 1.2460279044482028,
+        "ra": 0.5459445312290846,
+        "pG": -2.2331983709022274,
+        "pD": -2.2331984358583026,
+        "nsw": 0
+      },
+      {
+        "Name": "Bc \u2014 toutes trav\u00E9es charg\u00E9es (1.886 t/m\u00B2)",
+        "ta": -0.5966608090520253,
+        "tm": 1.0826331033328667,
+        "ra": 0.47435343942309033,
+        "pG": -1.9403534014099515,
+        "pD": -1.9403534578481725,
+        "nsw": 0
+      },
+      {
+        "Name": "Bt \u2014 toutes trav\u00E9es charg\u00E9es (2.202 t/m\u00B2)",
+        "ta": -0.6965045672085152,
+        "tm": 1.2637982747358962,
+        "ra": 0.5537305819602575,
+        "pG": -2.2650473863497425,
+        "pD": -2.2650474522321957,
+        "nsw": 0
+      },
+      {
+        "Name": "Mc120 \u2014 toutes trav\u00E9es charg\u00E9es (2.609 t/m\u00B2)",
+        "ta": -0.8254744536992608,
+        "tm": 1.4978124186676935,
+        "ra": 0.656263391742231,
+        "pG": -2.6844601484002064,
+        "pD": -2.6844602264819386,
+        "nsw": 0
+      },
+      {
+        "Name": "Construction (1.875 t/ml par voile)",
+        "ta": 0.4565454783631358,
+        "tm": -0.025334275052908806,
+        "ra": 0.7368720319201028,
+        "pG": -0.9673251192368291,
+        "pD": -0.9673251473729972,
+        "nsw": 0
+      },
+      {
+        "Name": "Eau \u2014 en eau, nappe basse",
+        "ta": 0.20393107567878985,
+        "tm": 0.03906775556010672,
+        "ra": -0.2514651416504863,
+        "pG": -1.0152642421660316,
+        "pD": -1.015264271696584,
+        "nsw": 0
+      },
+      {
+        "Name": "Eau \u2014 VIDE, nappe haute",
+        "ta": -0.3058966132148679,
+        "tm": -0.05860163331063112,
+        "ra": 0.37719771332561436,
+        "pG": 1.697896360859659,
+        "pD": 1.6978964102456366,
+        "nsw": 0
+      },
+      {
+        "Name": "Eau \u2014 en eau, nappe haute",
+        "ta": -0.10196553753607947,
+        "tm": -0.01953387775052451,
+        "ra": 0.1257325716751221,
+        "pG": 0.6826321186936279,
+        "pD": 0.682632138549053,
+        "nsw": 0
+      }
+    ],
+    "combos": [
+      {
+        "Name": "ELS G\u002B \u002B Pmax",
+        "ta": -2.472214628099685,
+        "tmax": 1.7252236278175275,
+        "w": 0.7834783365405666
+      },
+      {
+        "Name": "ELS G\u002B \u002B Pmin",
+        "ta": -1.6793092145746207,
+        "tmax": 1.944887529829526,
+        "w": -0.23839124434351122
+      },
+      {
+        "Name": "ELS G\u2212 \u002B Pmax",
+        "ta": -2.3151293746927206,
+        "tmax": 1.4319403754656772,
+        "w": 0.9244634172361481
+      },
+      {
+        "Name": "ELS G\u2212 \u002B Pmin",
+        "ta": -1.5222239611676585,
+        "tmax": 1.642988096152917,
+        "w": -0.09740616364792953
+      },
+      {
+        "Name": "ELU G\u002B \u002B Pmax",
+        "ta": -3.3374897479345704,
+        "tmax": 2.3290518975536685,
+        "w": 1.0576957543297665
+      },
+      {
+        "Name": "ELU G\u2212 \u002B Pmax",
+        "ta": -2.3151293746927206,
+        "tmax": 1.4319403754656772,
+        "w": 0.9244634172361481
+      },
+      {
+        "Name": "ELS A(l) \u2014 trav\u00E9e 1 charg\u00E9e",
+        "ta": -3.832053198949609,
+        "tmax": 4.066006030190579,
+        "w": -0.3243864328010426
+      },
+      {
+        "Name": "ELU A(l) \u2014 trav\u00E9e 1 charg\u00E9e",
+        "ta": -5.150607842401147,
+        "tmax": 5.450095100717727,
+        "w": -0.41945727145904854
+      },
+      {
+        "Name": "ELS Bc \u2014 trav\u00E9e 1 charg\u00E9e",
+        "ta": -3.463684048803857,
+        "tmax": 3.4319072167561444,
+        "w": -0.024274925224287536
+      },
+      {
+        "Name": "ELU Bc \u2014 trav\u00E9e 1 charg\u00E9e",
+        "ta": -4.659448975540126,
+        "tmax": 4.60463001613849,
+        "w": -0.01930859469003643
+      },
+      {
+        "Name": "ELS Bt \u2014 trav\u00E9e 1 charg\u00E9e",
+        "ta": -3.6295941128779896,
+        "tmax": 3.7174994676941227,
+        "w": -0.15944237730799582
+      },
+      {
+        "Name": "ELU Bt \u2014 trav\u00E9e 1 charg\u00E9e",
+        "ta": -4.880662394305634,
+        "tmax": 4.985419684055792,
+        "w": -0.19953186413498347
+      },
+      {
+        "Name": "ELS Mc120 \u2014 trav\u00E9e 1 charg\u00E9e",
+        "ta": -3.615288249939125,
+        "tmax": 3.692873815108671,
+        "w": -0.14778734568531782
+      },
+      {
+        "Name": "ELU Mc120 \u2014 trav\u00E9e 1 charg\u00E9e",
+        "ta": -4.880639137417814,
+        "tmax": 4.985379650396711,
+        "w": -0.1995129166751788
+      },
+      {
+        "Name": "ELS A(l) \u2014 trav\u00E9e 2 charg\u00E9e",
+        "ta": -2.0943880466307836,
+        "tmax": 1.273114136983402,
+        "w": 1.0099806828402604
+      },
+      {
+        "Name": "ELU A(l) \u2014 trav\u00E9e 2 charg\u00E9e",
+        "ta": -2.8337209726427153,
+        "tmax": 1.7254212873321393,
+        "w": 1.359698882729357
+      },
+      {
+        "Name": "ELS Bc \u2014 trav\u00E9e 2 charg\u00E9e",
+        "ta": -2.19673817825794,
+        "tmax": 1.3866248757994546,
+        "w": 0.9486230492203438
+      },
+      {
+        "Name": "ELU Bc \u2014 trav\u00E9e 2 charg\u00E9e",
+        "ta": -2.970187814812248,
+        "tmax": 1.8771760498088206,
+        "w": 1.2778887045694711
+      },
+      {
+        "Name": "ELS Bt \u2014 trav\u00E9e 2 charg\u00E9e",
+        "ta": -2.1506406239715985,
+        "tmax": 1.3346903345593817,
+        "w": 0.976257960887863
+      },
+      {
+        "Name": "ELU Bt \u2014 trav\u00E9e 2 charg\u00E9e",
+        "ta": -2.9087244090971254,
+        "tmax": 1.807809693532758,
+        "w": 1.3147352534594958
+      },
+      {
+        "Name": "ELS Mc120 \u2014 trav\u00E9e 2 charg\u00E9e",
+        "ta": -2.154615459959506,
+        "tmax": 1.3391236301435545,
+        "w": 0.9738750960457017
+      },
+      {
+        "Name": "ELU Mc120 \u2014 trav\u00E9e 2 charg\u00E9e",
+        "ta": -2.9087308709453303,
+        "tmax": 1.8078169006938003,
+        "w": 1.3147313796616977
+      },
+      {
+        "Name": "ELS A(l) \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -3.296267779935605,
+        "tmax": 3.291905062579568,
+        "w": 0.04388504188514997
+      },
+      {
+        "Name": "ELU A(l) \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -4.436227283715798,
+        "tmax": 4.417744027906858,
+        "w": 0.07157136145587817
+      },
+      {
+        "Name": "ELS Bc \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -3.188207598962114,
+        "tmax": 3.0850719074109074,
+        "w": 0.14086978745549228
+      },
+      {
+        "Name": "ELU Bc \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -4.292147042417804,
+        "tmax": 4.142040582117259,
+        "w": 0.20088435554966821
+      },
+      {
+        "Name": "ELS Bt \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -3.3080201087499024,
+        "tmax": 3.314433685094687,
+        "w": 0.033337247039304074
+      },
+      {
+        "Name": "ELU Bt \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -4.451897055468204,
+        "tmax": 4.447782191260348,
+        "w": 0.05750763499474676
+      },
+      {
+        "Name": "ELS Mc120 \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -3.297689081798946,
+        "tmax": 3.294629626677896,
+        "w": 0.0426094138198172
+      },
+      {
+        "Name": "ELU Mc120 \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -4.45188026042857,
+        "tmax": 4.447749996015164,
+        "w": 0.057522708656756016
+      },
+      {
+        "Name": "Phasage \u2014 remblai c\u00F4t\u00E9 gauche seul",
+        "ta": -0.0032015061276708945,
+        "tmax": 0.41751701846225303,
+        "w": 1.3869635953355415
+      },
+      {
+        "Name": "Phasage \u2014 remblai c\u00F4t\u00E9 droit seul",
+        "ta": -1.6274791355449938,
+        "tmax": 0.5565823003970518,
+        "w": -0.31291019637116313
+      },
+      {
+        "Name": "Phase de construction",
+        "ta": 0.4565454783631358,
+        "tmax": 0.4565454783631358,
+        "w": -0.14016327677848406
+      }
+    ],
+    "effets": [
+      {
+        "Bar": "Traverse 1",
+        "Where": "About A",
+        "MomentSlsMax": -0.9404663040199727,
+        "MomentSlsMin": -4.1379498121644795,
+        "MomentUlsMax": -0.74314823370943,
+        "MomentUlsMin": -5.563568270241215,
+        "ShearUlsMax": 13.8926726964104,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "1/4",
+        "MomentSlsMax": 2.9123228721406047,
+        "MomentSlsMin": 0.29060634142796177,
+        "MomentUlsMax": 4.028226425633656,
+        "MomentUlsMin": -0.09097166277467944,
+        "ShearUlsMax": 6.656365524383088,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 4.245486379797657,
+        "MomentSlsMin": 0.8237700591838435,
+        "MomentUlsMax": 5.734278879002852,
+        "MomentUlsMin": 0.521578623457616,
+        "ShearUlsMax": 2.116717137825538,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "3/4",
+        "MomentSlsMax": 1.4196531703154736,
+        "MomentSlsMin": -0.8990876102611214,
+        "MomentUlsMax": 1.899039803378709,
+        "MomentUlsMin": -1.2499480885248795,
+        "ShearUlsMax": 8.848499246526828,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "About B",
+        "MomentSlsMax": -2.643153955057639,
+        "MomentSlsMin": -7.2375358216219885,
+        "MomentUlsMax": -2.297014040304683,
+        "MomentUlsMin": -9.836090364278585,
+        "ShearUlsMax": 16.00703974274712,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "About A",
+        "MomentSlsMax": -2.6431539525050223,
+        "MomentSlsMin": -7.237535807216561,
+        "MomentUlsMax": -2.297014038985537,
+        "MomentUlsMin": -9.836090344895965,
+        "ShearUlsMax": 16.007039760683345,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "1/4",
+        "MomentSlsMax": 1.4196531583129945,
+        "MomentSlsMin": -0.8990875853591104,
+        "MomentUlsMax": 1.8990397874182077,
+        "MomentUlsMin": -1.2499480567407535,
+        "ShearUlsMax": 8.84849923991441,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 4.245486382782453,
+        "MomentSlsMin": 0.8237700640990465,
+        "MomentUlsMax": 5.734278883059988,
+        "MomentUlsMin": 0.5215786290912665,
+        "ShearUlsMax": 2.11671713121312,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "3/4",
+        "MomentSlsMax": 2.9123228861761055,
+        "MomentSlsMin": 0.2906063302929274,
+        "MomentUlsMax": 4.028226444376077,
+        "MomentUlsMin": -0.09097167795915057,
+        "ShearUlsMax": 6.656365503922669,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "About B",
+        "MomentSlsMax": -0.9404663318458196,
+        "MomentSlsMin": -4.1379497864377,
+        "MomentUlsMax": -0.7431482705797261,
+        "MomentUlsMin": -5.563568235945809,
+        "ShearUlsMax": 13.89267267594998,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About A",
+        "MomentSlsMax": 3.703114645603078,
+        "MomentSlsMin": 1.1017546836597163,
+        "MomentUlsMax": 4.984939922100267,
+        "MomentUlsMin": 0.9886825137052169,
+        "ShearUlsMax": 13.892672565660673,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "1/4",
+        "MomentSlsMax": -0.10282399309050305,
+        "MomentSlsMin": -3.35087898241676,
+        "MomentUlsMax": 0.40570773702708185,
+        "MomentUlsMin": -4.648252105526696,
+        "ShearUlsMax": 6.065665682627174,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": -0.9928231644313485,
+        "MomentSlsMin": -4.320154595483267,
+        "MomentUlsMax": -0.6858984647520007,
+        "MomentUlsMin": -5.866815369890157,
+        "ShearUlsMax": 2.114467716747267,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "3/4",
+        "MomentSlsMax": 0.45163406332250733,
+        "MomentSlsMin": -1.2388283540876641,
+        "MomentUlsMax": 0.6829199491302939,
+        "MomentUlsMin": -1.6571259565374963,
+        "ShearUlsMax": 8.816873624034415,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About B",
+        "MomentSlsMax": 6.9083640687781225,
+        "MomentSlsMin": 2.718381585874079,
+        "MomentUlsMax": 9.36369725968211,
+        "MomentUlsMin": 2.462831399982645,
+        "ShearUlsMax": 15.580281340551132,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "About A",
+        "MomentSlsMax": 6.9083640966779605,
+        "MomentSlsMin": 2.7183815908178772,
+        "MomentUlsMax": 9.363697297221572,
+        "MomentUlsMin": 2.4628314025375095,
+        "ShearUlsMax": 15.580281478211363,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "1/4",
+        "MomentSlsMax": 0.4516340494231907,
+        "MomentSlsMin": -1.2388284031488164,
+        "MomentUlsMax": 0.6829199375216022,
+        "MomentUlsMin": -1.6571260221612873,
+        "ShearUlsMax": 8.81687373593029,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": -0.992823182450824,
+        "MomentSlsMin": -4.3201546983947665,
+        "MomentUlsMax": -0.6858984746955891,
+        "MomentUlsMin": -5.8668155082904345,
+        "ShearUlsMax": 2.114467748870578,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "3/4",
+        "MomentSlsMax": -0.10282402324507034,
+        "MomentSlsMin": -3.3508790491711142,
+        "MomentUlsMax": 0.40570770810600976,
+        "MomentUlsMin": -4.648252195482067,
+        "ShearUlsMax": 6.065665777555116,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "About B",
+        "MomentSlsMax": 3.7031147025184072,
+        "MomentSlsMin": 1.1017546814087382,
+        "MomentUlsMax": 4.984939998168766,
+        "MomentUlsMin": 0.988682504692499,
+        "ShearUlsMax": 13.892672784102114,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About A",
+        "MomentSlsMax": -1.101754683659732,
+        "MomentSlsMin": -3.7031146456030832,
+        "MomentUlsMax": -0.9886825137052342,
+        "MomentUlsMin": -4.984939922100275,
+        "ShearUlsMax": 9.336119473064485,
+        "NormalSlsMinT": 3.9656286239624023
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "1/4",
+        "MomentSlsMax": 0.725574161234936,
+        "MomentSlsMin": -1.6420300773648782,
+        "MomentUlsMax": 1.2566597604836145,
+        "MomentUlsMin": -2.364399176460172,
+        "ShearUlsMax": 3.9640950590019846,
+        "NormalSlsMinT": 3.9656286239624023
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 1.5576021940156026,
+        "MomentSlsMin": -1.6173469675204837,
+        "MomentUlsMax": 2.3955711303235265,
+        "MomentUlsMin": -2.4274450435609762,
+        "ShearUlsMax": 0.8920937252821927,
+        "NormalSlsMinT": 3.9656286239624023
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "3/4",
+        "MomentSlsMax": 0.38823911351501894,
+        "MomentSlsMin": -2.032221719004217,
+        "MomentUlsMax": 0.83260449723375,
+        "MomentUlsMin": -2.842760686052406,
+        "ShearUlsMax": 4.2023095455946935,
+        "NormalSlsMinT": 3.9656286239624023
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About B",
+        "MomentSlsMax": -0.9404663040199657,
+        "MomentSlsMin": -4.137949812164484,
+        "MomentUlsMax": -0.7431482337094215,
+        "MomentUlsMin": -5.563568270241222,
+        "ShearUlsMax": 6.481621069032193,
+        "NormalSlsMinT": 3.9656286239624023
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "About A",
+        "MomentSlsMax": 0.03383663653269528,
+        "MomentSlsMin": -0.03383667119890329,
+        "MomentUlsMax": 0.04511551941379813,
+        "MomentUlsMin": -0.04511556193821579,
+        "ShearUlsMax": 0.38069404383499056,
+        "NormalSlsMinT": 11.113601118326187
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "1/4",
+        "MomentSlsMax": 0.23548550802731164,
+        "MomentSlsMin": -0.2354855295521983,
+        "MomentUlsMax": 0.31398067987631634,
+        "MomentUlsMin": -0.3139807062805101,
+        "ShearUlsMax": 0.38069404383499056,
+        "NormalSlsMinT": 11.113601118326187
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 0.437134379521928,
+        "MomentSlsMin": -0.43713438790549336,
+        "MomentUlsMax": 0.5828458403388347,
+        "MomentUlsMin": -0.5828458506228044,
+        "ShearUlsMax": 0.38069404383499056,
+        "NormalSlsMinT": 11.113601118326187
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "3/4",
+        "MomentSlsMax": 0.6387832527372228,
+        "MomentSlsMin": -0.6387832479794668,
+        "MomentUlsMax": 0.8517110036962495,
+        "MomentUlsMin": -0.8517109978599954,
+        "ShearUlsMax": 0.38069404383499056,
+        "NormalSlsMinT": 11.113601118326187
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "About B",
+        "MomentSlsMax": 0.8404321289844949,
+        "MomentSlsMin": -0.8404321110854178,
+        "MomentUlsMax": 1.1205761721547116,
+        "MomentUlsMin": -1.1205761501982334,
+        "ShearUlsMax": 0.38069404383499056,
+        "NormalSlsMinT": 11.113601118326187
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About A",
+        "MomentSlsMax": 3.703114702518422,
+        "MomentSlsMin": 1.1017546814087376,
+        "MomentUlsMax": 4.984939998168785,
+        "MomentUlsMin": 0.9886825046924984,
+        "ShearUlsMax": 9.336119440370217,
+        "NormalSlsMinT": 3.9656283855438232
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "1/4",
+        "MomentSlsMax": 1.6420301262913226,
+        "MomentSlsMin": -0.7255741686383561,
+        "MomentUlsMax": 2.3643992421022957,
+        "MomentUlsMin": -1.2566597751901865,
+        "ShearUlsMax": 3.964095026307715,
+        "NormalSlsMinT": 3.9656283855438232
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 1.6173469917760448,
+        "MomentSlsMin": -1.5576021898894596,
+        "MomentUlsMax": 2.4274450761798225,
+        "MomentUlsMin": -2.3955711281270444,
+        "ShearUlsMax": 0.8920936862153174,
+        "NormalSlsMinT": 3.9656283855438232
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "3/4",
+        "MomentSlsMax": 2.032221718588895,
+        "MomentSlsMin": -0.38823909785931154,
+        "MomentUlsMax": 2.8427606856479772,
+        "MomentUlsMin": -0.8326044781342123,
+        "ShearUlsMax": 4.202309506527818,
+        "NormalSlsMinT": 3.9656283855438232
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About B",
+        "MomentSlsMax": 4.1379497864377,
+        "MomentSlsMin": 0.9404663318458153,
+        "MomentUlsMax": 5.563568235945807,
+        "MomentUlsMin": 0.7431482705797211,
+        "ShearUlsMax": 6.481621029965318,
+        "NormalSlsMinT": 3.9656283855438232
+      }
+    ],
+    "sections": [
+      {
+        "Bar": "Traverse 1",
+        "Where": "About A",
+        "EffectiveDepthM": 0.242,
+        "amax": 2.9221500000000002,
+        "amin": 9.378889061547726,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16 e = 20 cm",
+        "tau": 0.5740773841491902,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.243,
+        "amax": 6.473745975180081,
+        "amin": 2.9342250000000005,
+        "bmax": "HA14 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.27392450717625877,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.242,
+        "amax": 9.6339918324977,
+        "amin": 2.9221500000000002,
+        "bmax": "HA16 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.08746765032336934,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.245,
+        "amax": 3.0527264171999833,
+        "amin": 2.958375,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.36116323455211546,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "About B",
+        "EffectiveDepthM": 0.242,
+        "amax": 2.9221500000000002,
+        "amin": 16.878175172567538,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16 e = 10 cm",
+        "tau": 0.6614479232540132,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "About A",
+        "EffectiveDepthM": 0.242,
+        "amax": 2.9221500000000002,
+        "amin": 16.878175137083595,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16 e = 10 cm",
+        "tau": 0.6614479239951796,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.245,
+        "amax": 3.052726390647122,
+        "amin": 2.958375,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.36116323428222086,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.242,
+        "amax": 9.633991839584077,
+        "amin": 2.9221500000000002,
+        "bmax": "HA16 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.08746765005012892,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.243,
+        "amax": 6.473746007615156,
+        "amin": 2.9342250000000005,
+        "bmax": "HA14 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.27392450633426624,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "About B",
+        "EffectiveDepthM": 0.242,
+        "amax": 2.9221500000000002,
+        "amin": 9.378889000567122,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16 e = 20 cm",
+        "tau": 0.5740773833037182,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About A",
+        "EffectiveDepthM": 0.293,
+        "amax": 6.791723579182539,
+        "amin": 3.537975,
+        "bmax": "HA14 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.4741526472921732,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.293,
+        "amax": 3.537975,
+        "amin": 6.12321949763268,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA14 e = 20 cm",
+        "tau": 0.2070193065743063,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.292,
+        "amax": 3.5259,
+        "amin": 8.000279298863195,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16 e = 20 cm",
+        "tau": 0.07241327797079683,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.295,
+        "amax": 3.562125,
+        "amin": 3.562125,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.2988770720011666,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About B",
+        "EffectiveDepthM": 0.29,
+        "amax": 13.159601098710551,
+        "amin": 3.50175,
+        "bmax": "HA20 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.5372510807086597,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "About A",
+        "EffectiveDepthM": 0.29,
+        "amax": 13.159601154434398,
+        "amin": 3.50175,
+        "bmax": "HA20 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.5372510854555643,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.295,
+        "amax": 3.562125,
+        "amin": 3.562125,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.29887707579424716,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.292,
+        "amax": 3.5259,
+        "amin": 8.000279497073418,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16 e = 20 cm",
+        "tau": 0.0724132790709102,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.293,
+        "amax": 3.537975,
+        "amin": 6.123219623994629,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA14 e = 20 cm",
+        "tau": 0.2070193098141678,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "About B",
+        "EffectiveDepthM": 0.293,
+        "amax": 6.7917236874779405,
+        "amin": 3.537975,
+        "bmax": "HA14 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.47415265474751245,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About A",
+        "EffectiveDepthM": 0.243,
+        "amax": 2.9342250000000005,
+        "amin": 8.314301485461478,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16 e = 20 cm",
+        "tau": 0.3842024474512134,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.245,
+        "amax": 2.958375,
+        "amin": 3.5462389179680485,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.16179979832661162,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.245,
+        "amax": 3.358511778562299,
+        "amin": 3.491311018585666,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.036411988787028275,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.245,
+        "amax": 2.958375,
+        "amin": 4.419187356175716,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.17152283859570178,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About B",
+        "EffectiveDepthM": 0.242,
+        "amax": 2.9221500000000002,
+        "amin": 8.278947422060135,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16 e = 20 cm",
+        "tau": 0.26783558136496666,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "About A",
+        "EffectiveDepthM": 0.195,
+        "amax": 2.354625,
+        "amin": 2.354625,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.019522771478717463,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.195,
+        "amax": 2.354625,
+        "amin": 2.354625,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.019522771478717463,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.195,
+        "amax": 2.354625,
+        "amin": 2.354625,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.019522771478717463,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.195,
+        "amax": 2.354625,
+        "amin": 2.354625,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.019522771478717463,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "About B",
+        "EffectiveDepthM": 0.195,
+        "amax": 2.354625,
+        "amin": 2.354625,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.019522771478717463,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About A",
+        "EffectiveDepthM": 0.243,
+        "amax": 8.314301618830084,
+        "amin": 2.9342250000000005,
+        "bmax": "HA16 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.38420244610577026,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.245,
+        "amax": 3.5462390268813,
+        "amin": 2.958375,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.16179979699215163,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.245,
+        "amax": 3.491311072544188,
+        "amin": 3.3585117693983175,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.036411987192461935,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.245,
+        "amax": 4.419187355242084,
+        "amin": 2.958375,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.17152283700113544,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About B",
+        "EffectiveDepthM": 0.242,
+        "amax": 8.27894742674089,
+        "amin": 2.9221500000000002,
+        "bmax": "HA16 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.267835579750633,
+        "ok": true,
+        "wk": null
+      }
+    ],
+    "metre": {
+      "ConcreteM3": 98.66249999999998,
+      "SteelKg": 9471.198759085499
+    },
+    "props": [],
+    "flot": 2.865998474779387,
+    "sweeps": []
+  },
+  {
+    "id": "tri_ec2_biais",
+    "deltaB": 1.2192501192645913,
+    "deltaMc": 1.238696366132782,
+    "poids": 206.8378225139406,
+    "marston": 1.0084120644112515,
+    "status": "AVANT-PROJET seulement \u2014 2 r\u00E9serve(s) bloquante(s) \u00E0 lever",
+    "reserves": 2,
+    "ncomb": 65,
+    "ncas": 37,
+    "cas": [
+      {
+        "Name": "Poids propre traverse (0.625 t/m\u00B2)",
+        "ta": -0.10387551438344347,
+        "tm": 0.20413287086912607,
+        "ra": 0.10387551438344297,
+        "pG": 0.6249999999999997,
+        "pD": 0.6250000000000001,
+        "nsw": 0
+      },
+      {
+        "Name": "Remblai \u00D71.1 (0.666 t/m\u00B2, Marston \u00D71.008)",
+        "ta": -0.11061528392765546,
+        "tm": 0.21737765251206143,
+        "ra": 0.11061528392765484,
+        "pG": 0.6655519625114255,
+        "pD": 0.6655519625114263,
+        "nsw": 0
+      },
+      {
+        "Name": "Remblai \u00D70.9 (0.545 t/m\u00B2)",
+        "ta": -0.09050341412262695,
+        "tm": 0.17785444296441383,
+        "ra": 0.090503414122627,
+        "pG": 0.5445425147820758,
+        "pD": 0.5445425147820758,
+        "nsw": 0
+      },
+      {
+        "Name": "Superstructures max (0.34 t/m\u00B2)",
+        "ta": -0.0565082798245931,
+        "tm": 0.11104828175280457,
+        "ra": 0.05650827982459322,
+        "pG": 0.34000000000000025,
+        "pD": 0.3399999999999998,
+        "nsw": 0
+      },
+      {
+        "Name": "Superstructures min (0.18 t/m\u00B2)",
+        "ta": -0.029916148142431653,
+        "tm": 0.05879026681030833,
+        "ra": 0.029916148142431636,
+        "pG": 0.18,
+        "pD": 0.18,
+        "nsw": 0
+      },
+      {
+        "Name": "Pouss\u00E9e max (K\u2080 = 0.5, surcharge 1 t/m\u00B2)",
+        "ta": -0.5304199643019285,
+        "tm": -0.1909937556841675,
+        "ra": 0.5532068109426391,
+        "pG": 0,
+        "pD": 0,
+        "nsw": 0
+      },
+      {
+        "Name": "Pouss\u00E9e min (K\u2080 = 0.25)",
+        "ta": -0.19913517878239273,
+        "tm": -0.07081551452070667,
+        "ra": 0.21052860210274862,
+        "pG": 0,
+        "pD": 0,
+        "nsw": 0
+      },
+      {
+        "Name": "A(l) trav\u00E9e 1 charg\u00E9e (2.747 t/m\u00B2, l = 2.3 m)",
+        "ta": -0.255421120518479,
+        "tm": 1.064414993045467,
+        "ra": 0.6881924202574966,
+        "pG": 2.753739789814052,
+        "pD": -0.915609842284471,
+        "nsw": 0
+      },
+      {
+        "Name": "Bc \u2014 trav\u00E9e 1 charg\u00E9e (8.916 t/m\u00B2 sur bande de 0.95 m, 15 positions)",
+        "ta": 0.645610893577631,
+        "tm": 1.032133510561465,
+        "ra": 2.1244448919593135,
+        "pG": 4.412141223808356,
+        "pD": -1.9514038496051471,
+        "nsw": 15
+      },
+      {
+        "Name": "Bt \u2014 trav\u00E9e 1 charg\u00E9e (7.898 t/m\u00B2 sur bande de 0.95 m, 15 positions)",
+        "ta": 0.5718697891829819,
+        "tm": 0.9142441352292705,
+        "ra": 1.8817926781923981,
+        "pG": 3.9081903614153273,
+        "pD": -1.7285162304194772,
+        "nsw": 15
+      },
+      {
+        "Name": "Mc120 \u2014 trav\u00E9e 1 charg\u00E9e (5.893 t/m\u00B2)",
+        "ta": -0.5480102474731123,
+        "tm": 2.2837200094059376,
+        "ra": 1.4765282439012106,
+        "pG": 5.908194360079841,
+        "pD": -1.964456092121905,
+        "nsw": 0
+      },
+      {
+        "Name": "A(l) trav\u00E9e 2 charg\u00E9e (2.751 t/m\u00B2, l = 2.28 m)",
+        "ta": -0.5386155749852404,
+        "tm": -0.1987564787235882,
+        "ra": -0.5129883328827685,
+        "pG": 0.9102477939981545,
+        "pD": 0.9102477939981545,
+        "nsw": 0
+      },
+      {
+        "Name": "Bc \u2014 trav\u00E9e 2 charg\u00E9e (8.916 t/m\u00B2 sur bande de 0.95 m, 15 positions)",
+        "ta": -0.7403320414047416,
+        "tm": -0.384951836600699,
+        "ra": -0.775841467920114,
+        "pG": 1.2303686871016049,
+        "pD": 1.230368687101604,
+        "nsw": 15
+      },
+      {
+        "Name": "Bt \u2014 trav\u00E9e 2 charg\u00E9e (7.898 t/m\u00B2 sur bande de 0.95 m, 15 positions)",
+        "ta": -0.655771971407463,
+        "tm": -0.3409829788071461,
+        "ra": -0.6872255426798219,
+        "pG": 1.0898370654979253,
+        "pD": 1.0898370654979244,
+        "nsw": 15
+      },
+      {
+        "Name": "Mc120 \u2014 trav\u00E9e 2 charg\u00E9e (5.893 t/m\u00B2)",
+        "ta": -1.1536923875078022,
+        "tm": -0.42572819487728997,
+        "ra": -1.098799889964909,
+        "pG": 1.9497133010129124,
+        "pD": 1.9497133010129124,
+        "nsw": 0
+      },
+      {
+        "Name": "A(l) trav\u00E9es 1, 2 charg\u00E9es (2.401 t/m\u00B2, l = 4.58 m)",
+        "ta": -0.6933183736105204,
+        "tm": 0.7569946925804156,
+        "ra": 0.15389645795584794,
+        "pG": 3.2015180840520814,
+        "pD": -0.006006600532930673,
+        "nsw": 0
+      },
+      {
+        "Name": "Bc \u2014 trav\u00E9es 1, 2 charg\u00E9es (8.916 t/m\u00B2 sur bande de 0.95 m, 15 positions)",
+        "ta": -1.681703084802755,
+        "tm": 1.0943844478498324,
+        "ra": -0.6818274669401606,
+        "pG": 3.6847536918014736,
+        "pD": 1.236721056604944,
+        "nsw": 15
+      },
+      {
+        "Name": "Bt \u2014 trav\u00E9es 1, 2 charg\u00E9es (7.898 t/m\u00B2 sur bande de 0.95 m, 15 positions)",
+        "ta": -1.4896204480770339,
+        "tm": 0.9693848256012496,
+        "ra": -0.6039497376159937,
+        "pG": 3.2638843890082985,
+        "pD": 1.0954638729834008,
+        "nsw": 15
+      },
+      {
+        "Name": "Mc120 \u2014 trav\u00E9es 1, 2 charg\u00E9es (5.893 t/m\u00B2)",
+        "ta": -1.7017026349809141,
+        "tm": 1.857991814528647,
+        "ra": 0.3777283539363001,
+        "pG": 7.857907661092752,
+        "pD": -0.014742791108991682,
+        "nsw": 0
+      },
+      {
+        "Name": "A(l) trav\u00E9e 3 charg\u00E9e (2.747 t/m\u00B2, l = 2.3 m)",
+        "ta": 0.3366117710356155,
+        "tm": 0.03117369832473743,
+        "ra": 0.28047704429471265,
+        "pG": -0.9156098422844716,
+        "pD": 2.753739789814052,
+        "nsw": 0
+      },
+      {
+        "Name": "Bc \u2014 trav\u00E9e 3 charg\u00E9e (8.916 t/m\u00B2 sur bande de 0.95 m, 15 positions)",
+        "ta": 0.9373982812139219,
+        "tm": 0.15736393892280176,
+        "ra": 0.7525115049537437,
+        "pG": -1.9514038496051456,
+        "pD": 4.412141223808355,
+        "nsw": 15
+      },
+      {
+        "Name": "Bt \u2014 trav\u00E9e 3 charg\u00E9e (7.898 t/m\u00B2 sur bande de 0.95 m, 15 positions)",
+        "ta": 0.8303294798631465,
+        "tm": 0.13938996920900804,
+        "ra": 0.6665603074182339,
+        "pG": -1.7285162304194768,
+        "pD": 3.908190361415327,
+        "nsw": 15
+      },
+      {
+        "Name": "Mc120 \u2014 trav\u00E9e 3 charg\u00E9e (5.893 t/m\u00B2)",
+        "ta": 0.7222061338277006,
+        "tm": 0.06688368643483245,
+        "ra": 0.6017681472169095,
+        "pG": -1.9644560921219052,
+        "pD": 5.9081943600798414,
+        "nsw": 0
+      },
+      {
+        "Name": "A(l) trav\u00E9es 1, 3 charg\u00E9es (2.398 t/m\u00B2, l = 4.61 m)",
+        "ta": 0.07087196739544888,
+        "tm": 0.9563481203691424,
+        "ra": 0.8455593134362299,
+        "pG": 1.6045183143645139,
+        "pD": 1.6045183143645139,
+        "nsw": 0
+      },
+      {
+        "Name": "Bc \u2014 trav\u00E9es 1, 3 charg\u00E9es (8.916 t/m\u00B2 sur bande de 0.95 m, 15 positions)",
+        "ta": 0.22601672972225584,
+        "tm": 1.5683952749017989,
+        "ra": 1.8658016013656789,
+        "pG": 3.49739538662557,
+        "pD": 1.4240793617808474,
+        "nsw": 15
+      },
+      {
+        "Name": "Bt \u2014 trav\u00E9es 1, 3 charg\u00E9es (7.898 t/m\u00B2 sur bande de 0.95 m, 15 positions)",
+        "ta": 0.20020129905468032,
+        "tm": 1.3892545558570721,
+        "ra": 1.6526913951490867,
+        "pG": 3.0979259834911814,
+        "pD": 1.2614222785005178,
+        "nsw": 15
+      },
+      {
+        "Name": "Mc120 \u2014 trav\u00E9es 1, 3 charg\u00E9es (5.893 t/m\u00B2)",
+        "ta": 0.17419588635458916,
+        "tm": 2.35060369584077,
+        "ra": 2.07829639111812,
+        "pG": 3.9437382679579343,
+        "pD": 3.943738267957938,
+        "nsw": 0
+      },
+      {
+        "Name": "A(l) trav\u00E9es 2, 3 charg\u00E9es (2.401 t/m\u00B2, l = 4.58 m)",
+        "ta": -0.17579883904930294,
+        "tm": -0.1462026830411426,
+        "ra": -0.20250379380690697,
+        "pG": -0.006006600532930451,
+        "pD": 3.201518084052081,
+        "nsw": 0
+      },
+      {
+        "Name": "Bc \u2014 trav\u00E9es 2, 3 charg\u00E9es (8.916 t/m\u00B2 sur bande de 0.95 m, 15 positions)",
+        "ta": -0.8634562580759352,
+        "tm": -0.27797430426477454,
+        "ra": -0.7818262427614546,
+        "pG": 1.2367210566049445,
+        "pD": 3.684753691801474,
+        "nsw": 15
+      },
+      {
+        "Name": "Bt \u2014 trav\u00E9es 2, 3 charg\u00E9es (7.898 t/m\u00B2 sur bande de 0.95 m, 15 positions)",
+        "ta": -0.7648330491115509,
+        "tm": -0.24622432545597805,
+        "ra": -0.6925267418399839,
+        "pG": 1.0954638729834012,
+        "pD": 3.263884389008299,
+        "nsw": 15
+      },
+      {
+        "Name": "Mc120 \u2014 trav\u00E9es 2, 3 charg\u00E9es (5.893 t/m\u00B2)",
+        "ta": -0.43148625368010174,
+        "tm": -0.35884450844245774,
+        "ra": -0.49703174274799977,
+        "pG": -0.014742791108995679,
+        "pD": 7.8579076610927565,
+        "nsw": 0
+      },
+      {
+        "Name": "A(l) toutes trav\u00E9es charg\u00E9es (2.136 t/m\u00B2, l = 6.88 m)",
+        "ta": -0.355057569047685,
+        "tm": 0.6977478891316988,
+        "ra": 0.3550575690476845,
+        "pG": 2.1363165513255304,
+        "pD": 2.1363165513255304,
+        "nsw": 0
+      },
+      {
+        "Name": "Bc \u2014 toutes trav\u00E9es charg\u00E9es (8.916 t/m\u00B2 sur bande de 0.95 m, 15 positions)",
+        "ta": -0.7737301555266659,
+        "tm": 1.564974535143247,
+        "ra": 0.8978281282992839,
+        "pG": 4.9271663398823105,
+        "pD": 2.4550457827273164,
+        "nsw": 15
+      },
+      {
+        "Name": "Bt \u2014 toutes trav\u00E9es charg\u00E9es (7.898 t/m\u00B2 sur bande de 0.95 m, 15 positions)",
+        "ta": -0.6853553825177918,
+        "tm": 1.3862245299637146,
+        "ra": 0.7952789947639359,
+        "pG": 4.364389764930721,
+        "pD": 2.174632628056828,
+        "nsw": 15
+      },
+      {
+        "Name": "Mc120 \u2014 toutes trav\u00E9es charg\u00E9es (5.893 t/m\u00B2)",
+        "ta": -0.9794965011532124,
+        "tm": 1.9248755009634793,
+        "ra": 0.9794965011532122,
+        "pG": 5.893451568970849,
+        "pD": 5.893451568970849,
+        "nsw": 0
+      },
+      {
+        "Name": "Construction (1.25 t/ml par voile)",
+        "ta": 0.32396388208320953,
+        "tm": 0.023927628733685147,
+        "ra": 0.44466889337740734,
+        "pG": 0.7262600197662167,
+        "pD": 0.7262600197662167,
+        "nsw": 0
+      },
+      {
+        "Name": "Eau \u2014 VIDE, nappe haute",
+        "ta": -0.3614105345775077,
+        "tm": -0.12960727013886192,
+        "ra": 0.3786272631504895,
+        "pG": -2.925,
+        "pD": -2.925,
+        "nsw": 0
+      }
+    ],
+    "combos": [
+      {
+        "Name": "ELS G\u002B \u002B Pmax",
+        "ta": -0.8014190424376202,
+        "tmax": 0.3424258723088267,
+        "w": 0.4844531592420247
+      },
+      {
+        "Name": "ELS G\u002B \u002B Pmin",
+        "ta": -0.4701342569180848,
+        "tmax": 0.4668949651380978,
+        "w": 0.014598718921737808
+      },
+      {
+        "Name": "ELS G\u2212 \u002B Pmax",
+        "ta": -0.7547150409504305,
+        "tmax": 0.2531154668786755,
+        "w": 0.5311571607292147
+      },
+      {
+        "Name": "ELS G\u2212 \u002B Pmin",
+        "ta": -0.4234302554308947,
+        "tmax": 0.3728470890831631,
+        "w": 0.06130272040892759
+      },
+      {
+        "Name": "ELU G\u002B \u002B Pmax",
+        "ta": -1.0819157072907877,
+        "tmax": 0.4622749276169158,
+        "w": 0.6540117649767336
+      },
+      {
+        "Name": "ELU G\u2212 \u002B Pmax",
+        "ta": -0.7547150409504305,
+        "tmax": 0.2531154668786755,
+        "w": 0.5311571607292147
+      },
+      {
+        "Name": "ELS A(l) \u2014 trav\u00E9e 1 charg\u00E9e",
+        "ta": -1.1079243870597937,
+        "tmax": 1.6412398101432855,
+        "w": -0.08171496522356114
+      },
+      {
+        "Name": "ELU A(l) \u2014 trav\u00E9e 1 charg\u00E9e",
+        "ta": -1.490589500120356,
+        "tmax": 2.193796860359884,
+        "w": -0.1008790676440472
+      },
+      {
+        "Name": "ELS Bc \u2014 trav\u00E9e 1 charg\u00E9e, empreinte de 0.95 m \u00E0 0 m de l\u0027about",
+        "ta": -0.026685970144463278,
+        "tmax": 2.771325470333538,
+        "w": -0.4028472397869871
+      },
+      {
+        "Name": "ELU Bc \u2014 trav\u00E9e 1 charg\u00E9e, empreinte de 0.95 m \u00E0 0 m de l\u0027about",
+        "ta": -0.048938277566577426,
+        "tmax": 3.6972965908554962,
+        "w": -0.5290554337286149
+      },
+      {
+        "Name": "ELS Bt \u2014 trav\u00E9e 1 charg\u00E9e, empreinte de 0.95 m \u00E0 0 m de l\u0027about",
+        "ta": -0.11517529541804306,
+        "tmax": 2.4698835983690244,
+        "w": -0.3015005741636263
+      },
+      {
+        "Name": "ELU Bt \u2014 trav\u00E9e 1 charg\u00E9e, empreinte de 0.95 m \u00E0 0 m de l\u0027about",
+        "ta": -0.16692404459801446,
+        "tmax": 3.295530629945598,
+        "w": -0.39392654623080103
+      },
+      {
+        "Name": "ELS Mc120 \u2014 trav\u00E9e 1 charg\u00E9e",
+        "ta": -1.349429289910732,
+        "tmax": 2.6769242320920927,
+        "w": -0.5278160864451378
+      },
+      {
+        "Name": "ELU Mc120 \u2014 trav\u00E9e 1 charg\u00E9e",
+        "ta": -1.8217295413794847,
+        "tmax": 3.6138477133243274,
+        "w": -0.7125517167009336
+      },
+      {
+        "Name": "ELS A(l) \u2014 trav\u00E9e 2 charg\u00E9e",
+        "ta": -1.4477577324199085,
+        "tmax": 0.1539679336211366,
+        "w": 0.46907681398054146
+      },
+      {
+        "Name": "ELU A(l) \u2014 trav\u00E9e 2 charg\u00E9e",
+        "ta": -1.9437006272671715,
+        "tmax": 0.21037771646656234,
+        "w": 0.6335099712947563
+      },
+      {
+        "Name": "ELS Bc \u2014 trav\u00E9e 2 charg\u00E9e, empreinte de 0.95 m \u00E0 0.66 m de l\u0027about",
+        "ta": -1.6898174921233091,
+        "tmax": -0.0653378786023322,
+        "w": 0.5057588151512489
+      },
+      {
+        "Name": "ELU Bc \u2014 trav\u00E9e 2 charg\u00E9e, empreinte de 0.95 m \u00E0 0.66 m de l\u0027about",
+        "ta": -2.2664469735383745,
+        "tmax": -0.08209835402951127,
+        "w": 0.6824193061890331
+      },
+      {
+        "Name": "ELS Bt \u2014 trav\u00E9e 2 charg\u00E9e, empreinte de 0.95 m \u00E0 0.66 m de l\u0027about",
+        "ta": -1.5883454081265764,
+        "tmax": -0.023013344822683246,
+        "w": 0.50332530200544
+      },
+      {
+        "Name": "ELU Bt \u2014 trav\u00E9e 2 charg\u00E9e, empreinte de 0.95 m \u00E0 0.66 m de l\u0027about",
+        "ta": -2.1311508615427295,
+        "tmax": -0.025532569735137844,
+        "w": 0.6791746219946213
+      },
+      {
+        "Name": "ELS Mc120 \u2014 trav\u00E9e 2 charg\u00E9e",
+        "ta": -1.9551114299454235,
+        "tmax": 0.05991073964821991,
+        "w": 0.45700691047057873
+      },
+      {
+        "Name": "ELU Mc120 \u2014 trav\u00E9e 2 charg\u00E9e",
+        "ta": -2.639400430426319,
+        "tmax": 0.08087949852509402,
+        "w": 0.6169593291352813
+      },
+      {
+        "Name": "ELS A(l) \u2014 trav\u00E9es 1, 2 charg\u00E9es",
+        "ta": -1.6334010907702443,
+        "tmax": 1.2509220763671332,
+        "w": -0.023875739697796217
+      },
+      {
+        "Name": "ELU A(l) \u2014 trav\u00E9es 1, 2 charg\u00E9es",
+        "ta": -2.191225105067622,
+        "tmax": 1.6735695369942478,
+        "w": -0.023760100276359886
+      },
+      {
+        "Name": "ELS Bc \u2014 trav\u00E9es 1, 2 charg\u00E9es, empreinte de 0.95 m \u00E0 1.26 m de l\u0027about",
+        "ta": -2.819462744200926,
+        "tmax": 2.267409015110102,
+        "w": -0.11547221147553177
+      },
+      {
+        "Name": "ELU Bc \u2014 trav\u00E9es 1, 2 charg\u00E9es, empreinte de 0.95 m \u00E0 1.26 m de l\u0027about",
+        "ta": -3.772640642975196,
+        "tmax": 3.027745960429186,
+        "w": -0.14588872931334107
+      },
+      {
+        "Name": "ELS Bt \u2014 trav\u00E9es 1, 2 charg\u00E9es, empreinte de 0.95 m \u00E0 1.26 m de l\u0027about",
+        "ta": -2.5889635801300597,
+        "tmax": 2.039499324410349,
+        "w": -0.04694926703459901
+      },
+      {
+        "Name": "ELU Bt \u2014 trav\u00E9es 1, 2 charg\u00E9es, empreinte de 0.95 m \u00E0 1.26 m de l\u0027about",
+        "ta": -3.4653084242140415,
+        "tmax": 2.7238663728295154,
+        "w": -0.054524803392097976
+      },
+      {
+        "Name": "ELS Mc120 \u2014 trav\u00E9es 1, 2 charg\u00E9es",
+        "ta": -2.503121677418536,
+        "tmax": 2.203624990553669,
+        "w": -0.5552623352165833
+      },
+      {
+        "Name": "ELU Mc120 \u2014 trav\u00E9es 1, 2 charg\u00E9es",
+        "ta": -3.3792142645150225,
+        "tmax": 2.9748937372474566,
+        "w": -0.749604152542386
+      },
+      {
+        "Name": "ELS A(l) \u2014 trav\u00E9e 3 charg\u00E9e",
+        "ta": -0.39748491719488177,
+        "tmax": 0.4004687298521197,
+        "w": 0.5181339952865662
+      },
+      {
+        "Name": "ELU A(l) \u2014 trav\u00E9e 3 charg\u00E9e",
+        "ta": -0.5433368736338013,
+        "tmax": 0.5391388783018702,
+        "w": 0.6989195463694555
+      },
+      {
+        "Name": "ELS Bc \u2014 trav\u00E9e 3 charg\u00E9e, empreinte de 0.95 m \u00E0 1.35 m de l\u0027about",
+        "ta": 0.3234588950190853,
+        "tmax": 0.7071972910887852,
+        "w": 0.5953852249981311
+      },
+      {
+        "Name": "ELU Bc \u2014 trav\u00E9e 3 charg\u00E9e, empreinte de 0.95 m \u00E0 1.35 m de l\u0027about",
+        "ta": 0.4179215426514882,
+        "tmax": 0.9452822202386104,
+        "w": 0.8019211859848752
+      },
+      {
+        "Name": "ELS Bt \u2014 trav\u00E9e 3 charg\u00E9e, empreinte de 0.95 m \u00E0 1.35 m de l\u0027about",
+        "ta": 0.1949763333981548,
+        "tmax": 0.6450420281270418,
+        "w": 0.5827146627089719
+      },
+      {
+        "Name": "ELU Bt \u2014 trav\u00E9e 3 charg\u00E9e, empreinte de 0.95 m \u00E0 1.35 m de l\u0027about",
+        "ta": 0.2466114604902504,
+        "tmax": 0.863137674382707,
+        "w": 0.7850271029326636
+      },
+      {
+        "Name": "ELS Mc120 \u2014 trav\u00E9e 3 charg\u00E9e",
+        "ta": -0.07921290860991936,
+        "tmax": 0.4899605226283573,
+        "w": 0.5446721525474199
+      },
+      {
+        "Name": "ELU Mc120 \u2014 trav\u00E9e 3 charg\u00E9e",
+        "ta": -0.10693742662339045,
+        "tmax": 0.6614467055482826,
+        "w": 0.7353074059390168
+      },
+      {
+        "Name": "ELS A(l) \u2014 trav\u00E9es 1, 3 charg\u00E9es",
+        "ta": -0.7163726815630831,
+        "tmax": 1.5405900345305916,
+        "w": 0.01964075161755563
+      },
+      {
+        "Name": "ELU A(l) \u2014 trav\u00E9es 1, 3 charg\u00E9es",
+        "ta": -0.9685205594580707,
+        "tmax": 2.0593498555375245,
+        "w": 0.0342618881441088
+      },
+      {
+        "Name": "ELS Bc \u2014 trav\u00E9es 1, 3 charg\u00E9es, empreinte de 0.95 m \u00E0 0.19 m de l\u0027about",
+        "ta": -0.5301989667709114,
+        "tmax": 3.057586166567898,
+        "w": -0.49941776374403046
+      },
+      {
+        "Name": "ELU Bc \u2014 trav\u00E9es 1, 3 charg\u00E9es, empreinte de 0.95 m \u00E0 0.19 m de l\u0027about",
+        "ta": -0.7202889397351779,
+        "tmax": 4.080257845463018,
+        "w": -0.6578161323380063
+      },
+      {
+        "Name": "ELS Bt \u2014 trav\u00E9es 1, 3 charg\u00E9es, empreinte de 0.95 m \u00E0 0.19 m de l\u0027about",
+        "ta": -0.5611774835720069,
+        "tmax": 2.732880413149263,
+        "w": -0.3870408984146203
+      },
+      {
+        "Name": "ELU Bt \u2014 trav\u00E9es 1, 3 charg\u00E9es, empreinte de 0.95 m \u00E0 0.19 m de l\u0027about",
+        "ta": -0.7615936288032992,
+        "tmax": 3.647441253675121,
+        "w": -0.507980311898792
+      },
+      {
+        "Name": "ELS Mc120 \u2014 trav\u00E9es 1, 3 charg\u00E9es",
+        "ta": -0.6272231560830306,
+        "tmax": 2.831992115771931,
+        "w": -0.46759709313974174
+      },
+      {
+        "Name": "ELU Mc120 \u2014 trav\u00E9es 1, 3 charg\u00E9es",
+        "ta": -0.8467512607120922,
+        "tmax": 3.8231893562921053,
+        "w": -0.6312560757386496
+      },
+      {
+        "Name": "ELS A(l) \u2014 trav\u00E9es 2, 3 charg\u00E9es",
+        "ta": -1.0123776492967833,
+        "tmax": 0.16829788398970824,
+        "w": 0.5004761320965865
+      },
+      {
+        "Name": "ELU A(l) \u2014 trav\u00E9es 2, 3 charg\u00E9es",
+        "ta": -1.363193849769674,
+        "tmax": 0.2300996930266226,
+        "w": 0.6753757287828175
+      },
+      {
+        "Name": "ELS Bc \u2014 trav\u00E9es 2, 3 charg\u00E9es, empreinte de 0.95 m \u00E0 0.1 m de l\u0027about",
+        "ta": -1.837566552128741,
+        "tmax": 0.14295653490153626,
+        "w": 0.4354751500533376
+      },
+      {
+        "Name": "ELU Bc \u2014 trav\u00E9es 2, 3 charg\u00E9es, empreinte de 0.95 m \u00E0 0.1 m de l\u0027about",
+        "ta": -2.463445720212283,
+        "tmax": 0.19441456753365305,
+        "w": 0.5887077527251505
+      },
+      {
+        "Name": "ELS Bt \u2014 trav\u00E9es 2, 3 charg\u00E9es, empreinte de 0.95 m \u00E0 0.1 m de l\u0027about",
+        "ta": -1.7192187013714806,
+        "tmax": 0.15418871065748596,
+        "w": 0.4410693748790848
+      },
+      {
+        "Name": "ELU Bt \u2014 trav\u00E9es 2, 3 charg\u00E9es, empreinte de 0.95 m \u00E0 0.1 m de l\u0027about",
+        "ta": -2.305648585869268,
+        "tmax": 0.2098282658379893,
+        "w": 0.5961667191594802
+      },
+      {
+        "Name": "ELS Mc120 \u2014 trav\u00E9es 2, 3 charg\u00E9es",
+        "ta": -1.2329052961177234,
+        "tmax": -0.013127027514620693,
+        "w": 0.5172259037759739
+      },
+      {
+        "Name": "ELU Mc120 \u2014 trav\u00E9es 2, 3 charg\u00E9es",
+        "ta": -1.6644221497589242,
+        "tmax": -0.017721487144737536,
+        "w": 0.6982549700975644
+      },
+      {
+        "Name": "ELS A(l) \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -1.2274881252948426,
+        "tmax": 1.191508342346875,
+        "w": 0.05838407638480203
+      },
+      {
+        "Name": "ELU A(l) \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -1.650007817767083,
+        "tmax": 1.5942288409104486,
+        "w": 0.08591965450043793
+      },
+      {
+        "Name": "ELS Bc \u2014 toutes trav\u00E9es charg\u00E9es, empreinte de 0.95 m \u00E0 0.29 m de l\u0027about",
+        "ta": -1.7298952290696168,
+        "tmax": 2.6559497716281486,
+        "w": -0.5184818110535452
+      },
+      {
+        "Name": "ELU Bc \u2014 toutes trav\u00E9es charg\u00E9es, empreinte de 0.95 m \u00E0 0.29 m de l\u0027about",
+        "ta": -2.3198839561334497,
+        "tmax": 3.5457338780524768,
+        "w": -0.683234862084027
+      },
+      {
+        "Name": "ELS Bt \u2014 toutes trav\u00E9es charg\u00E9es, empreinte de 0.95 m \u00E0 0.29 m de l\u0027about",
+        "ta": -1.6238455014589712,
+        "tmax": 2.3835261318813723,
+        "w": -0.40392746712701166
+      },
+      {
+        "Name": "ELU Bt \u2014 toutes trav\u00E9es charg\u00E9es, empreinte de 0.95 m \u00E0 0.29 m de l\u0027about",
+        "ta": -2.17848431931925,
+        "tmax": 3.1825946488878776,
+        "w": -0.530495736848648
+      },
+      {
+        "Name": "ELS Mc120 \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -1.780915543590833,
+        "tmax": 2.310988857000271,
+        "w": -0.4950433419111886
+      },
+      {
+        "Name": "ELU Mc120 \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -2.4042359838476237,
+        "tmax": 3.119834956950365,
+        "w": -0.6683085115801033
+      },
+      {
+        "Name": "Phasage \u2014 remblai c\u00F4t\u00E9 gauche seul",
+        "ta": -0.2289393996212582,
+        "tmax": 0.16726667183361144,
+        "w": 0.4877227571518905
+      },
+      {
+        "Name": "Phasage \u2014 remblai c\u00F4t\u00E9 droit seul",
+        "ta": -0.3770819867104144,
+        "tmax": 0.10189966419251983,
+        "w": -0.12427819180391717
+      },
+      {
+        "Name": "Phase de construction",
+        "ta": 0.32396388208320953,
+        "tmax": 0.32396388208320953,
+        "w": -0.0603525056470991
+      }
+    ],
+    "effets": [
+      {
+        "Bar": "Traverse 1",
+        "Where": "About A",
+        "MomentSlsMax": 0.3400371474483036,
+        "MomentSlsMin": -3.19028288092985,
+        "MomentUlsMax": 0.7149964599338726,
+        "MomentUlsMin": -4.273091000856718,
+        "ShearUlsMax": 12.437622550022168,
+        "NormalSlsMinT": 1.2485981215722763
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "1/4",
+        "MomentSlsMax": 2.7712800808438263,
+        "MomentSlsMin": -1.063911089158091,
+        "MomentUlsMax": 3.8285540077272016,
+        "MomentUlsMin": -1.5524852078984137,
+        "ShearUlsMax": 8.317901797649686,
+        "NormalSlsMinT": 1.2485981215722763
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 3.2873584049173554,
+        "MomentSlsMin": -0.3462078891500924,
+        "MomentUlsMax": 4.458828114861898,
+        "MomentUlsMin": -0.6138797295117899,
+        "ShearUlsMax": 6.46975607111058,
+        "NormalSlsMinT": 1.2485981215722763
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "3/4",
+        "MomentSlsMax": 2.168339440361589,
+        "MomentSlsMin": -1.0005764500077745,
+        "MomentUlsMax": 2.899960198743127,
+        "MomentUlsMin": -1.3686826288739393,
+        "ShearUlsMax": 10.062450824552014,
+        "NormalSlsMinT": 1.2485981215722763
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "About B",
+        "MomentSlsMax": 0.2820077496153295,
+        "MomentSlsMin": -3.967839554794023,
+        "MomentUlsMax": 0.6083006273303029,
+        "MomentUlsMin": -5.399036440183139,
+        "ShearUlsMax": 13.962578877064926,
+        "NormalSlsMinT": 1.2485981215722763
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "About A",
+        "MomentSlsMax": 0.10180413956885738,
+        "MomentSlsMin": -3.923921829072397,
+        "MomentUlsMax": 0.35502805109021485,
+        "MomentUlsMin": -5.278769844456346,
+        "ShearUlsMax": 14.486021716388265,
+        "NormalSlsMinT": 1.2532549547560976
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "1/4",
+        "MomentSlsMax": 2.5245653115691242,
+        "MomentSlsMin": -1.8216964436055378,
+        "MomentUlsMax": 3.3688788867276998,
+        "MomentUlsMin": -2.4648622317410864,
+        "ShearUlsMax": 9.519394471172179,
+        "NormalSlsMinT": 1.2532549547560976
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 3.4993945535873583,
+        "MomentSlsMin": -1.2228787304547528,
+        "MomentUlsMax": 4.673056668990717,
+        "MomentUlsMin": -1.7651872775016924,
+        "ShearUlsMax": 4.496087024585056,
+        "NormalSlsMinT": 1.2532549547560976
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "3/4",
+        "MomentSlsMax": 2.524565309361176,
+        "MomentSlsMin": -1.8216964409761647,
+        "MomentUlsMax": 3.3688788837828127,
+        "MomentUlsMin": -2.464862228221585,
+        "ShearUlsMax": 9.51939447308676,
+        "NormalSlsMinT": 1.2532549547560976
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "About B",
+        "MomentSlsMax": 0.10180414169986138,
+        "MomentSlsMin": -3.9239218290690565,
+        "MomentUlsMax": 0.3550280539296423,
+        "MomentUlsMin": -5.278769844424551,
+        "ShearUlsMax": 14.486021716461652,
+        "NormalSlsMinT": 1.2532549547560976
+      },
+      {
+        "Bar": "Traverse 3",
+        "Where": "About A",
+        "MomentSlsMax": 0.28200774602375556,
+        "MomentSlsMin": -3.9678395507096202,
+        "MomentUlsMax": 0.6083006225402716,
+        "MomentUlsMin": -5.399036436312429,
+        "ShearUlsMax": 13.962578878325568,
+        "NormalSlsMinT": 1.2485981209074333
+      },
+      {
+        "Bar": "Traverse 3",
+        "Where": "1/4",
+        "MomentSlsMax": 2.168339439361657,
+        "MomentSlsMin": -1.0005764474163032,
+        "MomentUlsMax": 2.899960197421158,
+        "MomentUlsMin": -1.3686826254194322,
+        "ShearUlsMax": 10.062450823142902,
+        "NormalSlsMinT": 1.2485981209074333
+      },
+      {
+        "Bar": "Traverse 3",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 3.2873584054437517,
+        "MomentSlsMin": -0.3462078897627495,
+        "MomentUlsMax": 4.458828115568196,
+        "MomentUlsMin": -0.6138797303289764,
+        "ShearUlsMax": 6.469756066820005,
+        "NormalSlsMinT": 1.2485981209074333
+      },
+      {
+        "Bar": "Traverse 3",
+        "Where": "3/4",
+        "MomentSlsMax": 2.7712800795174823,
+        "MomentSlsMin": -1.0639110887632144,
+        "MomentUlsMax": 3.8285540059563443,
+        "MomentUlsMin": -1.5524852073653306,
+        "ShearUlsMax": 8.31790179629327,
+        "NormalSlsMinT": 1.2485981209074333
+      },
+      {
+        "Bar": "Traverse 3",
+        "Where": "About B",
+        "MomentSlsMax": 0.3400371472194341,
+        "MomentSlsMin": -3.190282879425977,
+        "MomentUlsMax": 0.7149964596194808,
+        "MomentUlsMin": -4.27309099885091,
+        "ShearUlsMax": 12.437622550373494,
+        "NormalSlsMinT": 1.2485981209074333
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About A",
+        "MomentSlsMax": 3.752167022579996,
+        "MomentSlsMin": -0.2853489480631693,
+        "MomentUlsMax": 5.022936582643808,
+        "MomentUlsMin": -0.6699289095508876,
+        "ShearUlsMax": 12.437622559298987,
+        "NormalSlsMinT": 1.901401879365772
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "1/4",
+        "MomentSlsMax": 1.3322580075463542,
+        "MomentSlsMin": -2.0820553029630937,
+        "MomentUlsMax": 1.897785987156536,
+        "MomentUlsMin": -2.9539576994176615,
+        "ShearUlsMax": 6.547952113604456,
+        "NormalSlsMinT": 1.901401879365772
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 0.4881769352811327,
+        "MomentSlsMin": -2.474703926048802,
+        "MomentUlsMax": 0.8038385172869094,
+        "MomentUlsMin": -3.4196971772006113,
+        "ShearUlsMax": 3.0594697125506163,
+        "NormalSlsMinT": 1.901401879365772
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "3/4",
+        "MomentSlsMax": 0.875150263183194,
+        "MomentSlsMin": -1.8769668256745582,
+        "MomentUlsMax": 1.2021144393816499,
+        "MomentUlsMin": -2.5210000967479416,
+        "ShearUlsMax": 8.549625298762317,
+        "NormalSlsMinT": 1.901401879365772
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About B",
+        "MomentSlsMax": 4.654173594663509,
+        "MomentSlsMin": -0.7042657239018142,
+        "MomentUlsMax": 6.329015849641696,
+        "MomentUlsMin": -1.1706445334317126,
+        "ShearUlsMax": 14.134384216692887,
+        "NormalSlsMinT": 1.901401879365772
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "About A",
+        "MomentSlsMax": 3.9104951026012933,
+        "MomentSlsMin": -0.17569857754744736,
+        "MomentUlsMax": 5.310725676543016,
+        "MomentUlsMin": -0.45329300318216914,
+        "ShearUlsMax": 11.567291131703422,
+        "NormalSlsMinT": 1.8967450434828765
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "1/4",
+        "MomentSlsMax": 0.8308737645109484,
+        "MomentSlsMin": -1.3706467521184464,
+        "MomentUlsMax": 1.140032532744662,
+        "MomentUlsMin": -1.8300598422482524,
+        "ShearUlsMax": 5.783645565885699,
+        "NormalSlsMinT": 1.8967450434828765
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": -0.18562241673235702,
+        "MomentSlsMin": -1.5294329838112353,
+        "MomentUlsMax": -0.14020870440037225,
+        "MomentUlsMin": -2.0647345281451677,
+        "ShearUlsMax": 2.028587531226404,
+        "NormalSlsMinT": 1.8967450434828765
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "3/4",
+        "MomentSlsMax": 0.830873763346202,
+        "MomentSlsMin": -1.3706467495054049,
+        "MomentUlsMax": 1.1400325312053365,
+        "MomentUlsMin": -1.8300598387651525,
+        "ShearUlsMax": 5.783645565781712,
+        "NormalSlsMinT": 1.8967450434828765
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "About B",
+        "MomentSlsMax": 3.9104951002281054,
+        "MomentSlsMin": -0.17569857818433607,
+        "MomentUlsMax": 5.310725673367918,
+        "MomentUlsMin": -0.45329300403326545,
+        "ShearUlsMax": 11.567291131599438,
+        "NormalSlsMinT": 1.8967450434828765
+      },
+      {
+        "Bar": "Radier 3",
+        "Where": "About A",
+        "MomentSlsMax": 4.654173592909345,
+        "MomentSlsMin": -0.7042657222468283,
+        "MomentUlsMax": 6.32901584729259,
+        "MomentUlsMin": -1.1706445312263307,
+        "ShearUlsMax": 14.134384215075793,
+        "NormalSlsMinT": 1.9014018793805845
+      },
+      {
+        "Bar": "Radier 3",
+        "Where": "1/4",
+        "MomentSlsMax": 0.8751502611299816,
+        "MomentSlsMin": -1.8769668230696241,
+        "MomentUlsMax": 1.2021144366432452,
+        "MomentUlsMin": -2.5210000932634227,
+        "ShearUlsMax": 8.549625297145223,
+        "NormalSlsMinT": 1.9014018793805845
+      },
+      {
+        "Bar": "Radier 3",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 0.4881769359997064,
+        "MomentSlsMin": -2.474703926087383,
+        "MomentUlsMax": 0.8038385182446975,
+        "MomentUlsMin": -3.4196971776872345,
+        "ShearUlsMax": 3.0594697099739347,
+        "NormalSlsMinT": 1.9014018793805845
+      },
+      {
+        "Bar": "Radier 3",
+        "Where": "3/4",
+        "MomentSlsMax": 1.3322580077967203,
+        "MomentSlsMin": -2.0820553026318827,
+        "MomentUlsMax": 1.8977859874905254,
+        "MomentUlsMin": -2.953957698973044,
+        "ShearUlsMax": 6.547952108652535,
+        "NormalSlsMinT": 1.9014018793805845
+      },
+      {
+        "Bar": "Radier 3",
+        "Where": "About B",
+        "MomentSlsMax": 3.7521670199209405,
+        "MomentSlsMin": -0.2853489465532346,
+        "MomentUlsMax": 5.022936579099047,
+        "MomentUlsMin": -0.6699289075221695,
+        "ShearUlsMax": 12.43762255894766,
+        "NormalSlsMinT": 1.9014018793805845
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About A",
+        "MomentSlsMax": 0.28534894806316935,
+        "MomentSlsMin": -3.7521670225799983,
+        "MomentUlsMax": 0.6699289095508875,
+        "MomentUlsMin": -5.022936582643812,
+        "ShearUlsMax": 8.233350842621155,
+        "NormalSlsMinT": 1.5558749194943322
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "1/4",
+        "MomentSlsMax": 1.183176493346024,
+        "MomentSlsMin": -1.4344078241352327,
+        "MomentUlsMax": 1.6757915428441084,
+        "MomentUlsMin": -2.1043947569413537,
+        "ShearUlsMax": 4.488682873871154,
+        "NormalSlsMinT": 1.5558749194943322
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 1.1580078276213215,
+        "MomentSlsMin": -0.509198174400868,
+        "MomentUlsMax": 1.639964976353158,
+        "MomentUlsMin": -0.9679482748088724,
+        "ShearUlsMax": 2.445737177364725,
+        "NormalSlsMinT": 1.5558749194943322
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "3/4",
+        "MomentSlsMax": 0.9729552900875438,
+        "MomentSlsMin": -1.3017490090963668,
+        "MomentUlsMax": 1.3816945017517197,
+        "MomentUlsMin": -1.8634598105943452,
+        "ShearUlsMax": 4.690639521114725,
+        "NormalSlsMinT": 1.5558749194943322
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About B",
+        "MomentSlsMax": 0.3400371474483026,
+        "MomentSlsMin": -3.19028288092985,
+        "MomentUlsMax": 0.7149964599338712,
+        "MomentUlsMin": -4.273091000856719,
+        "ShearUlsMax": 6.185659052364724,
+        "NormalSlsMinT": 1.5558749194943322
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "About A",
+        "MomentSlsMax": 1.2246107458215414,
+        "MomentSlsMin": -1.5429425961293564,
+        "MomentUlsMax": 1.6675487156737714,
+        "MomentUlsMin": -2.06985212994953,
+        "ShearUlsMax": 2.0733145201027794,
+        "NormalSlsMinT": 3.0896462373651317
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "1/4",
+        "MomentSlsMax": 0.5602528410575103,
+        "MomentSlsMin": -0.7269142474301428,
+        "MomentUlsMax": 0.7627907628145777,
+        "MomentUlsMin": -0.9819157719508457,
+        "ShearUlsMax": 2.0733145201027794,
+        "NormalSlsMinT": 3.0896462373651317
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 0.33040474368058537,
+        "MomentSlsMin": -0.2568809220752578,
+        "MomentUlsMax": 0.4577776140120431,
+        "MomentUlsMin": -0.3553061117446002,
+        "ShearUlsMax": 2.0733145201027794,
+        "NormalSlsMinT": 3.0896462373651317
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "3/4",
+        "MomentSlsMax": 1.0952255486934204,
+        "MomentSlsMin": -0.9374894470097647,
+        "MomentUlsMax": 1.4789896683958548,
+        "MomentUlsMin": -1.2776711585563778,
+        "ShearUlsMax": 2.0733145201027794,
+        "NormalSlsMinT": 3.0896462373651317
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "About B",
+        "MomentSlsMax": 1.9465167937007053,
+        "MomentSlsMin": -1.6472552131461802,
+        "MomentUlsMax": 2.615495642772266,
+        "MomentUlsMin": -2.2358549428405383,
+        "ShearUlsMax": 2.0733145201027794,
+        "NormalSlsMinT": 3.0896462373651317
+      },
+      {
+        "Bar": "Voile 2",
+        "Where": "About A",
+        "MomentSlsMax": 1.5429425988014183,
+        "MomentSlsMin": -1.224610747331474,
+        "MomentUlsMax": 2.0698521335116338,
+        "MomentUlsMin": -1.6675487177024875,
+        "ShearUlsMax": 2.073314523362025,
+        "NormalSlsMinT": 3.0896462367123005
+      },
+      {
+        "Bar": "Voile 2",
+        "Where": "1/4",
+        "MomentSlsMax": 0.7269142485043453,
+        "MomentSlsMin": -0.5602528417729521,
+        "MomentUlsMax": 0.9819157733827931,
+        "MomentUlsMin": -0.7627907637638845,
+        "ShearUlsMax": 2.073314523362025,
+        "NormalSlsMinT": 3.0896462367123005
+      },
+      {
+        "Bar": "Voile 2",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 0.25688092207525803,
+        "MomentSlsMin": -0.33040474368058526,
+        "MomentUlsMax": 0.3553061117446003,
+        "MomentUlsMin": -0.457777614012043,
+        "ShearUlsMax": 2.073314523362025,
+        "NormalSlsMinT": 3.0896462367123005
+      },
+      {
+        "Bar": "Voile 2",
+        "Where": "3/4",
+        "MomentSlsMax": 0.937489447770244,
+        "MomentSlsMin": -1.095225549830995,
+        "MomentUlsMax": 1.277671159583025,
+        "MomentUlsMin": -1.4789896699172371,
+        "ShearUlsMax": 2.073314523362025,
+        "NormalSlsMinT": 3.0896462367123005
+      },
+      {
+        "Bar": "Voile 2",
+        "Where": "About B",
+        "MomentSlsMax": 1.6472552146671395,
+        "MomentSlsMin": -1.9465167963837948,
+        "MomentUlsMax": 2.2358549448938336,
+        "MomentUlsMin": -2.6154956463589514,
+        "ShearUlsMax": 2.073314523362025,
+        "NormalSlsMinT": 3.0896462367123005
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About A",
+        "MomentSlsMax": 3.7521670199209427,
+        "MomentSlsMin": -0.2853489465532342,
+        "MomentUlsMax": 5.022936579099049,
+        "MomentUlsMin": -0.669928907522169,
+        "ShearUlsMax": 8.233350839470257,
+        "NormalSlsMinT": 1.5558749192129882
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "1/4",
+        "MomentSlsMax": 1.4344078222167775,
+        "MomentSlsMin": -1.1831764925855413,
+        "MomentUlsMax": 2.1043947543787977,
+        "MomentUlsMin": -1.6757915418174565,
+        "ShearUlsMax": 4.488682870720256,
+        "NormalSlsMinT": 1.5558749192129882
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 0.5091981744008693,
+        "MomentSlsMin": -1.1580078276213217,
+        "MomentUlsMax": 0.9679482748088741,
+        "MomentUlsMin": -1.6399649763531585,
+        "ShearUlsMax": 2.4457371741208784,
+        "NormalSlsMinT": 1.5558749192129882
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "3/4",
+        "MomentSlsMax": 1.301749008473599,
+        "MomentSlsMin": -0.9729552899786265,
+        "MomentUlsMax": 1.8634598099064132,
+        "MomentUlsMin": -1.3816945016068194,
+        "ShearUlsMax": 4.690639517870878,
+        "NormalSlsMinT": 1.5558749192129882
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About B",
+        "MomentSlsMax": 3.1902828794259834,
+        "MomentSlsMin": -0.3400371472194337,
+        "MomentUlsMax": 4.273090998850918,
+        "MomentUlsMin": -0.7149964596194804,
+        "ShearUlsMax": 6.185659049120878,
+        "NormalSlsMinT": 1.5558749192129882
+      }
+    ],
+    "sections": [
+      {
+        "Bar": "Traverse 1",
+        "Where": "About A",
+        "EffectiveDepthM": 0.192,
+        "amax": 3.2010749721787763,
+        "amin": 9.202438878098608,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16 e = 20 cm",
+        "tau": 0.6477928411469879,
+        "ok": false,
+        "wk": 0.09698111573205172
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.192,
+        "amax": 7.939775846603873,
+        "amin": 3.2010749721787763,
+        "bmax": "HA16 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.4332240519609212,
+        "ok": false,
+        "wk": 0.16596994253981254
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.192,
+        "amax": 9.496606048982503,
+        "amin": 3.2010749721787763,
+        "bmax": "HA16 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.33696646203700936,
+        "ok": true,
+        "wk": 0.1968774969167941
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.193,
+        "amax": 6.110026972281869,
+        "amin": 3.2177472376588745,
+        "bmax": "HA14 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.5213705090441458,
+        "ok": false,
+        "wk": 0.18195739877193728
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "About B",
+        "EffectiveDepthM": 0.19,
+        "amax": 3.167730441218581,
+        "amin": 11.709662250271421,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16\u002BHA20 altern\u00E9s e = 20 cm",
+        "tau": 0.7348725724771014,
+        "ok": false,
+        "wk": 0.09660605658405375
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "About A",
+        "EffectiveDepthM": 0.19,
+        "amax": 3.167730441218581,
+        "amin": 11.573112714569552,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16\u002BHA20 altern\u00E9s e = 20 cm",
+        "tau": 0.7624221955993823,
+        "ok": false,
+        "wk": 0.0348745610044233
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.193,
+        "amax": 7.161264969283757,
+        "amin": 5.096783248666575,
+        "bmax": "HA14 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.49323287415399886,
+        "ok": true,
+        "wk": 0.2118502890148881
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.19,
+        "amax": 10.258957312308295,
+        "amin": 3.429061006763591,
+        "bmax": "HA16\u002BHA20 altern\u00E9s e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.23663615918868716,
+        "ok": false,
+        "wk": 0.16698940324855957
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.193,
+        "amax": 7.161264962738533,
+        "amin": 5.096783241019676,
+        "bmax": "HA14 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.49323287425319995,
+        "ok": true,
+        "wk": 0.2118502888296069
+      },
+      {
+        "Bar": "Traverse 2",
+        "Where": "About B",
+        "EffectiveDepthM": 0.19,
+        "amax": 3.167730441218581,
+        "amin": 11.573112714559171,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16\u002BHA20 altern\u00E9s e = 20 cm",
+        "tau": 0.7624221956032449,
+        "ok": false,
+        "wk": 0.03487456173443122
+      },
+      {
+        "Bar": "Traverse 3",
+        "Where": "About A",
+        "EffectiveDepthM": 0.19,
+        "amax": 3.167730441218581,
+        "amin": 11.709662237567057,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16\u002BHA20 altern\u00E9s e = 20 cm",
+        "tau": 0.734872572543451,
+        "ok": false,
+        "wk": 0.0966060553537053
+      },
+      {
+        "Bar": "Traverse 3",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.193,
+        "amax": 6.110026969344783,
+        "amin": 3.2177472376588745,
+        "bmax": "HA14 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.5213705089711348,
+        "ok": false,
+        "wk": 0.18195739868802743
+      },
+      {
+        "Bar": "Traverse 3",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.192,
+        "amax": 9.496606050579242,
+        "amin": 3.2010749721787763,
+        "bmax": "HA16 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.33696646181354195,
+        "ok": true,
+        "wk": 0.19687749694831957
+      },
+      {
+        "Bar": "Traverse 3",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.192,
+        "amax": 7.939775842625677,
+        "amin": 3.2010749721787763,
+        "bmax": "HA16 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.43322405189027446,
+        "ok": false,
+        "wk": 0.16596994246037877
+      },
+      {
+        "Bar": "Traverse 3",
+        "Where": "About B",
+        "EffectiveDepthM": 0.192,
+        "amax": 3.2010749721787763,
+        "amin": 9.202438873546056,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16 e = 20 cm",
+        "tau": 0.6477928411652861,
+        "ok": false,
+        "wk": 0.09698111566677646
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About A",
+        "EffectiveDepthM": 0.19,
+        "amax": 11.040153978871334,
+        "amin": 3.167730441218581,
+        "bmax": "HA16\u002BHA20 altern\u00E9s e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.6546117136473151,
+        "ok": false,
+        "wk": 0.18659671584600798
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.193,
+        "amax": 3.6845355404234494,
+        "amin": 5.856884679674054,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA14 e = 20 cm",
+        "tau": 0.33927213023857283,
+        "ok": false,
+        "wk": 0.3424090226990064
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.193,
+        "amax": 3.2177472376588745,
+        "amin": 7.013547082586078,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA14 e = 20 cm",
+        "tau": 0.15852174676428063,
+        "ok": true,
+        "wk": 0.1254683299833668
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.194,
+        "amax": 3.234419503138972,
+        "amin": 5.228400925488186,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.4407023349877483,
+        "ok": true,
+        "wk": 0.20052973586900466
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About B",
+        "EffectiveDepthM": 0.19,
+        "amax": 13.857361580963108,
+        "amin": 3.167730441218581,
+        "bmax": "HA20 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.7439149587733098,
+        "ok": false,
+        "wk": 0.19096816427844085
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "About A",
+        "EffectiveDepthM": 0.19,
+        "amax": 11.5313880866065,
+        "amin": 3.167730441218581,
+        "bmax": "HA16\u002BHA20 altern\u00E9s e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.6088047964054433,
+        "ok": false,
+        "wk": 0.19887806978579098
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.195,
+        "amax": 3.25109176861907,
+        "amin": 3.752837760448337,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.2965972085069589,
+        "ok": true,
+        "wk": 0.16748147973386543
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.194,
+        "amax": 3.234419503138972,
+        "amin": 4.227183927745288,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.1045663675889899,
+        "ok": true,
+        "wk": 0.04253305491026752
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.195,
+        "amax": 3.25109176861907,
+        "amin": 3.7528377530456374,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.29659720850162624,
+        "ok": true,
+        "wk": 0.16748147949908432
+      },
+      {
+        "Bar": "Radier 2",
+        "Where": "About B",
+        "EffectiveDepthM": 0.19,
+        "amax": 11.531388079232537,
+        "amin": 3.167730441218581,
+        "bmax": "HA16\u002BHA20 altern\u00E9s e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.6088047963999704,
+        "ok": false,
+        "wk": 0.19887806960170515
+      },
+      {
+        "Bar": "Radier 3",
+        "Where": "About A",
+        "EffectiveDepthM": 0.19,
+        "amax": 13.857361575442065,
+        "amin": 3.167730441218581,
+        "bmax": "HA20 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.7439149586881997,
+        "ok": false,
+        "wk": 0.19096816417728482
+      },
+      {
+        "Bar": "Radier 3",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.194,
+        "amax": 3.234419503138972,
+        "amin": 5.228400917943241,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.4407023349043929,
+        "ok": true,
+        "wk": 0.20052973539853672
+      },
+      {
+        "Bar": "Radier 3",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.193,
+        "amax": 3.2177472376588745,
+        "amin": 7.013547082700308,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA14 e = 20 cm",
+        "tau": 0.1585217466307738,
+        "ok": true,
+        "wk": 0.12546833016805034
+      },
+      {
+        "Bar": "Radier 3",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.193,
+        "amax": 3.6845355411398084,
+        "amin": 5.856884678703496,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA14 e = 20 cm",
+        "tau": 0.33927212998199663,
+        "ok": false,
+        "wk": 0.342409022763354
+      },
+      {
+        "Bar": "Radier 3",
+        "Where": "About B",
+        "EffectiveDepthM": 0.19,
+        "amax": 11.040153970633495,
+        "amin": 3.167730441218581,
+        "bmax": "HA16\u002BHA20 altern\u00E9s e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.6546117136288243,
+        "ok": false,
+        "wk": 0.18659671563974767
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About A",
+        "EffectiveDepthM": 0.19,
+        "amax": 3.167730441218581,
+        "amin": 11.040153978871341,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16\u002BHA20 altern\u00E9s e = 20 cm",
+        "tau": 0.43333425487479765,
+        "ok": true,
+        "wk": 0.09775063508145623
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.194,
+        "amax": 3.241274002374185,
+        "amin": 3.9553948501841294,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.2313754058696471,
+        "ok": true,
+        "wk": 0.2711100935216512
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.195,
+        "amax": 3.25109176861907,
+        "amin": 3.25109176861907,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.12542241935203716,
+        "ok": true,
+        "wk": 0.23342278068868094
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.195,
+        "amax": 3.25109176861907,
+        "amin": 3.557895103679482,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.24054561646742179,
+        "ok": true,
+        "wk": 0.1961212384587296
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About B",
+        "EffectiveDepthM": 0.192,
+        "amax": 3.2010749721787763,
+        "amin": 9.202438878098608,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA16 e = 20 cm",
+        "tau": 0.32216974231066275,
+        "ok": true,
+        "wk": 0.09698111573205144
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "About A",
+        "EffectiveDepthM": 0.14300000000000002,
+        "amax": 4.662943534838932,
+        "amin": 5.936327483930392,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA14 e = 20 cm",
+        "tau": 0.1449870293778167,
+        "ok": true,
+        "wk": 0.19978826174426337
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.14500000000000002,
+        "amax": 2.4174784946141803,
+        "amin": 2.6727693751760615,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.14298720828295028,
+        "ok": true,
+        "wk": 0.13238510785718532
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.14500000000000002,
+        "amax": 2.4174784946141803,
+        "amin": 2.4174784946141803,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.14298720828295028,
+        "ok": true,
+        "wk": 0.0780730849059451
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.14400000000000002,
+        "amax": 4.119635548691162,
+        "amin": 3.5047443776330365,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.14398017500713745,
+        "ok": true,
+        "wk": 0.1624975922503643
+      },
+      {
+        "Bar": "Voile 1",
+        "Where": "About B",
+        "EffectiveDepthM": 0.14300000000000002,
+        "amax": 7.574951082063504,
+        "amin": 6.357407149856014,
+        "bmax": "HA14 e = 20 cm",
+        "bmin": "HA14 e = 20 cm",
+        "tau": 0.1449870293778167,
+        "ok": true,
+        "wk": 0.19666044661236998
+      },
+      {
+        "Bar": "Voile 2",
+        "Where": "About A",
+        "EffectiveDepthM": 0.14300000000000002,
+        "amax": 5.93632749469367,
+        "amin": 4.66294354083481,
+        "bmax": "HA14 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.144987029605736,
+        "ok": true,
+        "wk": 0.15588654645031214
+      },
+      {
+        "Bar": "Voile 2",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.14500000000000002,
+        "amax": 2.672769379260325,
+        "amin": 2.4174784946141803,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.14298720850772587,
+        "ok": true,
+        "wk": 0.17176641355272346
+      },
+      {
+        "Bar": "Voile 2",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.14500000000000002,
+        "amax": 2.4174784946141803,
+        "amin": 2.4174784946141803,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.14298720850772587,
+        "ok": true,
+        "wk": 0.06069975211762539
+      },
+      {
+        "Bar": "Voile 2",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.14400000000000002,
+        "amax": 3.5047443805846425,
+        "amin": 4.119635553144439,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.14398017523347395,
+        "ok": true,
+        "wk": 0.24988647258467678
+      },
+      {
+        "Bar": "Voile 2",
+        "Where": "About B",
+        "EffectiveDepthM": 0.14300000000000002,
+        "amax": 6.357407156008635,
+        "amin": 7.574951093039964,
+        "bmax": "HA14 e = 20 cm",
+        "bmin": "HA14 e = 20 cm",
+        "tau": 0.144987029605736,
+        "ok": true,
+        "wk": 0.1664254566153028
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About A",
+        "EffectiveDepthM": 0.19,
+        "amax": 11.040153970633504,
+        "amin": 3.167730441218581,
+        "bmax": "HA16\u002BHA20 altern\u00E9s e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.43333425470896086,
+        "ok": true,
+        "wk": 0.1865967156397478
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.194,
+        "amax": 3.9553948447060083,
+        "amin": 3.241274000222772,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.23137540570722967,
+        "ok": true,
+        "wk": 0.17904150414583733
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.195,
+        "amax": 3.25109176861907,
+        "amin": 3.25109176861907,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.12542241918568606,
+        "ok": true,
+        "wk": 0.10264045799621191
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.195,
+        "amax": 3.5578951019196134,
+        "amin": 3.25109176861907,
+        "bmax": "HA10 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.24054561630107066,
+        "ok": true,
+        "wk": 0.26239708063182876
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About B",
+        "EffectiveDepthM": 0.192,
+        "amax": 9.202438873546074,
+        "amin": 3.2010749721787763,
+        "bmax": "HA16 e = 20 cm",
+        "bmin": "HA10 e = 20 cm",
+        "tau": 0.3221697421417124,
+        "ok": true,
+        "wk": 0.1910637145065661
+      }
+    ],
+    "metre": {
+      "ConcreteM3": 64.40751959836234,
+      "SteelKg": 7650.86872679914
+    },
+    "props": [
+      {
+        "Bar": "Traverse",
+        "ProposedM": 0.27
+      },
+      {
+        "Bar": "Radier",
+        "ProposedM": 0.27
+      }
+    ],
+    "flot": 0.8481129256443214,
+    "sweeps": [
+      {
+        "System": "Bc",
+        "SweptTm": 1.502173178060096,
+        "UniformTm": 0.7672818924969871,
+        "WorstBar": "Traverse 1",
+        "WorstWhere": "3/4"
+      },
+      {
+        "System": "Bt",
+        "SweptTm": 1.330596288258361,
+        "UniformTm": 0.6796436343796177,
+        "WorstBar": "Traverse 1",
+        "WorstWhere": "3/4"
+      }
+    ]
+  },
+  {
+    "id": "mono_faible",
+    "deltaB": 1.265129593810445,
+    "deltaMc": 1.285039282019739,
+    "poids": 200.8,
+    "marston": 1,
+    "status": "Note d\u0027ex\u00E9cution \u2014 aucune r\u00E9serve bloquante",
+    "reserves": 0,
+    "ncomb": 16,
+    "ncas": 11,
+    "cas": [
+      {
+        "Name": "Poids propre traverse (1 t/m\u00B2)",
+        "ta": -0.9133743212103306,
+        "tm": 1.5066256812844467,
+        "ra": 0.890739303922692,
+        "pG": -1.088218832733065,
+        "pD": -1.0882187290905352,
+        "nsw": 0
+      },
+      {
+        "Name": "Remblai \u00D71.1 (1.32 t/m\u00B2)",
+        "ta": -1.2056541039976383,
+        "tm": 1.9887458992954672,
+        "ra": 1.1757758811779566,
+        "pG": -1.4364488592076459,
+        "pD": -1.4364487223995077,
+        "nsw": 0
+      },
+      {
+        "Name": "Remblai \u00D70.9 (1.08 t/m\u00B2)",
+        "ta": -0.9864442669071583,
+        "tm": 1.6271557357872006,
+        "ra": 0.9619984482365088,
+        "pG": -1.1752763393517103,
+        "pD": -1.175276227417779,
+        "nsw": 0
+      },
+      {
+        "Name": "Pouss\u00E9e max (K\u2080 = 0.5, surcharge 1 t/m\u00B2)",
+        "ta": 2.1223321844224383,
+        "tm": -0.5932266795165102,
+        "ra": 4.99843944411556,
+        "pG": 4.587073522983528,
+        "pD": -4.420629630888842,
+        "nsw": 0
+      },
+      {
+        "Name": "Pouss\u00E9e min (K\u2080 = 0.25)",
+        "ta": 0.8148126635533997,
+        "tm": -0.24436949674638098,
+        "ra": 2.0213836837735206,
+        "pG": 1.8247242625143794,
+        "pD": -1.754671353731291,
+        "nsw": 0
+      },
+      {
+        "Name": "A(l) toutes trav\u00E9es charg\u00E9es (2.425 t/m\u00B2, l = 4.4 m)",
+        "ta": -2.215044116047401,
+        "tm": 3.653751011953963,
+        "ra": 2.1601514387569143,
+        "pG": -2.6390633789914317,
+        "pD": -2.6390631276456564,
+        "nsw": 0
+      },
+      {
+        "Name": "Bc \u2014 toutes trav\u00E9es charg\u00E9es (3.532 t/m\u00B2 sur bande de 3.05 m, 15 positions)",
+        "ta": -2.9344797195580963,
+        "tm": 4.809337719666481,
+        "ra": 2.059278144965299,
+        "pG": -2.6795264341993694,
+        "pD": -2.6795261789998763,
+        "nsw": 15
+      },
+      {
+        "Name": "Bt \u2014 toutes trav\u00E9es charg\u00E9es (3.674 t/m\u00B2 sur bande de 2.9 m, 17 positions)",
+        "ta": -2.962963409094194,
+        "tm": 4.894157232226938,
+        "ra": 2.025598221072462,
+        "pG": -2.6509165162530683,
+        "pD": -2.650916263778399,
+        "nsw": 17
+      },
+      {
+        "Name": "Mc120 \u2014 toutes trav\u00E9es charg\u00E9es (4.153 t/m\u00B2)",
+        "ta": -3.792873296526831,
+        "tm": 6.256405705420951,
+        "ra": 3.698879245409929,
+        "pG": -4.518931675220983,
+        "pD": -4.518931244835571,
+        "nsw": 0
+      },
+      {
+        "Name": "Construction (3 t/ml par voile)",
+        "ta": 0.25088991466224664,
+        "tm": 0.25088991799111493,
+        "ra": 1.4758230690470402,
+        "pG": -1.4520484665030369,
+        "pD": -1.4520483282091865,
+        "nsw": 0
+      },
+      {
+        "Name": "Eau \u2014 en eau, nappe basse",
+        "ta": 0.15132173522926926,
+        "tm": 0.15132173711613836,
+        "ra": -0.1888054748149829,
+        "pG": -0.8230505912948934,
+        "pD": -0.8230505129071263,
+        "nsw": 0
+      }
+    ],
+    "combos": [
+      {
+        "Name": "ELS G\u002B \u002B Pmax",
+        "ta": 0.0033037592144591343,
+        "tmax": 3.2304873874852644,
+        "w": 0.8041745649991423
+      },
+      {
+        "Name": "ELS G\u002B \u002B Pmin",
+        "ta": -1.304215761654575,
+        "tmax": 3.300956744561752,
+        "w": -0.8898073152643686
+      },
+      {
+        "Name": "ELS G\u2212 \u002B Pmax",
+        "ta": 0.22251359630494782,
+        "tmax": 2.9067304060653023,
+        "w": 1.0206682000151108
+      },
+      {
+        "Name": "ELS G\u2212 \u002B Pmin",
+        "ta": -1.085005924564093,
+        "tmax": 2.9451281223183354,
+        "w": -0.6733136802484054
+      },
+      {
+        "Name": "ELU G\u002B \u002B Pmax",
+        "ta": 0.004460074939538927,
+        "tmax": 4.36115797310512,
+        "w": 1.0856356627488335
+      },
+      {
+        "Name": "ELU G\u2212 \u002B Pmax",
+        "ta": 0.22251359630494782,
+        "tmax": 2.9067304060653023,
+        "w": 1.0206682000151108
+      },
+      {
+        "Name": "ELS A(l) \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -2.6547491800424226,
+        "tmax": 7.432203332582834,
+        "w": -1.8209427678834516
+      },
+      {
+        "Name": "ELU A(l) \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -3.5396105107362974,
+        "tmax": 9.961680703803717,
+        "w": -2.4145207810946143
+      },
+      {
+        "Name": "ELS Bc \u2014 toutes trav\u00E9es charg\u00E9es, empreinte de 3.05 m \u00E0 0.68 m de l\u0027about",
+        "ta": -3.518071904255269,
+        "tmax": 8.789482529710408,
+        "w": -2.192080153714901
+      },
+      {
+        "Name": "ELU Bc \u2014 toutes trav\u00E9es charg\u00E9es, empreinte de 3.05 m \u00E0 0.68 m de l\u0027about",
+        "ta": -4.690707476353433,
+        "tmax": 11.770837666473836,
+        "w": -2.9093706288699064
+      },
+      {
+        "Name": "ELS Bt \u2014 toutes trav\u00E9es charg\u00E9es, empreinte de 2.9 m \u00E0 0.75 m de l\u0027about",
+        "ta": -3.5522523316985612,
+        "tmax": 8.888332022405185,
+        "w": -2.1889624131008567
+      },
+      {
+        "Name": "ELU Bt \u2014 toutes trav\u00E9es charg\u00E9es, empreinte de 2.9 m \u00E0 0.75 m de l\u0027about",
+        "ta": -4.736281379611183,
+        "tmax": 11.902636990066867,
+        "w": -2.905213641384501
+      },
+      {
+        "Name": "ELS Mc120 \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -3.7895695373123566,
+        "tmax": 9.276177926459939,
+        "w": -2.941701705969246
+      },
+      {
+        "Name": "ELU Mc120 \u2014 toutes trav\u00E9es charg\u00E9es",
+        "ta": -5.115918875371694,
+        "tmax": 12.52284020072091,
+        "w": -3.9712973030584653
+      },
+      {
+        "Name": "Phasage \u2014 remblai c\u00F4t\u00E9 gauche seul",
+        "ta": 0.71625100589646,
+        "tmax": 1.4814112745766184,
+        "w": 1.5038721672133732
+      },
+      {
+        "Name": "Phase de construction",
+        "ta": 0.25088991466224664,
+        "tmax": 0.2508899213199833,
+        "w": -0.6124665771923978
+      }
+    ],
+    "effets": [
+      {
+        "Bar": "Traverse 1",
+        "Where": "About A",
+        "MomentSlsMax": 0.3738353315342189,
+        "MomentSlsMin": -4.945767322952131,
+        "MomentUlsMax": 1.169614203412317,
+        "MomentUlsMin": -7.014932925559312,
+        "ShearUlsMax": 18.742159609697456,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "1/4",
+        "MomentSlsMax": 6.751732018655694,
+        "MomentSlsMin": 2.3119247340532927,
+        "MomentUlsMax": 9.114838225185187,
+        "MomentUlsMin": 2.3119247340532927,
+        "ShearUlsMax": 9.93154031088924,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 9.658729526370623,
+        "MomentSlsMin": 2.6918764746712753,
+        "MomentUlsMax": 13.124814184461574,
+        "MomentUlsMin": 2.4842471368404966,
+        "ShearUlsMax": 2.983510959791773,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "3/4",
+        "MomentSlsMax": 5.213218707341013,
+        "MomentSlsMin": 0.07569704623980417,
+        "MomentUlsMax": 7.308731456824064,
+        "MomentUlsMin": -0.6071550927802905,
+        "ShearUlsMax": 12.079352395946804,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "About B",
+        "MomentSlsMax": -3.052048495782372,
+        "MomentSlsMin": -9.069365493891867,
+        "MomentUlsMax": -2.9990858871313195,
+        "MomentUlsMin": -12.296606025405074,
+        "ShearUlsMax": 20.889971690872216,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About A",
+        "MomentSlsMax": 10.575028399811155,
+        "MomentSlsMin": 3.685315961117739,
+        "MomentUlsMax": 14.342370255930303,
+        "MomentUlsMin": 3.6192340449324947,
+        "ShearUlsMax": 18.742160014231747,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "1/4",
+        "MomentSlsMax": 2.064648524172995,
+        "MomentSlsMin": -4.312855865825224,
+        "MomentUlsMax": 3.5016177198913843,
+        "MomentUlsMin": -6.402008024623993,
+        "ShearUlsMax": 12.529093723487893,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": -2.6133920921213027,
+        "MomentSlsMin": -9.461978796914511,
+        "MomentUlsMax": -2.392431636424071,
+        "MomentUlsMin": -12.86666922100642,
+        "ShearUlsMax": 6.013749505698186,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "3/4",
+        "MomentSlsMax": -3.1471696325569987,
+        "MomentSlsMin": -8.76794556645013,
+        "MomentUlsMax": -3.1471696325569987,
+        "MomentUlsMin": -11.836726514707676,
+        "ShearUlsMax": 8.348636825896174,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About B",
+        "MomentSlsMax": 4.129003332015009,
+        "MomentSlsMin": -1.9711778829231488,
+        "MomentUlsMax": 6.146891371390355,
+        "MomentUlsMin": -3.3095483515695854,
+        "ShearUlsMax": 20.889971310000476,
+        "NormalSlsMinT": 0
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About A",
+        "MomentSlsMax": -3.6853159611177384,
+        "MomentSlsMin": -10.575028399811165,
+        "MomentUlsMax": -3.6192340449324947,
+        "MomentUlsMin": -14.342370255930318,
+        "ShearUlsMax": 10.522439634456013,
+        "NormalSlsMinT": 4.576000809669495
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "1/4",
+        "MomentSlsMax": -1.8507574582112865,
+        "MomentSlsMin": -5.932452560339865,
+        "MomentUlsMax": -1.7317343711546584,
+        "MomentUlsMin": -8.077370410029193,
+        "ShearUlsMax": 6.211877134456013,
+        "NormalSlsMinT": 4.576000809669495
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 0.6127318050372196,
+        "MomentSlsMin": -5.043619981210618,
+        "MomentUlsMax": 1.6266630345909254,
+        "MomentUlsMin": -7.229924546095818,
+        "ShearUlsMax": 2.742497680871208,
+        "NormalSlsMinT": 4.576000809669495
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "3/4",
+        "MomentSlsMax": 1.1977210682857296,
+        "MomentSlsMin": -4.768912402081371,
+        "MomentUlsMax": 2.3479354403365136,
+        "MomentUlsMin": -6.895453682162439,
+        "ShearUlsMax": 0.882352465501675,
+        "NormalSlsMinT": 4.576000809669495
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About B",
+        "MomentSlsMax": 0.3738353315342362,
+        "MomentSlsMin": -4.945767322952125,
+        "MomentUlsMax": 1.1696142034123418,
+        "MomentUlsMin": -7.0149329255593065,
+        "ShearUlsMax": 2.776789965501675,
+        "NormalSlsMinT": 4.576000809669495
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About A",
+        "MomentSlsMax": 4.129003332014993,
+        "MomentSlsMin": -1.9711778829231426,
+        "MomentUlsMax": 6.146891371390334,
+        "MomentUlsMin": -3.309548351569574,
+        "ShearUlsMax": 4.457982177747336,
+        "NormalSlsMinT": 4.5759997963905334
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "1/4",
+        "MomentSlsMax": 5.3685354008818935,
+        "MomentSlsMin": 0.29168718335556243,
+        "MomentUlsMax": 7.513453237947048,
+        "MomentUlsMin": -0.3730104949473688,
+        "ShearUlsMax": 3.6547321777473365,
+        "NormalSlsMinT": 4.5759997963905334
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "Mi-port\u00E9e",
+        "MomentSlsMax": 6.174567469748793,
+        "MomentSlsMin": 2.121052249634267,
+        "MomentUlsMax": 8.360872022009811,
+        "MomentUlsMin": 2.0639454441687843,
+        "ShearUlsMax": 3.116790224162533,
+        "NormalSlsMinT": 4.5759997963905334
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "3/4",
+        "MomentSlsMax": 7.648643813796712,
+        "MomentSlsMin": 2.704373040731954,
+        "MomentUlsMax": 10.325669148625561,
+        "MomentUlsMin": 2.704373040731954,
+        "ShearUlsMax": 2.861790224162533,
+        "NormalSlsMinT": 4.5759997963905334
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About B",
+        "MomentSlsMax": 9.069365493891892,
+        "MomentSlsMin": 3.0520484957823792,
+        "MomentUlsMax": 12.296606025405108,
+        "MomentUlsMin": 2.9990858871313257,
+        "ShearUlsMax": 2.776790224162533,
+        "NormalSlsMinT": 4.5759997963905334
+      }
+    ],
+    "sections": [
+      {
+        "Bar": "Traverse 1",
+        "Where": "About A",
+        "EffectiveDepthM": 0.342,
+        "amax": 4.129650000000001,
+        "amin": 7.765428479908463,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA16 e = 20 cm",
+        "tau": 0.5480163628566507,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.34,
+        "amax": 10.801168207710262,
+        "amin": 4.105500000000001,
+        "bmax": "HA16\u002BHA20 altern\u00E9s e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.29210412679085995,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.34,
+        "amax": 15.70601045222581,
+        "amin": 4.105500000000001,
+        "bmax": "HA20 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.08775032234681684,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.342,
+        "amax": 8.201563066843903,
+        "amin": 4.129650000000001,
+        "bmax": "HA16 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.35319743847797674,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Traverse 1",
+        "Where": "About B",
+        "EffectiveDepthM": 0.34,
+        "amax": 4.105500000000001,
+        "amin": 14.702922222343677,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA20 e = 20 cm",
+        "tau": 0.614410932084477,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About A",
+        "EffectiveDepthM": 0.342,
+        "amax": 17.162407066871193,
+        "amin": 4.129650000000001,
+        "bmax": "HA16 e = 10 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.5480163746851388,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.343,
+        "amax": 4.141725000000001,
+        "amin": 6.71729686540965,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA14 e = 20 cm",
+        "tau": 0.36527970039323304,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.34,
+        "amax": 4.105500000000001,
+        "amin": 15.370683360423769,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA20 e = 20 cm",
+        "tau": 0.17687498546171135,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.34,
+        "amax": 4.105500000000001,
+        "amin": 14.191535640398204,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA20 e = 20 cm",
+        "tau": 0.24554814193812272,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Radier 1",
+        "Where": "About B",
+        "EffectiveDepthM": 0.343,
+        "amax": 6.421255080658457,
+        "amin": 4.141725000000001,
+        "bmax": "HA14 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.6090370644315007,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About A",
+        "EffectiveDepthM": 0.342,
+        "amax": 4.504461695436444,
+        "amin": 16.0024392183429,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA16 e = 10 cm",
+        "tau": 0.3076736735221056,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.342,
+        "amax": 4.129650000000001,
+        "amin": 8.182234694999664,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA16 e = 20 cm",
+        "tau": 0.18163383434081906,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.343,
+        "amax": 4.141725000000001,
+        "amin": 7.900026411841834,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA16 e = 20 cm",
+        "tau": 0.07995620060849003,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.343,
+        "amax": 4.141725000000001,
+        "amin": 7.454313451600376,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA14 e = 20 cm",
+        "tau": 0.025724561676433673,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit gauche",
+        "Where": "About B",
+        "EffectiveDepthM": 0.343,
+        "amax": 4.141725000000001,
+        "amin": 7.741111876596147,
+        "bmax": "HA12 e = 20 cm",
+        "bmin": "HA16 e = 20 cm",
+        "tau": 0.08095597567060277,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About A",
+        "EffectiveDepthM": 0.34400000000000003,
+        "amax": 6.40131208122853,
+        "amin": 4.1538,
+        "bmax": "HA14 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.1295925051670737,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "1/4",
+        "EffectiveDepthM": 0.343,
+        "amax": 8.428848573579135,
+        "amin": 4.141725000000001,
+        "bmax": "HA16 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.10655195853490776,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "Mi-port\u00E9e",
+        "EffectiveDepthM": 0.342,
+        "amax": 8.583194696594566,
+        "amin": 4.129650000000001,
+        "bmax": "HA16 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.0911342170807758,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "3/4",
+        "EffectiveDepthM": 0.34,
+        "amax": 12.302623399507262,
+        "amin": 4.105500000000001,
+        "bmax": "HA16\u002BHA20 altern\u00E9s e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.08417030071066274,
+        "ok": true,
+        "wk": null
+      },
+      {
+        "Bar": "Pi\u00E9droit droit",
+        "Where": "About B",
+        "EffectiveDepthM": 0.34,
+        "amax": 14.702922222343718,
+        "amin": 4.105500000000001,
+        "bmax": "HA20 e = 20 cm",
+        "bmin": "HA12 e = 20 cm",
+        "tau": 0.08167030071066274,
+        "ok": true,
+        "wk": null
+      }
+    ],
+    "metre": {
+      "ConcreteM3": 62.40000000000001,
+      "SteelKg": 5976.590577910577
+    },
+    "props": [],
+    "flot": null,
+    "sweeps": [
+      {
+        "System": "Bc",
+        "SweptTm": 2.9497718933815227,
+        "UniformTm": 3.184957791787919,
+        "WorstBar": "Traverse 1",
+        "WorstWhere": "1/4"
+      },
+      {
+        "System": "Bt",
+        "SweptTm": 3.0243391868449283,
+        "UniformTm": 3.312300051845657,
+        "WorstBar": "Traverse 1",
+        "WorstWhere": "1/4"
+      }
+    ]
+  },
+  {
+    "id": "blocs5",
+    "nb": 2,
+    "expl": "5 cellules r\u00E9parties en 2 blocs de 3 \u002B 2 cellules, 1 joint(s) sec(s) \u2014 limit\u00E9 \u00E0 3 cellules par bloc pour le coulage.",
+    "g": [
+      25.769768985159754,
+      27.631208124319148
+    ]
+  }
+]
