@@ -32,6 +32,22 @@ export function tBeamULS({ M, beff, hf, b0, d, fck = 30, fyk = 500, code = 'EC' 
 }
 
 /**
+ * Étriers verticaux à l'effort tranchant (NF EN 1992-1-1 § 6.2.3, bielles d'inclinaison variable) : cot θ le plus grand
+ * dans [1 ; 2,5] tel que V_Rd,max ≥ V_Ed, A_sw/s = V_Ed/(z f_ywd cot θ), minimum ρ_w,min = 0,08 √f_ck/f_yk (§ 9.2.2 (5)).
+ * α_cw selon la contrainte moyenne de compression σ_cp (MPa) ; f_cd = 0,85 f_ck/1,5 (EN 1992-2 § 3.1.6 (101)).
+ * V en kN, longueurs en m ; A_sw/s en m²/m.
+ */
+export function etriersEC2({ VEd, bw, bwNom = bw, z, fck = 30, fyk = 500, scp = 0 }) {
+  const fcd = 0.85 * fck / 1.5, nu1 = 0.6 * (1 - fck / 250), fywd = fyk / 1.15;
+  const acw = scp <= 0 ? 1 : scp <= 0.25 * fcd ? 1 + scp / fcd : scp <= 0.5 * fcd ? 1.25 : 2.5 * (1 - scp / fcd);
+  const VRdmax = cot => acw * bwNom * z * nu1 * fcd * 1000 / (cot + 1 / cot);
+  let cot = 2.5; while (cot > 1 && VRdmax(cot) < VEd) cot -= 0.01;
+  cot = Math.max(cot, 1);
+  const calc = Math.max(VEd, 0) / (z * fywd * 1000 * cot), min = 0.08 * Math.sqrt(fck) / fyk * bw;
+  return { cot, VRdmax: VRdmax(cot), AswS: Math.max(calc, min), AswCalc: calc, AswMin: min, acw, ok: VRdmax(cot) >= VEd - 1e-6 };
+}
+
+/**
  * Contraintes normales de la poutre précontrainte (section composite) : σ = P/A ± P e v/I ∓ M v/I (compression > 0).
  * Limites : BPEL 91 classe II (σ ≤ 0,6 f_cj ; traction ≥ −f_tj en section d'enrobage sous combinaison rare, 0 sous
  * fréquente) ou EN 1992-1-1 (σ_c ≤ 0,6 f_ck caractéristique, décompression sous quasi-permanente — XC/XD) ; précontrainte

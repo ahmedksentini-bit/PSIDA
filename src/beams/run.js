@@ -3,7 +3,11 @@
  * ligne d'appui (transmises au module « Appuis et fondations » en mode appuis seuls).
  */
 import { beamDeck, beamCombinations, beamSection } from './index.js';
-import { tBeamULS, prestressCheck, lineReactions } from './design.js';
+import { tBeamULS, prestressCheck, lineReactions, etriersEC2 } from './design.js';
+import { FORME_VIPP, sectionVIPP } from './vipp_section.js';
+import { chaineVIPP, DEFAUTS_VIPP } from './vipp.js';
+import { hourdisLocal } from './hourdis.js';
+import { entretoiseVerinage } from './entretoise.js';
 
 const nums = s => String(s ?? '').split(/[,;\s]+/).filter(Boolean).map(Number);
 const pairs = s => String(s ?? '').split(';').map(t => t.trim()).filter(Boolean).map(t => nums(t));
@@ -11,9 +15,23 @@ const pairs = s => String(s ?? '').split(';').map(t => t.trim()).filter(Boolean)
 export function parsePoutres(d) {
   const parts = pairs(d.pt_parts).filter(p => p.length >= 2 && p[0] > 0 && p[1] > 0).map(([b, h]) => ({ b, h }));
   const v = (k, def) => (String(d[k] ?? '').trim() === '' ? def : +d[k]);
+  // définition de la section : dimensions d'une poutre VIPP (défaut du formulaire), rectangles empilés, ou valeurs
+  // (projets antérieurs : A, I, K donnés — la chaîne de précontrainte détaillée demande les dimensions)
+  const geo = d.pt_geo || (parts.length ? 'rect' : 'valeurs');
+  const F = FORME_VIPP, DV = DEFAUTS_VIPP, C = DV.cables;
+  const forme = { hp: v('pt_hp', F.hp), bt: v('pt_bt', F.bt), hte: v('pt_hte', F.hte), pt: v('pt_pt', F.pt), gt: v('pt_gt', F.gt), b0: v('pt_b0v', F.b0), bta: v('pt_bta', F.bta), hpi: v('pt_hpi', F.hpi), tpan: v('pt_tpan', F.tpan), b0a: v('pt_b0a', F.b0a), Lb: v('pt_Lb', F.Lb) };
+  const vipp = {
+    forme, expo: d.pt_expo || DV.expo, fyk: v('pt_fyk', 500), cs: v('pt_cs', DV.cs),
+    beton: { fckP: v('pt_fck', 40), fckH: v('pt_fckh', DV.beton.fckH), RH: v('pt_RH', DV.beton.RH), cimP: d.pt_cim || DV.beton.cimP, cimH: 'N', gamma: 25 },
+    cables: { nc: v('pt_nc', C.nc), n2: v('pt_n2', C.n2), unite: d.pt_unite || C.unite, parLit: v('pt_parlit', C.parLit), cBas: v('pt_cbas', C.cBas), ev: v('pt_ev', C.ev),
+      yaBas: v('pt_yab', C.yaBas), yaHaut: v('pt_yah', C.yaHaut), sigP0: v('pt_sp0', 0) || null, mu: v('pt_mu', C.mu), k: v('pt_kp', C.k), g: v('pt_g', C.g * 1000) / 1000, tension: d.pt_tens || C.tension, fpk: 1860, fp01k: 1640, classe: 2, rho1000: 2.5 },
+    dates: { t1: v('pt_t1', DV.dates.t1), t2: v('pt_t2', DV.dates.t2), t2b: v('pt_t2b', DV.dates.t2b), t3: v('pt_t3', DV.dates.t3), fin: 36500 },
+  };
+  const local = { tRev: v('pt_trev', 0.08), te: v('pt_te', 0.25), dv: v('pt_dv', 0.6), verinsRive: d.pt_vrive === undefined ? true : !!+d.pt_vrive || d.pt_vrive === 'on', fckH: v('pt_fckh', 30), c: v('pt_ch', 0.03) };
   return {
+    geo, vipp, local,
     spans: nums(d.pt_spans), n: v('pt_n', 4), b1: v('pt_b1', 3.28), hd: v('pt_hd', 0.30),
-    beam: parts.length ? { parts } : { A: v('pt_A', 1.98), I: v('pt_I', 1.006), K: v('pt_K', 0.0364), v: v('pt_v', 0.65), vp: v('pt_vp', 1.67), H: v('pt_H', 2.32) },
+    beam: geo === 'rect' && parts.length ? { parts } : { A: v('pt_A', 1.98), I: v('pt_I', 1.006), K: v('pt_K', 0.0364), v: v('pt_v', 0.65), vp: v('pt_vp', 1.67), H: v('pt_H', 2.32) },
     roadway: (([y1, y2]) => ({ y1, y2 }))(nums(d.pt_road || '-4, 4')),
     footways: pairs(d.pt_foot).filter(p => p.length >= 2).map(([y1, y2]) => ({ y1, y2 })),
     lines: String(d.pt_lines || '').split(';').map(t => t.trim()).filter(Boolean).map(t => { const [g, e] = t.split('@').map(Number); return { g, e }; }).filter(l => Number.isFinite(l.g) && Number.isFinite(l.e)),
@@ -26,6 +44,11 @@ export function parsePoutres(d) {
 }
 
 export function computePoutres(inp) {
+  if (inp.geo === 'dims') {
+    // section VIPP : poutre + hourdis de largeur b₁ pour la répartition transversale (coefficient d'équivalence 1)
+    const S = sectionVIPP(inp.vipp.forme, { b1: inp.b1, hd: inp.hd });
+    inp = { ...inp, beam: { ...S.comp, v: S.comp.v, vp: S.comp.vp }, vippSection: S };
+  }
   const bd = beamDeck(inp);
   const sec = bd.sec, H = sec.H || inp.beam.H || 2, v = sec.v ?? inp.beam.v, vp = sec.vp ?? inp.beam.vp;
   const spans = [...bd.bySpan.values()].map(S => {
@@ -36,8 +59,17 @@ export function computePoutres(inp) {
       const out = { k: b.k, y: b.y, mid: {}, eta: {}, V0: {}, comb: { ELS_F61: c.ELS_F61[mid], ELU_F61: c.ELU_F61[mid], ELS_EC: c.ELS_EC[mid], ELU_EC: c.ELU_EC[mid] }, MuF, MuE };
       for (const id of ['G', 'A', 'Bc', 'Bt', 'Mc120', 'D240', 'trott', 'TS', 'UDL', 'gr1a', 'gr1b']) if (b[id]) { out.mid[id] = b[id].Mmax[mid]; out.eta[id] = b[id].eta; out.V0[id] = b[id].Vmax ? b[id].Vmax[x0] : null; }
       const d = H - inp.cover;
-      if (inp.type === 'BA') {
+      if (inp.type === 'BP' && inp.geo === 'dims') {
+        out.vipp = chaineVIPP({ ...inp.vipp, b1: inp.b1, hd: inp.hd, gExtra: 0 }, S.L, b, { elsF61: c.ELS_F61, eluF61: c.ELU_F61 });
+      } else if (inp.type === 'BA') {
         out.BA = { BAEL: tBeamULS({ M: MuF, beff: inp.b1, hf: inp.hd, b0: inp.b0, d, fck: inp.fck, fyk: inp.fyk, code: 'BAEL' }), EC: tBeamULS({ M: MuE, beff: inp.b1, hf: inp.hd, b0: inp.b0, d, fck: inp.fck, fyk: inp.fyk, code: 'EC' }) };
+        // le long de la travée : armatures inférieures (ELU, enveloppe EC / F61) et étriers (EC2 § 6.2.3), z = 0,9 d
+        const secs = S.deck.beam.sections, half = secs.filter(q => q.x <= S.L / 2 + 1e-9);
+        out.BA.travee = half.map((q, i) => {
+          const VEd = 1.35 * Math.abs(b.G.Vmax?.[i] ?? 0) + 1.35 * Math.max(Math.abs(b.gr1a?.Vmax?.[i] ?? 0), Math.abs(b.gr1b?.Vmax?.[i] ?? 0));
+          const As = tBeamULS({ M: Math.max(c.ELU_EC[i], c.ELU_F61[i]), beff: inp.b1, hf: inp.hd, b0: inp.b0, d, fck: inp.fck, fyk: inp.fyk, code: 'EC' });
+          return { x: q.x, MEd: Math.max(c.ELU_EC[i], c.ELU_F61[i]), As: As.As, VEd, V: etriersEC2({ VEd, bw: inp.b0, z: 0.9 * d, fck: inp.fck, fyk: inp.fyk }) };
+        });
       } else {
         const Gm = b.G.Mmin[mid], base = { A: sec.A, I: sec.I, v, vp, P: inp.P, e0: inp.e0, Mmin: Gm, fck: inp.fck };
         // BPEL classe II : combinaison rare (ELS Fascicule 61) ; EC2 : décompression sous quasi-permanente (ψ₂ = 0 : G seul),
@@ -50,7 +82,23 @@ export function computePoutres(inp) {
     });
     return { L: S.L, theta: S.gp.theta, alpha: S.gp.alpha, Lguyon: S.gp.Lguyon, classe: S.f61.classe, deltaB: S.f61.deltaBc[0], deltaC: S.f61.deltaMc?.[0], beams };
   });
-  return { inp, sec, spans, lines: lineReactions(bd), bd };
+  // hourdis (flexion locale) et entretoises d'about (vérinage) : sections connues par leurs dimensions ou leurs rectangles
+  let hourdis = null, entretoise = null;
+  const parts = inp.beam.parts, Lmax = Math.max(...inp.spans);
+  const table = inp.geo === 'dims' ? { bt: inp.vipp.forme.bt, eTab: inp.vipp.forme.hte + inp.vipp.forme.pt * Math.max(inp.vipp.forme.bt / 2 - inp.vipp.forme.b0 / 2 - inp.vipp.forme.gt, 0) / 2, hp: inp.vipp.forme.hp }
+    : parts ? { bt: parts[parts.length - 1].b, eTab: parts[parts.length - 1].h, hp: parts.reduce((a, q) => a + q.h, 0) } : null;
+  const L0 = inp.local || {};
+  if (table && inp.n >= 2) {
+    try {
+      hourdis = hourdisLocal({ n: inp.n, b1: inp.b1, hd: inp.hd, bt: table.bt, eTab: table.eTab, L: Lmax, roadway: inp.roadway, footways: inp.footways, lines: inp.lines, bands: inp.bands, tRev: L0.tRev, fck: inp.geo === 'dims' ? inp.vipp.beton.fckH : inp.fck, fyk: inp.fyk, c: L0.c, alphaEC: inp.alphaEC, classe: spans[0].classe, mil: inp.mil });
+    } catch (e) { hourdis = { erreur: e.message }; }
+  }
+  {
+    const hp = table ? table.hp : (sec.H || 2) - inp.hd, sp = spans.reduce((a, q) => (q.L > a.L ? q : a));
+    entretoise = entretoiseVerinage({ ys: bd.ys, RG: sp.beams.map(b => b.V0.G ?? 0), dv: L0.dv, verinsRive: L0.verinsRive, he: Math.max(hp - 0.10, 0.5), te: L0.te, hd: inp.hd, fck: inp.fck, fyk: inp.fyk });
+    entretoise.L = sp.L;
+  }
+  return { inp, sec, spans, lines: lineReactions(bd), bd, hourdis, entretoise };
 }
 
 /** Texte « appuis seuls » (G ; G min ; A ; Bc ; Mc120 ; trottoirs ; TS ; UDL) à partir des réactions par ligne. */

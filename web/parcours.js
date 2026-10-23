@@ -15,11 +15,11 @@ export const OUVRAGES = {
     etat: ['oui', 'oui', 'oui', 'oui', 'oui', 'oui', 'oui', 'oui'],
   },
   poutres: {
-    titre: 'Pont à poutres', sous: 'VIPP, PRAD, poutres en béton armé (travées indépendantes)',
-    texte: 'Répartition transversale de Guyon-Massonnet du réseau poutres + hourdis, efforts par poutre sous charges permanentes et trafic, réactions transmises aux appuis.',
-    etapes: [['poutres', 'Tablier à poutres'], ['appuis', 'Appuis'], ['retenue', 'Retenue']],
-    etat: ['non', 'oui', 'partiel', 'non', 'oui', 'partiel', 'non', 'partiel'],
-    manque: 'à venir : précontrainte et ferraillage des poutres, hourdis, entretoises, plans, note complète.',
+    titre: 'Pont à poutres', sous: 'VIPP (post-tension) et poutres en béton armé, travées indépendantes',
+    texte: 'Répartition de Guyon-Massonnet ; VIPP par dimensions : câblage, pertes, phases (fluage, retrait, relaxation), contraintes ELS, ELU, effort tranchant et étriers, flèches, diagnostic du guide Sétra 1996 ; hourdis (plaque, roues EC et F61), entretoises d\'about (vérinage), plans (coffrage, câblage, ferraillage), note ; réactions transmises aux appuis.',
+    etapes: [['poutres', 'Tablier à poutres'], ['appuis', 'Appuis'], ['seisme', 'Séisme'], ['retenue', 'Retenue']],
+    etat: ['oui', 'oui', 'oui', 'oui', 'oui', 'partiel', 'oui', 'oui'],
+    manque: 'à venir : poutres PRAD (pré-tension) ; bordereau de façonnage des poutres.',
   },
   cadre: {
     titre: 'Cadre ou portique', sous: 'PICF, PIPO — ouvrages hydrauliques et passages inférieurs',

@@ -73,7 +73,7 @@ export function beamDeck(g) {
  */
 function perBeam(deck, perm, f61, ec, b1, n) {
   const secs = deck.beam.sections, mid = deck.beam.sectionIndex(0, 0.5);
-  const cases = { G: perm, A: f61.A, Bc: f61.Bc, Bt: f61.Bt, Mc120: f61.Mc120, D240: f61.D240, trott: f61.trottoir, TS: ec.TS, UDL: ec.UDL, LM1: ec.LM1, gr1a: ec.gr1a, gr1b: ec.gr1b };
+  const cases = { G: perm, A: f61.A, Bc: f61.Bc, Bt: f61.Bt, Mc120: f61.Mc120, D240: f61.D240, trott: f61.trottoir, TS: ec.TS, UDL: ec.UDL, footway: ec.footway, LM1: ec.LM1, gr1a: ec.gr1a, gr1b: ec.gr1b };
   return Array.from({ length: n }, (_, k) => {
     const out = { k, y: deck.ys[k], x: secs.map(s => s.x) };
     for (const [id, r] of Object.entries(cases)) {

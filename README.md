@@ -516,3 +516,17 @@ pont à poutres, cadre ou portique, poutres rendues continues, encorbellements, 
 réel des fonctions (conception, trafic, ELS / ELU, ferraillage ou câblage, appuis, séisme, plans, note : oui / partiel /
 à venir) ; la barre d'onglets ne montre plus que les étapes de l'ouvrage choisi, numérotées dans l'ordre du projet et cochées
 quand elles sont calculées ; le choix est enregistré avec le projet (champ « ouvrage »). Aucun calcul n'est modifié.
+v0.92 : pont à poutres VIPP — chaîne complète (src/beams/vipp.js, vipp_section.js) : poutre définie par ses dimensions
+(talon à pan incliné, goussets ; caractéristiques exactes du polygone), largeur efficace (EN 1992-1-1 § 5.3.2.1), câblage
+parabolique en deux familles (1re sur la poutre seule, 2e sur la section composée), frottement et recul d'ancrage, calcul par
+phases (moteur de src/phasage : raccourcissement élastique câble par câble, fluage et retrait des deux bétons, retrait
+différentiel, relaxation), contraintes ELS (0,6 f_ck(t), 0,6 f_ck, 0,45 f_ck, décompression EN 1992-2 tableau 7.101N, BPEL
+classe II), ELU de flexion (bloc rectangulaire sur le contour réel, allongement préalable des câbles), effort tranchant
+(V_pd, α_cw, b_w,nom, cot θ variable, étriers proposés), flèches, quantités et diagnostic du guide Sétra VIPP (1996) ;
+poutres BA : armatures et étriers le long de la travée ; hourdis (src/beams/hourdis.js) : plaque DKT continue sur les poutres,
+moments locaux par surfaces d'influence sous TS, UDL, LM2 (EN 1991-2 § 4.3) et Bc, Bt, Br, Mc120 avec δ (Fascicule 61),
+ferraillage par mètre et poinçonnement ; entretoises d'about (src/beams/entretoise.js) : vérinage sur vérins, flexion et
+étriers ; plans de la poutre (src/plans/vipp.js : coffrage, câblage avec ordonnées des gaines et allongements théoriques,
+ferraillage de principe ; aperçu, DXF, PDF) ; assistant de saisie (coupe du tablier, section et câblage) ; note de calcul
+HTML et Word ; manuel chapitre 29.
+Projets antérieurs (section par valeurs) inchangés.
