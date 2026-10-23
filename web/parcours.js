@@ -10,10 +10,9 @@ const COLONNES = ['Conception', 'Calcul sous trafic', 'ELS / ELU', 'Ferraillage 
 export const OUVRAGES = {
   dalle: {
     titre: 'Pont-dalle', sous: 'armé (PSI-DA) ou précontraint (PSI-DP)',
-    texte: 'Dalle continue de 1 à plusieurs travées, droite, biaise ou courbe : répartition de Guyon-Massonnet ou plaque, Eurocodes ou Fascicule 61 / BAEL, ferraillage et plans, appuis, séisme, notes.',
+    texte: 'Dalle continue de 1 à plusieurs travées, droite, biaise ou courbe : répartition de Guyon-Massonnet ou plaque, Eurocodes ou Fascicule 61 / BAEL, ferraillage et plans, appuis, séisme, notes ; coulage par phases successives (reprises, câbles couplés, adaptation par fluage).',
     etapes: [['projet', 'Tablier'], ['conception', 'Conception'], ['tablier', 'Calcul'], ['ferraillage', 'Ferraillage, plans'], ['precontrainte', 'Précontrainte'], ['complements', 'Compléments'], ['appuis', 'Appuis'], ['seisme', 'Séisme'], ['retenue', 'Retenue'], ['notes', 'Notes']],
     etat: ['oui', 'oui', 'oui', 'oui', 'oui', 'oui', 'oui', 'oui'],
-    manque: 'à venir : pont-dalle coulé par phases successives (travée par travée, reprises avec coupleurs), avec la redistribution par fluage entre phases.',
   },
   poutres: {
     titre: 'Pont à poutres', sous: 'VIPP (post-tension), PRAD (pré-tension) et poutres en béton armé, travées indépendantes',

@@ -582,3 +582,8 @@ nomenclature des armatures de la dalle MX-FER-01 (transversales de la flexion lo
 (LM1 excentré), treillis du diaphragme sous le flux de Bredt, appareils sous les âmes (pression localisée § 6.7, diffusion
 § 6.5.3), éclatement des ancrages (§ 8.10.3) et tirants arrière des bossages 0,25 P (VSL 1991) ; nomenclature FL-FER-02.
 Manuel § 28.20.
+v0.98 : pont-dalle coulé par phases successives (src/phasage/dalle_phases.js, carte de l'onglet Précontrainte) : tronçons
+de reprise en reprise (α L au-delà des piles), décintrement et mise en tension par phase, familles de câbles du calcul PSI-DP
+couplées aux reprises ; calcul par phases (fluage, retrait, relaxation, frottement, recul) comparé à l'ouvrage coulé d'une
+traite ; béton armé : décintrement par phase ou unique ; reprises et coupleurs (EN 1992-2 § 8.10.4 (105) : 3 MPa de
+compression sous combinaison caractéristique ou ferraillage minimal (7.1)). Manuel § 28.21.
