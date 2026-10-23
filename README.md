@@ -476,4 +476,6 @@ retrait gêné), sur l'équation intégrale de Volterra résolue indépendamment
 Précontrainte par post-tension : câbles par segments excentrés, injectés après mise en tension, pertes différées par
 retrait, fluage et relaxation (§ 3.3.2) calculées pas à pas — recoupées avec l'éq. (5.46) à 3 % près et avec le moment
 hyperstatique 1,5 P·e ; adaptation par fluage recoupée avec le Bulletin technique Sétra n° 7 (1972), annexe I, et φ avec
-le guide Sétra EC2 ponts-routes (2008). Moteur seul : l'interface et les sections composées suivent.
+le guide Sétra EC2 ponts-routes (2008). Sections composées par barres décalées (poutre préfabriquée + hourdis coulé plus tard, voussoirs d'âges différents) :
+section homogène équivalente, retrait différentiel et invariance du fluage homogène vérifiés. Moteur seul : l'interface
+suit.

@@ -8,7 +8,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculPhasage, instants, relaxation } from '../src/phasage/phasage.js';
+import { calculPhasage, instants, relaxation, resultante } from '../src/phasage/phasage.js';
 import { betonEC2 } from '../src/phasage/fluage.js';
 
 const proche = (a, b, tol, lab) => assert.ok(Math.abs(a - b) <= tol * Math.abs(b), `${lab} : ${a} ≠ ${b} (tol ${tol})`);
@@ -176,4 +176,49 @@ test('Relaxation des aciers : NF EN 1992-1-1 éq. (3.29), classe 2, μ = 0,675, 
   const s0 = 0.75 * 1860 * 0.9, d = relaxation({ classe: 2, rho1000: 2.5 }, s0)(500000 / 24) / s0;
   proche(d, 0.66 * 2.5 * Math.exp(9.1 * 0.675) * 500 ** (0.75 * 0.325) * 1e-5, 1e-12, 'Δσ_pr/σ_pi');
   assert.ok(d > 0.03 && d < 0.04);
+});
+
+// ---------------------------------------------------------------- sections composées (barres décalées)
+const composite = (lois, { n = 20, Lc = 20, phases }) => {
+  const noeuds = Array.from({ length: n + 1 }, (_, k) => [k * Lc / n, 0]);
+  const parts = [{ A: 0.4, I: 0.03, e: 0, beton: 'P' }, { A: 0.5, I: 0.5 * 0.2 ** 2 / 12, e: 0.7, beton: 'H' }];
+  const barres = parts.flatMap((p, ip) => Array.from({ length: n }, (_, k) => ({ i: k, j: k + 1, ...p, nom: ip ? 'hourdis' : 'poutre' })));
+  return { r: calculPhasage({ noeuds, betons: lois, barres, phases: phases(n), tFin: phases.tFin ?? 0, parDecade: 16 }), n, Lc, parts };
+};
+const appuisIso = n => [{ n: 0, ddl: ['ux', 'uy'] }, { n, ddl: ['uy'] }];
+const tous = n => Array.from({ length: 2 * n }, (_, k) => k);
+
+test('Section composée (élastique) : poutre + hourdis décalé = section homogène équivalente (flèche, moment)', () => {
+  const E = 30000, { r, n, Lc, parts } = composite({ P: { loi: 'elastique', E }, H: { loi: 'elastique', E } },
+    { phases: n => [{ t: 0, activer: tous(n), appuis: appuisIso(n), charges: Array.from({ length: n }, (_, k) => ({ barre: k, w })) }] });
+  const A = parts.reduce((s0, p) => s0 + p.A, 0), yg = parts.reduce((s0, p) => s0 + p.A * p.e, 0) / A;
+  const I = parts.reduce((s0, p) => s0 + p.I + p.A * (p.e - yg) ** 2, 0);
+  proche(-r.final.u[3 * (n / 2) + 1], 5 * w * Lc ** 4 / (384 * E * 1000 * I), 0.01, 'flèche à mi-portée');
+  const R = resultante(r.final, [n / 2 - 1, 2 * n - 1 - (n / 2)], Lc / n);
+  proche(R.M, w * Lc * Lc / 8, 1e-6, 'moment de la section composée');
+  assert.ok(Math.abs(R.N) < 1e-6 * w * Lc);
+});
+
+test('Section composée : retrait différentiel du hourdis — efforts et courbure = calcul de section indépendant', () => {
+  const E = 30000, eps = -300e-6, { r, n, Lc, parts } = composite({ P: { loi: 'elastique', E }, H: { loi: 'elastique', E, epsInf: eps, T: 50 } },
+    { phases: Object.assign(n => [{ t: 0, activer: tous(n), appuis: appuisIso(n) }], { tFin: 5000 }) });
+  // ε(y) = ε0 − κ y ; Nk = E Ak (ε0 − κ ek − εsh,k), Mk = E Ik κ ; ΣN = 0, Σ(Mk − Nk ek) = 0
+  const sh = [0, eps * (1 - Math.exp(-5000 / 50))], Ek = E * 1000;
+  const a11 = parts.reduce((s0, p) => s0 + Ek * p.A, 0), a12 = -parts.reduce((s0, p) => s0 + Ek * p.A * p.e, 0);
+  const a21 = -parts.reduce((s0, p) => s0 + Ek * p.A * p.e, 0), a22 = parts.reduce((s0, p) => s0 + Ek * (p.I + p.A * p.e * p.e), 0);
+  const b1 = parts.reduce((s0, p, k) => s0 + Ek * p.A * sh[k], 0), b2 = -parts.reduce((s0, p, k) => s0 + Ek * p.A * sh[k] * p.e, 0);
+  const det = a11 * a22 - a12 * a21, e0 = (b1 * a22 - a12 * b2) / det, kap = (a11 * b2 - a21 * b1) / det;
+  const Nh = Ek * parts[1].A * (e0 - kap * parts[1].e - sh[1]);
+  proche(r.final.barres[2 * n - 1 - n / 2].N, Nh, 1e-3, 'effort normal du hourdis');
+  proche(-r.final.u[3 * (n / 2) + 1], kap * Lc * Lc / 8, 1e-3, 'flèche (courbure uniforme)');
+  assert.ok(Nh > 0, 'hourdis tendu par son retrait gêné');
+});
+
+test('Section composée homogène (même béton, même âge) : le fluage ne redistribue rien entre les parties', () => {
+  const o = { fck: 35, RH: 70, h0: 300, avecRetrait: false, tCoulage: 0 };
+  const { r, n } = composite({ P: o, H: o }, { phases: Object.assign(n => [{ t: 28, activer: tous(n), appuis: appuisIso(n), charges: Array.from({ length: n }, (_, k) => ({ barre: k, w })) }], { tFin: 10000 }) });
+  const k0 = r.pas.findIndex(p => p.t === 28), a = r.pas[k0].barres[2 * n - 1 - n / 2].N, b = r.final.barres[2 * n - 1 - n / 2].N;
+  proche(b, a, 1e-6, 'effort du hourdis constant');
+  const b2 = betonEC2(o), ratio = r.final.u[3 * (n / 2) + 1] / r.pas[k0].u[3 * (n / 2) + 1];
+  proche(ratio, b2.E(28) * b2.J(10000, 28), 1e-6, 'flèche × E(t0)·J(t, t0)');
 });

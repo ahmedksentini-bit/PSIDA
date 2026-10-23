@@ -50,7 +50,9 @@ export function instants(ta, tb, parDecade = 8, premier = 0.1) {
  * modele = {
  *   noeuds : [[x, y], …],
  *   betons : { clé: { loi?: 'ec2'|'dischinger'|'elastique', fck, RH, h0, ciment, ts, E, phiInf, T, epsInf, tCoulage (j) } },
- *   barres : [{ i, j, A (m²), I (m⁴), beton: clé, nom? }],
+ *   barres : [{ i, j, A (m²), I (m⁴), beton: clé, e? (décalage du centre de gravité, m, + vers y local), nom? }],
+ *            (section composée : une barre par partie — poutre préfabriquée, hourdis… — sur les mêmes nœuds, chacune
+ *             avec son béton, son décalage et sa phase d'activation ; maillage fin, l'effort normal étant constant par barre)
  *   phases : [{ t (j), nom?, activer?: [indices de barres], appuis?: [{ n, ddl: ['ux','uy','rz'] }],
  *               retirerAppuis?: [{ n, ddl }], liaisons?: [{ a, b, ddl: ['ux','uy','rz'], k? }],
  *               charges?: [{ barre, w }], nodales?: [{ n, F: [Fx, Fy, M] }] }],
@@ -66,6 +68,13 @@ export function instants(ta, tb, parDecade = 8, premier = 0.1) {
  * Renvoie { pas: [{ t, phase, barres: [{ N, Vi, Mi, Vj, Mj, Mmi }], cables: [{ cable, seg, N, P0, perte }], u, reactions }], phases: [indices de pas en fin de
  * phase (juste avant la suivante)], final, barre(k, t) }.
  */
+/** Efforts de la section composée (somme des parties actives) rapportés à la ligne des nœuds : N, M = Σ (Mₖ − Nₖ eₖ). */
+export function resultante(pasCalc, indices, x) {
+  let N = 0, M = 0;
+  for (const k of indices) { const r = pasCalc.barres[k]; if (!r) continue; N += r.N; M += r.M(x) - r.N * r.e; }
+  return { N, M };
+}
+
 export function calculPhasage(modele) {
   const { noeuds, barres, phases } = modele, nn = noeuds.length, nd = 3 * nn;
   const lois = Object.fromEntries(Object.entries(modele.betons).map(([k, o]) => [k, { ...loiBeton(o), tC: o.tCoulage ?? 0 }]));
@@ -84,7 +93,11 @@ export function calculPhasage(modele) {
   const mul = (A, x) => A.map(r => r.reduce((s, v, i) => s + v * x[i], 0));
   const tmul = (A, x) => A[0].map((_, j) => A.reduce((s, r, i) => s + r[j] * x[i], 0));
   const ddl = b => [3 * b.i, 3 * b.i + 1, 3 * b.i + 2, 3 * b.j, 3 * b.j + 1, 3 * b.j + 2];
-  for (const b of B) { b.Bm = Bm(b); b.T = T6(b); b.k1 = k1(b); b.dofs = ddl(b); }
+  // barre décalée (partie d'une section composée) : centre de gravité à e de la ligne des nœuds (y local), bras rigides :
+  // u_partie = u − e·θ, v_partie = v, θ_partie = θ  →  d = B₀ · O · u_local
+  const Om = e => { const O = Array.from({ length: 6 }, (_, a) => Array.from({ length: 6 }, (_, c) => (a === c ? 1 : 0))); O[0][2] = -e; O[3][5] = -e; return O; };
+  const mm = (A, Bx) => A.map(r => Bx[0].map((_, j) => r.reduce((s0, v, k) => s0 + v * Bx[k][j], 0)));
+  for (const b of B) { b.e = b.e || 0; b.Bm0 = Bm(b); b.O = Om(b.e); b.Bm = mm(b.Bm0, b.O); b.T = T6(b); b.k1 = k1(b); b.dofs = ddl(b); }
 
   // câbles de précontrainte : un segment rectiligne par barre, excentrements e_i, e_j (m, positifs vers y local)
   const S = [];
@@ -124,7 +137,7 @@ export function calculPhasage(modele) {
       const fImp = tmul(b.Bm, mul(kn, dImp));
       const w = chargesPas.get(b.k) || 0, qx = -w * b.s, qy = -w * b.c, L = b.L;
       const feq = [qx * L / 2, qy * L / 2, qy * L * L / 12, qx * L / 2, qy * L / 2, -qy * L * L / 12];
-      const fg = tmul(b.T, fImp.map((v, a) => v + feq[a]));
+      const fg = tmul(b.T, fImp.map((v, a) => v + tmul(b.O, feq)[a]));
       for (let a = 0; a < 6; a++) R[b.dofs[a]] += fg[a];
       etat.push({ En, dImp, kn, feq, w });
     }
@@ -173,10 +186,10 @@ export function calculPhasage(modele) {
       barres: B.map(b => {
         if (!b.actif) return null;
         // efforts aux extrémités (sur la barre, repère local) : f = Bᵀ q − f_eq
-        const f = tmul(b.Bm, b.q).map((v, a) => v - b.feq[a]);
+        const f = tmul(b.Bm0, b.q).map((v, a) => v - b.feq[a]);   // au centre de gravité de la barre
         const qy = -b.wTot * b.c, L = b.L;
         const Mx = x => -f[2] + f[1] * x + qy * x * x / 2;
-        return { N: b.q[0], Vi: f[1], Mi: Mx(0), Vj: -f[4], Mj: Mx(L), Mmi: Mx(L / 2), M: Mx };
+        return { N: b.q[0], Vi: f[1], Mi: Mx(0), Vj: -f[4], Mj: Mx(L), Mmi: Mx(L / 2), M: Mx, e: b.e };
       }),
     });
   }

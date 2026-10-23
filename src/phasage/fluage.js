@@ -78,8 +78,8 @@ export function betonNonVieillissant({ E = 30000, phiInf = 2, T = 100 } = {}) {
   return { type: 'nonVieillissant', E: () => E, J: (t, tau) => (1 + ph(t - tau)) / E, phi: (t, tau) => ph(t - tau), retrait: () => 0 };
 }
 
-/** Loi élastique (sans fluage ni retrait) : contrôle des calculs par phases instantanés. */
-export function betonElastique({ E = 30000 } = {}) { return { type: 'elastique', E: () => E, J: () => 1 / E, phi: () => 0, retrait: () => 0 }; }
+/** Loi élastique (sans fluage ; retrait optionnel ε∞ (1 − e^{−t/T})) : contrôle des calculs par phases. */
+export function betonElastique({ E = 30000, epsInf = 0, T = 100 } = {}) { return { type: 'elastique', E: () => E, J: () => 1 / E, phi: () => 0, retrait: t => epsInf * (1 - Math.exp(-Math.max(t, 0) / T)) }; }
 
 export function loiBeton(o = {}) {
   if (o.loi === 'dischinger') return betonDischinger(o);
