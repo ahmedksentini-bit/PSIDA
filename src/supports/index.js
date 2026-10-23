@@ -46,7 +46,8 @@ export function seismicActions(st, sp, hGG, spLigne = null) {
   const projet = EC8.lireProjet(JSON.parse(JSON.stringify(toPontEC8({ ...st, supports: { sp, hGG, spLigne } }, { site: sp.ec8, q: sp.seisme.q }))));
   const problemes = EC8.valider(projet);
   const a = EC8.actionSismique(projet), m = EC8.modele(projet), r = EC8.analyse(projet, a, m);
-  const site = { ag: a.ag, S: a.S, ST: a.ST ?? 1, g: projet.options?.g ?? 9.81 };
+  // action du site pour les efforts propres des culées (a_g, S, S_T) ; `site` reste réservé aux zone, catégorie et sol
+  const actionSite = { ag: a.ag, S: a.S, ST: a.ST ?? 1, g: projet.options?.g ?? 9.81 };
   // repos d'appui (EN 1998-2 6.6.4) : culées, et piles d'un tablier à travées indépendantes
   let repos = null;
   try { const v = EC8.verifierAppuis(projet, a, m, r); repos = v.repos.map(q => ({ ...q, etat: (v.criteres.find(c => c.id === `${q.id}_repos`) || {}).etat })); } catch { repos = null; }
@@ -57,13 +58,13 @@ export function seismicActions(st, sp, hGG, spLigne = null) {
     const mm = EC8.multimodale(projet, a, m, r), efforts = EC8.exporterEfforts(projet, a, r, { multimodale: mm }, 'multimodale');
     const T1 = d => (mm.comparaison.find(c => c.direction === d) || {}).T1 ?? 0;
     const F = d => efforts.appuis.reduce((s, ap) => s + Math.abs(d === 'x' ? ap.cas[0].Fx : ap.cas[1].Fy), 0);
-    return { projet, problemes, efforts, repos, site, methode: 'multimodale', motifMethode: choix.motif, T: { x: T1('x'), y: T1('y') }, F: { x: F('x'), y: F('y') }, M: r.M, conditions: r.conditions };
+    return { projet, problemes, efforts, repos, actionSite, methode: 'multimodale', motifMethode: choix.motif, T: { x: T1('x'), y: T1('y') }, F: { x: F('x'), y: F('y') }, M: r.M, conditions: r.conditions };
   }
   // effort total = somme des efforts reçus par les appuis (comme l'onglet « Calcul sismique ») : en travées indépendantes, les
   // modes sont combinés appui par appui (SRSS / CQC), et la somme des combinaisons dépasse un peu la combinaison du total
   const efforts = EC8.exporterEfforts(projet, a, r);
   const F = d => efforts.appuis.reduce((s, ap) => s + Math.abs(d === 'x' ? ap.cas[0].Fx : ap.cas[1].Fy), 0);
-  return { projet, problemes, repos, efforts, site, methode: projet.tablier.continuite === 'isostatique' ? 'travees_independantes' : 'mode_fondamental', T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T }, F: { x: F('x'), y: F('y') }, Fglobal: { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 }, M: r.M, conditions: r.conditions };
+  return { projet, problemes, repos, efforts, actionSite, methode: projet.tablier.continuite === 'isostatique' ? 'travees_independantes' : 'mode_fondamental', T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T }, F: { x: F('x'), y: F('y') }, Fglobal: { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 }, M: r.M, conditions: r.conditions };
 }
 
 /** Action sismique du site (a_g, S, S_T) pour les efforts propres des culées quand les efforts viennent de l'onglet. */
@@ -406,10 +407,10 @@ function calculAppuis(st, input = {}) {
   if (sp.seisme.actif) {
     if (sp.seisme.source === 'onglet') seisme = externalSeismic(sp.seisme.externe, nL, deck.spans);
     else { try { seisme = seismicActions(st, sp, hGG, parLigne ? xs.map((_, i) => SL(i)) : null); } catch (e) { seisme = { error: e.message }; } }
-    if (seisme && seisme.efforts && !seisme.site) { try { seisme.site = siteSismique(st, sp, hGG, parLigne ? xs.map((_, i) => SL(i)) : null); } catch { seisme.site = null; } }
+    if (seisme && seisme.efforts && !seisme.actionSite) { try { seisme.actionSite = siteSismique(st, sp, hGG, parLigne ? xs.map((_, i) => SL(i)) : null); } catch { seisme.actionSite = null; } }
   }
   // culées : efforts sismiques propres (inertie, poussée dynamique), k_h = a_g S S_T / g (r = 1)
-  const khCulee = seisme && seisme.site ? seisme.site.ag * seisme.site.S * (seisme.site.ST || 1) / (seisme.site.g || 9.81) : 0;
+  const khCulee = seisme && seisme.actionSite ? seisme.actionSite.ag * seisme.actionSite.S * (seisme.actionSite.ST || 1) / (seisme.actionSite.g || 9.81) : 0;
   // inertie propre des fûts (Pont EC8, export des efforts) : effort tranchant et moment au pied, par direction
   const futOf = k => (k.fut ? { fut: { Fx: Math.abs(k.fut.Fx), Mx: Math.abs(k.fut.Mx), Fy: Math.abs(k.fut.Fy), My: Math.abs(k.fut.My) } } : {});
   const accidental = (i, Nfreq) => {

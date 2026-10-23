@@ -35,11 +35,14 @@ test('Mononobe-Okabe : Rankine pour k_h = 0, valeur de référence φ = 30°, k_
   close(r.F3, 0.2 * 20 * 36 * 10, 1e-12, 'culée rigide : ΔP_d');
 });
 
-test('appuis du pont-dalle en zone 4 : culées (F1, F3) et inertie des fûts ajoutées aux combinaisons sismiques', () => {
+test('appuis du pont-dalle en zone 4 : culées (F1, F3) et inertie des fûts ajoutées aux combinaisons sismiques', async () => {
   const st = compute(parseData({ ...formDefaults(), ap_seisme: 'on', ap_zone: '4' }));
   const S = st.supports, C = S.lines[0].EC, P = S.lines[1].EC;
   assert.ok(C.seisme && C.seisme.F1 > 0 && C.seisme.F3 > 0 && C.seisme.connexion === 'flexible');
-  close(C.seisme.kh, S.seisme.site.ag * S.seisme.site.S * S.seisme.site.ST / 9.81, 1e-9, 'k_h = a_g S S_T / g');
+  const A = S.seisme.actionSite; close(C.seisme.kh, A.ag * A.S * A.ST / 9.81, 1e-9, 'k_h = a_g S S_T / g');
+  assert.ok(S.seisme.site === undefined || S.seisme.site.zone !== undefined, 'site (zone, catégorie, sol) non écrasé');
+  const txt = JSON.stringify((await import('../web/supports_view.js')).supportsBlocks(S, 'EC'));
+  assert.ok(!/Zone undefined/.test(txt) && /Effort propre/.test(txt));
   // culée : la combinaison sismique X dominante porte F1 + F3 en plus des efforts des appareils
   const bx = C.base.find(b => b.sis && /^ACC séisme X/.test(b.label) && !b.fond);
   assert.ok(bx && Math.abs(bx.sisInst.H - (C.seisme.F1 + C.seisme.F3)) < 1e-6);
