@@ -479,3 +479,7 @@ hyperstatique 1,5 P·e ; adaptation par fluage recoupée avec le Bulletin techni
 le guide Sétra EC2 ponts-routes (2008). Sections composées par barres décalées (poutre préfabriquée + hourdis coulé plus tard, voussoirs d'âges différents) :
 section homogène équivalente, retrait différentiel et invariance du fluage homogène vérifiés. Moteur seul : l'interface
 suit.
+v0.85 : onglet « Phasage » — tablier à poutres préfabriquées précontraintes rendues continues (src/phasage/exemples.js,
+web/phasage_view.js) : phases de construction (pose et mise en tension, hourdis, clavage, superstructures), moments de la
+section composée à chaque phase, évolution dans le temps, diagrammes, pertes différées des câbles, note HTML et Word,
+export du modèle JSON ; manuel § 28.

@@ -222,3 +222,20 @@ test('Section composée homogène (même béton, même âge) : le fluage ne redi
   const b2 = betonEC2(o), ratio = r.final.u[3 * (n / 2) + 1] / r.pas[k0].u[3 * (n / 2) + 1];
   proche(ratio, b2.E(28) * b2.J(10000, 28), 1e-6, 'flèche × E(t0)·J(t, t0)');
 });
+
+test('Modèle type « poutres rendues continues » : câblage du générateur (élastique) et note', async () => {
+  const { poutresContinues, DEFAUTS_POUTRES, momentsRemarquables } = await import('../src/phasage/exemples.js');
+  const p = { ...DEFAUTS_POUTRES, cable: { ...DEFAUTS_POUTRES.cable, P: 0 } };
+  const { modele, reperes } = poutresContinues(p);
+  modele.betons = { P: { loi: 'elastique', E: 35000, tCoulage: 0 }, H: { loi: 'elastique', E: 35000, tCoulage: 60 } };
+  const r = calculPhasage(modele), m = momentsRemarquables(r.final, reperes, resultante);
+  // sans fluage : seules les superstructures (posées après clavage) voient la continuité — trois travées égales
+  proche(m.appuis[0], -0.1 * p.gSup * p.L ** 2, 0.01, 'moment sur appui 1 (maillage de 10 barres)');
+  proche(m.travees[1], (p.poutre.A + p.hourdis.A) * p.gBeton * p.L ** 2 / 8 + 0.025 * p.gSup * p.L ** 2, 0.01, 'mi-travée centrale');
+  // avec les lois de l'Eurocode : le moment sur appui devient moins négatif que −0,1 g L²… ou plus, mais il évolue
+  const { computePhasage, phasageBlocks } = await import('../web/phasage_view.js');
+  const out = computePhasage({}), B = phasageBlocks(out);
+  assert.ok(B.some(b => b.t === 'svg') && B.some(b => b.t === 'table'));
+  const ma = momentsRemarquables(out.r.final, out.reperes, resultante).appuis[0];
+  assert.ok(Math.abs(ma + 0.1 * 8 * 625) > 20, 'redistribution par fluage et retrait visible');
+});
