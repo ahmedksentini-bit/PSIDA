@@ -5,7 +5,7 @@
 //  · { source: "pont-ec8", type: "pret" } à l'ouverture, pour que PSIDA envoie un projet en attente.
 
 import { actionSismique } from "../moteur/action.ts";
-import { analyse } from "../moteur/analyse.ts";
+import { analyse, methodeRetenue } from "../moteur/analyse.ts";
 import { exporterEfforts, type SourcesEfforts } from "../moteur/export-efforts.ts";
 import { pontIsole } from "../moteur/isolation.ts";
 import { temporelLineaire, type Temporel } from "../moteur/temporel.ts";
@@ -53,7 +53,7 @@ let cacheTemporel: { cle: string; t: Temporel } | null = null;
 
 /** Sources de la méthode d'efforts choisie (projet.options.methodeEfforts). */
 export function sourcesEfforts(p: Projet, a: ActionSismique, m: Modele, r: Analyse): { methode: MethodeEfforts; sources: SourcesEfforts } {
-  const methode = p.options.methodeEfforts ?? "mode_fondamental";
+  const { methode } = methodeRetenue(p, r);
   if (methode === "multimodale") return { methode, sources: { multimodale: multimodale(p, a, m, r) } };
   if (methode === "temporel_lineaire") {
     const cle = JSON.stringify({ ...p, nom: "" });

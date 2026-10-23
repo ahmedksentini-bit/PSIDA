@@ -82,5 +82,9 @@ export function ouvrir(st, { form, onApply, goField, solve }) {
       t.disabled = false;
     }
   };
+  // hauteur bornée à 85 % de la fenêtre réelle : sous un zoom CSS de la page (affichage agrandi), les unités vh sont
+  // multipliées par le zoom et le panneau débordait (bouton Fermer hors de l'écran) ; l'en-tête reste collé en haut
+  const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+  dlg.style.maxHeight = `${Math.floor(0.85 * window.innerHeight / zoom)}px`;
   if (!dlg.open) dlg.showModal();
 }

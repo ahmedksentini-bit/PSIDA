@@ -39,8 +39,8 @@ function modeleSismique(S, iso) {
   const L = { elastomere: 'élastomère', fixe: 'appareils fixes', glissant: 'appareils glissants' };
   const lia = pr ? ` ; liaisons ${pr.appuis.map(a => `${a.id} ${L[a.appareils.type] || a.appareils.type}`).join(', ')}` : '';
   const mod = iso ? 'travées indépendantes : chaque travée sur sa rangée d\'appareils à chaque about (deux rangées par pile), une translation par travée en X et une poutre par travée en Y, piles en console, modes jusqu\'à 90 % de la masse (EN 1998-2 4.2.1), repos d\'appui sur chaque pile (6.6.4)'
-    : S.methode === 'multimodale' ? 'analyse multimodale sur le modèle à tablier flexible (ouvrage construit par encorbellements, hors du domaine du mode fondamental — guide Cerema 2015, ch. 4 § 5.3.1)'
-      : 'tablier rigide, efforts répartis selon les raideurs (appareils et fûts)';
+    : S.methode === 'multimodale' ? `analyse multimodale sur le modèle à tablier flexible (${S.motifMethode ? S.motifMethode.replace(/^analyse multimodale retenue d'office : /, 'hors du domaine du mode fondamental — ') + ', EN 1998-2 4.2.2' : pr && pr.tablier.type === 'caisson' ? 'ouvrage construit par encorbellements, hors du domaine du mode fondamental — guide Cerema 2015, ch. 4 § 5.3.1' : 'méthode demandée'})`
+      : `tablier rigide${(() => { const c = (S.conditions || []).find(x => x.id === 'L_sur_B'); return c ? ` (${c.valeur} : EN 1998-2 4.2.2.3, L/B ≤ 4 ou Δd/da ≤ 0,20)` : ''; })()}, efforts répartis selon les raideurs (appareils et fûts)`;
   // fondations : le modèle sismique (Pont EC8) encastre les fûts en pied, sur semelles comme sur pieux
   const fond = 'fondations supposées rigides (fûts encastrés en pied, sur semelles comme sur pieux) : la souplesse du sol et des pieux, qui allonge les périodes et modifie la répartition entre appuis, n\'est pas modélisée — à examiner pour les sols mous et les pieux longs (interaction sol-structure, EN 1998-5, section 6)';
   return `${tab}${lia} ; ${mod} ; ${fond}`;

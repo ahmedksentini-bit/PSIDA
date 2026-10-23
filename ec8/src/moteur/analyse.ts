@@ -3,13 +3,14 @@
 // Unités : t, MN, MN/m, m, s, m/s².
 
 import { derives } from "../projet/geometrie.ts";
-import type { Projet } from "../projet/types.ts";
+import type { MethodeEfforts, Projet } from "../projet/types.ts";
 import { TABLEAU_B_VERTICAL } from "../referentiel/modele.ts";
 import type { ActionSismique } from "./action.ts";
 import type { Borne, Direction, Modele } from "./modele.ts";
 import { nombre, tex, type LigneNote, type SectionNote } from "./note.ts";
 import { valeur, type FormeSpectre } from "./spectres.ts";
-import { reponseDirection } from "./multimodal.ts";
+import { modeleDynamique, reponseDirection } from "./multimodal.ts";
+import { cholesky } from "./valeurs-propres.ts";
 
 export interface EffortAppui {
   id: string;
@@ -70,6 +71,46 @@ export interface Analyse {
 
 const BORNES: Borne[] = ["lbdp", "ubdp"];
 
+/**
+ * Second critère du tablier rigide en transversal (EN 1998-2 4.2.2.3(1)) : Δd/da ≤ 0,20, où Δd est l'écart maximal et da
+ * la moyenne des déplacements transversaux du tablier sous une force transversale répartie comme les masses (accélération
+ * uniforme), calculés sur le modèle à tablier flexible (poutre sur appuis élastiques). Pire des deux bornes de raideur.
+ * Renvoie null si le calcul est impossible (système singulier).
+ */
+export function ecartDeplacementTransversal(p: Projet, m: Modele): number | null {
+  try {
+    let pire = 0;
+    for (const b of BORNES) {
+      const md = modeleDynamique(p, m, "y", b), n = md.n;
+      const F = md.M.map((l) => l.reduce((s, x, j) => s + x * (md.r[j] ?? 0), 0));
+      const L = cholesky(md.K), y = new Array<number>(n).fill(0), u = new Array<number>(n).fill(0);
+      for (let i = 0; i < n; i++) { let t = F[i]!; for (let k = 0; k < i; k++) t -= L[i]![k]! * y[k]!; y[i] = t / L[i]![i]!; }
+      for (let i = n - 1; i >= 0; i--) { let t = y[i]!; for (let k = i + 1; k < n; k++) t -= L[k]![i]! * u[k]!; u[i] = t / L[i]![i]!; }
+      const d = md.tablier.ddl.map((k) => u[k]!), moy = d.reduce((s, x) => s + x, 0) / d.length;
+      if (!(moy > 0)) return null;
+      pire = Math.max(pire, (Math.max(...d) - Math.min(...d)) / moy);
+    }
+    return pire;
+  } catch { return null; }
+}
+
+/** Conditions dont le non-respect sort l'ouvrage du domaine de la méthode du mode fondamental (EN 1998-2 4.2.2.2, 4.2.2.3). */
+export const CONDITIONS_BLOQUANTES = ["masse_piles", "L_sur_B"] as const;
+
+/**
+ * Méthode d'efforts effectivement retenue. Une méthode choisie explicitement (options.methodeEfforts) est respectée, même
+ * hors domaine (les conditions non respectées restent signalées). Sans choix : mode fondamental si ses conditions
+ * d'application sont respectées, sinon analyse multimodale (tablier souple en transversal quand L/B > 4, masse des piles
+ * ≥ 20 % de celle du tablier), qui n'a pas ces limites.
+ */
+export function methodeRetenue(p: Projet, r: Analyse): { methode: MethodeEfforts; motif: string | null } {
+  const choisie = p.options.methodeEfforts;
+  if (choisie) return { methode: choisie, motif: null };
+  const horsDomaine = r.conditions.filter((c) => !c.respectee && (CONDITIONS_BLOQUANTES as readonly string[]).includes(c.id));
+  if (!horsDomaine.length) return { methode: "mode_fondamental", motif: null };
+  return { methode: "multimodale", motif: `analyse multimodale retenue d'office : ${horsDomaine.map((c) => `${c.libelle} non respectée (${c.valeur})`).join(" ; ")}` };
+}
+
 /** Interpolation linéaire dans une ligne du tableau 22 (Ψ = 0,5 à 1,0). */
 function interpoler(ligne: Record<string, number>, psi: number): number {
   const pts = Object.entries(ligne).map(([k, v]) => [Number(k.replace("Ψ = ", "").replace(",", ".")), v] as const).sort((a, b) => a[0] - b[0]);
@@ -93,6 +134,9 @@ export function analyse(p: Projet, a: ActionSismique, m: Modele): Analyse {
   const massePiles = m.masses.piles.reduce((s, x) => s + x.masseFuts, 0);
   const rapportMasse = massePiles / M;
   const LsurB = L / p.tablier.largeur;
+  // second critère (Δd/da) seulement quand le premier échoue : il demande une résolution du modèle à tablier flexible
+  const dSurDa = LsurB > 4 && !(p.tablier.continuite === "isostatique" && p.tablier.travees.length > 1) ? ecartDeplacementTransversal(p, m) : null;
+  const rigideT = LsurB <= 4 || (dSurDa !== null && dSurDa <= 0.2);
   const iso = p.tablier.continuite === "isostatique" && p.tablier.travees.length > 1;
   const conditions: Condition[] = iso ? [
     {
@@ -123,13 +167,13 @@ export function analyse(p: Projet, a: ActionSismique, m: Modele): Analyse {
     },
     {
       id: "L_sur_B",
-      libelle: "Tablier rigide en transversal : L/B ≤ 4",
-      valeur: `L/B = ${nombre(LsurB, 2)}`,
-      respectee: LsurB <= 4,
+      libelle: "Tablier rigide en transversal : L/B ≤ 4 ou Δd/da ≤ 0,20",
+      valeur: LsurB <= 4 ? `L/B = ${nombre(LsurB, 2)}` : `L/B = ${nombre(LsurB, 2)} ; Δd/da = ${dSurDa === null ? "non calculable" : nombre(dSurDa, 2)}`,
+      respectee: rigideT,
       references: ["tablier_rigide"],
-      conseils: LsurB <= 4 ? undefined : [
-        `Le tablier n'est pas rigide en transversal : il faudrait B ≥ L/4 = ${nombre(L / 4, 2)} m (B = ${nombre(p.tablier.largeur, 2)} m).`,
-        "Choisir la méthode multimodale, qui tient compte de la souplesse transversale du tablier (onglet Méthodes).",
+      conseils: rigideT ? undefined : [
+        `Le tablier n'est pas rigide en transversal : L/B > 4 et Δd/da > 0,20 ; il faudrait B ≥ L/4 = ${nombre(L / 4, 2)} m (B = ${nombre(p.tablier.largeur, 2)} m) ou des appuis plus souples par rapport au tablier.`,
+        "Sans méthode choisie, PSIDA retient alors l'analyse multimodale, qui tient compte de la souplesse transversale du tablier (onglet Méthodes).",
       ],
     },
   ];

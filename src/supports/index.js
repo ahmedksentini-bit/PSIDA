@@ -17,7 +17,7 @@ import { requiredSteelNM } from './section_nm.js';
 import { winklerPile, pileGroup, headFlexibility, pileProfile, pileShear, pileCapFiles, blevot } from './psh.js';
 import { minorationSurface } from '../geotech/lateral.js';
 import { pierWater } from './water.js';
-import { bearingSpacing, STANDARD_BEARINGS, designation, checkBearing } from '../bearings.js';
+import { bearingSpacing, STANDARD_BEARINGS, designation, checkBearing, totalHeight } from '../bearings.js';
 import { verifyBearing1337 } from './bearings1337.js';
 import { localPressure, bearingSplitting, shortCorbel } from './pierhead.js';
 import { toPontEC8 } from '../ec8export.js';
@@ -48,12 +48,14 @@ export function seismicActions(st, sp, hGG, spLigne = null) {
   // repos d'appui (EN 1998-2 6.6.4) : culées, et piles d'un tablier à travées indépendantes
   let repos = null;
   try { const v = EC8.verifierAppuis(projet, a, m, r); repos = v.repos.map(q => ({ ...q, etat: (v.criteres.find(c => c.id === `${q.id}_repos`) || {}).etat })); } catch { repos = null; }
-  // méthode demandée par le projet (caissons construits par encorbellements : multimodale)
-  if (projet.options.methodeEfforts === 'multimodale') {
+  // méthode demandée par le projet (caissons construits par encorbellements : multimodale) ; sans demande, mode fondamental
+  // dans son domaine (masse des piles < 20 %, tablier rigide L/B ≤ 4 : EN 1998-2 4.2.2.2-4.2.2.3), multimodale sinon
+  const choix = EC8.methodeRetenue(projet, r);
+  if (choix.methode === 'multimodale') {
     const mm = EC8.multimodale(projet, a, m, r), efforts = EC8.exporterEfforts(projet, a, r, { multimodale: mm }, 'multimodale');
     const T1 = d => (mm.comparaison.find(c => c.direction === d) || {}).T1 ?? 0;
     const F = d => efforts.appuis.reduce((s, ap) => s + Math.abs(d === 'x' ? ap.cas[0].Fx : ap.cas[1].Fy), 0);
-    return { projet, problemes, efforts, repos, methode: 'multimodale', T: { x: T1('x'), y: T1('y') }, F: { x: F('x'), y: F('y') }, M: r.M, conditions: r.conditions };
+    return { projet, problemes, efforts, repos, methode: 'multimodale', motifMethode: choix.motif, T: { x: T1('x'), y: T1('y') }, F: { x: F('x'), y: F('y') }, M: r.M, conditions: r.conditions };
   }
   // effort total = somme des efforts reçus par les appuis (comme l'onglet « Calcul sismique ») : en travées indépendantes, les
   // modes sont combinés appui par appui (SRSS / CQC), et la somme des combinaisons dépasse un peu la combinaison du total
@@ -130,6 +132,36 @@ const EiB = fc => 11000 * fc ** (1 / 3), EvB = fc => 3700 * fc ** (1 / 3), Ecm =
  * @param {object} st résultats de compute() (pipeline) ; @param {object} input données « Appuis » (voir SUPPORT_DEFAULTS)
  */
 export function computeSupports(st, input = {}) {
+  const r = calculAvecSemelles(st, input);
+  // appareils choisis automatiquement (règles du guide 1989) qui ne vérifient pas la NF EN 1337-3 alors qu'un appareil de
+  // la gamme la vérifie : cet appareil est retenu et le calcul est refait (raideurs des lignes, répartition des efforts
+  // horizontaux, têtes d'appui). Les appareils imposés par l'utilisateur ne sont jamais remplacés.
+  const rows = st.bearings && st.bearings.rows;
+  if (!rows) return r;
+  const remplace = new Map();
+  r.lines.forEach((L, i) => {
+    const b = L.EC && L.EC.brg, row = rows[i];
+    if (!b || b.error || b.ok || !b.proposal || !row || !row.sel || row.sel.imposed) return;
+    const p0 = b.proposal.bd, a = Math.round(p0.a * 1000), bb = Math.round(p0.b * 1000), t = Math.round(p0.t * 1000), ts = Math.round(p0.ts * 1000);
+    const std = STANDARD_BEARINGS.find(x => x.a === a && x.b === bb) || { a, b: bb, t, ts, ns: [p0.n] };
+    const bd = { ...std, t, ts };
+    const g = row.Pmax != null && row.ug != null ? checkBearing(bd, p0.n, { Pmax: row.Pmax, Pmin: row.Pmin ?? 0, H: row.Hb ?? 0, ug: row.ug, alpha: row.alpha ?? 0.003 }) : { T: p0.n * p0.t };
+    remplace.set(i, { ...row.sel, ...g, bd, n: p0.n, area: a * bb, label: designation(bd, p0.n), hTot: totalHeight(bd, p0.n), ajusteEN1337: { de: row.sel.label || b.label } });
+  });
+  if (!remplace.size) return r;
+  const st2 = { ...st, bearings: { ...st.bearings, rows: rows.map((row, i) => (remplace.has(i) ? { ...row, sel: remplace.get(i) } : row)) } };
+  const r2 = calculAvecSemelles(st2, input);
+  for (const [i, sel] of remplace) {
+    const L = r2.lines[i]; if (!L) continue;
+    (L.warnings ||= []).push(`appareil ${sel.label} retenu au lieu de ${sel.ajusteEN1337.de} (choisi par les règles du guide 1989) : seul le premier vérifie la NF EN 1337-3 sous les mêmes efforts${L.EC && L.EC.brg && !L.EC.brg.ok ? ' — il ne la vérifie toujours pas après le nouveau calcul, voir le tableau des appareils' : ''}`);
+    L.appareilAjuste = { de: sel.ajusteEN1337.de, a: sel.label };
+  }
+  // appareils effectivement retenus : repris par l'export vers l'onglet « Calcul sismique » (Pont EC8)
+  r2.bearingsRetenus = st2.bearings;
+  return r2;
+}
+
+function calculAvecSemelles(st, input) {
   // semelles superficielles de largeur B non donnée (B vide) : dimensionnées ligne par ligne (plus petite largeur, par pas de
   // 0,25 m, qui vérifie portance, glissement et excentrement dans toutes les combinaisons, à vide comprise), puis second
   // calcul avec ces largeurs pour que la rotation des semelles dans la répartition des efforts horizontaux leur corresponde

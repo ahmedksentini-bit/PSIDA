@@ -121,13 +121,31 @@ export function checkBearing(bd, n, { Pmax, Pmin, H, ug, alpha, G1 = 0.8, G2 = 1
   return { ok, sig, sigLim, sigMin, dist1, dist2, T, Tmax, rotLim, f, antiCheminement: sigMin < sigMinAdm, glissement: H > f * Pmin, glissantNecessaire: ug > Math.min(a, b) / 10, checks };
 }
 
-/** Plus petit appareil standard (aire puis épaisseur croissantes) vérifiant toutes les conditions. */
+/**
+ * Plus petit appareil standard (aire puis épaisseur croissantes) vérifiant toutes les conditions.
+ * opt.sigMinPerm [MPa] : exige en plus σ_m,min = P_G,min/A′ ≥ sigMinPerm sous charges permanentes seules (loads.PminG, ou
+ * loads.Pmin à défaut), A′ = (a − 2c)(b − 2c), c = 5 mm d'enrobage latéral — critère de la NF EN 1337-3 pour un appareil
+ * non ancré (guide Sétra 2007, § 3.4.1.5 : 3 MPa). Si aucun appareil ne le satisfait, la sélection sans ce critère est
+ * rendue avec ancrageNecessaire = true (appareil à ancrer, ou moins d'appareils par ligne).
+ */
 export function selectBearing(loads, opt = {}) {
+  const { sigMinPerm = null, ...o } = opt;
   const cands = [];
   for (const bd of STANDARD_BEARINGS) for (const n of bd.ns) cands.push({ bd, n, area: bd.a * bd.b, T: n * bd.t });
   cands.sort((p, q) => p.area - q.area || p.T - q.T);
-  for (const c of cands) { const r = checkBearing(c.bd, c.n, { ...loads, ...opt }); if (r.ok) return { ...c, ...r, label: designation(c.bd, c.n), hTot: totalHeight(c.bd, c.n) }; }
-  return null;
+  const PG = loads.PminG ?? loads.Pmin;
+  const sigPermOf = bd => (PG > 0 ? PG / ((bd.a / 1000 - 0.01) * (bd.b / 1000 - 0.01)) / 1000 : 0);
+  let premier = null;
+  for (const c of cands) {
+    const r = checkBearing(c.bd, c.n, { ...loads, ...o });
+    if (!r.ok) continue;
+    const sel = { ...c, ...r, label: designation(c.bd, c.n), hTot: totalHeight(c.bd, c.n), sigPerm: sigPermOf(c.bd) };
+    if (sigMinPerm === null || sel.sigPerm >= sigMinPerm - 1e-9) return sel;
+    premier ||= sel;
+  }
+  // les appareils sont triés par aire croissante : si le plus petit appareil vérifié est déjà trop peu comprimé, aucun ne
+  // l'est assez ; on garde le plus petit, signalé
+  return premier ? { ...premier, ancrageNecessaire: true } : null;
 }
 
 /**

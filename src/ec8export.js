@@ -22,8 +22,10 @@ const betonClasse = fck => { const c = CLASSES.find(([f]) => f >= fck) || CLASSE
  *   q: { long, trans }, g }
  */
 export function toPontEC8(st, opt = {}) {
-  const { p, deck, perm, bearings, supports } = st;
+  const { p, deck, perm, supports } = st;
   if (!supports) throw new Error('Calcul des appuis indisponible : export Pont EC8 impossible.');
+  // appareils retenus par le calcul des appuis (remplacés quand le choix du guide 1989 ne vérifiait pas la NF EN 1337-3)
+  const bearings = supports.bearingsRetenus || st.bearings;
   const sp = supports.sp, width = 2 * deck.b;
   // données propres à chaque ligne (plan de nivellement : hauteurs, semelles, pieux)
   const spL = i => (supports.spLigne && supports.spLigne[i]) || sp;

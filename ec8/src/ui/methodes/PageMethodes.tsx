@@ -188,13 +188,17 @@ const METHODES_EFFORTS: { id: MethodeEfforts; titre: string }[] = [
 
 /** Méthode dont les efforts partent vers PSIDA (« Appuis et fondations ») et dans le fichier exporté. */
 function ChoixEfforts({ projet, modifier }: { projet: Projet; modifier: (f: (p: Projet) => void) => void }) {
-  const choix = projet.options.methodeEfforts ?? "mode_fondamental";
+  const choix: MethodeEfforts | "auto" = projet.options.methodeEfforts ?? "auto";
   const q = { x: projet.comportement.qLongitudinal, y: projet.comportement.qTransversal };
   const regle = (v: number) => (choix === "pont_isole" ? "effets avec q = 1" : v <= 1.5 ? `AEd × q (q = ${f(v, 2)})` : `dimensionnement en capacité des piles, γ0 M_Rd, plafonné à q·AEd (q = ${f(v, 2)})`);
   return (
     <section className="carte-plate choix-efforts">
       <h2>Efforts transmis à PSIDA</h2>
       <div className="segments" role="group" aria-label="Méthode des efforts exportés">
+        <button type="button" aria-pressed={choix === "auto"} title="Mode fondamental si ses conditions d'application sont respectées (masse des piles < 20 %, L/B ≤ 4), sinon multimodale"
+          onClick={() => modifier((p) => { delete p.options.methodeEfforts; })}>
+          Automatique
+        </button>
         {METHODES_EFFORTS.map((x) => (
           <button key={x.id} type="button" aria-pressed={choix === x.id} disabled={x.id === "pont_isole" && !projet.isolation}
             title={x.id === "pont_isole" && !projet.isolation ? "Définir d'abord une variante isolée (sous-onglet Pont isolé)" : undefined}
@@ -206,7 +210,7 @@ function ChoixEfforts({ projet, modifier }: { projet: Projet; modifier: (f: (p: 
       <p className="aide-bloc">
         Efforts par appui (UBDP, combinaisons 100/30/30) envoyés vers « Appuis et fondations » de PSIDA et dans le fichier exporté. Fûts et appareils : effets de l'action
         de calcul AEd. Fondations (EN 1998-2 5.8.2) : en X, {regle(q.x)} ; en Y, {regle(q.y)}. La poussée progressive et le temporel non linéaire servent de vérification
-        et ne transmettent pas d'efforts.{choix === "temporel_lineaire" ? " Le calcul temporel (quelques secondes) est refait à chaque modification du projet." : ""}
+        et ne transmettent pas d'efforts.{choix === "auto" ? " Automatique : mode fondamental dans son domaine (EN 1998-2 4.2.2.2 et 4.2.2.3 : masse des piles < 20 % du tablier, tablier rigide L/B ≤ 4), analyse multimodale sinon." : ""}{choix === "temporel_lineaire" ? " Le calcul temporel (quelques secondes) est refait à chaque modification du projet." : ""}
       </p>
     </section>
   );

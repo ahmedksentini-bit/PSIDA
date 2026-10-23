@@ -125,12 +125,12 @@ function bearingsTable(st) {
       <td>u_g = ${f1(r.ug * 1000)} mm<br>H = ${f1(r.Hb)} kN<br>α = ${f1(r.alpha * 1000)} mrad</td>`;
     if (s) {
       const obs = [];
-      if (s.antiCheminement) obs.push(`σ_min = ${f1(s.sigMin)} MPa &lt; 2 MPa : risque de cheminement, prévoir un dispositif anti-cheminement (taquets) ou augmenter la charge permanente par appareil (moins d'appareils)`);
+      if (s.antiCheminement) obs.push(`σ_min = ${f1(s.sigMin)} MPa &lt; 2 MPa (guide 1989, Fascicule 61) : risque de cheminement, prévoir un dispositif anti-cheminement (taquets) ou augmenter la charge permanente par appareil (moins d'appareils). En Eurocodes, c'est la NF EN 1337-3 qui s'applique : σ_m,min ≥ 3 MPa sous charges permanentes seules sur l'aire A′ pour un appareil non ancré, vérifié dans l'onglet Appuis`);
       if (s.glissement) obs.push(`H &gt; f·P_min (f = ${f2(s.f)}) : risque de glissement, bloquer l'appareil`);
       if (s.glissantNecessaire) obs.push(`u_g &gt; min(a, b)/10 : appareil glissant élastomère + PTFE (§ 3.6.2)`);
       if (s.imposed && !s.ok) obs.unshift(`appareil imposé ne vérifiant pas : ${Object.entries(s.checks).filter(([, v]) => !v).map(([k]) => ({ compression: 'compression', distorsionVide: 'distorsion u_g/T', distorsionCharge: 'distorsion sous charge', deversement: 'épaisseur T ≤ a/5', rotation: 'rotation' })[k]).join(', ')}`);
       h += `<td><b>${s.label}</b>${s.imposed ? ' <span class="small">(imposé)</span>' : ''}<br><span class="small">hauteur ${s.hTot} mm</span></td>
-      <td class="chk">σ = ${f1(s.sig)} ≤ ${f1(s.sigLim)} MPa<br>u_g/T = ${f2(s.dist1)} ≤ 0,5<br>u_g/T + H/(G₂ab) = ${f2(s.dist2)} ≤ 0,7<br>T = ${(s.T * 1000).toFixed(0)} ≤ a/5 = ${(s.Tmax * 1000).toFixed(0)} mm<br>α = ${f1(r.alpha * 1000)} ≤ ${f1(s.rotLim * 1000)} mrad<br>σ_min = ${f1(s.sigMin)} ${s.antiCheminement ? '<b class="ko">&lt; 2</b>' : '≥ 2'} MPa</td>
+      <td class="chk">σ = ${f1(s.sig)} ≤ ${f1(s.sigLim)} MPa<br>u_g/T = ${f2(s.dist1)} ≤ 0,5<br>u_g/T + H/(G₂ab) = ${f2(s.dist2)} ≤ 0,7<br>T = ${(s.T * 1000).toFixed(0)} ≤ a/5 = ${(s.Tmax * 1000).toFixed(0)} mm<br>α = ${f1(r.alpha * 1000)} ≤ ${f1(s.rotLim * 1000)} mrad<br>σ_min = ${f1(s.sigMin)} ${s.antiCheminement ? '<b class="ko">&lt; 2</b>' : '≥ 2'} MPa <span class="small">(guide 1989 ; NF EN 1337-3 : 3 MPa sous G seul, onglet Appuis)</span></td>
       <td>${obs.length ? obs.map(o => `<div class="obs">${o}</div>`).join('') : '<span class="badge ok">OK</span>'}</td></tr>`;
     } else h += `<td colspan="3"><span class="badge warn">ATTENTION</span>aucun appareil standard ne convient : augmenter le nombre d'appareils par ligne, appareils sur mesure ou à pot d'élastomère (§ 3.7)</td></tr>`;
   }

@@ -57,8 +57,8 @@ export function standaloneState(inp, supportsInput) {
     else if (inp.bearing) {
       const bd = STANDARD_BEARINGS.find(b => b.a === inp.bearing.bd.a && b.b === inp.bearing.bd.b) || { ...inp.bearing.bd, ns: [inp.bearing.n] };
       sel = { bd: { ...bd, t: inp.bearing.bd.t, ts: inp.bearing.bd.ts }, n: inp.bearing.n, T: inp.bearing.n * inp.bearing.bd.t / 1000 };
-      sel.label = designation(sel.bd, sel.n); sel.hTot = totalHeight(sel.bd, sel.n);
-    } else sel = selectBearing(loads);
+      sel.label = designation(sel.bd, sel.n); sel.hTot = totalHeight(sel.bd, sel.n); sel.imposed = true;
+    } else sel = selectBearing(loads, { sigMinPerm: 3 });   // NF EN 1337-3 : σ_m,min ≥ 3 MPa sous G seul (appareil non ancré)
     return { i, x: xs[i], nb: nbL(i), Rmax: l.G + Qmax, Rmin: l.Gmin, kCP: 1, kQ: 1, Pmax, sel, liaison: liaison(i), auto: !(inp.liaisons && inp.liaisons[i]) };
   });
   // liaisons non saisies où aucun élastomère fretté standard ne convient (réaction trop forte) : appareils à pot ; la ligne

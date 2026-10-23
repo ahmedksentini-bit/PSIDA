@@ -117,7 +117,7 @@
   .reco-btn .reco-n.ok { background:#2a8f6a; }
   dialog.reco { width:min(900px, calc(100vw - 32px)); max-height:85vh; overflow:auto; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--ink); padding:16px 20px; }
   dialog.reco::backdrop { background:rgba(0,0,0,.35); }
-  .reco-tete { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  .reco-tete { display:flex; justify-content:space-between; align-items:center; gap:12px; position:sticky; top:-16px; z-index:1; background:var(--card); padding:8px 0; margin-top:-8px; border-bottom:1px solid var(--line); }
   .reco-tete h2 { margin:0; }
   .reco-tete button { width:auto; margin:0; }
   .reco-item { border-top:1px solid var(--line); padding:8px 0; }

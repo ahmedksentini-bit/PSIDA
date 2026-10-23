@@ -4,7 +4,7 @@ export { lireProjet } from "../src/projet/stockage.ts";
 export { valider } from "../src/projet/validation.ts";
 export { actionSismique } from "../src/moteur/action.ts";
 export { modele } from "../src/moteur/modele.ts";
-export { analyse } from "../src/moteur/analyse.ts";
+export { analyse, methodeRetenue } from "../src/moteur/analyse.ts";
 export { multimodale } from "../src/moteur/multimodal.ts";
 export { verifierAppuis } from "../src/moteur/verif-appuis.ts";
 export { exporterEfforts } from "../src/moteur/export-efforts.ts";
