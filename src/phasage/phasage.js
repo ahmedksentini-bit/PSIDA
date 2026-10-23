@@ -21,6 +21,7 @@
  */
 import { solve } from '../linalg.js';
 import { loiBeton } from './fluage.js';
+import { pertesInstantanees } from './precontrainte.js';
 
 const DDL = { ux: 0, uy: 1, rz: 2 };
 
@@ -58,7 +59,8 @@ export function instants(ta, tb, parDecade = 8, premier = 0.1) {
  *               charges?: [{ barre, w }], nodales?: [{ n, F: [Fx, Fy, M] }] }],
  *   cables?: [{ nom?, Ap (m²), Ep (MPa, 195 000), fpk (1 860), rho1000 (2,5 %), classe (2), relax (1),
  *               phase (indice de la phase de mise en tension), P (kN, après pertes instantanées : nombre ou tableau par
- *               segment), segments: [{ barre, ei, ej }] (excentrements par rapport à la ligne moyenne, m, + vers y local) }],
+ *               segment) — ou P0 (force au vérin) avec mu, k, g, tension ('gauche'|'droite'|'deux') : pertes par frottement
+ *               et recul d'ancrage calculées (precontrainte.js), segments: [{ barre, ei, ej }] (excentrements par rapport à la ligne moyenne, m, + vers y local) }],
  *   tFin (j), parDecade?
  * }
  * Câbles : post-tension, force P appliquée au béton seul puis câble injecté (adhérent) ; il suit ensuite les
@@ -101,8 +103,15 @@ export function calculPhasage(modele) {
 
   // câbles de précontrainte : un segment rectiligne par barre, excentrements e_i, e_j (m, positifs vers y local)
   const S = [];
+  const instant = [];
   (modele.cables || []).forEach((c, ic) => {
     const Ep = (c.Ep ?? 195000) * 1000, segs = c.segments || [];
+    // force au vérin P0 donnée : pertes par frottement et recul d'ancrage (§ 5.10.5.2 et 5.10.5.3)
+    if (c.P == null && c.P0 != null) {
+      const geo = segs.map(g => { const b = B[g.barre], ei = g.ei ?? 0, ej = g.ej ?? ei; return { L: Math.hypot(b.L, ej - ei), alpha: Math.atan2(b.s, b.c) + Math.atan((ej - ei) / b.L) }; });
+      const pi = pertesInstantanees(c, geo);
+      c = { ...c, P: pi.P }; instant[ic] = pi;
+    }
     segs.forEach((g, is) => {
       const b = B[g.barre], dL = (g.ej ?? g.ei ?? 0) - (g.ei ?? 0), Ls = Math.hypot(b.L, dL), ca = b.L / Ls, sa = dL / Ls;
       const ei = g.ei ?? 0, ej = g.ej ?? ei;
@@ -227,5 +236,5 @@ export function calculPhasage(modele) {
   let tp = tCour;
   for (const t of instants(tCour, modele.tFin ?? tCour, modele.parDecade || 8)) { resoudre(t, tp, new Float64Array(nd), new Map()); tp = t; photographie(t, phases.length - 1); }
   finPhase.push(pas.length - 1);
-  return { pas, finPhase, final: pas[pas.length - 1], barres: B.map(b => ({ nom: b.nom, L: b.L, i: b.i, j: b.j })) };
+  return { pas, finPhase, final: pas[pas.length - 1], barres: B.map(b => ({ nom: b.nom, L: b.L, i: b.i, j: b.j })), pertesInstantanees: instant };
 }

@@ -483,3 +483,8 @@ v0.85 : onglet « Phasage » — tablier à poutres préfabriquées précontrain
 web/phasage_view.js) : phases de construction (pose et mise en tension, hourdis, clavage, superstructures), moments de la
 section composée à chaque phase, évolution dans le temps, diagrammes, pertes différées des câbles, note HTML et Word,
 export du modèle JSON ; manuel § 28.
+v0.86 : phasage — pertes instantanées de précontrainte (src/phasage/precontrainte.js : frottement § 5.10.5.2, recul
+d'ancrage § 5.10.5.3 avec zone d'influence λ, tension par une ou deux extrémités), recoupées avec la solution exacte du
+frottement exponentiel ; fléaux construits par encorbellements successifs (trois travées a – 2a – a, voussoirs d'âges
+différents, équipage mobile, câbles de fléau et de continuité, clavages, hauteur parabolique et I ∝ h^5/2 du BT n° 7) ;
+manuel § 28.6 et 28.7.

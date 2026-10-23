@@ -31,7 +31,8 @@ export function lirePhasage(d = {}) {
     poutre: { A: num(d.ph_pA, D.poutre.A), I: num(d.ph_pI, D.poutre.I), fck: num(d.ph_pfck, D.poutre.fck), RH: num(d.ph_RH, D.poutre.RH), h0: num(d.ph_ph0, D.poutre.h0), ciment: d.ph_pcim || D.poutre.ciment },
     hourdis: { A: num(d.ph_hA, D.hourdis.A), I: num(d.ph_hI, D.hourdis.I), e: num(d.ph_he, D.hourdis.e), fck: num(d.ph_hfck, D.hourdis.fck), RH: num(d.ph_RH, D.hourdis.RH), h0: num(d.ph_hh0, D.hourdis.h0), ciment: d.ph_hcim || D.hourdis.ciment },
     gBeton: num(d.ph_gb, D.gBeton), gSup: num(d.ph_gsup, D.gSup),
-    cable: { Ap: num(d.ph_Ap, D.cable.Ap * 1e4) / 1e4, P: num(d.ph_P, D.cable.P), eMi: num(d.ph_eMi, D.cable.eMi), eAbout: num(d.ph_eAb, D.cable.eAbout), classe: Math.round(num(d.ph_classe, 2)), rho1000: num(d.ph_rho, 2.5) },
+    cable: { Ap: num(d.ph_Ap, D.cable.Ap * 1e4) / 1e4, P: num(d.ph_P, D.cable.P), eMi: num(d.ph_eMi, D.cable.eMi), eAbout: num(d.ph_eAb, D.cable.eAbout), classe: Math.round(num(d.ph_classe, 2)), rho1000: num(d.ph_rho, 2.5),
+      ...(d.ph_pinst === 'calcul' ? { P0: num(d.ph_P0, 4000), mu: num(d.ph_mu, 0.19), k: num(d.ph_k, 0.007), g: num(d.ph_g, 6) / 1000, tension: d.ph_tens || 'deux' } : {}) },
     dates: { tension: num(d.ph_t1, D.dates.tension), hourdis: num(d.ph_t2, D.dates.hourdis), continuite: num(d.ph_t3, D.dates.continuite), superstructures: num(d.ph_t4, D.dates.superstructures), fin: num(d.ph_t5, D.dates.fin) },
     parDecade: D.parDecade,
   };
@@ -54,7 +55,7 @@ export function poutresContinues(p = DEFAUTS_POUTRES) {
   // câble parabolique par travée : e(x) = e_about + (e_mi − e_about)·4ξ(1 − ξ), segments rectilignes par barre
   const ex = xi => C.eAbout + (C.eMi - C.eAbout) * 4 * xi * (1 - xi);
   const cables = Array.from({ length: n }, (_, s) => ({
-    nom: `câble T${s + 1}`, Ap: C.Ap, P: C.P, phase: 0, classe: C.classe, rho1000: C.rho1000,
+    nom: `câble T${s + 1}`, Ap: C.Ap, ...(C.P0 != null ? { P0: C.P0, mu: C.mu, k: C.k, g: C.g, tension: C.tension } : { P: C.P }), phase: 0, classe: C.classe, rho1000: C.rho1000,
     segments: Array.from({ length: nb }, (_, k) => ({ barre: iP[s * nb + k], ei: ex(k / nb), ej: ex((k + 1) / nb) })),
   }));
   const appuis = [{ n: debut[0], ddl: ['ux', 'uy'] }, { n: fin[0], ddl: ['uy'] }];
@@ -100,4 +101,131 @@ export function diagramme(pasCalc, R, resultante, m = 4) {
     const x = q * L / nb / m; pts.push([s * L + k * L / nb + x, resultante(pasCalc, [iP[s * nb + k], iH[s * nb + k]], x).M]);
   }
   return pts;
+}
+
+/* ======================================================================================================================
+ * Fléaux construits par encorbellements successifs (Bulletin technique Sétra n° 7, 1972) : trois travées a – 2a – a,
+ * deux fléaux symétriques sur les piles P1 et P2, bétonnés voussoir par voussoir avec un équipage mobile, câbles de fléau
+ * tendus après chaque paire de voussoirs, clavage central et clavage des travées de rive sur les culées, câbles de
+ * continuité, superstructures.
+ * Hauteur variable : h(ξ) = h_c + (h_p − h_c)(1 − ξ)², ξ = 0 sur pile, 1 en bout de fléau ; inertie I = I_c (h/h_c)^{5/2}
+ * (hypothèse du programme MCP du Sétra, BT n° 7 § 2.222) ; aire interpolée de même entre A_p et A_c. La ligne des nœuds
+ * est droite (le c.d.g. réel suit la hauteur : les excentrements des câbles sont comptés depuis le c.d.g. local).
+ * ==================================================================================================================== */
+export const DEFAUTS_FLEAU = {
+  a: 40, nv: 8, l0: 8, hp: 4.0, hc: 2.0, Ac: 6.0, Ap: 9.0, Ic: 4.2, vh: 0.42,
+  fck: 40, RH: 70, h0: 400, ciment: 'R', gBeton: 25, gSup: 60, Qeq: 400,
+  cable: { Ap: 0.0021, P0: 3000, mu: 0.19, k: 0.007, g: 0.006, enrob: 0.15, classe: 2, rho1000: 2.5 },
+  continuite: { n: 2, nv: 4, Ap: 0.0021, P0: 3000 },
+  dates: { cycle: 7, durc: 3, clavage: 90, continuite: 95, superstructures: 120, fin: 36500 },
+  parDecade: 6,
+};
+
+export function lireFleau(d = {}) {
+  const D = DEFAUTS_FLEAU;
+  return {
+    a: num(d.fl_a, D.a), nv: Math.max(1, Math.round(num(d.fl_nv, D.nv))), l0: num(d.fl_l0, D.l0),
+    hp: num(d.fl_hp, D.hp), hc: num(d.fl_hc, D.hc), Ac: num(d.fl_Ac, D.Ac), Ap: num(d.fl_Ap, D.Ap), Ic: num(d.fl_Ic, D.Ic), vh: num(d.fl_vh, D.vh),
+    fck: num(d.fl_fck, D.fck), RH: num(d.fl_RH, D.RH), h0: num(d.fl_h0, D.h0), ciment: d.fl_cim || D.ciment,
+    gBeton: num(d.fl_gb, D.gBeton), gSup: num(d.fl_gsup, D.gSup), Qeq: num(d.fl_Qeq, D.Qeq),
+    cable: { Ap: num(d.fl_cAp, D.cable.Ap * 1e4) / 1e4, P0: num(d.fl_cP0, D.cable.P0), mu: num(d.fl_mu, D.cable.mu), k: num(d.fl_k, D.cable.k), g: num(d.fl_g, D.cable.g * 1000) / 1000, enrob: num(d.fl_enr, D.cable.enrob), classe: 2, rho1000: 2.5 },
+    continuite: { n: Math.max(0, Math.round(num(d.fl_ccn, D.continuite.n))), nv: Math.max(1, Math.round(num(d.fl_ccv, D.continuite.nv))), Ap: num(d.fl_ccAp, D.continuite.Ap * 1e4) / 1e4, P0: num(d.fl_ccP0, D.continuite.P0) },
+    dates: { cycle: num(d.fl_cyc, D.dates.cycle), durc: num(d.fl_dur, D.dates.durc), clavage: num(d.fl_tcl, D.dates.clavage), continuite: num(d.fl_tcc, D.dates.continuite), superstructures: num(d.fl_tsup, D.dates.superstructures), fin: num(d.fl_tfin, D.dates.fin) },
+    parDecade: D.parDecade,
+  };
+}
+
+export function fleaux(p = DEFAUTS_FLEAU) {
+  const { a, nv, l0, hp, hc, Ac, Ap: Apile, Ic, vh, cable: C, dates: T } = p;
+  const lv = (a - l0 / 2) / nv;
+  if (!(lv > 0)) throw new Error('voussoir sur pile plus long que le fléau');
+  const tFinFleau = nv * T.cycle + T.durc;
+  if (!(T.clavage >= tFinFleau && T.continuite >= T.clavage && T.superstructures >= T.continuite && T.fin >= T.superstructures)) throw new Error(`dates incohérentes : le dernier voussoir est activé à ${tFinFleau} j ; il faut clavage ≥ ${tFinFleau} j, puis continuité, superstructures et fin croissants`);
+  const h = xi => hc + (hp - hc) * (1 - xi) ** 2, Ax = xi => Ac + (Apile - Ac) * (1 - xi) ** 2, Ix = xi => Ic * (h(xi) / hc) ** 2.5;
+  const eHaut = xi => vh * h(xi) - C.enrob, eBas = xi => -((1 - vh) * h(xi) - C.enrob);
+  const noeuds = [], barres = [], betons = {};
+  // distances depuis l'axe de pile des nœuds d'un demi-fléau : l0/2, puis + lv
+  const r = [0, l0 / 2]; for (let k = 1; k <= nv; k++) r.push(l0 / 2 + k * lv);
+  const piles = [a, 3 * a], F = [];
+  for (let f = 0; f < 2; f++) {
+    const xp = piles[f], ids = { G: [], D: [], pile: null };
+    ids.pile = noeuds.length; noeuds.push([xp, 0]);
+    for (let k = 1; k < r.length; k++) { ids.G.push(noeuds.length); noeuds.push([xp - r[k], 0]); }
+    for (let k = 1; k < r.length; k++) { ids.D.push(noeuds.length); noeuds.push([xp + r[k], 0]); }
+    // barres : VSP (k = 0) puis voussoirs k = 1..nv, côté gauche (de la pile vers le bout) et côté droit
+    const bG = [], bD = [];
+    for (let k = 0; k <= nv; k++) {
+      const xi = (r[k] + r[k + 1]) / 2 / a, cle = `V${k}`;
+      betons[cle] = { fck: p.fck, RH: p.RH, h0: p.h0, ciment: p.ciment, tCoulage: k === 0 ? 0 : (k - 1) * T.cycle + T.cycle };
+      const ni = k === 0 ? ids.pile : ids.G[k - 1], nj = ids.G[k], mi = k === 0 ? ids.pile : ids.D[k - 1], mj = ids.D[k];
+      bG.push(barres.length); barres.push({ i: nj, j: ni, A: Ax(xi), I: Ix(xi), beton: cle, nom: `F${f + 1} G${k}`, xi0: r[k + 1] / a, xi1: r[k] / a });
+      bD.push(barres.length); barres.push({ i: mi, j: mj, A: Ax(xi), I: Ix(xi), beton: cle, nom: `F${f + 1} D${k}`, xi0: r[k] / a, xi1: r[k + 1] / a });
+    }
+    F.push({ ids, bG, bD, xp });
+  }
+  const w = k => barres[F[0].bG[k]].A * p.gBeton;
+  // câble de fléau k : du bout gauche du voussoir k au bout droit, par-dessus la pile (excentrement en fibre supérieure)
+  const segFleau = (f, k) => {
+    const s = [];
+    for (let q = k; q >= 0; q--) { const b = barres[F[f].bG[q]]; s.push({ barre: F[f].bG[q], ei: eHaut(b.xi0), ej: eHaut(b.xi1) }); }
+    for (let q = 0; q <= k; q++) { const b = barres[F[f].bD[q]]; s.push({ barre: F[f].bD[q], ei: eHaut(b.xi0), ej: eHaut(b.xi1) }); }
+    return s;
+  };
+  const phases = [], cables = [];
+  const tension = (k, iPh) => { for (let f = 0; f < 2; f++) cables.push({ nom: `fléau F${f + 1}-${k}`, Ap: C.Ap, P0: C.P0, mu: C.mu, k: C.k, g: C.g, tension: 'deux', classe: C.classe, rho1000: C.rho1000, phase: iPh, segments: segFleau(f, k) }); };
+  const bout = (f, cote, k) => (k === 0 ? (cote === 'G' ? F[f].ids.G[0] : F[f].ids.D[0]) : (cote === 'G' ? F[f].ids.G[k] : F[f].ids.D[k]));
+  // phase 0 : voussoirs sur pile, encastrement provisoire sur pile
+  phases.push({ t: 0, nom: 'Voussoirs sur pile (encastrement provisoire)', activer: [...F[0].bG.slice(0, 1), ...F[0].bD.slice(0, 1), ...F[1].bG.slice(0, 1), ...F[1].bD.slice(0, 1)],
+    appuis: [{ n: F[0].ids.pile, ddl: ['ux', 'uy', 'rz'] }, { n: F[1].ids.pile, ddl: ['ux', 'uy', 'rz'] }],
+    charges: [...F[0].bG.slice(0, 1), ...F[0].bD.slice(0, 1), ...F[1].bG.slice(0, 1), ...F[1].bD.slice(0, 1)].map(b => ({ barre: b, w: w(0) })),
+    nodales: p.Qeq ? [0, 1].flatMap(f => [{ n: bout(f, 'G', 0), F: [0, -p.Qeq, 0] }, { n: bout(f, 'D', 0), F: [0, -p.Qeq, 0] }]) : [] });
+  tension(0, 0);
+  for (let k = 1; k <= nv; k++) {
+    const tc = k * T.cycle, W = w(k) * lv;
+    // béton frais porté par l'équipage, au bout du voussoir k − 1 : force W et moment W·lv/2
+    const frais = sgn => [0, 1].flatMap(f => [{ n: bout(f, 'G', k - 1), F: [0, -W * sgn, W * lv / 2 * sgn] }, { n: bout(f, 'D', k - 1), F: [0, -W * sgn, -W * lv / 2 * sgn] }]);
+    phases.push({ t: tc, nom: `Bétonnage des voussoirs ${k}`, nodales: frais(1) });
+    const eq = p.Qeq ? [0, 1].flatMap(f => [{ n: bout(f, 'G', k - 1), F: [0, p.Qeq, 0] }, { n: bout(f, 'D', k - 1), F: [0, p.Qeq, 0] }, ...(k < nv ? [{ n: bout(f, 'G', k), F: [0, -p.Qeq, 0] }, { n: bout(f, 'D', k), F: [0, -p.Qeq, 0] }] : [])]) : [];
+    phases.push({ t: tc + T.durc, nom: `Voussoirs ${k} : décoffrage, câbles de fléau, avancement de l'équipage${k === nv ? ' (dépose)' : ''}`,
+      activer: [0, 1].flatMap(f => [F[f].bG[k], F[f].bD[k]]), nodales: [...frais(-1), ...eq], charges: [0, 1].flatMap(f => [F[f].bG[k], F[f].bD[k]]).map(b => ({ barre: b, w: w(k) })) });
+    tension(k, phases.length - 1);
+  }
+  // clavages : central (bouts D de F1 et G de F2) et culées sous les bouts extrêmes ; pose sur appareils d'appui
+  phases.push({ t: T.clavage, nom: 'Clavages (central et sur culées), pose sur appareils d’appui', liaisons: [{ a: F[0].ids.D[nv], b: F[1].ids.G[nv], ddl: ['ux', 'uy', 'rz'] }],
+    appuis: [{ n: F[0].ids.G[nv], ddl: ['uy'] }, { n: F[1].ids.D[nv], ddl: ['uy'] }], retirerAppuis: [{ n: F[0].ids.pile, ddl: ['rz'] }, { n: F[1].ids.pile, ddl: ['ux', 'rz'] }] });
+  // câbles de continuité (fibre inférieure) dans la travée centrale, sur les nv voussoirs de part et d'autre de la clé
+  const iCont = phases.length;
+  phases.push({ t: T.continuite, nom: 'Câbles de continuité de la travée centrale' });
+  const cc = p.continuite;
+  for (let q = 0; q < cc.n; q++) {
+    const segs = [];
+    for (let k = nv - cc.nv + 1; k <= nv; k++) { const b = barres[F[0].bD[k]]; segs.push({ barre: F[0].bD[k], ei: eBas(b.xi0), ej: eBas(b.xi1) }); }
+    for (let k = nv; k >= nv - cc.nv + 1; k--) { const b = barres[F[1].bG[k]]; segs.push({ barre: F[1].bG[k], ei: eBas(b.xi0), ej: eBas(b.xi1) }); }
+    cables.push({ nom: `continuité ${q + 1}`, Ap: cc.Ap, P0: cc.P0, mu: C.mu, k: C.k, g: C.g, tension: 'deux', classe: C.classe, rho1000: C.rho1000, phase: iCont, segments: segs });
+  }
+  phases.push({ t: T.superstructures, nom: 'Superstructures', charges: barres.map((_, i) => ({ barre: i, w: p.gSup })) });
+  return {
+    modele: { noeuds, barres: barres.map(({ xi0, xi1, ...b }) => b), betons, phases, cables, tFin: T.fin, parDecade: p.parDecade || 6 },
+    reperes: { F, nv, a, lv, l0, eHaut, eBas, h },
+  };
+}
+
+/** Moments de la section aux points remarquables d'un calcul de fléaux : sur piles (côté travée centrale) et à la clé. */
+export function momentsFleau(pasCalc, R) {
+  const { F, nv } = R, b = pasCalc.barres;
+  const surPile = f => { const r = b[F[f].bD[0]]; return r ? r.Mi : null; };
+  const cle = () => { const r = b[F[0].bD[nv]]; return r ? r.Mj : null; };
+  const rive = () => { const r = b[F[0].bG[Math.floor(nv / 2)]]; return r ? r.Mi : null; };
+  return { P1: surPile(0), P2: surPile(1), cle: cle(), rive: rive() };
+}
+
+/** Diagramme du moment le long de l'ouvrage (barres actives). */
+export function diagrammeFleau(pasCalc, R, modele, m = 3) {
+  const pts = [];
+  modele.barres.forEach((bb, k) => {
+    const r = pasCalc.barres[k]; if (!r) return;
+    const [xi] = modele.noeuds[bb.i], [xj] = modele.noeuds[bb.j], L = Math.abs(xj - xi);
+    for (let q = 0; q <= m; q++) pts.push([xi + (xj - xi) * q / m, r.M(L * q / m)]);
+  });
+  return pts.sort((u, v) => u[0] - v[0]);
 }

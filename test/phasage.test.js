@@ -239,3 +239,62 @@ test('Modèle type « poutres rendues continues » : câblage du générateur (�
   const ma = momentsRemarquables(out.r.final, out.reperes, resultante).appuis[0];
   assert.ok(Math.abs(ma + 0.1 * 8 * 625) > 20, 'redistribution par fluage et retrait visible');
 });
+
+// ---------------------------------------------------------------- pertes instantanées (§ 5.10.5)
+test('Pertes instantanées : frottement exponentiel, recul d’ancrage (λ = √(g E_p A_p / p)), aire conservée', async () => {
+  const { pertesInstantanees } = await import('../src/phasage/precontrainte.js');
+  const Ap = 0.003, EpAp = 195e6 * Ap, P0 = 4000, mu = 0.19, k = 0.007, g = 0.006;
+  const segs = Array.from({ length: 10 }, () => ({ L: 4, alpha: 0 }));
+  const r = pertesInstantanees({ P0, mu, k, g, Ap }, segs);
+  proche(r.avant[r.avant.length - 1], P0 * Math.exp(-mu * k * 40), 1e-12, 'frottement en bout');
+  const p = P0 * mu * k, lam = Math.sqrt(g * EpAp / p);
+  // exact (frottement exponentiel, a = μk) : 2 P0 [(1 − e^{−aλ})/a − λ e^{−aλ}] = g E_p A_p ; ≈ √(g E_p A_p / p) à 1–2 %
+  const a = mu * k, F = l => 2 * P0 * ((1 - Math.exp(-a * l)) / a - l * Math.exp(-a * l)) - g * EpAp;
+  let lo = 0, hi = 40; for (let it = 0; it < 100; it++) { const m = (lo + hi) / 2; if (F(m) > 0) hi = m; else lo = m; }
+  proche(r.lambda[0], lo, 2e-3, 'λ exact'); proche(r.lambda[0], lam, 0.02, 'λ ≈ √(g E_p A_p / p)');
+  proche(r.avant[0] - r.apres[0], 2 * P0 * (1 - Math.exp(-a * lo)), 2e-3, 'perte à l’ancrage');
+  const aire = (a, b) => { let s0 = 0; for (let i = 1; i < r.x.length; i++) s0 += ((a[i - 1] - b[i - 1]) + (a[i] - b[i])) / 2 * (r.x[i] - r.x[i - 1]); return s0; };
+  proche(aire(r.avant, r.apres), g * EpAp, 1e-6, 'aire de la perte = E_p A_p g');
+  // câble court : λ dépasse la longueur, tout le câble est affecté, aire conservée
+  const c = pertesInstantanees({ P0, mu, k, g, Ap }, [{ L: 6, alpha: 0 }]);
+  assert.equal(c.lambda[0], 6); proche((() => { let s0 = 0; for (let i = 1; i < c.x.length; i++) s0 += ((c.avant[i - 1] - c.apres[i - 1]) + (c.avant[i] - c.apres[i])) / 2 * (c.x[i] - c.x[i - 1]); return s0; })(), g * EpAp, 1e-6, 'aire, câble court');
+});
+
+test('Pertes instantanées : câble parabolique (déviations angulaires) et mise en tension par les deux extrémités', async () => {
+  const { pertesInstantanees } = await import('../src/phasage/precontrainte.js');
+  const L = 30, f = 0.9, n = 12, ex = x => -4 * f * x / L * (1 - x / L);
+  const segs = Array.from({ length: n }, (_, i) => { const a = i * L / n, b = a + L / n; return { L: Math.hypot(L / n, ex(b) - ex(a)), alpha: Math.atan((ex(b) - ex(a)) / (L / n)) }; });
+  const theta = Math.abs(segs[n - 1].alpha - segs[0].alpha), Ls = segs.reduce((s0, q) => s0 + q.L, 0);
+  const r = pertesInstantanees({ P0: 3000, mu: 0.19, k: 0.007, g: 0.006, Ap: 0.0025 }, segs);
+  proche(r.avant[r.avant.length - 1], 3000 * Math.exp(-0.19 * (theta + 0.007 * Ls)), 1e-9, 'frottement en bout, θ = somme des déviations');
+  assert.ok(theta > 0.9 * 8 * f / L && theta < 8 * f / L, `θ = ${theta}`);
+  const d = pertesInstantanees({ P0: 3000, mu: 0.19, k: 0.007, g: 0.006, Ap: 0.0025, tension: 'deux' }, segs);
+  d.P.forEach((v, i) => proche(v, d.P[n - 1 - i], 1e-9, 'symétrie'));
+  assert.ok(Math.min(...d.P) > Math.min(...r.P), 'deux extrémités : moins de pertes au milieu');
+});
+
+test('Pertes instantanées dans le calcul par phases : P0 au vérin → forces par segment', () => {
+  const r = calculPhasage({ noeuds: [[0, 0], [10, 0], [20, 0]], betons: { B: { loi: 'elastique', E: 35000 } },
+    barres: [{ i: 0, j: 1, A: 1, I: 0.1, beton: 'B' }, { i: 1, j: 2, A: 1, I: 0.1, beton: 'B' }],
+    phases: [{ t: 0, activer: [0, 1], appuis: [{ n: 0, ddl: ['ux', 'uy'] }, { n: 2, ddl: ['uy'] }] }],
+    cables: [{ Ap: 0.003, P0: 4000, mu: 0.19, k: 0.007, g: 0.006, phase: 0, segments: [{ barre: 0, ei: 0, ej: -0.4 }, { barre: 1, ei: -0.4, ej: 0 }] }], tFin: 0 });
+  const pi = r.pertesInstantanees[0];
+  r.final.cables.forEach((c, i) => proche(c.N, pi.P[i], 1e-9, 'force injectée'));
+  assert.ok(pi.P[0] < 4000 && pi.P[1] < pi.P[0] + 1e-9 || pi.lambda[0] > 10);
+});
+
+test('Fléaux par encorbellements (élastique, sans câbles ni équipage) : moment sur pile = console sous poids propre', async () => {
+  const { fleaux, DEFAUTS_FLEAU, momentsFleau } = await import('../src/phasage/exemples.js');
+  const p = { ...DEFAUTS_FLEAU, Qeq: 0, cable: { ...DEFAUTS_FLEAU.cable, P0: 0 }, continuite: { ...DEFAUTS_FLEAU.continuite, n: 0 } };
+  const { modele, reperes } = fleaux(p);
+  modele.cables = [];
+  for (const k of Object.keys(modele.betons)) modele.betons[k] = { loi: 'elastique', E: 36000, tCoulage: modele.betons[k].tCoulage };
+  const r = calculPhasage(modele);
+  // console de droite du fléau 1 : M(pile) = −Σ w_k ℓ_k d_k (barres D0…Dnv)
+  let M = 0; for (const b of reperes.F[0].bD) { const bb = modele.barres[b], [xi] = modele.noeuds[bb.i], [xj] = modele.noeuds[bb.j]; M -= bb.A * p.gBeton * (xj - xi) * ((xi + xj) / 2 - reperes.F[0].xp); }
+  const kFin = r.finPhase[modele.phases.findIndex(ph => /Clavages/.test(ph.nom)) - 1];
+  proche(momentsFleau(r.pas[kFin], reperes).P1, M, 1e-9, 'moment sur pile en fin de construction');
+  // sans fluage, le clavage ne change rien avant les superstructures (clé à 0)
+  const kAv = r.finPhase[modele.phases.length - 2];
+  assert.ok(Math.abs(momentsFleau(r.pas[kAv], reperes).cle) < 1e-6 * Math.abs(M));
+});

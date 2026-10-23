@@ -4,7 +4,7 @@
  * blocksToHTML et aux notes HTML/Word), figures en SVG autonomes.
  */
 import { calculPhasage, resultante } from '../src/phasage/phasage.js';
-import { lirePhasage, poutresContinues, momentsRemarquables, diagramme } from '../src/phasage/exemples.js';
+import { lirePhasage, poutresContinues, momentsRemarquables, diagramme, lireFleau, fleaux, momentsFleau, diagrammeFleau } from '../src/phasage/exemples.js';
 import { betonEC2 } from '../src/phasage/fluage.js';
 
 const F = (x, d = 0) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',').replace(/^-0(,0+)?$/, '0$1') : '—');
@@ -12,10 +12,10 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 const COUL = ['#0b5fa5', '#c8552b', '#2a8f6a', '#8a4fb8', '#b8860b', '#6b6b6b'];
 
 /** Courbes en SVG : series = [{ nom, pts: [[x, y]…], coul?, tirets? }], abscisses logarithmiques en option. */
-export function courbesSVG(series, { titre = '', xlab = '', ylab = '', xlog = false, w = 720, h = 300, marques = [] } = {}) {
+export function courbesSVG(series, { titre = '', xlab = '', ylab = '', xlog = false, w = 720, h = 300, marques = [], zero = true } = {}) {
   const X = v => (xlog ? Math.log10(Math.max(v, 1e-6)) : v), all = series.flatMap(s => s.pts);
   let x0 = Math.min(...all.map(p => X(p[0]))), x1 = Math.max(...all.map(p => X(p[0])));
-  let y0 = Math.min(0, ...all.map(p => p[1])), y1 = Math.max(0, ...all.map(p => p[1]));
+  let y0 = Math.min(...(zero ? [0] : []), ...all.map(p => p[1])), y1 = Math.max(...(zero ? [0] : []), ...all.map(p => p[1]));
   if (x1 - x0 < 1e-9) x1 = x0 + 1; const dy = (y1 - y0) || 1; y0 -= 0.06 * dy; y1 += 0.06 * dy;
   const ml = 64, mr = 14, mt = 28, mb = 60, W = w - ml - mr, H = h - mt - mb;
   const sx = v => ml + (X(v) - x0) / (x1 - x0) * W, sy = v => mt + (y1 - v) / (y1 - y0) * H;
@@ -56,11 +56,21 @@ function elevationSVG(p) {
 
 /** Calcul complet : modèle, résultats, blocs de note. */
 export function computePhasage(d) {
+  if (d.ph_type === 'fleau') { const p = lireFleau(d), { modele, reperes } = fleaux(p); return { type: 'fleau', p, modele, reperes, r: calculPhasage(modele) }; }
   const p = lirePhasage(d), { modele, reperes } = poutresContinues(p), r = calculPhasage(modele);
-  return { p, modele, reperes, r };
+  return { type: 'poutres', p, modele, reperes, r };
+}
+
+/** Pertes instantanées d'un câble : diagramme avant et après recul d'ancrage. */
+function blocsPertesInst(B, pi, nom, c) {
+  if (!pi) return;
+  B.push({ t: 'svg', svg: courbesSVG([{ nom: 'après frottement', pts: pi.x.map((x, i) => [x, pi.avant[i]]), tirets: true }, { nom: 'après recul d’ancrage', pts: pi.x.map((x, i) => [x, pi.apres[i]]), coul: '#c8552b' }],
+    { titre: `Pertes instantanées — ${nom} [kN]`, xlab: 'abscisse le long du câble [m]', ylab: 'P [kN]', h: 260, zero: false }),
+    caption: `Frottement P₀ e^{−μ(θ + kx)} (μ = ${F(c.mu, 2)}, k = ${F(c.k, 3)} rad/m) et recul d'ancrage g = ${F(c.g * 1000, 1)} mm (NF EN 1992-1-1 § 5.10.5.2 et 5.10.5.3) ; longueur d'influence λ = ${F(Math.max(...pi.lambda), 1)} m${pi.lambda[1] ? ' de chaque côté' : ''}.` });
 }
 
 export function phasageBlocks(out) {
+  if (out.type === 'fleau') return fleauBlocks(out);
   const { p, modele, reperes: R, r } = out, B = [];
   const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
   const bP = betonEC2(modele.betons.P), bH = betonEC2(modele.betons.H);
@@ -108,11 +118,11 @@ export function phasageBlocks(out) {
   const kT = debutPh(0), rows = [];
   for (let s = 0; s < p.n; s++) {
     const N0 = r.pas[kT].cables[seg(s)].N, Nc = kC >= 0 ? r.pas[kC].cables[seg(s)].N : NaN, Nf = r.final.cables[seg(s)].N;
-    rows.push([`Câble T${s + 1} (mi-travée)`, F(p.cable.P), F(Nc), F(Nf), F((1 - Nf / p.cable.P) * 100, 1), F((p.cable.P - Nf) / p.cable.Ap / 1000)]);
-    void N0;
+    rows.push([`Câble T${s + 1} (mi-travée)`, F(N0), F(Nc), F(Nf), F((1 - Nf / N0) * 100, 1), F((N0 - Nf) / p.cable.Ap / 1000)]);
   }
   table(['Câble', 'P après mise en tension [kN]', `P au clavage [kN]`, `P(∞) [kN]`, 'Pertes différées [%]', 'Δσ_p [MPa]'], rows);
-  para('Pertes calculées pas à pas : raccourcissement du béton sous les charges successives, fluage et retrait (EN 1992-1-1 annexe B et § 3.1.4) et relaxation (§ 3.3.2), en interaction avec la structure. La force après mise en tension est une donnée (pertes instantanées par frottement et recul d\'ancrage non calculées ici).');
+  if (r.pertesInstantanees && r.pertesInstantanees[0]) blocsPertesInst(B, r.pertesInstantanees[0], 'câble T1', p.cable);
+  para(`Pertes calculées pas à pas : raccourcissement du béton sous les charges successives, fluage et retrait (EN 1992-1-1 annexe B et § 3.1.4) et relaxation (§ 3.3.2), en interaction avec la structure. ${r.pertesInstantanees && r.pertesInstantanees[0] ? `Force au vérin P₀ = ${F(p.cable.P0)} kN, pertes instantanées calculées (frottement, recul d\'ancrage).` : 'La force après mise en tension est une donnée (pertes instantanées non calculées).'}`);
 
   h2('Méthode et limites');
   para('Méthode pas à pas (Bažant ; Ghali, Favre et Elbadry, Concrete Structures: Stresses and Deformations, ch. 5) sur une ossature plane : chaque incrément d\'effort est affecté de la fonction de fluage J(t, τ) de son béton et de son âge ; un changement de schéma (clavage, activation du hourdis) ne sollicite que par les incréments postérieurs. Moteur recoupé sur les solutions fermées de Dischinger, l\'équation intégrale de Volterra, le Bulletin technique Sétra n° 7 (1972, annexe I), le guide Sétra « Eurocode 2 — application aux ponts-routes en béton » (2008) et l\'éq. (5.46) de l\'EN 1992-1-1.');
@@ -122,11 +132,79 @@ export function phasageBlocks(out) {
 
 export function phasageNote(out, { version = '' } = {}) {
   return {
-    title: 'Note de calcul — tablier à poutres précontraintes rendues continues : effets différés',
+    title: out.type === 'fleau' ? 'Note de calcul — pont construit par encorbellements successifs : phasage et effets différés' : 'Note de calcul — tablier à poutres précontraintes rendues continues : effets différés',
     meta: `PSIDA ${version} — calcul par phases avec fluage, retrait et relaxation (NF EN 1992-1-1)`,
     blocks: [{ t: 'h1', text: '1. Calcul par phases' }, ...phasageBlocks(out), { t: 'h1', text: '2. Références' },
-      { t: 'ref', text: 'NF EN 1992-1-1 : § 3.1.2, § 3.1.4, § 3.3.2, § 5.10.6 et annexe B ; NF EN 1992-2.' },
+      { t: 'ref', text: 'NF EN 1992-1-1 : § 3.1.2, § 3.1.4, § 3.3.2, § 5.10.5, § 5.10.6 et annexe B ; NF EN 1992-2.' },
       { t: 'ref', text: 'Z. P. Bažant, Prediction of concrete creep effects using age-adjusted effective modulus method, ACI Journal 69 (1972) ; A. Ghali, R. Favre, M. Elbadry, Concrete Structures: Stresses and Deformations, 4ᵉ éd., CRC Press (2012).' },
       { t: 'ref', text: 'Sétra, Bulletin technique n° 7 : ponts en béton précontraint construits par encorbellements successifs (1972), annexe I § 2.2 ; Sétra, Guide méthodologique Eurocode 2 — application aux ponts-routes en béton (2008), ch. 4.' }],
   };
+}
+
+/* ---------------------------------------------------------------------------------------------- fléaux */
+function elevationFleauSVG(p, R) {
+  const w = 720, h = 170, ml = 20, Lt = 4 * p.a, k = (w - 2 * ml) / Lt, sx = x => ml + x * k, kz = 40 / p.hp, y0 = 60, s = [];
+  s.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" font-family="system-ui,sans-serif" font-size="11"><rect width="${w}" height="${h}" fill="#fff"/>`);
+  const bas = []; for (let q = 0; q <= 200; q++) { const x = Lt * q / 200, d = Math.min(Math.abs(x - p.a), Math.abs(x - 3 * p.a)), xi = Math.min(d / p.a, 1); bas.push(`${sx(x).toFixed(1)},${(y0 + R.h(xi) * kz).toFixed(1)}`); }
+  s.push(`<polygon points="${sx(0)},${y0} ${sx(Lt)},${y0} ${bas.reverse().join(' ')}" fill="#dfe7f1" stroke="#456"/>`);
+  // joints de voussoirs (fléau 1 et 2)
+  for (const xp of [p.a, 3 * p.a]) for (const sg of [-1, 1]) for (let q = 0; q <= p.nv; q++) { const x = xp + sg * (p.l0 / 2 + q * R.lv), xi = Math.min(Math.abs(x - xp) / p.a, 1); s.push(`<line x1="${sx(x)}" x2="${sx(x)}" y1="${y0}" y2="${y0 + R.h(xi) * kz}" stroke="#89a" stroke-width="0.6"/>`); }
+  for (const xp of [p.a, 3 * p.a]) { const yb = y0 + p.hp * kz; s.push(`<rect x="${sx(xp) - 6}" y="${yb}" width="12" height="${h - 40 - yb}" fill="#bbb" stroke="#555"/>`); }
+  for (const x of [0, Lt]) s.push(`<path d="M${sx(x)} ${y0 + p.hc * kz} l-7 12 h14 z" fill="#fff" stroke="#333"/>`);
+  s.push(`<text x="${sx(p.a / 2)}" y="${h - 22}" text-anchor="middle">rive ${F(p.a, 1)} m</text><text x="${sx(2 * p.a)}" y="${h - 22}" text-anchor="middle">travée centrale ${F(2 * p.a, 1)} m</text><text x="${sx(3.5 * p.a)}" y="${h - 22}" text-anchor="middle">rive ${F(p.a, 1)} m</text>`);
+  s.push(`<text x="${sx(0)}" y="${y0 - 10}">2 fléaux de ${p.nv} paires de voussoirs de ${F(R.lv, 2)} m (cycle ${F(p.dates.cycle)} j) ; h = ${F(p.hp, 2)} m sur pile, ${F(p.hc, 2)} m à la clé</text></svg>`);
+  return s.join('');
+}
+
+export function fleauBlocks(out) {
+  const { p, modele, reperes: R, r } = out, B = [];
+  const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
+  const bt = betonEC2(modele.betons.V0);
+  h2('Ouvrage et phases de construction');
+  B.push({ t: 'svg', svg: elevationFleauSVG(p, R), caption: 'Élévation : trois travées a – 2a – a, deux fléaux construits symétriquement par encorbellements successifs (échelle verticale dilatée).' });
+  table(['Donnée', 'Valeur'], [
+    ['Hauteur sur pile / à la clé [m]', `${F(p.hp, 2)} / ${F(p.hc, 2)} (variation parabolique)`],
+    ['Aire sur pile / à la clé [m²] ; inertie à la clé [m⁴]', `${F(p.Ap, 2)} / ${F(p.Ac, 2)} ; ${F(p.Ic, 2)} (I ∝ h^{5/2})`],
+    ['Voussoir sur pile ; voussoirs courants', `${F(p.l0, 2)} m ; ${p.nv} × ${F(R.lv, 2)} m de part et d'autre`],
+    ['Béton f_ck ; ciment ; h₀ ; HR', `${p.fck} MPa ; ${p.ciment} ; ${p.h0} mm ; ${p.RH} %`],
+    ['E_cm [MPa] ; φ(∞, 3 j) ; ε_cs(∞)', `${F(bt.Ecm)} ; ${F(bt.phi(p.dates.fin, p.dates.durc), 2)} ; ${F(bt.retrait(p.dates.fin) * 1e6)} µm/m`],
+    ['Équipage mobile ; superstructures', `${F(p.Qeq)} kN par bout de fléau ; ${F(p.gSup, 1)} kN/m`],
+    ['Câbles de fléau (par paire de voussoirs)', `A_p = ${F(p.cable.Ap * 1e4, 1)} cm², P₀ = ${F(p.cable.P0)} kN au vérin, tendus des deux côtés, à ${F(p.cable.enrob, 2)} m sous l'extrados`],
+    ['Câbles de continuité (travée centrale)', `${p.continuite.n} × (A_p = ${F(p.continuite.Ap * 1e4, 1)} cm², P₀ = ${F(p.continuite.P0)} kN) sur ${p.continuite.nv} voussoirs de part et d'autre de la clé`],
+  ]);
+  const dateClav = p.dates.clavage, tFinFleau = p.nv * p.dates.cycle + p.dates.durc;
+  table(['Étape', 'Dates [j]'], [
+    ['Voussoirs sur pile, encastrement provisoire, câbles de fléau 0', '0'],
+    [`Bétonnage des voussoirs 1 à ${p.nv}, câbles de fléau 1 à ${p.nv} (cycle ${F(p.dates.cycle)} j, décoffrage et tension à ${F(p.dates.durc)} j)`, `${F(p.dates.cycle)} à ${F(tFinFleau)}`],
+    ['Clavages central et sur culées, pose sur appareils d’appui', F(dateClav)],
+    ['Câbles de continuité', F(p.dates.continuite)], ['Superstructures', F(p.dates.superstructures)], ['Fin du calcul', F(p.dates.fin)],
+  ]);
+  h2('Moments fléchissants (béton, précontrainte comprise)');
+  const iCl = modele.phases.findIndex(ph => /Clavages/.test(ph.nom)), iCC = modele.phases.findIndex(ph => /continuité/.test(ph.nom)), iS = modele.phases.length - 1;
+  const debut = i => r.pas.findIndex(q => q.phase === i);
+  const lignes = [[`fin de construction des fléaux (${F(dateClav)} j)`, r.finPhase[iCl - 1]], [`après clavage, avant continuité (${F(p.dates.continuite)} j)`, r.finPhase[iCl]],
+    ['après câbles de continuité', debut(iCC)], [`avant superstructures (${F(p.dates.superstructures)} j)`, r.finPhase[iCC]], ['après superstructures', debut(iS)], [`fin (${F(p.dates.fin)} j)`, r.pas.length - 1]];
+  table(['Instant', 'M sur pile P1 [kN·m]', 'M à la clé [kN·m]', 'M mi-travée de rive [kN·m]'], lignes.filter(l => l[1] >= 0).map(([n, k]) => { const m = momentsFleau(r.pas[k], R); return [n, F(m.P1), m.cle == null ? '—' : F(m.cle), m.rive == null ? '—' : F(m.rive)]; }));
+  const mA = momentsFleau(r.pas[debut(iS)], R), mF = momentsFleau(r.final, R);
+  para(`Moments rapportés à la ligne des nœuds (c.d.g. de la section), positifs quand ils tendent la fibre inférieure, précontrainte comprise. Avant le clavage, la clé n'existe pas : la valeur indiquée est celle du bout de fléau (moment des derniers ancrages). Entre la pose des superstructures et la fin du calcul, l'adaptation par fluage fait passer le moment à la clé de ${F(mA.cle)} à ${F(mF.cle)} kN·m et sur pile de ${F(mA.P1)} à ${F(mF.P1)} kN·m : l'ouvrage se rapproche de la distribution qu'il aurait eue s'il avait été construit sur cintre (BT n° 7 § 2.155), d'où le renforcement des câbles de continuité.`);
+  const kC = debut(iCl);
+  const serie = (f, k0 = 0) => r.pas.slice(k0).map(q => [Math.max(q.t, 0.5), f(momentsFleau(q, R))]).filter(q => q[1] != null);
+  B.push({ t: 'svg', svg: courbesSVG([{ nom: 'M sur pile P1', pts: serie(m => m.P1) }, { nom: 'M à la clé', pts: serie(m => m.cle, kC) }], { titre: 'Évolution des moments dans le temps [kN·m]', xlab: 'temps [jours] (échelle logarithmique)', ylab: 'M [kN·m]', xlog: true, marques: [{ x: dateClav, nom: 'clavage' }, { x: p.dates.superstructures, nom: 'superstr.' }] }), caption: 'Croissance du moment sur pile pendant la construction (voussoirs successifs, câbles de fléau), puis adaptation par fluage après le clavage.' });
+  const diag = [{ nom: 'fin de construction des fléaux', pts: diagrammeFleau(r.pas[r.finPhase[iCl - 1]], R, modele) }, { nom: 'après superstructures', pts: diagrammeFleau(r.pas[debut(iS)], R, modele), coul: '#2a8f6a' }, { nom: `t = ${F(p.dates.fin)} j`, pts: diagrammeFleau(r.final, R, modele), coul: '#c8552b' }];
+  B.push({ t: 'svg', svg: courbesSVG(diag, { titre: 'Moment le long de l’ouvrage [kN·m]', xlab: 'abscisse [m]', ylab: 'M [kN·m]', marques: [0, p.a, 2 * p.a, 3 * p.a, 4 * p.a].map(x => ({ x, nom: '' })) }), caption: 'Diagrammes en fin de construction des fléaux, après pose des superstructures et à la fin du calcul.' });
+  h2('Précontrainte : pertes instantanées et différées');
+  const rows = [];
+  modele.cables.forEach((c, ic) => {
+    if (ic % 2 === 1 && /fléau/.test(c.nom)) return;   // fléau 2 identique au fléau 1
+    const seg = r.final.cables.findIndex(q => q && q.cable === ic && q.seg === Math.floor(c.segments.length / 2));
+    const k0 = debut(c.phase), N0 = r.pas[k0].cables[seg].N, Nc = r.pas[r.finPhase[iCl - 1]].cables[seg]?.N, Nf = r.final.cables[seg].N;
+    rows.push([c.nom.replace('F1-', ''), F(c.P0), F(N0), Nc == null ? '—' : F(Nc), F(Nf), F((1 - Nf / c.P0) * 100, 1)]);
+  });
+  table(['Câble (milieu)', 'P₀ vérin [kN]', 'après pertes instantanées [kN]', 'avant clavage [kN]', 'P(∞) [kN]', 'pertes totales [%]'], rows);
+  const iLong = modele.cables.findIndex((c, i) => i === 2 * p.nv);
+  blocsPertesInst(B, r.pertesInstantanees[iLong], modele.cables[iLong].nom, p.cable);
+  h2('Méthode et limites');
+  para('Calcul par phases pas à pas (même moteur que pour les poutres rendues continues) : chaque voussoir est une barre avec son béton et sa date de coulage ; le béton frais est porté par l\'équipage au bout du fléau (force et moment) jusqu\'au décoffrage ; les câbles de fléau sont tendus des deux côtés après chaque paire de voussoirs, avec frottement et recul d\'ancrage (§ 5.10.5) ; les clavages réunissent les fléaux sans contrainte. Hauteur et inertie variables par barre (I ∝ h^{5/2}, BT n° 7 § 2.222).');
+  para('Limites : ligne moyenne supposée droite (la variation du c.d.g. avec la hauteur n\'est prise en compte que dans les excentrements), fléaux construits simultanément et symétriquement (pas de déséquilibre de bétonnage ni de vent en phase de construction), pas de gradient thermique ni de charges d\'exploitation, flexion transversale du caisson et effort tranchant hors de ce module, contre-flèches non calculées.');
+  return B;
 }
