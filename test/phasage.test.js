@@ -113,3 +113,11 @@ test('Retrait d’un étai : la réaction est restituée, on retrouve la travée
   assert.ok(Math.abs(r.final.reactions[4]) < 1e-9);
   proche(r.final.reactions[1], w * L, 1e-9, 'réaction d’about');
 });
+
+test('Guide Sétra « Eurocode 2 — application aux ponts-routes en béton » (2008), ch. 3 § 2.3.3 : φ ≈ 0,25 et 0,47', () => {
+  // traverse d'un pont-cadre C35/45, h = 0,38 m (h0 ≈ e, dalle sans étanchéité, ch. 4 § 3.1 a), HR 70 % (§ 3.3) ;
+  // déformation imposée pendant 4 mois à 50 ans, puis à 2 ans
+  const b = betonEC2({ fck: 35, RH: 70, h0: 380, ciment: 'N' }), an = 365.25, m4 = 4 * 30.44;
+  assert.equal(b.phi(50 * an + m4, 50 * an).toFixed(2), '0.25');
+  assert.equal(b.phi(2 * an + m4, 2 * an).toFixed(2), '0.47');
+});
