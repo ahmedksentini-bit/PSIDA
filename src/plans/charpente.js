@@ -70,7 +70,8 @@ export function charpente(M, { Lmax = 24, montant = { b: 0.25, t: 0.020 } } = {}
     const zg = zones.map(z => { const smin = Math.min(...C.filter(c => c.x >= z.x0 - 1e-9 && c.x <= z.x1 + 1e-9).map(c => c.s), sAt((z.x0 + z.x1) / 2)); return { ...z, s: arr(smin) }; });
     goujons = { n, d: v.goujons.d, h: v.goujons.h, total: Math.ceil(nb) * np, zones: zg };
   }
-  return { p, L, x0, Lt, zones, troncons, joints, montants, entretoises, appuis, prof, nEnt, lEnt, kg: { poutres: kgPoutres, entretoises: kgEnt, entretoisesAppui: kgEntApp, montants: kgMont, total }, ratio: total / (Lt * p.largeur), surface, goujons, ac, a, montant };
+  const R = v && v.courbe ? v.courbe.A.R : 0;
+  return { p, L, x0, Lt, R, zones, troncons, joints, montants, entretoises, appuis, prof, nEnt, lEnt, kg: { poutres: kgPoutres, entretoises: kgEnt, entretoisesAppui: kgEntApp, montants: kgMont, total }, ratio: total / (Lt * p.largeur), surface, goujons, ac, a, montant };
 }
 
 /* ------------------------------------------------------------------------------------------------------ vues */
@@ -104,16 +105,21 @@ function vueElevation(C, eV = 50) {
 }
 
 function vuePlan(C) {
-  const p = C.p, V = new Vue('VUE EN PLAN DE LA CHARPENTE', { echelle: 200 }), np = p.nPoutres, e = p.entraxe;
+  const p = C.p, R = C.R, V = new Vue(R ? `VUE EN PLAN DE LA CHARPENTE (R = ${fr(R, 0)} m)` : 'VUE EN PLAN DE LA CHARPENTE', { echelle: 200 }), np = p.nPoutres, e = p.entraxe;
   const ys = Array.from({ length: np }, (_, k) => (k - (np - 1) / 2) * e);
-  for (const y of ys) { V.ligne('CHARPENTE', [0, y], [C.Lt, y]); }
-  for (const x of C.entretoises) V.ligne('EQUIPEMENTS', [x, ys[0]], [x, ys[np - 1]]);
-  for (const x of C.appuis) { V.ligne('AXES', [x, ys[0] - 1.2], [x, ys[np - 1] + 1.2]); for (const y of ys) V.poly('APPAREILS', [[x - 0.3, y - 0.3], [x + 0.3, y - 0.3], [x + 0.3, y + 0.3], [x - 0.3, y + 0.3]], true); }
-  V.poly('VUES', [[0, -p.largeur / 2], [C.Lt, -p.largeur / 2], [C.Lt, p.largeur / 2], [0, p.largeur / 2]], true);
-  V.ligne('AXES', [-1, 0], [C.Lt + 1, 0]);
-  V.coteV([C.Lt, ys[0]], [C.Lt, ys[np - 1]], C.Lt + 1.5, `${fr(e * (np - 1), 2)}`);
-  V.coteV([C.Lt, -p.largeur / 2], [C.Lt, p.largeur / 2], C.Lt + 3.2, `${fr(p.largeur, 2)}`);
-  V.texte('TEXTES', [C.x0[0] + 1, p.largeur / 2 + 0.6], `entretoises ${C.prof[0]} tous les ${fr(C.ac, 2)} m (et sur appuis)`, { h: 2.0 });
+  // repère en plan : abscisse curviligne s de l'axe, décalage y (tablier courbe : arcs de rayon R + y)
+  const P = (s, y) => (R ? [(R + y) * Math.sin(s / R), (R + y) * Math.cos(s / R) - R] : [s, y]);
+  const arc = (y, s0 = 0, s1 = C.Lt) => { const n = R ? Math.max(2, Math.ceil((s1 - s0) / 1.0)) : 1, pts = []; for (let q = 0; q <= n; q++) pts.push(P(s0 + (s1 - s0) * q / n, y)); return pts; };
+  for (const y of ys) V.poly('CHARPENTE', arc(y));
+  for (const x of C.entretoises) V.poly('EQUIPEMENTS', [P(x, ys[0]), P(x, ys[np - 1])]);
+  for (const x of C.appuis) { V.poly('AXES', [P(x, ys[0] - 1.2), P(x, ys[np - 1] + 1.2)]); for (const y of ys) { const c = P(x, y); V.poly('APPAREILS', [[c[0] - 0.3, c[1] - 0.3], [c[0] + 0.3, c[1] - 0.3], [c[0] + 0.3, c[1] + 0.3], [c[0] - 0.3, c[1] + 0.3]], true); } }
+  V.poly('VUES', [...arc(-p.largeur / 2), ...arc(p.largeur / 2).reverse()], true);
+  V.poly('AXES', arc(0, -1, C.Lt + 1));
+  const fin = P(C.Lt, 0);
+  if (!R) { V.coteV([C.Lt, ys[0]], [C.Lt, ys[np - 1]], C.Lt + 1.5, `${fr(e * (np - 1), 2)}`); V.coteV([C.Lt, -p.largeur / 2], [C.Lt, p.largeur / 2], C.Lt + 3.2, `${fr(p.largeur, 2)}`); }
+  else V.texte('TEXTES', [fin[0], fin[1] + p.largeur / 2 + 1.0], `entraxe ${fr(e * (np - 1), 2)} m ; largeur ${fr(p.largeur, 2)} m ; longueur développée ${fr(C.Lt, 2)} m`, { h: 2.0, ancre: 'd' });
+  const t0 = P(1, p.largeur / 2 + 0.6);
+  V.texte('TEXTES', t0, `entretoises ${C.prof[0]} tous les ${fr(C.ac, 2)} m (et sur appuis)`, { h: 2.0 });
   return V;
 }
 
@@ -173,7 +179,7 @@ export function planCharpenteElevation(M, cartouche = {}, { nom = 'PONT MIXTE' }
 export function planCharpenteCoupes(M, cartouche = {}, { nom = 'PONT MIXTE' } = {}) {
   const C = charpente(M), cA = vueCoupe(C), cB = vueCoupe(C, { appui: true }), p = M.p;
   const q = { titre: 'QUANTITÉS DE LA CHARPENTE', hl: 5, h: 2.0, cols: [{ t: 'Poste', w: 92, a: 'g' }, { t: 'Quantité', w: 34, a: 'd' }],
-    lignes: [[`Poutres (${p.nPoutres} PRS, ${C.troncons.length} tronçons chacune)`, `${milliers(C.kg.poutres)} kg`], [`Entretoises courantes (${C.nEnt} × ${C.prof[0]})`, `${milliers(C.kg.entretoises)} kg`],
+    lignes: [[`Poutres (${p.nPoutres} PRS, ${C.troncons.length} tronçons chacune${C.R ? ', cintrées en plan' : ''})`, `${milliers(C.kg.poutres)} kg`], [`Entretoises courantes (${C.nEnt} × ${C.prof[0]})`, `${milliers(C.kg.entretoises)} kg`],
       ['Entretoises d\'appui (vérinage)', `${milliers(C.kg.entretoisesAppui)} kg`], ['Montants et raidisseurs d\'appui', `${milliers(C.kg.montants)} kg`],
       Object.assign(['Total charpente', `${milliers(C.kg.total)} kg`], { gras: true }), ['Ratio par m² de tablier', `${fr(C.ratio, 0)} kg/m²`], ['Surface à protéger (anticorrosion)', `${milliers(C.surface)} m²`],
       ...(C.goujons ? [[`Goujons Ø${fr(C.goujons.d * 1000, 0)} × ${fr(C.goujons.h * 1000, 0)} (${C.goujons.n} par rangée)`, `${milliers(C.goujons.total)} u`]] : [])] };

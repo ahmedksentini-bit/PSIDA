@@ -349,6 +349,15 @@ export function mixteVerifsBlocks(out) {
     table(['Phase', 't [j]', 'σ_Ed min [MPa]', 'σ_Ed max [MPa]', 'Déversement d\'ensemble : Σ M_u / 0,7 M_gs (travées non durcies)'], b.etapes.map(e => [e.nom, F(e.t, 0), F(e.sMin, 0), F(e.sMax, 0), e.globale.length ? e.globale.map(g => `T${g.s + 1} : ${F(g.Mu, 0)} / ${F(0.7 * g.Mgs, 0)}`).join(' ; ') : '—']));
     para(`ELU de construction 1,35 G + 1,5 q_c, q_c = ${F(b.qc, 2)} kN/m² sur le plot coulé (charges de chantier, EN 1991-1-6 § 4.11.2). Déversement de la semelle comprimée là où la dalle n'a pas durci : même modèle de cadres que l'ouvrage en service (EN 1993-2 § 6.3.4.2). Déversement d'ensemble du couple de poutres entretoisées avant durcissement de la dalle : M_gs = π² s E √(I_eff I_x) / L² (Yura et al., ASCE J. Struct. Eng. 2008), critère d'alerte Σ M_u ≤ 0,7 M_gs (AASHTO LRFD § 6.10.3.4.2) ; au-delà, prévoir un contreventement horizontal provisoire ou un ordre de bétonnage différent.`);
   }
+  if (v.courbe) {
+    const c = v.courbe, A = c.A;
+    h2(`Tablier courbe en plan (R = ${F(A.R, 0)} m) : grillage`);
+    table(['Section', 'M_G poutre ext. courbe / droit [kN·m]', 'k_G (ext.)', 'k_G (int.)', 'M_Q courbe / droit [kN·m]', 'k_Q'], A.sections.map(s => [s.nom, `${F(s.MGc, 0)} / ${F(s.MGd, 0)}`, F(s.kG, 3), F(s.kGint, 3), `${F(s.MQc, 0)} / ${F(s.MQd, 0)}`, F(s.kQ, 3)]));
+    table(['Ligne d\'appui', 'R_G poutre intérieure [kN]', 'R_Q,min [kN]', 'EQU 0,95 R_G + 1,35 R_Q,min [kN]'], A.uplift.map(u => [u.appui === 0 || u.appui === A.uplift.length - 1 ? `Culée C${u.appui}` : `Pile P${u.appui}`, F(u.RG, 0), F(u.RQmin, 0), F(u.EQU, 0)]));
+    const pas2 = Math.max(1, Math.round(c.lignes.length / 12));
+    table(['x [m]', 'k', 'σ_ELU amplifié [MPa]', 'f_l sup. / inf. [MPa]', 'σ + f_l', 'f_y', 'M_lat [kN·m]', 'H cadre (V-load) [kN]'], c.lignes.filter((q, i) => i % pas2 === 0).map(q => [F(q.x, 1), F(q.k, 3), F(q.sig, 0), `${F(q.flS, 0)} / ${F(q.flI, 0)}`, F(q.tot, 0), F(q.fy, 0), F(q.Mlat, 1), F(q.H, 1)]));
+    para(`Grillage plan : poutres en arcs de rayon R ± e/2 (cordes de 1,5 m au plus), entretoises radiales aux cadres (E I_q, rigidifiées ×5 sur appuis), section mixte n₀ en travée et fissurée sur appui, torsion de Saint-Venant des tôles et de la dalle ; même grillage droit en référence. Les rapports k = M courbe / M droit de la poutre extérieure (permanentes : k_G, trafic placé côté extérieur : k_Q) amplifient les contraintes ELU du modèle droit (k = max(k_G ; k_Q), du côté de la sécurité). Flexion latérale des semelles entre cadres M_lat = M l²/(10 R D) (AASHTO LRFD § 4.6.1.2.4b), f_l = 6 M_lat/(t_f b_f²) ; effort radial transmis aux cadres H = M l/(R D) (méthode V-load) pour le dimensionnement des entretoises. Effort maximal dans un cadre : ${F(c.Hmax, 0)} kN.`);
+  }
   h2('Connexion (goujons)');
   const g = v.goujons, cx = v.connexion.filter((q, i) => i % pas === 0);
   table(['x [m]', 'v_L,Ed ELU [kN/m]', 'v_L ELS car.', 's ELU [m]', 's ELS [m]', 's fatigue [m]', 'Espacement retenu [m]'], cx.map(q => [F(q.x, 1), F(q.vElu, 0), F(q.vEls, 0), F(Math.min(q.sELU, 9.99), 2), F(Math.min(q.sELS, 9.99), 2), F(Math.min(q.sFat, 9.99), 2), F(q.s, 2)]));
@@ -364,6 +373,7 @@ import { proprietes, equivalence, momentPlastique, classeSection } from '../src/
 import { verifierMixte } from '../src/mixte/verifs.js';
 import { structureAchevee } from '../src/phasage/acheve.js';
 import { verifierBetonnage } from '../src/mixte/betonnage.js';
+import { verifierCourbure } from '../src/mixte/courbe.js';
 import { flexionTransversale } from '../src/phasage/caisson_transversal.js';
 import { desequilibreFleau, BARRE_36 } from '../src/phasage/desequilibre.js';
 import { EC_ALPHA } from '../src/loads_ec.js';
@@ -374,7 +384,7 @@ export function optionsMixte(d, p) {
   const Lr = v('mx_Lr', p.largeur - 2), tr = v('mx_trott', 0);
   return { chaussee: { y1: -Lr / 2, y2: Lr / 2 }, trottoirs: tr > 0 ? [{ y1: -Lr / 2 - tr, y2: -Lr / 2 }, { y1: Lr / 2, y2: Lr / 2 + tr }] : [],
     alpha: EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended, dT: v('mx_dT', 10), ac: v('mx_ac', 6), a: v('mx_a', 6), Iv: v('mx_Iv', 40000) * 1e-8, Iq: v('mx_Iq', 180000) * 1e-8,
-    goujons: { d: v('mx_gd', 22) / 1000, h: v('mx_gh', 200) / 1000, n: Math.max(1, Math.round(v('mx_gn', 3))), fu: 450 }, Nobs: v('mx_Nobs', 5e5), qc: v('mx_qc', 1.0) };
+    goujons: { d: v('mx_gd', 22) / 1000, h: v('mx_gh', 200) / 1000, n: Math.max(1, Math.round(v('mx_gn', 3))), fu: 450 }, Nobs: v('mx_Nobs', 5e5), qc: v('mx_qc', 1.0), R: v('mx_R', 0) };
 }
 export function computeMixte(d) {
   const p = lireBipoutre(d), { modele, reperes } = bipoutre(p), out = { type: 'mixte', p, modele, reperes, r: calculPhasage(modele) };
@@ -384,6 +394,8 @@ export function computeMixte(d) {
     // charpente pendant le bétonnage : vérifications ajoutées à la synthèse de la structure (même liste, même affinage)
     const b = verifierBetonnage(out, o);
     out.v.betonnage = b; out.v.verifs.push(...b.verifs); out.v.ok = out.v.ok && b.ok;
+    // tablier courbe en plan : grillage et effets de la courbure (rayon de l'axe, 0 = droit)
+    if (o.R > 0) { const c = verifierCourbure(out, o); out.v.courbe = c; out.v.verifs.push(...c.verifs); out.v.ok = out.v.ok && c.ok; }
   } catch (e) { out.vErreur = e.message; }
   return out;
 }

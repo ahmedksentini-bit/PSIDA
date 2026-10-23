@@ -115,6 +115,7 @@ export function predimMixte({ L = [45, 60, 45], B = 10.5, gSup = 13.5, Lr = 8.5,
  *    puis épaisseur) ; fatigue de la semelle → semelle inférieure (+5 mm) ; dalle comprimée → dalle (+1 cm) ; armatures
  *    sur appui → taux d'armatures (+0,1 %) ; au-delà de 150 mm d'épaisseur, la semelle est élargie ; bétonnage :
  *    déversement de la semelle → largeur (+5 cm), déversement d'ensemble → largeurs des deux semelles en travée ;
+ *    courbure : épaisseurs et largeurs des semelles de la zone (flexion latérale ∝ 1/b²) ;
  *  - poutres continues : décompression, traction → précontrainte (+5 %, section des torons ajustée) ;
  *  - fléaux : traction ou décompression en partie haute → câbles de fléau (+1 par paire) ; en partie basse →
  *    câbles de continuité (+2 au centre, +2 en rive) selon la position.
@@ -151,7 +152,10 @@ function ajusterMixte(c, defauts, V) {
   };
   for (const q of defauts) {
     const z = zone(q.x);
-    if (/^Bétonnage : déversement d'ensemble/.test(q.nom)) { pas('mx_tbfs', 0.05, 1.2); pas('mx_tbfi', 0.05, 1.6); }
+    if (/^Courbure \(R/.test(q.nom)) { semelle(z, 'fi'); semelle(z, 'fs'); pas(`mx_${z}bfi`, 0.05, 1.6); pas(`mx_${z}bfs`, 0.05, 1.2); }
+    else if (/^Courbure : contrainte de flexion latérale/.test(q.nom)) { pas(`mx_${z}bfi`, 0.05, 1.6); pas(`mx_${z}bfs`, 0.05, 1.2); }
+    else if (/^Courbure, bétonnage/.test(q.nom)) pas('mx_tbfs', 0.05, 1.2);
+    else if (/^Bétonnage : déversement d'ensemble/.test(q.nom)) { pas('mx_tbfs', 0.05, 1.2); pas('mx_tbfi', 0.05, 1.6); }
     else if (/^Bétonnage : déversement de la semelle supérieure/.test(q.nom)) pas(`mx_${z}bfs`, 0.05, 1.2);
     else if (/^Bétonnage : déversement de la semelle inférieure/.test(q.nom)) pas(`mx_${z}bfi`, 0.05, 1.6);
     else if (/^Bétonnage : résistance/.test(q.nom)) { semelle(z, 'fs'); semelle(z, 'fi'); }
