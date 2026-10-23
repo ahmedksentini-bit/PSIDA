@@ -26,7 +26,8 @@ function ecrire(champs) {
 }
 
 function tableau(P, r) {
-  const lignes = P.lignes.map(l => `<tr><td>${esc(l.grandeur)}</td><td>${esc(l.valeur)}</td><td class="small">${esc(l.regle)}</td><td class="small">${esc(l.ref)}</td></tr>`).join('');
+  const virg = t => String(t).replace(/(\d)\.(\d)/g, '$1,$2');   // décimales à la française
+  const lignes = P.lignes.map(l => `<tr><td>${esc(l.grandeur)}</td><td>${esc(virg(l.valeur))}</td><td class="small">${esc(l.regle)}</td><td class="small">${esc(l.ref)}</td></tr>`).join('');
   const j = r && r.journal.length ? `<p class="small"><b>Affinage par le calcul</b> (${r.journal.length} essai${r.journal.length > 1 ? 's' : ''}) :</p><ul class="small">${r.journal.map(q => `<li>essai ${q.essai} — en défaut : ${esc(q.defauts.join(' ; '))} → ${esc(q.modifie.join(', '))}</li>`).join('')}</ul>` : '';
   const fin = !r ? '' : r.ok ? '<p class="small"><span class="badge ok">OK</span> toutes les vérifications de l\'ouvrage terminé sont satisfaites avec les valeurs écrites dans le formulaire.</p>'
     : `<p class="small"><span class="badge warn">ATTENTION</span> critères restant en défaut (sans levier géométrique automatique, à traiter par le projeteur) : ${esc(r.restants.map(q => q.nom).join(' ; '))}.</p>`;

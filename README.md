@@ -543,3 +543,17 @@ approche 1), combinaisons EN 1990 A2, ELS (compression, décompression XC / XD, 
 effets hyperstatiques de la précontrainte à γ_P = 1 (second calcul par phases sans câbles), armatures passives de complément
 et de continuité, effort tranchant (V_pd, effet Résal des caissons), réactions transmises aux appuis ; câbles de continuité
 des travées de rive des fléaux ; manuel § 28.12.
+v0.94 : poutres PRAD (src/beams/prad.js, chaîne VIPP en mode adhérence) : torons rectilignes en lits et torons supérieurs,
+groupes gainés, tension sur banc, pertes avant et au relâchement (relaxation, étuvage, raccourcissement élastique), âge
+équivalent d'étuvage (EN 1992-1-1 § 10.3.1.1), longueurs de transmission et d'ancrage (§ 8.10.2), limite k₆ f_ck(t) au
+relâchement, diagnostic du dossier Sétra PRAD 73, plan des torons et du gainage ; nomenclature des armatures d'une travée
+VIPP ou PRAD (poutres, hourdis, entretoises : bordereau ISO 4066) ; manuel § 29.8 et 29.9.
+Prédimensionnement des ouvrages par phases (src/phasage/predim.js) : règles des guides Sétra (poutres continues, fléaux,
+bipoutre) puis affinage par le calcul complet (renforcement des seules dimensions en défaut) ; manuel § 28.13.
+Pont mixte : charpente pendant le bétonnage (src/mixte/betonnage.js : résistance, déversement des semelles, déversement
+d'ensemble de Yura) ; plans de charpente (src/plans/charpente.js : élévation, vue en plan, tôles par tronçon, coupes,
+connexion, quantités) ; tablier courbe en plan (src/mixte/courbe.js : grillage, amplification des moments, flexion latérale
+des semelles, efforts de cadres, soulèvement) ; manuel § 28.14 et 28.15.
+Fléaux : flexion transversale du caisson (src/phasage/caisson_transversal.js : cadre avec flux de flexion et de torsion,
+distortion majorée, ferraillage par mètre), déséquilibres de construction et clouage provisoire (src/phasage/desequilibre.js) ;
+plans des fléaux et des poutres rendues continues (src/plans/ouvrages_phases.js) ; manuel § 28.16.
