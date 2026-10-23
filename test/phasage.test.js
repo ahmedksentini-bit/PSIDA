@@ -340,3 +340,19 @@ test('Assistant de saisie du phasage : schémas dessinés avant calcul, élémen
   const C = caisson({ B: 12, ts: 0.25, Bi: 6.5, ti: 0.22, bw: 0.45 }, 2);
   proche(C.A, 12 * 0.25 + 6.5 * 0.22 + 0.9 * 1.53, 1e-12, 'A caisson');
 });
+
+test('Contraintes : poutre isostatique précontrainte (élastique) = −P/A ∓ (P·e + M)·v/I ; limites f_ck(t), f_ctm(t)', async () => {
+  const { contraintesPhases, contraintesBarre } = await import('../src/phasage/contraintes.js');
+  const n = 10, Lb = 20, A = 0.5, I = 0.08, vs = 0.55, vi = 0.65, e = -0.4, P = 3000, wq = 12.5;
+  const noeuds = Array.from({ length: n + 1 }, (_, k) => [k * Lb / n, 0]), barres = Array.from({ length: n }, (_, k) => ({ i: k, j: k + 1, A, I, beton: 'B' }));
+  const modele = { noeuds, barres, betons: { B: { fck: 40, RH: 70, h0: 300, ciment: 'R', tCoulage: 0 } },
+    phases: [{ t: 7, activer: barres.map((_, k) => k), appuis: [{ n: 0, ddl: ['ux', 'uy'] }, { n, ddl: ['uy'] }], charges: barres.map((_, k) => ({ barre: k, w: wq })) }],
+    cables: [{ Ap: 0.0025, P, phase: 0, segments: barres.map((_, k) => ({ barre: k, ei: e, ej: e })) }], tFin: 7 };
+  const r = calculPhasage(modele), fibres = barres.map(() => ({ vs, vi, precontraint: true, partie: 'poutre' }));
+  const c = contraintesBarre(r.final, modele, fibres, n / 2, 0), M = wq * Lb * Lb / 8 + P * e;   // section à mi-portée
+  proche(c.sup, (-P / A - M * vs / I) / 1000, 1e-9, 'σ sup'); proche(c.inf, (-P / A + M * vi / I) / 1000, 1e-9, 'σ inf');
+  const C = contraintesPhases(r, modele, fibres, 100), b = betonEC2(modele.betons.B);
+  const vc = C.verifs.find(v => /compression/.test(v.critere));
+  proche(vc.limite, -0.6 * b.fckT(7), 1e-12, 'limite 0,6 f_ck(7 j)'); assert.ok(b.fckT(7) < 40 && b.fckT(28) === 40);
+  proche(b.fctmT(28), 0.3 * 40 ** (2 / 3), 1e-12, 'f_ctm');
+});

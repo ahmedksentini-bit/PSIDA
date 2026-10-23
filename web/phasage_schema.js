@@ -143,7 +143,7 @@ export function schemasPhasage(d) {
     ];
     const ok = D.cycle > D.durc && D.clavage >= p.nv * D.cycle + D.durc && D.continuite >= D.clavage && D.superstructures >= D.continuite;
     return { long: longFleau(p), trans: transFleau(p), chrono: chrono(et, D.fin, 'fl_tfin'),
-      synthese: `<p class="small">${ok ? '<span class="badge ok">OK</span>' : '<span class="badge warn">ATTENTION</span> dates incohérentes : le cycle doit dépasser l’âge au décoffrage, et le clavage suivre le dernier voussoir (' + F(p.nv * D.cycle + D.durc, 0) + ' j). '} Ouvrage ${F(p.a, 1)} – ${F(2 * p.a, 1)} – ${F(p.a, 1)} m ; ${2 * (p.nv + 1)} câbles de fléau par fléau et ${p.continuite.n} de continuité ; voussoirs de ${F(lv)} m ; poids d’un voussoir courant ≈ ${F(p.gBeton * p.Ac * lv, 0)} kN à la clé, ${F(p.gBeton * p.Ap * lv, 0)} kN près de la pile.</p>` };
+      synthese: `<p class="small">${ok ? '<span class="badge ok">OK</span>' : '<span class="badge warn">ATTENTION</span> dates incohérentes : le cycle doit dépasser l’âge au décoffrage, et le clavage suivre le dernier voussoir (' + F(p.nv * D.cycle + D.durc, 0) + ' j). '} Ouvrage ${F(p.a, 1)} – ${F(2 * p.a, 1)} – ${F(p.a, 1)} m ; ${p.cable.n * (p.nv + 1)} câbles de fléau par fléau et ${p.continuite.n} de continuité ; voussoirs de ${F(lv)} m ; poids d’un voussoir courant ≈ ${F(p.gBeton * p.Ac * lv, 0)} kN à la clé, ${F(p.gBeton * p.Ap * lv, 0)} kN près de la pile.</p>` };
   }
   const p = lirePhasage(d), D = p.dates;
   const et = [

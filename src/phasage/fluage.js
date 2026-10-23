@@ -54,6 +54,9 @@ export function betonEC2({ fck = 35, RH = 70, h0 = 300, ciment = 'N', ts = 3, av
     /** J(t, τ) en 1/MPa, âges depuis le coulage. */
     J: (t, tau) => 1 / EcmT(tau) + phi(t, tau) / Ec,
     phi, retrait, phiRH, bH,
+    /** § 3.1.2 (5) : f_ck(t) = f_cm(t) − 8 entre 3 et 28 j, f_ck au-delà ; tableau 3.1 et 3.1.2 (9) : f_ctm(t) = β_cc(t)^α f_ctm. */
+    fckT: t => (t >= 28 ? fck : Math.max(fcmT(t) - 8, 0)),
+    fctmT: t => { const fctm = fck <= 50 ? 0.30 * fck ** (2 / 3) : 2.12 * Math.log(1 + fcm / 10); return betaCC(t) ** (t < 28 ? 1 : 2 / 3) * fctm; },
   };
 }
 

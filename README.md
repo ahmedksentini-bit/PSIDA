@@ -496,3 +496,7 @@ v0.88 : onglet « Phasage » — assistant de saisie (web/phasage_schema.js) : �
 voussoirs, équipage, clavages), coupe transversale (poutre en I et hourdis, ou caisson sur pile et à la clé) et
 chronologie des phases dessinées en direct, éléments rattachés aux champs (clignotement bleu) ; sections définies par
 leurs dimensions (src/phasage/sections.js : A, I, c.d.g. calculés ; caisson exact à chaque hauteur) ou par leurs valeurs.
+v0.89 : phasage — contraintes normales du béton à chaque pas (src/phasage/contraintes.js) : enveloppes par partie de
+section, limites 0,6 f_ck(t) en construction, 0,45 f_ck en service, traction / f_ctm(t), décompression des parties
+précontraintes (EN 1992-1-1 § 3.1.2, 5.10.2.2, 7.2 ; EN 1992-2 tableau 7.101N) ; contraintes aux sections remarquables ;
+fléaux : plusieurs câbles par paire de voussoirs ; manuel § 28.9.

@@ -6,6 +6,7 @@
 import { calculPhasage, resultante } from '../src/phasage/phasage.js';
 import { lirePhasage, poutresContinues, momentsRemarquables, diagramme, lireFleau, fleaux, momentsFleau, diagrammeFleau, contreflechesFleau, flechesPoutres } from '../src/phasage/exemples.js';
 import { betonEC2 } from '../src/phasage/fluage.js';
+import { contraintesPhases, contraintesBarre } from '../src/phasage/contraintes.js';
 
 const F = (x, d = 0) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',').replace(/^-0(,0+)?$/, '0$1') : '—');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -61,6 +62,25 @@ export function computePhasage(d) {
   return { type: 'poutres', p, modele, reperes, r };
 }
 
+/** Bloc « contraintes » commun : vérifications enveloppes et tableau aux sections remarquables. */
+function blocsContraintes(B, out, tService, sections, instants) {
+  const { modele, reperes: R, r } = out, F2 = v => F(v, 2);
+  B.push({ t: 'h2', text: 'Contraintes normales du béton (actions permanentes et précontrainte)' });
+  if (!R.fibres) { B.push({ t: 'p', text: 'Contraintes non calculées : les sections sont saisies par leurs valeurs (A, I, e) ; choisir « par leurs dimensions » pour obtenir les fibres extrêmes.' }); return; }
+  const C = contraintesPhases(r, modele, R.fibres, tService);
+  B.push({ t: 'table', head: ['Partie', 'Critère', 'σ [MPa]', 'Limite [MPa]', 'Taux', 'Lieu', 'Instant [j] (âge)', 'Verdict'],
+    rows: C.verifs.map(v => [v.partie, v.critere, F2(v.valeur), F2(v.limite), v.taux == null ? '—' : F2(v.taux), `${modele.barres[v.ou.barre].nom}, fibre ${v.ou.fibre}, ${v.ou.xi === 0 ? 'origine' : v.ou.xi === 1 ? 'extrémité' : 'milieu'} de barre`, `${F(v.ou.t)} (${F(v.ou.age)} j)`, v.ok ? 'OK' : 'NON']) });
+  B.push({ t: 'p', text: 'Enveloppe sur tous les pas de calcul et toutes les barres (origine, milieu, extrémité), traction positive. Limites : compression 0,6 f_ck(t) en construction (EN 1992-1-1 § 5.10.2.2 (5), EN 1992-2 § 113.3.2) et 0,45 f_ck en service sous charges permanentes (§ 7.2 (3)) ; traction comparée à f_ctm(t) ; décompression des parties précontraintes en service (EN 1992-2, tableau 7.101N, XC2 à XC4, combinaison quasi permanente). Trafic et gradient thermique non inclus : ils s\'ajoutent sur l\'ouvrage terminé.' });
+  const rows = [];
+  for (const [nomI, k] of instants) for (const [nomS, ks, xi] of sections) {
+    const cs = ks.map(kb => contraintesBarre(r.pas[k], modele, R.fibres, kb, xi));
+    if (cs.every(c => !c)) continue;
+    rows.push([nomI, nomS, ...cs.flatMap(c => (c ? [F2(c.sup), F2(c.inf)] : ['—', '—']))]);
+  }
+  const parties = sections[0][1].map(kb => R.fibres[kb].partie);
+  B.push({ t: 'table', head: ['Instant', 'Section', ...parties.flatMap(pt => [`σ sup ${pt} [MPa]`, `σ inf ${pt} [MPa]`])], rows });
+}
+
 /** Pertes instantanées d'un câble : diagramme avant et après recul d'ancrage. */
 function blocsPertesInst(B, pi, nom, c) {
   if (!pi) return;
@@ -101,6 +121,12 @@ export function phasageBlocks(out) {
 
   table(['Instant', ...Array.from({ length: p.n }, (_, i) => `flèche mi-travée ${i + 1} [mm]`)], cles.filter(c => c.k >= 0).map(c => [c.nom, ...flechesPoutres(r.pas[c.k], R).map(v => F(v * 1000, 1))]));
   para('Flèches à mi-travée, vers le bas positives, comptées depuis la pose (poutre précontrainte : la valeur initiale négative est la contre-flèche de précontrainte). La flèche finale indique la contre-flèche de fabrication à donner aux poutres pour obtenir le profil voulu en service.');
+  {
+    const kSup = debutPh(modele.phases.length - 1), mid = R.nb / 2 - 1, e1 = R.nb - 1;
+    const inst = [[`mise en tension (${F(p.dates.tension)} j)`, debutPh(0)], [`avant clavage (${F(p.dates.continuite)} j)`, r.finPhase[Math.max(0, modele.phases.findIndex(ph => ph.liaisons) - 1)]], [`après superstructures (${F(p.dates.superstructures)} j)`, kSup], [`fin (${F(p.dates.fin)} j)`, r.pas.length - 1]];
+    const secs = [['mi-travée 1', [R.iP[mid], R.iH[mid]], 1], ...(p.n > 1 ? [['appui 1 (travée 1)', [R.iP[e1], R.iH[e1]], 1]] : [])];
+    blocsContraintes(B, out, p.dates.superstructures, secs, inst);
+  }
   // évolution dans le temps
   const kC = debutPh(modele.phases.findIndex(ph => ph.liaisons));
   const serie = (f, k0 = 0) => r.pas.slice(k0).map(q => [q.t, f(momentsRemarquables(q, R, resultante))]);
@@ -171,7 +197,7 @@ export function fleauBlocks(out) {
     ['Béton f_ck ; ciment ; h₀ ; HR', `${p.fck} MPa ; ${p.ciment} ; ${p.h0} mm ; ${p.RH} %`],
     ['E_cm [MPa] ; φ(∞, 3 j) ; ε_cs(∞)', `${F(bt.Ecm)} ; ${F(bt.phi(p.dates.fin, p.dates.durc), 2)} ; ${F(bt.retrait(p.dates.fin) * 1e6)} µm/m`],
     ['Équipage mobile ; superstructures', `${F(p.Qeq)} kN par bout de fléau ; ${F(p.gSup, 1)} kN/m`],
-    ['Câbles de fléau (par paire de voussoirs)', `A_p = ${F(p.cable.Ap * 1e4, 1)} cm², P₀ = ${F(p.cable.P0)} kN au vérin, tendus des deux côtés, à ${F(p.cable.enrob, 2)} m sous l'extrados`],
+    ['Câbles de fléau (par paire de voussoirs)', `${p.cable.n} × (A_p = ${F(p.cable.Ap * 1e4, 1)} cm², P₀ = ${F(p.cable.P0)} kN au vérin), tendus des deux côtés, à ${F(p.cable.enrob, 2)} m sous l'extrados`],
     ['Câbles de continuité (travée centrale)', `${p.continuite.n} × (A_p = ${F(p.continuite.Ap * 1e4, 1)} cm², P₀ = ${F(p.continuite.P0)} kN) sur ${p.continuite.nv} voussoirs de part et d'autre de la clé`],
   ]);
   const dateClav = p.dates.clavage, tFinFleau = p.nv * p.dates.cycle + p.dates.durc;
@@ -194,15 +220,18 @@ export function fleauBlocks(out) {
   B.push({ t: 'svg', svg: courbesSVG([{ nom: 'M sur pile P1', pts: serie(m => m.P1) }, { nom: 'M à la clé', pts: serie(m => m.cle, kC) }], { titre: 'Évolution des moments dans le temps [kN·m]', xlab: 'temps [jours] (échelle logarithmique)', ylab: 'M [kN·m]', xlog: true, marques: [{ x: dateClav, nom: 'clavage' }, { x: p.dates.superstructures, nom: 'superstr.' }] }), caption: 'Croissance du moment sur pile pendant la construction (voussoirs successifs, câbles de fléau), puis adaptation par fluage après le clavage.' });
   const diag = [{ nom: 'fin de construction des fléaux', pts: diagrammeFleau(r.pas[r.finPhase[iCl - 1]], R, modele) }, { nom: 'après superstructures', pts: diagrammeFleau(r.pas[debut(iS)], R, modele), coul: '#2a8f6a' }, { nom: `t = ${F(p.dates.fin)} j`, pts: diagrammeFleau(r.final, R, modele), coul: '#c8552b' }];
   B.push({ t: 'svg', svg: courbesSVG(diag, { titre: 'Moment le long de l’ouvrage [kN·m]', xlab: 'abscisse [m]', ylab: 'M [kN·m]', marques: [0, p.a, 2 * p.a, 3 * p.a, 4 * p.a].map(x => ({ x, nom: '' })) }), caption: 'Diagrammes en fin de construction des fléaux, après pose des superstructures et à la fin du calcul.' });
+  blocsContraintes(B, out, p.dates.superstructures, [['sur pile P1 (côté travée centrale)', [R.F[0].bD[0]], 0], ['à la clé', [R.F[0].bD[R.nv]], 1], ['mi-travée de rive', [R.F[0].bG[Math.floor(R.nv / 2)]], 0]],
+    [[`fin de construction des fléaux (${F(p.dates.clavage)} j)`, r.finPhase[iCl - 1]], ['après superstructures', debut(iS)], [`fin (${F(p.dates.fin)} j)`, r.pas.length - 1]]);
   h2('Précontrainte : pertes instantanées et différées');
   const rows = [];
   modele.cables.forEach((c, ic) => {
     if (ic % 2 === 1 && /fléau/.test(c.nom)) return;   // fléau 2 identique au fléau 1
     const seg = r.final.cables.findIndex(q => q && q.cable === ic && q.seg === Math.floor(c.segments.length / 2));
     const k0 = debut(c.phase), N0 = r.pas[k0].cables[seg].N, Nc = r.pas[r.finPhase[iCl - 1]].cables[seg]?.N, Nf = r.final.cables[seg].N;
-    rows.push([c.nom.replace('F1-', ''), F(c.P0), F(N0), Nc == null ? '—' : F(Nc), F(Nf), F((1 - Nf / c.P0) * 100, 1)]);
+    const nn = c.n || 1;
+    rows.push([c.nom.replace('F1-', '') + (nn > 1 && /fléau/.test(c.nom) ? ` (${nn} câbles)` : ''), F(c.P0 / nn), F(N0 / nn), Nc == null ? '—' : F(Nc / nn), F(Nf / nn), F((1 - Nf / c.P0) * 100, 1)]);
   });
-  table(['Câble (milieu)', 'P₀ vérin [kN]', 'après pertes instantanées [kN]', 'avant clavage [kN]', 'P(∞) [kN]', 'pertes totales [%]'], rows);
+  table(['Câbles (milieu)', 'P₀ vérin par câble [kN]', 'après pertes instantanées [kN]', 'avant clavage [kN]', 'P(∞) [kN]', 'pertes totales [%]'], rows);
   const iLong = modele.cables.findIndex((c, i) => i === 2 * p.nv);
   blocsPertesInst(B, r.pertesInstantanees[iLong], modele.cables[iLong].nom, p.cable);
   h2('Contre-flèches de construction (fléau 1)');

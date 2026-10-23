@@ -87,7 +87,9 @@ export function poutresContinues(p = DEFAUTS_POUTRES) {
   return {
     modele: { noeuds, barres, phases, cables, tFin: T.fin, parDecade: p.parDecade || 8,
       betons: { P: { fck: P.fck, RH: P.RH, h0: P.h0, ciment: P.ciment, tCoulage: 0 }, H: { fck: H.fck, RH: H.RH, h0: H.h0, ciment: H.ciment, tCoulage: T.hourdis } } },
-    reperes: { n, L, nb, iP, iH, debut, fin },
+    reperes: { n, L, nb, iP, iH, debut, fin,
+      // fibres des parties (dimensions connues) : poutre précontrainte, hourdis armé
+      fibres: p.forme ? barres.map(b => (b.beton === 'P' ? { vs: p.forme.H - p.forme.yG, vi: p.forme.yG, precontraint: true, partie: 'poutre' } : { vs: p.forme.hd / 2, vi: p.forme.hd / 2, precontraint: false, partie: 'hourdis' })) : null },
   };
 }
 
@@ -127,9 +129,9 @@ export function diagramme(pasCalc, R, resultante, m = 4) {
  * ==================================================================================================================== */
 export const DEFAUTS_FLEAU = {
   a: 40, nv: 8, l0: 8, hp: 4.0, hc: 2.0, Ac: 6.0, Ap: 9.0, Ic: 4.2, vh: 0.42,
-  fck: 40, RH: 70, h0: 400, ciment: 'R', gBeton: 25, gSup: 60, Qeq: 400,
-  cable: { Ap: 0.0021, P0: 3000, mu: 0.19, k: 0.007, g: 0.006, enrob: 0.15, classe: 2, rho1000: 2.5 },
-  continuite: { n: 2, nv: 4, Ap: 0.0021, P0: 3000 },
+  fck: 40, RH: 70, h0: 400, ciment: 'R', gBeton: 25, gSup: 40, Qeq: 400,
+  cable: { n: 3, Ap: 0.0021, P0: 3000, mu: 0.19, k: 0.007, g: 0.006, enrob: 0.15, classe: 2, rho1000: 2.5 },
+  continuite: { n: 4, nv: 4, Ap: 0.0021, P0: 3000 },
   dates: { cycle: 7, durc: 3, clavage: 90, continuite: 95, superstructures: 120, fin: 36500 },
   parDecade: 6,
 };
@@ -153,7 +155,7 @@ function lireFleauValeurs(d = {}) {
     hp: num(d.fl_hp, D.hp), hc: num(d.fl_hc, D.hc), Ac: num(d.fl_Ac, D.Ac), Ap: num(d.fl_Ap, D.Ap), Ic: num(d.fl_Ic, D.Ic), vh: num(d.fl_vh, D.vh),
     fck: num(d.fl_fck, D.fck), RH: num(d.fl_RH, D.RH), h0: num(d.fl_h0, D.h0), ciment: d.fl_cim || D.ciment,
     gBeton: num(d.fl_gb, D.gBeton), gSup: num(d.fl_gsup, D.gSup), Qeq: num(d.fl_Qeq, D.Qeq),
-    cable: { Ap: num(d.fl_cAp, D.cable.Ap * 1e4) / 1e4, P0: num(d.fl_cP0, D.cable.P0), mu: num(d.fl_mu, D.cable.mu), k: num(d.fl_k, D.cable.k), g: num(d.fl_g, D.cable.g * 1000) / 1000, enrob: num(d.fl_enr, D.cable.enrob), classe: 2, rho1000: 2.5 },
+    cable: { n: Math.max(1, Math.round(num(d.fl_cn, D.cable.n))), Ap: num(d.fl_cAp, D.cable.Ap * 1e4) / 1e4, P0: num(d.fl_cP0, D.cable.P0), mu: num(d.fl_mu, D.cable.mu), k: num(d.fl_k, D.cable.k), g: num(d.fl_g, D.cable.g * 1000) / 1000, enrob: num(d.fl_enr, D.cable.enrob), classe: 2, rho1000: 2.5 },
     continuite: { n: Math.max(0, Math.round(num(d.fl_ccn, D.continuite.n))), nv: Math.max(1, Math.round(num(d.fl_ccv, D.continuite.nv))), Ap: num(d.fl_ccAp, D.continuite.Ap * 1e4) / 1e4, P0: num(d.fl_ccP0, D.continuite.P0) },
     dates: { cycle: num(d.fl_cyc, D.dates.cycle), durc: num(d.fl_dur, D.dates.durc), clavage: num(d.fl_tcl, D.dates.clavage), continuite: num(d.fl_tcc, D.dates.continuite), superstructures: num(d.fl_tsup, D.dates.superstructures), fin: num(d.fl_tfin, D.dates.fin) },
     parDecade: D.parDecade,
@@ -203,7 +205,7 @@ export function fleaux(p = DEFAUTS_FLEAU) {
     return s;
   };
   const phases = [], cables = [];
-  const tension = (k, iPh) => { for (let f = 0; f < 2; f++) cables.push({ nom: `fléau F${f + 1}-${k}`, Ap: C.Ap, P0: C.P0, mu: C.mu, k: C.k, g: C.g, tension: 'deux', classe: C.classe, rho1000: C.rho1000, phase: iPh, segments: segFleau(f, k) }); };
+  const tension = (k, iPh) => { for (let f = 0; f < 2; f++) cables.push({ nom: `fléau F${f + 1}-${k}`, n: C.n, Ap: C.n * C.Ap, P0: C.n * C.P0, mu: C.mu, k: C.k, g: C.g, tension: 'deux', classe: C.classe, rho1000: C.rho1000, phase: iPh, segments: segFleau(f, k) }); };
   const bout = (f, cote, k) => (k === 0 ? (cote === 'G' ? F[f].ids.G[0] : F[f].ids.D[0]) : (cote === 'G' ? F[f].ids.G[k] : F[f].ids.D[k]));
   // phase 0 : voussoirs sur pile, encastrement provisoire sur pile
   phases.push({ t: T.durc, nom: 'Voussoirs sur pile (encastrement provisoire)', activer: [...F[0].bG.slice(0, 1), ...F[0].bD.slice(0, 1), ...F[1].bG.slice(0, 1), ...F[1].bD.slice(0, 1)],
@@ -228,16 +230,18 @@ export function fleaux(p = DEFAUTS_FLEAU) {
   const iCont = phases.length;
   phases.push({ t: T.continuite, nom: 'Câbles de continuité de la travée centrale' });
   const cc = p.continuite;
-  for (let q = 0; q < cc.n; q++) {
+  if (cc.n > 0) {
     const segs = [];
     for (let k = nv - cc.nv + 1; k <= nv; k++) { const b = barres[F[0].bD[k]]; segs.push({ barre: F[0].bD[k], ei: eBas(b.xi0), ej: eBas(b.xi1) }); }
     for (let k = nv; k >= nv - cc.nv + 1; k--) { const b = barres[F[1].bG[k]]; segs.push({ barre: F[1].bG[k], ei: eBas(b.xi0), ej: eBas(b.xi1) }); }
-    cables.push({ nom: `continuité ${q + 1}`, Ap: cc.Ap, P0: cc.P0, mu: C.mu, k: C.k, g: C.g, tension: 'deux', classe: C.classe, rho1000: C.rho1000, phase: iCont, segments: segs });
+    // n câbles identiques groupés (A_p et P₀ multipliés par n : frottement et zone d'influence du recul inchangés)
+    cables.push({ nom: `continuité (${cc.n} câbles)`, Ap: cc.n * cc.Ap, P0: cc.n * cc.P0, mu: C.mu, k: C.k, g: C.g, tension: 'deux', classe: C.classe, rho1000: C.rho1000, phase: iCont, segments: segs, n: cc.n });
   }
   phases.push({ t: T.superstructures, nom: 'Superstructures', charges: barres.map((_, i) => ({ barre: i, w: p.gSup })) });
+  const fibres = barres.map(b => { const xi = (b.xi0 + b.xi1) / 2, v = vx(xi); return { vs: v, vi: h(xi) - v, precontraint: true, partie: 'caisson' }; });
   return {
     modele: { noeuds, barres: barres.map(({ xi0, xi1, ...b }) => b), betons, phases, cables, tFin: T.fin, parDecade: p.parDecade || 6 },
-    reperes: { F, nv, a, lv, l0, eHaut, eBas, h },
+    reperes: { F, nv, a, lv, l0, eHaut, eBas, h, fibres },
   };
 }
 
