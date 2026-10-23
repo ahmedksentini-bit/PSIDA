@@ -27,6 +27,16 @@ export function parsePoutres(d) {
       yaBas: v('pt_yab', C.yaBas), yaHaut: v('pt_yah', C.yaHaut), sigP0: v('pt_sp0', 0) || null, mu: v('pt_mu', C.mu), k: v('pt_kp', C.k), g: v('pt_g', C.g * 1000) / 1000, tension: d.pt_tens || C.tension, fpk: 1860, fp01k: 1640, classe: 2, rho1000: 2.5 },
     dates: { t1: v('pt_t1', DV.dates.t1), t2: v('pt_t2', DV.dates.t2), t2b: v('pt_t2b', DV.dates.t2b), t3: v('pt_t3', DV.dates.t3), fin: 36500 },
   };
+  // PRAD : torons adhérents (src/beams/prad.js) ; la 2e famille n'existe pas (t2b = t2)
+  if (d.pt_type === 'PRAD') {
+    const e = v('pr_e', 0.05);
+    vipp.adherence = { nt: Math.round(v('pr_nt', 20)), nsup: Math.round(v('pr_nsup', 0)), type: d.pr_type || 'T15S', cBas: v('pr_cbas', 0.05), ev: e, eh: e, alpha1: v('pr_rel', 1), dT: v('pr_dT', 0), about: v('pr_about', 0.30),
+      groupes: [{ n: Math.round(v('pr_g1n', 4)), Lg: v('pr_g1L', 2) }, { n: Math.round(v('pr_g2n', 4)), Lg: v('pr_g2L', 4) }] };
+    vipp.dates.t2b = vipp.dates.t2;
+    // étuvage : âge équivalent t_T = Σ exp(−4000/(273 + T) + 13,65) Δt (EN 1992-1-1 § 10.3.1.1 (3)), T = 20 °C + ΔT pendant h heures
+    const h = v('pr_hetuv', 0) / 24, T = 20 + v('pr_dT', 0);
+    vipp.beton.decalage = h > 0 ? Math.max(0, h * (Math.exp(-4000 / (273 + T) + 13.65) - 1)) : 0;
+  }
   const local = { tRev: v('pt_trev', 0.08), te: v('pt_te', 0.25), dv: v('pt_dv', 0.6), verinsRive: d.pt_vrive === undefined ? true : !!+d.pt_vrive || d.pt_vrive === 'on', fckH: v('pt_fckh', 30), c: v('pt_ch', 0.03) };
   return {
     geo, vipp, local,
@@ -59,7 +69,7 @@ export function computePoutres(inp) {
       const out = { k: b.k, y: b.y, mid: {}, eta: {}, V0: {}, comb: { ELS_F61: c.ELS_F61[mid], ELU_F61: c.ELU_F61[mid], ELS_EC: c.ELS_EC[mid], ELU_EC: c.ELU_EC[mid] }, MuF, MuE };
       for (const id of ['G', 'A', 'Bc', 'Bt', 'Mc120', 'D240', 'trott', 'TS', 'UDL', 'gr1a', 'gr1b']) if (b[id]) { out.mid[id] = b[id].Mmax[mid]; out.eta[id] = b[id].eta; out.V0[id] = b[id].Vmax ? b[id].Vmax[x0] : null; }
       const d = H - inp.cover;
-      if (inp.type === 'BP' && inp.geo === 'dims') {
+      if ((inp.type === 'BP' || inp.type === 'PRAD') && inp.geo === 'dims') {
         out.vipp = chaineVIPP({ ...inp.vipp, b1: inp.b1, hd: inp.hd, gExtra: 0 }, S.L, b, { elsF61: c.ELS_F61, eluF61: c.ELU_F61 });
       } else if (inp.type === 'BA') {
         out.BA = { BAEL: tBeamULS({ M: MuF, beff: inp.b1, hf: inp.hd, b0: inp.b0, d, fck: inp.fck, fyk: inp.fyk, code: 'BAEL' }), EC: tBeamULS({ M: MuE, beff: inp.b1, hf: inp.hd, b0: inp.b0, d, fck: inp.fck, fyk: inp.fyk, code: 'EC' }) };

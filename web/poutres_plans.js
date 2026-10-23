@@ -4,6 +4,7 @@
  */
 import { planCoffrageVIPP, planCablageVIPP, planFerraillageVIPP } from '../src/plans/vipp.js';
 import { planNomenclatureVIPP } from '../src/plans/nomenclature_vipp.js';
+import { planToronsPRAD } from '../src/plans/prad.js';
 import { feuilleSVG } from '../src/plans/svg.js';
 import { feuilleDXF, octetsCp1252 } from '../src/plans/dxf.js';
 import { cartouche } from './plans_view.js';
@@ -18,16 +19,20 @@ export function poutreVIPP(r) {
   if (!sp.beams[0].vipp) return null;
   return sp.beams.reduce((a, b) => (b.vipp.elu.at(-1).MEd > a.vipp.elu.at(-1).MEd ? b : a)).vipp;
 }
+// PRAD : le plan de câblage est remplacé par le plan des torons et du gainage ; abouts de la poutre PRAD
+const plans = v => (v && v.prad ? PLANS.map(p => (p.k === 'cab' ? { k: 'cab', titre: 'Torons et gainage', num: 'PRAD-TOR-01', f: planToronsPRAD } : { ...p, num: p.num.replace('VIPP', 'PRAD') })) : PLANS);
 const feuille = (v, k, r) => {
-  const P = PLANS.find(p => p.k === k), inp = (r && r.inp) || {};
+  const P = plans(v).find(p => p.k === k), inp = (r && r.inp) || {}, a = v.prad ? v.prad.a.about : 0.5;
   const ctx = { n: inp.n, b1: inp.b1, hourdis: r && r.hourdis, entretoise: r && r.entretoise };
-  return P.f(v, cartouche(P.num), { nom: `POUTRE VIPP ${v.L.toFixed(2).replace('.', ',')} m`, ctx });
+  return P.f(v, cartouche(P.num), { nom: `POUTRE ${v.prad ? 'PRAD' : 'VIPP'} ${v.L.toFixed(2).replace('.', ',')} m`, ctx, a });
 };
 function telecharger(blob, nom) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nom; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
 
 export function renderPoutresPlans(r) {
   const card = $('#pt-plans'); if (!card) return;
   const v = poutreVIPP(r); card.hidden = !v; $('#pt-plan-apercu').innerHTML = '';
+  if (v) { const cur = $('#pt-plan-type').value; $('#pt-plan-type').innerHTML = plans(v).map(p => `<option value="${p.k}">${p.titre}</option>`).join(''); $('#pt-plan-type').value = cur || 'cof'; }
+  const h = card.querySelector('h2'); if (h) h.textContent = `Plans de la poutre ${v && v.prad ? 'PRAD' : 'VIPP'} (DXF et PDF)`;
 }
 
 export function initPoutresPlans(getRes) {
@@ -42,11 +47,11 @@ export function initPoutresPlans(getRes) {
     const url = URL.createObjectURL(new Blob([feuilleSVG(feuille(v, $('#pt-plan-type').value, r))], { type: 'image/svg+xml' }));
     $('#pt-plan-apercu').innerHTML = `<a href="${url}" target="_blank" rel="noopener" title="Ouvrir le plan en grand"><img src="${url}" alt="plan" style="width:100%"></a>`;
   }));
-  $('#pt-plan-dxf').addEventListener('click', avec((v, r) => { const k = $('#pt-plan-type').value; telecharger(new Blob([octetsCp1252(feuilleDXF(feuille(v, k, r)))], { type: 'application/dxf' }), `${PLANS.find(p => p.k === k).num}.dxf`); }));
+  $('#pt-plan-dxf').addEventListener('click', avec((v, r) => { const k = $('#pt-plan-type').value; telecharger(new Blob([octetsCp1252(feuilleDXF(feuille(v, k, r)))], { type: 'application/dxf' }), `${plans(v).find(p => p.k === k).num}.dxf`); }));
   const pdf = tous => avec(async (v, r) => {
     const { feuillesPDFBlob } = await import('./plans_pdf.js');
-    const ks = tous ? PLANS.map(p => p.k) : [$('#pt-plan-type').value];
-    telecharger(await feuillesPDFBlob(ks.map(k => feuille(v, k, r)), { titre: 'Poutre VIPP — plans' }), tous ? 'poutre-vipp-plans.pdf' : `${PLANS.find(p => p.k === ks[0]).num}.pdf`);
+    const ks = tous ? plans(v).map(p => p.k) : [$('#pt-plan-type').value];
+    telecharger(await feuillesPDFBlob(ks.map(k => feuille(v, k, r)), { titre: `Poutre ${v.prad ? 'PRAD' : 'VIPP'} — plans` }), tous ? `poutre-${v.prad ? 'prad' : 'vipp'}-plans.pdf` : `${plans(v).find(p => p.k === ks[0]).num}.pdf`);
   });
   $('#pt-plan-pdf').addEventListener('click', pdf(false));
   $('#pt-plan-pdf-tous').addEventListener('click', pdf(true));

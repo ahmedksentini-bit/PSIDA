@@ -74,15 +74,22 @@ export function vippBlocks(v, titre) {
   const B = [], h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), comment = text => B.push({ t: 'comment', text });
   const table = (head, rows, opt = {}) => B.push({ t: 'table', head, rows, ...opt });
   const S = v.S, f = S.forme, T = v.dates, M2 = x => F(x, 2), pc = (a, b) => `${F((1 - a / b) * 100, 1)} %`;
-  h2(`${titre} — conception (guide Sétra VIPP, 1996)`);
+  const pr = v.prad;
+  h2(`${titre} — conception (${pr ? 'dossier Sétra PRAD 73' : 'guide Sétra VIPP, 1996'})`);
   table(['Niveau', 'Constat', 'Guide'], v.conception.map(d => [d.niveau, d.texte, d.ref]));
-  for (const a of v.trace.alerte) para(`ATTENTION — câblage : ${a}.`);
-  h2(`${titre} — section, matériaux et câblage`);
+  for (const a of v.trace.alerte) para(`ATTENTION — ${pr ? 'torons' : 'câblage'} : ${a}.`);
+  h2(`${titre} — section, matériaux et ${pr ? 'torons' : 'câblage'}`);
   para(`Poutre seule : A = ${F3(S.poutre.A)} m², I = ${F(S.poutre.I, 4)} m⁴, v' = ${F3(S.poutre.yG)} m, v = ${F3(S.poutre.vs)} m, épaisseur fictive h₀ = ${F0(S.poutre.h0)} mm. Hourdis : largeur efficace b_eff = ${F2(v.beff)} m (EN 1992-1-1 § 5.3.2.1), A = ${F3(S.hourdis.A)} m², e = ${F3(S.hourdis.e)} m au-dessus de G poutre. Section composée homogène (n = E_cm,h/E_cm,p = ${F3(v.nh)}) : A = ${F3(S.comp.A)} m², I = ${F(S.comp.I, 4)} m⁴, v' = ${F3(S.comp.yG)} m.`);
   para(`Béton de poutre C${v.betons.P.fck} (E_cm = ${F0(v.betons.P.Ecm)} MPa, φ(∞, t₁) = ${F2(v.betons.P.phi)}, ε_cs(∞) = ${F(-v.betons.P.eps * 1e6, 0)} µm/m) ; hourdis C${v.betons.H.fck} (E_cm = ${F0(v.betons.H.Ecm)} MPa, φ = ${F2(v.betons.H.phi)}, ε_cs(∞) = ${F(-v.betons.H.eps * 1e6, 0)} µm/m) — EN 1992-1-1 § 3.1.4 et annexe B. Charges par poutre : poids propre ${F(v.charges.wP)} kN/m, hourdis ${F(v.charges.wH)} kN/m, superstructures ${F(v.charges.wS)} kN/m (part de G de Guyon-Massonnet).`);
+  if (pr) {
+    table(['Groupe', 'Torons', 'Gainés sur [m]', 'Force appliquée dès [m de l\'appui]', 'y [m]', 'P_m0 après relâchement [kN]', 'Mise en service', 't∞', 'Pertes depuis σ_pi'],
+      v.trace.cab.map((cb, ig) => { const q = v.pertes[ig], P0 = cb.n * pr.T.A * pr.sigPi * 1000; return [cb.sup ? 'supérieurs' : ig ? `gainé G${ig}` : 'adhérents', String(cb.n), cb.Lg ? F2(cb.Lg) : '—', F2(cb.xDeb), F3(cb.ym), F0(q.P0), F0(q.Pserv), F0(q.Pinf), pc(q.Pinf, P0)]; }), { small: true });
+    comment(`Tension sur banc σ_pi = ${F0(pr.sigPi)} MPa (§ 5.10.2.1) ; avant et au relâchement : relaxation ${F(pr.dRel, 1)} MPa (§ 3.3.2), étuvage ${F(pr.dTh, 1)} MPa (0,5 E_p α_c ΔT, § 10.5.2), raccourcissement élastique ${F(pr.sigEl, 1)} MPa (E_p σ_c / E_cm(t), § 5.10.4) → σ_pm0 = ${F0(pr.sigPm0)} MPa. Transmission : f_bpt = η_p1 η₁ f_ctd(t) = ${F2(pr.fbpt)} MPa, l_pt = α₁ α₂ φ σ_pm0 / f_bpt = ${F2(pr.lpt)} m (l_pt1 = ${F2(pr.lpt1)} m, l_pt2 = ${F2(pr.lpt2)} m, § 8.10.2.2) ; ancrage à l'ELU l_bpd = ${F2(v.ancrage.lbpd)} m (§ 8.10.2.3, σ_p∞ = ${F0(v.ancrage.sigPinf)} MPa). Les groupes gainés agissent au-delà de L_g + l_pt/2 − about ; pertes différées par le calcul pas à pas.`);
+  } else {
   table(['Câble', 'Famille', 'y mi-travée [m]', 'y ancrage [m]', 'P₀ vérin [kN]', 'Après frottement et recul (mi-travée)', 'λ recul [m]', 'Après mise en tension', 'Mise en service', 't∞', 'Pertes totales'],
     v.pertes.map(q => [String(q.ic + 1), String(q.famille), F3(q.ym), F3(q.ya), F0(q.P0), `${F0(q.Pinst)} (${pc(q.Pinst, q.P0)})`, F(Math.max(...q.lambda), 1), F0(q.PapresTension), F0(q.Pserv), F0(q.Pinf), pc(q.Pinf, q.P0)]), { small: true });
   comment(`σ_p0 = ${F0(v.sigP0)} MPa = min(0,8 f_pk ; 0,9 f_p0,1k) (§ 5.10.2.1) ; frottement P(x) = P₀ e^(−μ(θ + kx)) (§ 5.10.5.2), recul d'ancrage par égalité des aires (§ 5.10.5.3) ; raccourcissement élastique par mise en tension successive des câbles (§ 5.10.5.1) ; pertes différées par le calcul pas à pas (fluage et retrait des deux bétons, retrait différentiel hourdis-poutre, relaxation § 3.3.2 classe 2, ρ₁₀₀₀ = 2,5 %). Total à t∞ à mi-travée : ${F0(v.Ptot.inf)} kN pour ${F0(v.Ptot.P0)} kN au vérin (${pc(v.Ptot.inf, v.Ptot.P0)} de pertes).`);
+  }
   h2(`${titre} — phases de construction`);
   table(['Phase', 't [j]'], v.modele.phases.map(ph => [ph.nom, F(ph.t, 0)]).concat([['Fin de calcul (t∞)', F0(T.fin)]]));
   h2(`${titre} — contraintes normales (MPa, traction positive) à t∞`);
@@ -107,10 +114,10 @@ export function vippBlocks(v, titre) {
     v.tranchant.map(t => [F(t.x, 1), F0(t.VEd0), F0(t.Vpd), F0(t.VEd), F3(t.bwn), F2(t.scp), F2(t.cot), F0(t.VRdmax), F(t.AswS * 1e4, 1), etriers(t.AswS, t.z / 0.9), t.ok ? 'OK' : 'NON']), { small: true });
   comment('V_Ed = 1,35 V_G + 1,35 max(V_gr1a ; V_gr1b) ; V_pd = Σ P∞ sin α (composante verticale des câbles relevés, § 6.2.1 (1)) ; b_w,nom = b_w − ½ φ_gaine (gaines métalliques injectées, § 6.2.3 (6)) — âme épaissie (blochet) près des appuis ; α_cw selon σ_cp = P∞/A_c (§ 6.2.3 (3)) ; z = 0,9 d ; minimum ρ_w,min = 0,08 √f_ck/f_yk. Effort de traction supplémentaire ΔF_td = ½ V_Ed (cot θ − cot α) à ancrer dans le talon (§ 6.2.3 (7)).');
   h2(`${titre} — flèches à mi-travée (mm, vers le bas positives)`);
-  table(['Après 1re famille', 'Hourdis coulé (avant 2e famille)', 'Après 2e famille', 'Mise en service', 't∞', 'Trafic caractéristique (E_cm)'], [[F(v.fleches.tension * 1000, 1), F(v.fleches.hourdis * 1000, 1), F(v.fleches.famille2 * 1000, 1), F(v.fleches.service * 1000, 1), F(v.fleches.infini * 1000, 1), F(v.fleches.trafic * 1000, 1)]]);
+  table([pr ? 'Après relâchement' : 'Après 1re famille', pr ? 'Hourdis coulé' : 'Hourdis coulé (avant 2e famille)', pr ? 'Hourdis durci' : 'Après 2e famille', 'Mise en service', 't∞', 'Trafic caractéristique (E_cm)'], [[F(v.fleches.tension * 1000, 1), F(v.fleches.hourdis * 1000, 1), F(v.fleches.famille2 * 1000, 1), F(v.fleches.service * 1000, 1), F(v.fleches.infini * 1000, 1), F(v.fleches.trafic * 1000, 1)]]);
   comment(`Valeurs négatives : contre-flèche (poutre relevée par la précontrainte). La flèche à t∞ sous charges permanentes (${F(v.fleches.infini * 1000, 1)} mm) donne la contre-flèche de coffrage éventuelle ; trafic : L/${F0(v.L / Math.max(v.fleches.trafic, 1e-6))}.`);
   h2(`${titre} — quantités`);
-  para(`Béton de poutre ${F(v.quantites.volP, 1)} m³ ; précontrainte ${F0(v.quantites.kgP)} kg, soit ${F0(v.quantites.ratioP)} kg par m³ de béton du tablier (poutre + hourdis) — guide : ≈ 40 kg/m³.`);
+  para(`Béton de poutre ${F(v.quantites.volP, 1)} m³ ; précontrainte ${F0(v.quantites.kgP)} kg, soit ${F0(v.quantites.ratioP)} kg par m³ de béton du tablier (poutre + hourdis)${pr ? '' : ' — guide : ≈ 40 kg/m³'}.`);
   return B;
 }
 

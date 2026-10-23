@@ -801,6 +801,9 @@ $('#f').addEventListener('input', schedulePt);
 $('#f').addEventListener('change', schedulePt);
 renderPoutresScheme();
 initPoutresPlans(() => poutres);
+// PRAD : relâchement à 1 jour (étuvage) au lieu de la mise en tension des VIPP à 7 jours, si la valeur n'a pas été modifiée
+{ const ty = document.querySelector('[name="pt_type"]'), t1 = document.querySelector('[name="pt_t1"]');
+  if (ty && t1) ty.addEventListener('change', () => { if (ty.value === 'PRAD' && t1.value === '7') t1.value = '1'; else if (ty.value === 'BP' && t1.value === '1') t1.value = '7'; }); }
 initParcours();
 $('#btn-phasage-note').addEventListener('click', () => {
   if (!phasage) runPhasage(); if (!phasage) return;

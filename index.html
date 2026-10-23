@@ -454,7 +454,7 @@
       <p class="small">VIPP ou poutres BA : répartition transversale de Guyon-Massonnet, efforts par poutre (Eurocodes et Fascicule 61) ; pour une VIPP définie par ses dimensions, chaîne complète : câblage, pertes, calcul par phases (fluage, retrait, relaxation), contraintes ELS, ELU de flexion, effort tranchant et étriers, flèches, diagnostic du guide Sétra VIPP (1996). Réactions transmises aux appuis.</p>
       <div class="grp">Travées et poutres</div>
       <div class="fld">Portées des travées [m]<input type="hidden" name="pt_spans" value="33, 33, 33, 33" data-ed="list" data-item="Travée T" data-count="Nombre de travées"></div>
-      <label>Type de poutres<select name="pt_type"><option value="BP">précontraintes (VIPP)</option><option value="BA">béton armé</option></select></label>
+      <label>Type de poutres<select name="pt_type"><option value="BP">précontraintes par post-tension (VIPP)</option><option value="PRAD">précontraintes par adhérence (PRAD, pré-tension)</option><option value="BA">béton armé</option></select></label>
       <label>Nombre de poutres<input name="pt_n" value="4" type="number"></label>
       <label>Entraxe des poutres b₁ [m]<input name="pt_b1" value="3.28" type="number" step="any"></label>
       <label>Épaisseur du hourdis [m]<input name="pt_hd" value="0.30" type="number" step="any"></label>
@@ -482,7 +482,8 @@
       <label>Hauteur totale H [m]<input name="pt_H" value="2.32" type="number" step="any"></label>
       </div>
       <label class="wide" data-show="pt_geo=rect">Rectangles de la poutre, du talon vers la table : « b h ; … » [m] (le hourdis est ajouté ; calcule A, I, K, v, v')<input name="pt_parts" value="0.6 0.25 ; 0.25 1.47 ; 1.0 0.3" placeholder="ex. 0.6 0.25 ; 0.25 1.47 ; 1.0 0.3"></label>
-      <div data-show="pt_geo=dims"><div data-show="pt_type=BP">
+      <div data-show="pt_geo=dims"><div data-show="pt_type=BP|PRAD">
+      <div data-show="pt_type=BP">
       <div class="grp">Câblage (post-tension)</div>
       <label>Nombre de câbles par poutre<input name="pt_nc" value="4" type="number" min="1" max="12"></label>
       <label>dont 2e famille (tendus après le hourdis)<input name="pt_n2" value="2" type="number" min="0" max="11"></label>
@@ -497,10 +498,27 @@
       <label>Déviation parasite k [rad/m]<input name="pt_kp" value="0.007" type="number" step="any"></label>
       <label>Recul d'ancrage g [mm]<input name="pt_g" value="6" type="number" step="any"></label>
       <label>Mise en tension<select name="pt_tens"><option value="deux">par les deux extrémités</option><option value="gauche">par une extrémité</option></select></label>
+      </div>
+      <div data-show="pt_type=PRAD">
+      <div class="grp">Torons adhérents (pré-tension sur banc)</div>
+      <label>Nombre de torons par poutre<input name="pr_nt" value="20" type="number" min="2" step="1"></label>
+      <label>Torons supérieurs dans la table (adhérents)<input name="pr_nsup" value="2" type="number" min="0" step="1"></label>
+      <label>Type de toron<select name="pr_type"><option value="T15S">T15 super (150 mm²)</option><option value="T13S">T13 super (100 mm²)</option></select></label>
+      <label>Axe du lit inférieur depuis le bas [m]<input name="pr_cbas" value="0.05" type="number" step="any"></label>
+      <label>Entraxe des torons (horizontal et vertical) [m]<input name="pr_e" value="0.05" type="number" step="any"></label>
+      <label>Groupe gainé 1 : nombre de torons<input name="pr_g1n" value="4" type="number" min="0" step="1"></label>
+      <label>Groupe gainé 1 : longueur gainée depuis l'about [m]<input name="pr_g1L" value="2.0" type="number" step="any"></label>
+      <label>Groupe gainé 2 : nombre de torons<input name="pr_g2n" value="4" type="number" min="0" step="1"></label>
+      <label>Groupe gainé 2 : longueur gainée depuis l'about [m]<input name="pr_g2L" value="4.0" type="number" step="any"></label>
+      <label>Relâchement<select name="pr_rel"><option value="1">progressif (α₁ = 1,0)</option><option value="1.25">brutal, sciage (α₁ = 1,25)</option></select></label>
+      <label>Élévation de température d'étuvage T_max − T₀ [K]<input name="pr_dT" value="45" type="number" step="any"></label>
+      <label>Durée de l'étuvage [h] (âge équivalent, EN 1992-1-1 § 10.3.1.1)<input name="pr_hetuv" value="16" type="number" step="any"></label>
+      <label>About : extrémité de la poutre – axe d'appui [m]<input name="pr_about" value="0.30" type="number" step="any"></label>
+      </div>
       <div class="grp">Chronologie (âges en jours depuis le coulage de la poutre)</div>
-      <label>Mise en tension de la 1re famille<input name="pt_t1" value="7" type="number" step="any"></label>
+      <label><span data-show="pt_type=BP">Mise en tension de la 1re famille</span><span data-show="pt_type=PRAD">Relâchement des torons</span><input name="pt_t1" value="7" type="number" step="any"></label>
       <label>Coulage du hourdis<input name="pt_t2" value="35" type="number" step="any"></label>
-      <label>Mise en tension de la 2e famille<input name="pt_t2b" value="42" type="number" step="any"></label>
+      <label data-show="pt_type=BP">Mise en tension de la 2e famille<input name="pt_t2b" value="42" type="number" step="any"></label>
       <label>Superstructures (mise en service)<input name="pt_t3" value="90" type="number" step="any"></label>
       <label>Humidité relative [%]<input name="pt_RH" value="70" type="number" step="any"></label>
       <label>Ciment de la poutre<select name="pt_cim"><option value="R">R (prise rapide, préfabrication)</option><option value="N">N</option><option value="S">S</option></select></label>

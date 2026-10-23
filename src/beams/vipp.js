@@ -24,6 +24,7 @@
 import { calculPhasage } from '../phasage/phasage.js';
 import { betonEC2 } from '../phasage/fluage.js';
 import { sectionVIPP, contourVIPP, largeurEfficaceT } from './vipp_section.js';
+import { traceTorons, diagnosticPRAD, longueurAncrage } from './prad.js';
 
 /** Unités de précontrainte courantes (torons T15 super, 150 mm² ; T13 super, 100 mm²) et diamètre intérieur de gaine. */
 export const UNITES = {
@@ -116,7 +117,11 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
   const D = DEFAUTS_VIPP, c = { ...D.cables, ...p.cables }, T = { ...D.dates, ...p.dates }, B = { ...D.beton, ...p.beton };
   if (!(T.t1 < T.t2 && T.t2 <= T.t2b && T.t2b <= T.t3 && T.t3 < T.fin)) throw new Error('VIPP : dates croissantes attendues (1re famille < hourdis ≤ 2e famille ≤ superstructures < fin)');
   const nb = p.nb || D.nb, f = p.forme, { S, beff, nh } = geometrieVIPP(p, L), P = S.poutre, H = S.hourdis;
-  const tr = traceCables(c, L, f), u = tr.u, nc = tr.cab.length, n2 = Math.max(0, Math.min(nc - 1, Math.round(c.n2 || 0))), n1 = nc - n2;
+  // PRAD (p.adherence) : torons rectilignes adhérents, un « câble » par groupe de gainage, tous relâchés à t₁
+  const prad = !!p.adherence, MgMid = P.A * B.gamma * L * L / 8;
+  const tr = prad ? traceTorons(p.adherence, L, f, { fckP: B.fckP, t1: T.t1 + (B.decalage || 0), tRel: T.t1, Mg: MgMid }, S) : traceCables(c, L, f);
+  const u = tr.u, nc = tr.cab.length, n2 = prad ? 0 : Math.max(0, Math.min(nc - 1, Math.round(c.n2 || 0))), n1 = nc - n2;
+  const ApC = cb => cb.Ap ?? u.Ap;
   const bP = betonEC2({ fck: B.fckP, RH: B.RH, h0: P.h0, ciment: B.cimP }), bH = betonEC2({ fck: B.fckH, RH: B.RH, h0: H.h0, ciment: B.cimH });
   const sigP0 = c.sigP0 || Math.min(0.8 * c.fpk, 0.9 * c.fp01k), P0 = sigP0 * u.Ap * 1000;
   const xs = Array.from({ length: nb + 1 }, (_, j) => j * L / nb);
@@ -131,25 +136,29 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
   const noeuds = xs.map(x => [x, 0]), barres = [], iP = [], iH = [];
   for (let k = 0; k < nb; k++) { iP.push(barres.length); barres.push({ i: k, j: k + 1, A: P.A, I: P.I, e: 0, beton: 'P', nom: 'poutre' }); }
   for (let k = 0; k < nb; k++) { iH.push(barres.length); barres.push({ i: k, j: k + 1, A: H.A, I: H.I, e: H.e, beton: 'H', nom: 'hourdis' }); }
-  const cables = tr.cab.map((cb, ic) => ({
-    nom: `câble ${ic + 1}`, Ap: u.Ap, P0, mu: c.mu, k: c.k, g: c.g, tension: c.tension, fpk: c.fpk, classe: c.classe, rho1000: c.rho1000, phase: ic,
-    segments: iP.map((b, k) => ({ barre: b, ei: tr.y(cb, xs[k]) - P.yG, ej: tr.y(cb, xs[k + 1]) - P.yG })),
-  }));
+  const cables = tr.cab.map((cb, ic) => {
+    if (!prad) return { nom: `câble ${ic + 1}`, Ap: u.Ap, P0, mu: c.mu, k: c.k, g: c.g, tension: c.tension, fpk: c.fpk, classe: c.classe, rho1000: c.rho1000, phase: ic,
+      segments: iP.map((b, k) => ({ barre: b, ei: tr.y(cb, xs[k]) - P.yG, ej: tr.y(cb, xs[k + 1]) - P.yG })) };
+    // groupe de torons : force après relâchement, appliquée sur les barres au-delà de x_déb (gainage + l_pt/2) de chaque côté
+    const k0 = Math.min(Math.floor(nb / 2) - 1, Math.round(cb.xDeb / (L / nb))), ks = iP.map((b, k) => k).filter(k => k >= k0 && k < nb - k0);
+    return { nom: ic ? `torons gainés ${ic} (${cb.n})` : `torons adhérents (${cb.n})`, Ap: cb.Ap, P: cb.P, fpk: tr.prad.a.fpk, classe: tr.prad.a.classe, rho1000: tr.prad.a.rho1000, phase: 0, k0,
+      segments: ks.map(k => ({ barre: iP[k], ei: cb.ym - P.yG, ej: cb.ym - P.yG })) };
+  });
   const appuis = [{ n: 0, ddl: ['ux', 'uy'] }, { n: nb, ddl: ['uy'] }];
   const charge = (idx, w) => idx.map(barre => ({ barre, w }));
   // 1re famille (câbles 1 à n₁) tendue sur la poutre seule ; 2e famille (n₂ derniers câbles, lits supérieurs) tendue sur la
   // section composée, après durcissement du hourdis (pratique VIPP : la poutre seule ne supporte pas toute la précontrainte)
-  const phases = [{ t: T.t1, nom: 'Poutre seule sur ses appuis, mise en tension du câble 1', activer: iP, appuis, charges: charge(iP, wP) }];
-  for (let ic = 1; ic < n1; ic++) phases.push({ t: T.t1, nom: `Mise en tension du câble ${ic + 1}` });
+  const phases = [{ t: T.t1, nom: prad ? 'Relâchement des torons : poutre seule sur ses appuis' : 'Poutre seule sur ses appuis, mise en tension du câble 1', activer: iP, appuis, charges: charge(iP, wP) }];
+  if (!prad) for (let ic = 1; ic < n1; ic++) phases.push({ t: T.t1, nom: `Mise en tension du câble ${ic + 1}` });
   const iHourdis = phases.length;
   phases.push({ t: T.t2, nom: 'Coulage du hourdis (porté par la poutre seule)', charges: charge(iP, wH) });
   phases.push({ t: T.t2, nom: 'Hourdis durci : section composée', activer: iH });
   for (let ic = n1; ic < nc; ic++) phases.push({ t: T.t2b, nom: `2e famille : mise en tension du câble ${ic + 1}` });
-  cables.forEach((cb, ic) => { cb.phase = ic < n1 ? ic : iHourdis + 2 + (ic - n1); });
+  cables.forEach((cb, ic) => { cb.phase = prad ? 0 : ic < n1 ? ic : iHourdis + 2 + (ic - n1); });
   const iServ = phases.length;
   phases.push({ t: T.t3, nom: 'Superstructures : mise en service', charges: charge(iH, wS) });
   const modele = { noeuds, barres, phases, cables, tFin: T.fin, parDecade: 6,
-    betons: { P: { fck: B.fckP, RH: B.RH, h0: P.h0, ciment: B.cimP, tCoulage: 0 }, H: { fck: B.fckH, RH: B.RH, h0: H.h0, ciment: B.cimH, tCoulage: T.t2 } } };
+    betons: { P: { fck: B.fckP, RH: B.RH, h0: P.h0, ciment: B.cimP, tCoulage: -(B.decalage || 0) }, H: { fck: B.fckH, RH: B.RH, h0: H.h0, ciment: B.cimH, tCoulage: T.t2 } } };
   const out = calculPhasage(modele);
 
   // ---- contraintes des parties à un pas, à la section j
@@ -174,7 +183,8 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
   const Mfreq = x => Math.max(0.75 * Mq('TS', x) + 0.40 * Mq('UDL', x) + 0.40 * Mq('footway', x), 0.75 * Mq('gr1b', x));
   const MrareF = x => (elsF61 ? interp(elsF61, x) - Mq('G', x) : 0);
 
-  const fck = B.fckP, fckH = B.fckH, verifs = [];
+  // compression au jeune âge : 0,6 f_ck(t) ; éléments précontraints par pré-tension : k₆ f_ck(t), k₆ = 0,7 (§ 5.10.2.2 (5))
+  const fck = B.fckP, fckH = B.fckH, verifs = [], k6 = prad ? 0.7 : 0.6;
   const iS0 = out.pas.findIndex(pp => pp.phase === iServ), iS = iS0 >= 0 ? iS0 : out.pas.length - 1, iF = out.pas.length - 1;
   const stepsConstr = out.pas.map((pp, i) => i).filter(i => out.pas[i].phase < iServ);
   const sections = [];
@@ -183,9 +193,9 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
     // construction : enveloppe des pas antérieurs à la mise en service
     let cMin = Infinity, tMax = -Infinity, cInfo = null, tInfo = null;
     for (const i of stepsConstr) {
-      const pp = out.pas[i], s = sigmaPas(pp, j), age = pp.t;
-      for (const [nom, v, lim, limT] of [['poutre sup.', s.ps, bP.fckT(age), bP.fctmT(age)], ['poutre inf.', s.pi, bP.fckT(age), bP.fctmT(age)], ...(s.hs != null && age > T.t2 + 1 ? [['hourdis sup.', s.hs, bH.fckT(age - T.t2), bH.fctmT(age - T.t2)]] : [])]) {
-        if (v < 0 && -v / (0.6 * lim) > (cInfo ? cInfo.taux : -1)) { cInfo = { v, lim: 0.6 * lim, taux: -v / (0.6 * lim), fibre: nom, t: age }; }
+      const pp = out.pas[i], s = sigmaPas(pp, j), age = pp.t, ageP = age + (B.decalage || 0);   // âge équivalent du béton de la poutre (étuvage, EN 1992-1-1 § 10.3.1.1)
+      for (const [nom, v, lim, limT] of [['poutre sup.', s.ps, bP.fckT(ageP), bP.fctmT(ageP)], ['poutre inf.', s.pi, bP.fckT(ageP), bP.fctmT(ageP)], ...(s.hs != null && age > T.t2 + 1 ? [['hourdis sup.', s.hs, bH.fckT(age - T.t2), bH.fctmT(age - T.t2)]] : [])]) {
+        if (v < 0 && -v / (k6 * lim) > (cInfo ? cInfo.taux : -1)) { cInfo = { v, lim: k6 * lim, taux: -v / (k6 * lim), fibre: nom, t: age }; }
         if (v > 0 && v / limT > (tInfo ? tInfo.taux : -1)) { tInfo = { v, lim: limT, taux: v / limT, fibre: nom, t: age }; }
         cMin = Math.min(cMin, v); tMax = Math.max(tMax, v);
       }
@@ -209,7 +219,7 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
   const pire = (sel, cmp) => sections.reduce((b, r) => { const v = sel(r); return b == null || cmp(v, b.v) ? { v, x: r.x } : b; }, null);
   const less = (a, b) => a < b, more = (a, b) => a > b;
   let w;
-  w = pire(r => (r.constr.c ? r.constr.c.taux : 0), more); { const r = sections.find(s => s.x === w.x); if (r.constr.c) ver(`Construction : compression (${r.constr.c.fibre}, t = ${r.constr.c.t.toFixed(1)} j)`, r.constr.c.v, -r.constr.c.lim, r.constr.c.taux <= 1, 'EN 1992-1-1 § 5.10.2.2 (5) : 0,6 f_ck(t)', w.x); }
+  w = pire(r => (r.constr.c ? r.constr.c.taux : 0), more); { const r = sections.find(s => s.x === w.x); if (r.constr.c) ver(`Construction : compression (${r.constr.c.fibre}, t = ${r.constr.c.t.toFixed(1)} j)`, r.constr.c.v, -r.constr.c.lim, r.constr.c.taux <= 1, prad ? 'EN 1992-1-1 § 5.10.2.2 (5) : k₆ f_ck(t), k₆ = 0,7 (pré-tension, fissuration longitudinale à prévenir : expérience ou essais)' : 'EN 1992-1-1 § 5.10.2.2 (5) : 0,6 f_ck(t)', w.x); }
   w = pire(r => (r.constr.t ? r.constr.t.taux : 0), more); { const r = sections.find(s => s.x === w.x); if (r.constr.t) ver(`Construction : traction (${r.constr.t.fibre}, t = ${r.constr.t.t.toFixed(1)} j)`, r.constr.t.v, r.constr.t.lim, r.constr.t.taux <= 1, 'f_ctm(t), § 3.1.2 (9) — au-delà : armatures passives de reprise', w.x); }
   w = pire(r => Math.min(minC(r.car, 'ps'), minC(r.car, 'pi')), less); ver('Caractéristique : compression poutre', w.v, -0.6 * fck, w.v >= -0.6 * fck, 'EN 1992-2 § 7.2 (102) : 0,6 f_ck', w.x);
   w = pire(r => minC(r.car, 'hs'), less); ver('Caractéristique : compression hourdis', w.v, -0.6 * fckH, w.v >= -0.6 * fckH, '0,6 f_ck du hourdis', w.x);
@@ -223,16 +233,18 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
   }
 
   // ---- forces dans les câbles (par câble, au segment de mi-travée et au segment d'about)
-  const segMid = nb / 2 - 1, cableAt = (pas, ic, seg) => { const r = pas.cables.find(q => q && q.cable === ic && q.seg === seg); return r ? r.N : 0; };
+  // segment d'un câble à la barre `seg` (les groupes gainés ne couvrent pas les barres d'about)
+  const segMid = nb / 2 - 1, cableAt = (pas, ic, seg) => { const s0 = seg - (cables[ic].k0 || 0); if (s0 < 0 || s0 >= cables[ic].segments.length) return 0; const r = pas.cables.find(q => q && q.cable === ic && q.seg === s0); return r ? r.N : 0; };
   // instants juste après la mise en tension du dernier câble de chaque famille (avant tout fluage)
-  const iTension = out.pas.findIndex(pp => pp.phase === n1 - 1), iTension2 = n2 ? out.pas.findIndex(pp => pp.phase === iServ - 1) : iTension;
+  const iTension = out.pas.findIndex(pp => pp.phase === (prad ? 0 : n1 - 1)), iTension2 = n2 ? out.pas.findIndex(pp => pp.phase === iServ - 1) : iTension;
   const pertes = tr.cab.map((cb, ic) => {
     const pi = out.pertesInstantanees[ic];
-    return { ic, ym: cb.ym, ya: cb.ya, P0, Pinst: pi ? pi.P[segMid] : P0, Pabout: pi ? pi.P[0] : P0, lambda: pi ? pi.lambda : [0, 0],
+    const P0c = prad ? cb.P : P0;
+    return { ic, ym: cb.ym, ya: cb.ya, P0: P0c, Pinst: pi ? pi.P[segMid] : P0c, Pabout: pi ? pi.P[0] : P0c, lambda: pi ? pi.lambda : [0, 0],
       famille: ic < n1 ? 1 : 2, PapresTension: cableAt(out.pas[ic < n1 ? iTension : iTension2], ic, segMid), Pserv: cableAt(out.pas[iS], ic, segMid), Pinf: cableAt(out.pas[iF], ic, segMid) };
   });
   const somme = k => pertes.reduce((s, q) => s + q[k], 0);
-  const Ptot = { P0: nc * P0, inst: somme('Pinst'), tension: somme('PapresTension'), serv: somme('Pserv'), inf: somme('Pinf') };
+  const Ptot = { P0: somme('P0'), inst: somme('Pinst'), tension: somme('PapresTension'), serv: somme('Pserv'), inf: somme('Pinf') };
 
   // ---- ELU de flexion
   const fcd = fckx => 0.85 * fckx / 1.5, fpd = c.fp01k / 1.15, Ep = 195000, fyd = p.fyk / 1.15;
@@ -241,7 +253,7 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
   const elu = [];
   for (let j = 0; j <= nb / 2; j++) {
     const x = xs[j], seg = Math.min(j, nb - 1);
-    const cabs = tr.cab.map((cb, ic) => { const N = cableAt(out.pas[iF], ic, seg); return { Ap: u.Ap, d: Hc - tr.y(cb, x), epm: N / u.Ap / 1000 / Ep }; });
+    const cabs = tr.cab.map((cb, ic) => { const N = cableAt(out.pas[iF], ic, seg); return { Ap: N > 0 ? ApC(cb) : 0, d: Hc - tr.y(cb, x), epm: N > 0 ? N / ApC(cb) / 1000 / Ep : 0 }; }).filter(q => q.Ap > 0);
     const MEdE = 1.35 * Mq('G', x) + 1.35 * Mchar(x), MEdF = eluF61 ? interp(eluF61, x) : null;
     const MEd = Math.max(MEdE, MEdF ?? -Infinity);
     const base = { S, cables: cabs, ds, fcdP: fcd(fck), fcdH: fcd(fckH), fpd, Ep, fyd };
@@ -262,7 +274,7 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
     tr.cab.forEach((cb, ic) => { const N = cableAt(out.pas[iF], ic, seg), sl = tr.pente(cb, x); Vpd += N * Math.abs(sl) / Math.sqrt(1 + sl * sl); Pn += N; ySum += N * tr.y(cb, x); });
     const yp = Pn ? ySum / Pn : 0.2, d = Math.max(Hc - yp, 0.8 * Hc), z = 0.9 * d;
     const VEd = Math.max(VEd0 - Vpd, 0);
-    const bw = x <= (f.Lb ?? 0) ? (f.b0a ?? f.b0) : f.b0, bwn = bw - 0.5 * u.phi;
+    const bw = x <= (f.Lb ?? 0) ? (f.b0a ?? f.b0) : f.b0, bwn = prad ? bw : bw - 0.5 * u.phi;   // PRAD : âme pleine (§ 6.2.3 (6) sans gaine)
     const scp = Pn / Cc.A / 1000, acw = scp <= 0 ? 1 : scp <= 0.25 * fcdV ? 1 + scp / fcdV : scp <= 0.5 * fcdV ? 1.25 : 2.5 * (1 - scp / fcdV);
     const VRdmax = cot => acw * bwn * z * nu1 * fcdV * 1000 / (cot + 1 / cot);
     let cot = 2.5; while (cot > 1 && VRdmax(cot) < VEd) cot -= 0.01;
@@ -278,13 +290,16 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
   const fleches = { tension: uMid(out.pas[iTension]), hourdis: uMid(out.pas[out.finPhase[iHourdis + 1]]), famille2: uMid(out.pas[iTension2]), service: uMid(out.pas[iS]), infini: uMid(out.pas[iF]), trafic: fQ };
 
   // ---- quantités et diagnostic de conception (guide Sétra VIPP 1996)
-  const Lc = L + 1.0, volP = P.A * Lc, volT = (P.A + H.poids) * Lc, kgP = nc * u.Ap * (L + 2) * 7850, ratioP = kgP / volT;
-  const conception = diagnosticVIPP({ L, f, b1: p.b1, hd: p.hd, fck, ratioP, nc, unite: c.unite });
+  const Lc = L + 1.0, volP = P.A * Lc, volT = (P.A + H.poids) * Lc, kgP = tr.cab.reduce((s, cb) => s + ApC(cb), 0) * (L + (prad ? 2 * tr.prad.a.about : 2)) * 7850, ratioP = kgP / volT;
+  const conception = prad ? diagnosticPRAD({ L, f, hd: p.hd, fck, pr: tr.prad }) : diagnosticVIPP({ L, f, b1: p.b1, hd: p.hd, fck, ratioP, nc, unite: c.unite });
+  // PRAD : ancrage des torons à l'appui (EN 1992-1-1 § 8.10.2.3) — l_bpd pour σ_pd, comparée à la distance disponible
+  let ancrage = null;
+  if (prad) { const pr = tr.prad, sInf = Ptot.inf / pr.Ap / 1000, lbpd = longueurAncrage(pr, c.fp01k / 1.15, sInf); ancrage = { lbpd, sigPinf: sInf, lpt: pr.lpt, lpt2: pr.lpt2 }; }
 
   return {
     L, S, beff, nh, trace: tr, sigP0, P0, Ptot, pertes, modele, out, sections, verifs, elu, tranchant, fleches,
     charges: { wP, wH, wS, wG }, betons: { P: { fck, Ecm: bP.Ecm, h0: P.h0, phi: bP.phi(T.fin, T.t1), eps: bP.retrait(T.fin) }, H: { fck: fckH, Ecm: bH.Ecm, h0: H.h0, phi: bH.phi(T.fin - T.t2, T.t3 - T.t2), eps: bH.retrait(T.fin - T.t2) } },
-    dates: T, expo: p.expo, quantites: { volP, volT, kgP, ratioP }, conception, n1, n2,
+    dates: T, expo: p.expo, quantites: { volP, volT, kgP, ratioP }, conception, n1, n2, prad: prad ? tr.prad : null, ancrage,
     ok: verifs.every(v => v.ok) && elu.every(e => e.ok) && tranchant.every(t => t.ok),
   };
 }

@@ -6,6 +6,7 @@
 import { parsePoutres } from '../src/beams/run.js';
 import { sectionVIPP, contourVIPP } from '../src/beams/vipp_section.js';
 import { traceCables, UNITES } from '../src/beams/vipp.js';
+import { positionsTorons, DEFAUTS_PRAD, TORONS } from '../src/beams/prad.js';
 
 const F = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : '—');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -45,6 +46,12 @@ function sectionPoutre(inp, S, tr) {
   s.push(g('pt_hp pt_bt pt_b0v pt_bta pt_hpi pt_tpan pt_hte pt_pt pt_gt', `<polygon points="${pts}" fill="#dfe7f1" stroke="#456" stroke-width="1.2"/>`));
   s.push(`<g data-k="pt_hp pt_bta pt_bt"><circle cx="${cx}" cy="${sy(S.poutre.yG)}" r="3" fill="#333"/><line x1="${cx}" x2="${cx + f.bt / 2 * k + 4}" y1="${sy(S.poutre.yG)}" y2="${sy(S.poutre.yG)}" stroke="#333" stroke-dasharray="2 2"/>${T(cx + f.bt / 2 * k + 6, sy(S.poutre.yG) + 4, `G poutre ${F(S.poutre.yG)} m`, { a: 'start', fs: 9.5 })}</g>`);
   s.push(`<g data-k="pt_hd pt_b1"><circle cx="${cx}" cy="${sy(S.comp.yG)}" r="3" fill="#2a6b2a"/><line x1="${cx}" x2="${cx + f.bt / 2 * k + 4}" y1="${sy(S.comp.yG)}" y2="${sy(S.comp.yG)}" stroke="#2a6b2a" stroke-dasharray="2 2"/>${T(cx + f.bt / 2 * k + 6, sy(S.comp.yG) + 4, `G composite ${F(S.comp.yG)} m`, { a: 'start', fs: 9.5, c: '#2a6b2a' })}</g>`);
+  if (inp.vipp.adherence) {   // PRAD : torons du talon (pleins : adhérents ; vides : gainés), torons supérieurs
+    const a = { ...DEFAUTS_PRAD, ...inp.vipp.adherence }, P = positionsTorons(a, f), r = Math.max(P.T.phi / 2 * k, 1.8), nG = a.groupes.reduce((q, gg) => q + gg.n, 0);
+    P.pos.forEach((q, i) => s.push(g('pr_nt pr_e pr_cbas pr_g1n pr_g2n', `<circle cx="${cx + q.z * k}" cy="${sy(q.y)}" r="${r}" fill="${i % Math.max(1, Math.round(a.nt / Math.max(nG, 1))) === 0 && nG ? '#fff' : COUL[0]}" stroke="${COUL[0]}" stroke-width=".8"/>`)));
+    for (let i = 0; i < (a.nsup || 0); i++) s.push(g('pr_nsup', `<circle cx="${cx + (i - (a.nsup - 1) / 2) * 0.10 * k}" cy="${sy(f.hp - a.cote)}" r="${r}" fill="${COUL[0]}"/>`));
+    s.push(T(cx + f.bta / 2 * k + 6, sy(a.cBas) + 4, `${a.nt} torons ${a.type} (${nG} gainés)`, { a: 'start', fs: 9.5, c: COUL[0] }));
+  }
   if (tr) {
     const r = Math.max(tr.u.phi / 2 * k, 2.5), n1 = tr.cab.length - Math.round(inp.vipp.cables.n2 || 0);
     tr.cab.forEach((cb, i) => {
@@ -87,17 +94,30 @@ export function schemasPoutres(d) {
   const inp = parsePoutres(d), L = Math.max(...inp.spans, 1);
   let S = null, tr = null;
   if (inp.geo === 'dims') { S = sectionVIPP(inp.vipp.forme, { b1: inp.b1, hd: inp.hd }); if (inp.type === 'BP') tr = traceCables(inp.vipp.cables, L, inp.vipp.forme); }
-  const out = { trans: coupeTablier(inp, S), section: S ? sectionPoutre(inp, S, tr) : '', elev: S && tr ? elevation(inp, S, tr, L) : '', synthese: '' };
+  // PRAD : élévation avec les zones gainées (traits interrompus)
+  let elevPRAD = '';
+  if (S && inp.vipp.adherence) {
+    const a = { ...DEFAUTS_PRAD, ...inp.vipp.adherence }, f = S.forme, w = 760, h = 200, ml = 30, k = (w - ml - 30) / L, kz = 110 / (f.hp + inp.hd), sx = x => ml + x * k, sy = y => 46 + (f.hp + inp.hd - y) * kz, q = [];
+    q.push(`<rect x="${sx(0)}" y="${sy(f.hp + inp.hd)}" width="${L * k}" height="${inp.hd * kz}" fill="#c9d6c4" stroke="#456"/><rect x="${sx(0)}" y="${sy(f.hp)}" width="${L * k}" height="${f.hp * kz}" fill="#dfe7f1" stroke="#456"/>`);
+    q.push(`<line x1="${sx(0)}" x2="${sx(L)}" y1="${sy(a.cBas)}" y2="${sy(a.cBas)}" stroke="${COUL[0]}" stroke-width="2"/>`);
+    a.groupes.filter(gg => gg.n > 0).forEach((gg, j) => { const y = sy(a.cBas + 0.03 * (j + 1)); q.push(g(`pr_g${j + 1}n pr_g${j + 1}L`, `<line x1="${sx(0)}" x2="${sx(L)}" y1="${y}" y2="${y}" stroke="${COUL[1]}" stroke-width="1.6"/>` + [[0, gg.Lg], [L - gg.Lg, L]].map(([u0, u1]) => `<rect x="${sx(u0)}" y="${y - 3}" width="${(u1 - u0) * k}" height="6" fill="#fff" stroke="${COUL[1]}" stroke-dasharray="3 2"/>`).join('') + T(sx(gg.Lg) + 4, y - 5, `${gg.n} gainés sur ${F(gg.Lg)} m`, { a: 'start', fs: 9.5, c: COUL[1] }))); });
+    if (a.nsup) q.push(g('pr_nsup', `<line x1="${sx(0)}" x2="${sx(L)}" y1="${sy(f.hp - a.cote)}" y2="${sy(f.hp - a.cote)}" stroke="${COUL[0]}" stroke-width="1.4"/>`));
+    for (const x of [0, L]) q.push(`<path d="M${sx(x)} ${sy(0)} l-7 12 h14 z" fill="#fff" stroke="#333"/>`);
+    q.push(T(sx(0), 16, 'Élévation de la poutre PRAD : torons rectilignes, zones gainées aux abouts (échelle verticale dilatée)', { a: 'start', fs: 11.5 }));
+    elevPRAD = svg(w, h, q.join(''));
+  }
+  const out = { trans: coupeTablier(inp, S), section: S ? sectionPoutre(inp, S, tr) : '', elev: S && tr ? elevation(inp, S, tr, L) : elevPRAD, synthese: '' };
   const li = [];
   if (S) {
     li.push(`Poutre seule : A = ${F(S.poutre.A, 3)} m², I = ${F(S.poutre.I, 4)} m⁴, v' = ${F(S.poutre.yG, 3)} m ; avec hourdis (b₁) : A = ${F(S.comp.A, 3)} m², I = ${F(S.comp.I, 4)} m⁴, K = ${F(S.comp.K, 5)} m⁴.`);
-    li.push(`Hauteur du tablier ${F(S.forme.hp + inp.hd)} m pour ${F(L)} m : élancement 1/${F(L / (S.forme.hp + inp.hd), 1)} (guide Sétra VIPP : 1/16 à 1/18).`);
+    li.push(`Hauteur du tablier ${F(S.forme.hp + inp.hd)} m pour ${F(L)} m : élancement 1/${F(L / (S.forme.hp + inp.hd), 1)} (${inp.vipp.adherence ? 'dossier Sétra PRAD 73 : 1/18 à 1/20' : 'guide Sétra VIPP : 1/16 à 1/18'}).`);
   }
   if (tr) {
     const u = UNITES[inp.vipp.cables.unite] || tr.u, P0 = Math.min(0.8 * 1860, 0.9 * 1640) * u.Ap * 1000;
     li.push(`${tr.cab.length} câbles ${inp.vipp.cables.unite} (A_p = ${F(u.Ap * 1e4, 1)} cm² chacun, gaine ${F(u.phi * 1000, 0)} mm) dont ${Math.round(inp.vipp.cables.n2 || 0)} en 2e famille ; P₀ ≈ ${F(P0, 0)} kN par câble au vérin.`);
     for (const a of tr.alerte) li.push(`<span class="badge warn">ATTENTION</span> ${esc(a)}`);
   }
+  if (inp.vipp.adherence) { const a = { ...DEFAUTS_PRAD, ...inp.vipp.adherence }, T0 = TORONS[a.type] || TORONS.T15S, P = Math.min(0.8 * 1860, 0.9 * 1640) * T0.A * 1000; li.push(`${a.nt} torons ${a.type} dans le talon${a.nsup ? ` et ${a.nsup} en table` : ''} ; tension sur banc ≈ ${F(P, 0)} kN par toron ; ${a.groupes.filter(gg => gg.n > 0).map(gg => `${gg.n} gainés sur ${F(gg.Lg)} m`).join(', ') || 'aucun gainage'}.`); }
   if (inp.geo !== 'dims') li.push('Section donnée par ses valeurs ou ses rectangles : répartition transversale et efforts par poutre ; choisir « dimensions d\'une poutre VIPP » pour la chaîne complète de précontrainte.');
   out.synthese = li.map(t => `<p class="small">${t.startsWith('<span') ? t : esc(t)}</p>`).join('');
   return out;

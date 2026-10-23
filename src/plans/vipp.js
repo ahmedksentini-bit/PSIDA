@@ -90,9 +90,9 @@ export function planCoffrageVIPP(v, cartouche = {}, { nom = 'POUTRE VIPP', a = 0
   const tq = { titre: 'QUANTITÉS (UNE POUTRE)', cols: [{ t: 'Désignation', w: 100, a: 'g' }, { t: 'Unité', w: 20, a: 'c' }, { t: 'Quantité', w: 32, a: 'd' }],
     lignes: [['Béton de la poutre (C' + v.betons.P.fck + ')', 'm³', fr(vol, 2)], ['Longueur hors tout', 'm', fr(Lp, 2)], ['Masse de la poutre (25 kN/m³)', 't', fr(vol * 2.5, 1)], ['Section courante', 'm²', fr(S.poutre.A, 3)], ['Section sur appui (blochet)', 'm²', fr(Math.abs(Ab), 3)]] };
   const N = numeroter(['NOTES', `1. Cotes en mètres. Béton C${v.betons.P.fck} (ciment de prise rapide), poutre préfabriquée ; hourdis C${v.betons.H.fck} coulé en place (tireté).`,
-    `2. Abouts de ${fr(a)} m depuis l'axe des appareils d'appui (guide Sétra VIPP § 3.2.5) ; blochets de ${fr(f.Lb)} m (âme ${fr((f.b0a ?? f.b0) * 100, 0)} cm).`,
+    v.prad ? `2. Abouts de ${fr(a)} m depuis l'axe des appareils d'appui (≥ 30 cm, dossier Sétra PRAD 73 § 1.3)${f.Lb > 0 ? ` ; blochets de ${fr(f.Lb)} m` : ''}.` : `2. Abouts de ${fr(a)} m depuis l'axe des appareils d'appui (guide Sétra VIPP § 3.2.5) ; blochets de ${fr(f.Lb)} m (âme ${fr((f.b0a ?? f.b0) * 100, 0)} cm).`,
     `3. Table, goussets et talon : dimensions du calcul (onglet Tablier à poutres) ; pan incliné du talon de tangente ${fr(f.tpan)}.`,
-    '4. Réservations des gaines et des plaques d\'ancrage : plan de câblage.', '5. Contre-flèche de fabrication : voir la note de calcul (flèches à t∞).']);
+    v.prad ? '4. Torons, gainage et banc de préfabrication : plan des torons (PRAD-TOR-01).' : '4. Réservations des gaines et des plaques d\'ancrage : plan de câblage.', '5. Contre-flèche de fabrication : voir la note de calcul (flèches à t∞).']);
   const hq = (tq.lignes.length + 2) * 6, hn = N.length * 2.1 * 1.6;
   const F = composer({ titre: `${nom} — COFFRAGE`, cartouche, rangees: [[el], [cA, cB]],
     groupes: [{ vues: [el], cible: 100, min: 50 }, { vues: [cA, cB], cible: 25, min: 10 }],
@@ -181,7 +181,7 @@ export function planFerraillageVIPP(v, cartouche = {}, { nom = 'POUTRE VIPP', a 
     lignes: [['Talon (A_s ELU / minimum)', milliers(kg.talon)], ['Étriers (zones)', milliers(kg.etriers)], ['Armatures de peau', milliers(kg.peau)], ['Table (transversales)', milliers(kg.table)], ['Total', milliers(tot)], [`Ratio (guide : 100 à 120 kg/m³)`, `${fr(tot / vol, 0)} kg/m³`]] };
   const N = numeroter(['NOTES', `1. Plan de principe : sections d'acier du calcul (ELU de flexion : A_s = ${fr(AsMid * 1e4, 1)} cm² à mi-travée ; effort tranchant EN 1992-1-1 § 6.2.3). Façonnage : nomenclature VIPP-NOM-01.`,
     `2. Aciers HA f_yk = 500 MPa ; enrobage ${fr(c * 100, 0)} cm (gaines : 5 cm au moins).`,
-    '3. Étriers fermés à 2 brins, espacement ≤ min(0,75 d ; 40 cm) ; densifier sous les plaques d\'ancrage (frettage selon l\'agrément du procédé).',
+    v.prad ? '3. Étriers fermés à 2 brins, espacement ≤ min(0,75 d ; 40 cm) ; frettage d\'about et armatures d\'éclatement sur la longueur de transmission (EN 1992-1-1 § 8.10.3).' : '3. Étriers fermés à 2 brins, espacement ≤ min(0,75 d ; 40 cm) ; densifier sous les plaques d\'ancrage (frettage selon l\'agrément du procédé).',
     '4. Armatures en attente dans la table pour la liaison avec le hourdis (couture à l\'interface, EN 1992-1-1 § 6.2.5) : à justifier.',
     '5. Ratio courant du guide Sétra VIPP : 100 à 120 kg/m³ de poutre (§ 3.1.2).']);
   const hz = (tz.lignes.length + 2) * 6, hq = (tq.lignes.length + 2) * 6, hn = N.length * 2.1 * 1.6, wcol = 104;
