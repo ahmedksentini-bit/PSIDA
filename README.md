@@ -575,3 +575,10 @@ d'appui sur chaque pile (EN 1998-2 § 6.6.4), ouverture des joints ; répartitio
 (src/supports/actions.js). Composante verticale des tabliers précontraints (EN 1998-2 § 4.1.7(2)P, src/seisme_vertical.js) :
 poutres continues et fléaux par analyse modale de la poutre continue (CQC, ξ = 2 %), VIPP et PRAD par les modes de la
 travée isostatique ; contraintes et ELU sous G + P ± E_z. Manuel § 16.16.
+v0.97 : compléments de ferraillage des ouvrages par phases. Poutres rendues continues : flexion locale du hourdis (plaque sur
+les poutres, roues EC et F61, poinçonnement) dans l'onglet par phases, reprise par la nomenclature PC-FER-01. Pont mixte :
+nomenclature des armatures de la dalle MX-FER-01 (transversales de la flexion locale, longitudinales ρ_travée et complément
+ρ_appui sur les zones d'appui). Fléaux : voussoir sur pile (src/phasage/voussoir_pile.js) — torsion transmise au diaphragme
+(LM1 excentré), treillis du diaphragme sous le flux de Bredt, appareils sous les âmes (pression localisée § 6.7, diffusion
+§ 6.5.3), éclatement des ancrages (§ 8.10.3) et tirants arrière des bossages 0,25 P (VSL 1991) ; nomenclature FL-FER-02.
+Manuel § 28.20.

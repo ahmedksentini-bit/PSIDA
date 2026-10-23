@@ -71,6 +71,18 @@ export function computePhasage(d) {
       out.acheve = structureAchevee(out, { spectreV, siteV, nPoutres: v('ph_nP', 4), chaussee: { y1: -Lr / 2, y2: Lr / 2 }, trottoirs: tr > 0 ? [{ y1: -Lr / 2 - tr, y2: -Lr / 2 }, { y1: Lr / 2, y2: Lr / 2 + tr }] : [],
         alpha: EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended, alphaKey: d.alpha || 'recommended', expo: (fl ? d.fl_expo : d.ph_expo) || 'XC' });
     } catch (e) { out.acheveErreur = e.message; }
+    // poutres rendues continues : flexion locale du hourdis (plaque sur les poutres, roues EC et F61), comme l'onglet
+    // Tablier à poutres ; ses sections remplacent le minimum dans la nomenclature
+    if (!fl && out.acheve && out.p.forme) {
+      try {
+        const f = out.p.forme, nP = out.acheve.nP, W = nP * f.bh, gb = v('ph_gbord', 8), tR = v('ph_trev', 0.08), ch = { y1: -Lr / 2, y2: Lr / 2 };
+        const H = hourdisLocal({ n: nP, b1: f.bh, W, hd: f.hd, bt: f.bt, eTab: f.ht, L: out.p.L, roadway: ch, footways: tr > 0 ? [{ y1: -Lr / 2 - tr, y2: -Lr / 2 }, { y1: Lr / 2, y2: Lr / 2 + tr }] : [],
+          lines: [{ g: gb, e: -W / 2 + 0.25 }, { g: gb, e: W / 2 - 0.25 }], bands: [{ q: 24 * tR, y1: ch.y1, y2: ch.y2 }], tRev: tR, fck: out.p.hourdis.fck, fyk: 500, c: v('ph_cdal', 0.03), alphaEC: d.alpha || 'recommended' });
+        out.acheve.hourdis = H;
+        out.acheve.verifs.push({ nom: 'Hourdis : poinçonnement sous une roue du tandem [kN]', val: H.poinc.VEd, lim: H.poinc.VRdc, ok: H.poinc.ok, ref: 'EN 1992-1-1 § 6.4.4', x: null });
+        out.acheve.ok = out.acheve.ok && H.poinc.ok;
+      } catch (e) { out.acheve.hourdisErreur = e.message; }
+    }
     if (fl) {
       // caisson : distortion (poutre sur appui élastique, diaphragmes), puis flexion transversale du cadre avec la part de
       // distortion répartie (calcul de dimensionnement) et sans (cadre par mètre, référence) ; fléaux en construction
@@ -83,6 +95,8 @@ export function computePhasage(d) {
         }
       } catch (e) { out.transversalErreur = e.message; }
       try { out.desequilibre = desequilibreFleau(out, { dc: v('fl_dcal', 3.0) }); } catch (e) { out.desequilibreErreur = e.message; }
+      // voussoir sur pile : diaphragme (torsion), appareils sous les âmes, zones d'ancrage
+      try { if (out.acheve && out.p.caisson) { out.vsp = voussoirSurPile(out, { eDiaph: v('fl_ediaph', 0.8), hBossage: v('fl_hboss', 0.6), Lr, alpha: al }); out.acheve.verifs.push(...out.vsp.verifs); out.acheve.ok = out.acheve.ok && out.vsp.ok; } } catch (e) { out.vspErreur = e.message; }
     }
   }
   return out;
@@ -275,6 +289,7 @@ export function fleauBlocks(out) {
   B.push(...acheveBlocks(out));
   B.push(...constructionFleauBlocks(out));
   B.push(...transversalBlocks(out));
+  B.push(...voussoirPileBlocks(out));
   h2('Méthode et limites');
   para('Calcul par phases pas à pas (même moteur que pour les poutres rendues continues) : chaque voussoir est une barre avec son béton et sa date de coulage ; le béton frais est porté par l\'équipage au bout du fléau (force et moment) jusqu\'au décoffrage ; les câbles de fléau sont tendus des deux côtés après chaque paire de voussoirs, avec frottement et recul d\'ancrage (§ 5.10.5) ; les clavages réunissent les fléaux sans contrainte. Hauteur et inertie variables par barre (I ∝ h^{5/2}, BT n° 7 § 2.222).');
   para('Limites : ligne moyenne supposée droite (la variation du c.d.g. avec la hauteur n\'est prise en compte que dans les excentrements) ; le calcul par phases suppose des fléaux construits symétriquement, les déséquilibres de construction étant traités à part (moments de déséquilibre ajoutés sur pile) ; flexion longitudinale sous trafic sur le caisson entier, torsion et distorsion traitées dans le cadre transversal, la distortion étant répartie par l\'analogie de la poutre sur appui élastique (diaphragmes sur piles et intermédiaires) ; gradient thermique linéaire seul (approche 1).');
@@ -295,6 +310,24 @@ export function constructionFleauBlocks(out) {
 }
 
 /** Caisson : flexion transversale (cadre) et distortion. */
+/** Voussoir sur pile : torsion au diaphragme, appareils sous les âmes, zones d'ancrage. */
+export function voussoirPileBlocks(out) {
+  const V = out.vsp, B = [];
+  if (!V) { if (out.vspErreur) B.push({ t: 'p', text: `Voussoir sur pile : calcul impossible (${out.vspErreur}).` }); return B; }
+  const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
+  const T = V.torsion, D = V.diaphragme, A = V.appareil, Bo = V.bossage, G = V.gousset, cm2 = x => F(x * 1e4, 1);
+  h2('Voussoir sur pile : diaphragme, appareils d\'appui, zones d\'ancrage');
+  table(['Élément', 'Effort', 'Armatures', 'Vérification'], [
+    ['Torsion au diaphragme', `T_TS = ${F(T.TTS, 0)} kN·m, t_UDL = ${F(T.tU, 1)} kN·m/m (${T.n} voies) ; T_Ed = 1,35 [T_TS + t (${F(T.Lg, 0)} + ${F(T.Ld, 0)})/2] = ${F(T.TEd, 0)} kN·m`, '—', `Ω = ${F(T.bAx, 2)} × ${F(T.hAx, 2)} = ${F(T.Omega, 2)} m², q = T/(2Ω) = ${F(T.q, 1)} kN/m`],
+    [`Diaphragme (e_d = ${F(D.ed, 2)} m)`, `cisaillement τ = ${F(D.tau, 2)} MPa ≤ ν f_cd/2 = ${F(D.tauLim, 2)}`, `${cm2(D.AsFace)} cm²/m par face et par direction (calcul ${cm2(D.AsReq / 2)}, minimum ${cm2(D.AsMinFace)})`, D.tau <= D.tauLim ? 'OK' : 'NON'],
+    ['Appareil sous âme (pile la plus chargée)', `R_ELU = ${F(A.RELU, 0)} kN, R_ELS = ${F(A.RELS, 0)} kN ; plaque ${F(A.a, 2)} × ${F(A.a, 2)} m (σ_ELS = ${F(A.sigApp, 0)} MPa)`, `frettage : tirant ${F(A.T, 0)} kN, ${cm2(A.As)} cm² dans chaque direction`, `F_Rdu = ${F(A.FRdu, 0)} kN — ${A.RELU <= A.FRdu ? 'OK' : 'NON'}`],
+    ...(Bo ? [[`Bossages des câbles de continuité (${Bo.nombre})`, `1,2 P₀ = ${F(1.2 * Bo.P, 0)} kN, plaque ≈ ${F(Bo.a, 2)} m, bossage h = ${F(Bo.h, 2)} m`, `éclatement ${F(Bo.T, 0)} kN : ${cm2(Bo.As)} cm² ; tirants arrière 0,25 × 1,2 P₀ = ${F(Bo.tieBack, 0)} kN : ${cm2(Bo.AsTB)} cm²`, 'frettage local : agrément']] : []),
+    [`Ancrages des câbles de fléau (${G.nombre})`, `1,2 P₀ = ${F(1.2 * G.P, 0)} kN, plaque ≈ ${F(G.a, 2)} m, gousset h = ${F(G.h, 2)} m`, `éclatement ${F(G.T, 0)} kN : ${cm2(G.As)} cm² par ancrage`, 'frettage local : agrément'],
+  ]);
+  para('Après déclouage, le caisson repose sur deux appareils par pile, un sous chaque âme ; le diaphragme sur pile bloque la torsion et la distortion. Couple : voies LM1 du côté le plus défavorable, chaque appui reprenant la moitié du couple réparti des travées voisines et le couple du tandem placé sur lui. Diaphragme : panneau en cisaillement sous le flux de Bredt q = T/(2Ω), armatures orthogonales A_s/s = q/f_yd (θ = 45°, EN 1992-1-1 § 6.2.4), minimum 0,1 % par face (§ 9.7). Appareil : plaque indicative pour 20 MPa à l\'ELS (appareil à pot), pression localisée (§ 6.7), diffusion T = ¼ (b − a)/b · R (§ 6.5.3, éq. 6.58). Ancrages : 1,2 P₀ (§ 2.4.2.2 (3)), éclatement T = ¼ (h − a)/h · P (éq. 6.58, § 8.10.3), tirants arrière des bossages 0,25 P (Rogowsky et Marti, VSL 1991). Le trou d\'homme du diaphragme, les déviateurs et la zone locale (frettage du procédé) sont à traiter avec l\'agrément du procédé et le projet d\'exécution.');
+  return B;
+}
+
 export function transversalBlocks(out) {
   const T = out.transversal, B = [];
   if (!T) { if (out.transversalErreur) B.push({ t: 'p', text: `Flexion transversale : calcul impossible (${out.transversalErreur}).` }); return B; }
@@ -340,6 +373,8 @@ export function acheveBlocks(out) {
   para('ELU : M_Ed = 1,35 M_charges + M_hyperstatique de la précontrainte (γ_P = 1,0, EN 1992-1-1 § 2.4.2.2 ; obtenu par un second calcul par phases sans câbles) + 1,35 Q + 1,5 × 0,6 T. M_Rd : câbles seuls ; A_s : armatures passives de complément nécessaires (face inférieure en moment positif, face supérieure en moment négatif). Effort tranchant réduit de la composante verticale des câbles et, pour les caissons de hauteur variable, de l\'effet Résal de la membrure inférieure inclinée (§ 6.2.1 (1)).');
   h2('Vérifications de l\'ouvrage terminé');
   table(['Vérification', 'Valeur', 'Limite', 'x [m]', 'Résultat', 'Référence'], v.verifs.map(q => [q.nom, F(q.val, 2), F(q.lim, 2), F(q.x, 1), q.ok ? 'OK' : 'NON', q.ref]));
+  if (v.hourdis) { h2('Hourdis : flexion locale transversale'); B.push(...localBlocks({ hourdis: v.hourdis, inp: { hd: out.p.forme.hd, local: { c: 0.03 } } })); }
+  else if (v.hourdisErreur) para(`Hourdis : calcul impossible (${v.hourdisErreur}).`);
   if (v.seismeV) {
     const S = v.seismeV, si = S.site || {};
     h2('Séisme vertical sur le tablier précontraint (EN 1998-2 § 4.1.7(2)P)');
@@ -427,6 +462,7 @@ import { hourdisLocal } from '../src/beams/hourdis.js';
 import { localBlocks } from './beams_view.js';
 import { flexionTransversale, distortionCaisson } from '../src/phasage/caisson_transversal.js';
 import { desequilibreFleau, BARRE_36 } from '../src/phasage/desequilibre.js';
+import { voussoirSurPile } from '../src/phasage/voussoir_pile.js';
 import { EC_ALPHA } from '../src/loads_ec.js';
 import { spectreVerticalDuFormulaire } from '../src/seisme_vertical.js';
 
