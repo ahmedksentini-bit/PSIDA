@@ -2,8 +2,10 @@
  * Chaîne de dimensionnement d'une poutre précontrainte par post-tension (VIPP) de pont à travées indépendantes :
  *
  *  1. section par dimensions (vipp_section.js) et largeur efficace du hourdis (NF EN 1992-1-1 § 5.3.2.1) ;
- *  2. câblage : n câbles paraboliques ancrés aux abouts, regroupés par lits dans le talon à mi-travée ; tension à
- *     σ_p0 = min(0,8 f_pk ; 0,9 f_p0,1k) (§ 5.10.2.1), frottement et recul d'ancrage (§ 5.10.5.2 et 5.10.5.3) ;
+ *  2. câblage : n câbles paraboliques ancrés aux abouts, regroupés par lits dans le talon à mi-travée ; tension au vérin
+ *     σ_p0 ≤ min(0,8 f_pk ; 0,9 f_p0,1k) (§ 5.10.2.1), frottement et recul d'ancrage (§ 5.10.5.2 et 5.10.5.3) ; contrainte
+ *     initiale après pertes instantanées σ_pm0(x) ≤ min(k₇ f_pk ; k₈ f_p0,1k), k₇ = 0,75, k₈ = 0,85 (§ 5.10.3 (2)) : sans
+ *     σ_p0 imposée, la tension au vérin est réduite jusqu'à respecter cette limite au point le plus tendu du câble ;
  *  3. calcul par phases (moteur pas à pas de src/phasage, méthode de Bažant) : mise en tension câble par câble de la
  *     poutre seule sous son poids (raccourcissement élastique, § 5.10.5.1), coulage du hourdis porté par la poutre, section
  *     composée, superstructures ; fluage et retrait EC2 (annexe B, § 3.1.4) des deux bétons, retrait différentiel,
@@ -23,6 +25,7 @@
  */
 import { momentVerticalIsostatique } from '../seisme_vertical.js';
 import { calculPhasage } from '../phasage/phasage.js';
+import { pertesInstantanees } from '../phasage/precontrainte.js';
 import { betonEC2 } from '../phasage/fluage.js';
 import { sectionVIPP, contourVIPP, largeurEfficaceT } from './vipp_section.js';
 import { traceTorons, diagnosticPRAD, longueurAncrage } from './prad.js';
@@ -124,8 +127,15 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
   const u = tr.u, nc = tr.cab.length, n2 = prad ? 0 : Math.max(0, Math.min(nc - 1, Math.round(c.n2 || 0))), n1 = nc - n2;
   const ApC = cb => cb.Ap ?? u.Ap;
   const bP = betonEC2({ fck: B.fckP, RH: B.RH, h0: P.h0, ciment: B.cimP }), bH = betonEC2({ fck: B.fckH, RH: B.RH, h0: H.h0, ciment: B.cimH });
-  const sigP0 = c.sigP0 || Math.min(0.8 * c.fpk, 0.9 * c.fp01k), P0 = sigP0 * u.Ap * 1000;
   const xs = Array.from({ length: nb + 1 }, (_, j) => j * L / nb);
+  // ---- tension au vérin (§ 5.10.2.1) et contrainte initiale après frottement et recul (§ 5.10.3 (2)) ; même polygone de
+  //      segments que le calcul par phases (un segment par barre), câble le plus défavorable
+  const sigPm0Lim = Math.min(0.75 * c.fpk, 0.85 * c.fp01k), sigP0Max = Math.min(0.8 * c.fpk, 0.9 * c.fp01k);
+  const geoCable = cb => xs.slice(0, -1).map((x, k) => { const ei = tr.y(cb, x), ej = tr.y(cb, xs[k + 1]), dx = L / nb; return { L: Math.hypot(dx, ej - ei), alpha: Math.atan((ej - ei) / dx) }; });
+  const sigMaxApres = s0 => (prad ? 0 : Math.max(...tr.cab.map(cb => Math.max(...pertesInstantanees({ P0: s0 * u.Ap * 1000, mu: c.mu, k: c.k, g: c.g, tension: c.tension, Ap: u.Ap }, geoCable(cb)).apres)))) / u.Ap / 1000;
+  let sigP0 = c.sigP0 || sigP0Max, sigP0Reduite = false;
+  if (!c.sigP0 && !prad) for (let it = 0; it < 6; it++) { const sm = sigMaxApres(sigP0); if (sm <= sigPm0Lim + 0.5) break; sigP0 = Math.floor(sigP0 * sigPm0Lim / sm); sigP0Reduite = true; }
+  const P0 = sigP0 * u.Ap * 1000;
   const interp = (arr, x) => { if (!arr) return 0; const X = ch.x, n = X.length; if (x <= X[0]) return arr[0]; for (let i = 1; i < n; i++) if (x <= X[i] + 1e-9) return arr[i - 1] + (arr[i] - arr[i - 1]) * (x - X[i - 1]) / ((X[i] - X[i - 1]) || 1); return arr[n - 1]; };
   const Mq = (id, x, kind = 'Mmax') => (ch[id] ? interp(ch[id][kind], x) : 0);
 
@@ -240,10 +250,17 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
   const iTension = out.pas.findIndex(pp => pp.phase === (prad ? 0 : n1 - 1)), iTension2 = n2 ? out.pas.findIndex(pp => pp.phase === iServ - 1) : iTension;
   const pertes = tr.cab.map((cb, ic) => {
     const pi = out.pertesInstantanees[ic];
-    const P0c = prad ? cb.P : P0;
-    return { ic, ym: cb.ym, ya: cb.ya, P0: P0c, Pinst: pi ? pi.P[segMid] : P0c, Pabout: pi ? pi.P[0] : P0c, lambda: pi ? pi.lambda : [0, 0],
+    // PRAD : P0 = force de tension sur banc (σ_pi), Pinst = force après relâchement (σ_pm0, pertes avant et au relâchement) ;
+    // les pertes totales se comptent ainsi depuis σ_pi, comme depuis la force au vérin des VIPP
+    const P0c = prad ? ApC(cb) * tr.prad.sigPi * 1000 : P0, PinstPrad = prad ? cb.P : null;
+    return { ic, ym: cb.ym, ya: cb.ya, P0: P0c, Pinst: prad ? PinstPrad : pi ? pi.P[segMid] : P0c, Pabout: prad ? PinstPrad : pi ? pi.P[0] : P0c, lambda: pi ? pi.lambda : [0, 0],
       famille: ic < n1 ? 1 : 2, PapresTension: cableAt(out.pas[ic < n1 ? iTension : iTension2], ic, segMid), Pserv: cableAt(out.pas[iS], ic, segMid), Pinf: cableAt(out.pas[iF], ic, segMid) };
   });
+  // contrainte initiale maximale le long des câbles après pertes instantanées (§ 5.10.3 (2)) : diagramme après frottement et
+  // recul (le raccourcissement élastique dû aux câbles suivants ne fait que la réduire) ; PRAD : σ_pm0 après relâchement
+  const sigPm0Max = prad ? tr.prad.sigPm0 : Math.max(...tr.cab.map((cb, ic) => { const pi = out.pertesInstantanees[ic]; return pi ? Math.max(...pi.apres) / u.Ap / 1000 : 0; }));
+  ver(`Contrainte initiale de précontrainte après pertes instantanées${prad ? ' (après relâchement)' : ' (frottement et recul, point le plus tendu)'}`, sigPm0Max, sigPm0Lim, sigPm0Max <= sigPm0Lim + 0.5,
+    `EN 1992-1-1 § 5.10.3 (2) : σ_pm0 ≤ min(k₇ f_pk ; k₈ f_p0,1k), k₇ = 0,75, k₈ = 0,85 (valeurs recommandées)${sigP0Reduite ? ` — tension au vérin réduite à ${Math.round(sigP0)} MPa pour la respecter` : ''}`, prad ? 0 : L / 2);
   const somme = k => pertes.reduce((s, q) => s + q[k], 0);
   const Ptot = { P0: somme('P0'), inst: somme('Pinst'), tension: somme('PapresTension'), serv: somme('Pserv'), inf: somme('Pinf') };
 
@@ -316,7 +333,7 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
   if (prad) { const pr = tr.prad, sInf = Ptot.inf / pr.Ap / 1000, lbpd = longueurAncrage(pr, c.fp01k / 1.15, sInf); ancrage = { lbpd, sigPinf: sInf, lpt: pr.lpt, lpt2: pr.lpt2 }; }
 
   return {
-    L, S, beff, nh, trace: tr, sigP0, P0, Ptot, pertes, modele, out, sections, verifs, elu, tranchant, fleches,
+    L, S, beff, nh, trace: tr, sigP0, P0, sigP0Max, sigP0Reduite, sigPm0Max, sigPm0Lim, Ptot, pertes, modele, out, sections, verifs, elu, tranchant, fleches,
     charges: { wP, wH, wS, wG }, betons: { P: { fck, Ecm: bP.Ecm, h0: P.h0, phi: bP.phi(T.fin, T.t1), eps: bP.retrait(T.fin) }, H: { fck: fckH, Ecm: bH.Ecm, h0: H.h0, phi: bH.phi(T.fin - T.t2, T.t3 - T.t2), eps: bH.retrait(T.fin - T.t2) } },
     dates: T, expo: p.expo, quantites: { volP, volT, kgP, ratioP }, conception, n1, n2, prad: prad ? tr.prad : null, ancrage, seismeV,
     ok: verifs.every(v => v.ok) && elu.every(e => e.ok) && tranchant.every(t => t.ok) && (!seismeV || seismeV.eluOk),

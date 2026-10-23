@@ -884,6 +884,8 @@ function ecrireAppuisSeuls(champs) {
   // liaisons saisies pour un autre ouvrage (autre nombre de lignes) : effacées
   if (f.ss_liaisons && f.ss_liaisons.value.trim() && f.ss_liaisons.value.split(/[,;]+/).filter(t => t.trim()).length !== n) f.ss_liaisons.value = '';
   for (const [k, v] of Object.entries(champs)) if (f[k]) f[k].value = String(v);
+  // tablier justifié aux Eurocodes (VIPP, PRAD, phasage, mixte) : appuis affichés aux Eurocodes (le Fascicule 61 reste au choix)
+  const ref = $('#supports-ref'); if (ref) ref.value = 'EC';
   $('#btn-standalone').click();
 }
 $('#btn-mixte-appuis').addEventListener('click', () => {
@@ -894,6 +896,7 @@ $('#btn-mixte-appuis').addEventListener('click', () => {
   try { ecrireAppuisSeuls(champsAppuisPhasage(phasage, { Lr: +(phasage.type === 'fleau' ? f.fl_Lr.value : f.ph_Lr && f.ph_Lr.value) || 8 })); }
   catch (e) { $('#error').textContent = e.message; }
 });
+$('#btn-standalone-recalc').addEventListener('click', () => $('#btn-standalone').click());
 $('#btn-standalone').addEventListener('click', () => {
   setMode('supports'); goTab('appuis');
   try {

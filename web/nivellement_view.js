@@ -44,7 +44,7 @@ export function initNivellement(form, getState) {
       h += `<tr><th>${esc(lab)}</th>`;
       for (let i = 0; i < n; i++) {
         if (k === 'type') h += `<td><select data-niv="type" data-i="${i}"><option value="">${sp.found.type === 'pieux' ? 'pieux (général)' : 'semelle (général)'}</option><option value="superficielle"${val.type[i] === 'superficielle' ? ' selected' : ''}>semelle</option><option value="pieux"${val.type[i] === 'pieux' ? ' selected' : ''}>pieux</option></select></td>`;
-        else h += `<td><input data-niv="${k}" data-i="${i}" type="number" step="any" value="${esc(val[k][i])}" placeholder="${k === 'B' ? f2(sp.found.B) : ''}"></td>`;
+        else h += `<td><input data-niv="${k}" data-i="${i}" type="number" step="any" value="${esc(val[k][i])}" placeholder="${k === 'B' ? (sp.found.B != null ? f2(sp.found.B) : 'dimensionnée') : ''}"></td>`;
       }
       h += '</tr>';
     }

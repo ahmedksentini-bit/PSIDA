@@ -9,10 +9,44 @@
  *   θ = (b/L)(ρ_p/ρ_e)^¼,  α = (γ_p + γ_e)/(2√(ρ_p ρ_e)).
  * Le moment d'une poutre k vaut M_k = m_x(y_k)·b₁ = K̄(y_k)·M/n (y_k axe de la poutre) ; la dalle orthotrope de Guyon est
  * résolue par le modèle de dalle (SlabDeck) avec la portée « de Guyon » L/(ρ_p/ρ_e)^¼ (qui donne le θ voulu) et α.
+ * Effort tranchant et réactions par poutre : coefficients de Guyon-Massonnet de la mi-travée (pratique PAP). Poutres de rive :
+ * à l'appui, la charge en console (corniche, dispositif de retenue, trottoir) descend directement dans la poutre de rive, et
+ * le coefficient de mi-travée peut la sous-estimer. Hypothèse prudente de PSIDA pour les poutres de rive : à l'appui
+ * (réactions et V en x = 0), le plus grand des coefficients de Guyon-Massonnet et de la règle des bras de levier (hourdis
+ * articulé sur les poutres, mêmes placements transversaux des charges), raccordé linéairement à Guyon-Massonnet sur une
+ * longueur égale à la largeur du tablier 2b (≤ L/2). Poutres intérieures : Guyon-Massonnet (la règle des bras de levier y
+ * serait très pénalisante ; les facteurs de répartition de l'effort tranchant calés par éléments finis, AASHTO LRFD
+ * § 4.6.2.2.3, restent voisins de ceux du moment ; la même pratique retient la règle des bras de levier pour la rive).
+ * Les moments restent ceux de Guyon-Massonnet.
  * Unités : m, kN, kN·m, m⁴.
  */
 import { SlabDeck } from '../analysis.js';
 import { EC_ALPHA } from '../loads_ec.js';
+
+/**
+ * Tablier « règle des bras de levier » : même modèle de charges que SlabDeck, mais K̄(y_k) = n w_k(e), w_k part de la charge
+ * placée en e reprise par la poutre k quand le hourdis est articulé sur les poutres (répartition linéaire entre les deux
+ * poutres voisines, console au-delà des poutres de rive). Les y du tablier doivent être les axes des poutres.
+ */
+class TablierLevier extends SlabDeck {
+  _w(e) {
+    const ys = this.ys, n = ys.length, w = new Array(n).fill(0);
+    if (n === 1) { w[0] = 1; return w; }
+    let j = 0; while (j < n - 2 && e > ys[j + 1]) j++;
+    const t = (e - ys[j]) / (ys[j + 1] - ys[j]);   // < 0 ou > 1 : console de rive (extrapolation linéaire)
+    w[j] = 1 - t; w[j + 1] = t;
+    return w;
+  }
+  Kbar(L, e1, e2) {
+    const key = `L|${e1.toFixed(3)}|${e2.toFixed(3)}`;
+    if (this._Kcache.has(key)) return this._Kcache.get(key);
+    const n = this.ys.length, m = Math.abs(e2 - e1) < 1e-9 ? 1 : 40, acc = new Array(n).fill(0);
+    for (let i = 0; i < m; i++) { const e = m === 1 ? e1 : e1 + (e2 - e1) * (i + 0.5) / m; this._w(e).forEach((v, k) => { acc[k] += v / m; }); }
+    const vals = acc.map(v => n * v);
+    this._Kcache.set(key, vals);
+    return vals;
+  }
+}
 
 /** Paramètres de Guyon-Massonnet d'un tablier à poutres (E disparaît des rapports). */
 export function guyonParams({ n, b1, L, Ip, Kp, hd = 0.2, Ie = null, Ke = null, le = 1 }) {
@@ -57,12 +91,13 @@ export function beamDeck(g) {
   const bySpan = new Map();
   for (const L of spansU) {
     const gp = guyonParams({ n, b1, L, Ip: sec.I, Kp: sec.K, hd: g.hd, Ie: g.Ie ?? null, Ke: g.Ke ?? null, le: g.le ?? 1 });
-    const deck = new SlabDeck({ spans: [L], width, h: sec.H || g.hd, area: n * sec.A + (g.extraArea || 0), roadway: g.roadway, footways: g.footways || [],
-      lines: g.lines || [], bands: g.bands || [], ys, Leq: [gp.Lguyon], alphaTorsion: gp.alpha, nu: 0, laneStep: g.laneStep || 0.25, nSec: 20, nGrid: 100, gammaC: g.gammaC || 25 });
-    const perm = deck.permanent();
-    const f61 = deck.fascicule61({ nRetenue: g.nRetenue ?? 2, classe: g.classe ?? null, mil: g.mil || 'Mc120' });
-    const ec = deck.eurocode({ alpha: EC_ALPHA[g.alphaEC || 'recommended'] });
-    bySpan.set(L, { L, gp, deck, perm, f61, ec, beams: perBeam(deck, perm, f61, ec, b1, n) });
+    const opts = { spans: [L], width, h: sec.H || g.hd, area: n * sec.A + (g.extraArea || 0), roadway: g.roadway, footways: g.footways || [],
+      lines: g.lines || [], bands: g.bands || [], ys, Leq: [gp.Lguyon], alphaTorsion: gp.alpha, nu: 0, laneStep: g.laneStep || 0.25, nSec: 20, nGrid: 100, gammaC: g.gammaC || 25 };
+    const charges = dk => ({ perm: dk.permanent(), f61: dk.fascicule61({ nRetenue: g.nRetenue ?? 2, classe: g.classe ?? null, mil: g.mil || 'Mc120' }), ec: dk.eurocode({ alpha: EC_ALPHA[g.alphaEC || 'recommended'] }) });
+    const deck = new SlabDeck(opts), { perm, f61, ec } = charges(deck);
+    // règle des bras de levier (effort tranchant et réactions par poutre près des appuis) : inutile si n = 1
+    const lev = n > 1 && g.levier !== false ? charges(new TablierLevier(opts)) : null;
+    bySpan.set(L, { L, gp, deck, perm, f61, ec, beams: perBeam(deck, perm, f61, ec, b1, n, lev) });
   }
   return { sec, n, b1, width, ys, spans: g.spans, spansU, bySpan };
 }
@@ -71,9 +106,11 @@ export function beamDeck(g) {
  * Efforts par poutre : M_k = m_x(y_k) b₁ (enveloppes), V_k et R_k = V et R du tablier × coefficient de la poutre
  * η_k = M_k/(M/n) à mi-travée (pratique PAP : mêmes coefficients de répartition pour M et V).
  */
-function perBeam(deck, perm, f61, ec, b1, n) {
+function perBeam(deck, perm, f61, ec, b1, n, lev = null) {
   const secs = deck.beam.sections, mid = deck.beam.sectionIndex(0, 0.5);
-  const cases = { G: perm, A: f61.A, Bc: f61.Bc, Bt: f61.Bt, Mc120: f61.Mc120, D240: f61.D240, trott: f61.trottoir, TS: ec.TS, UDL: ec.UDL, footway: ec.footway, LM1: ec.LM1, gr1a: ec.gr1a, gr1b: ec.gr1b };
+  const casesDe = (P, F, E) => ({ G: P, A: F.A, Bc: F.Bc, Bt: F.Bt, Mc120: F.Mc120, D240: F.D240, trott: F.trottoir, TS: E.TS, UDL: E.UDL, footway: E.footway, LM1: E.LM1, gr1a: E.gr1a, gr1b: E.gr1b });
+  const cases = casesDe(perm, f61, ec), casesL = lev ? casesDe(lev.perm, lev.f61, lev.ec) : {};
+  const etaDe = (r, k) => { if (!r) return null; const mx = r.mxMax || r.mx, Mt = (r.Mmax || r.M)[mid]; return Mt ? mx[mid][k] * b1 / (Mt / n) : 1; };
   return Array.from({ length: n }, (_, k) => {
     const out = { k, y: deck.ys[k], x: secs.map(s => s.x) };
     for (const [id, r] of Object.entries(cases)) {
@@ -82,9 +119,12 @@ function perBeam(deck, perm, f61, ec, b1, n) {
       const Mmax = secs.map((_, s) => mxMax[s][k] * b1), Mmin = secs.map((_, s) => mxMin[s][k] * b1);
       const Mt = (r.Mmax || r.M)[mid];
       const eta = Mt ? Mmax[mid] / (Mt / n) : 1;
-      const Vmax = r.Vmax ? r.Vmax.map(v => v * eta / n) : (r.Vm ? r.Vm.map(v => v * eta / n) : null);
-      const Vmin = r.Vmin ? r.Vmin.map(v => v * eta / n) : null;
-      out[id] = { Mmax, Mmin, eta, Vmax, Vmin, Rmax: (r.Rmax || r.R).map(v => v * eta / n) };
+      // V et R : poutres de rive, à l'appui, max(Guyon-Massonnet ; bras de levier), raccordé à Guyon-Massonnet sur 2b (≤ L/2)
+      const rive = k === 0 || k === n - 1, etaL = etaDe(casesL[id], k), etaV = rive ? Math.max(eta, etaL ?? -Infinity) : eta, L = deck.spans[0], Ltr = Math.min(2 * deck.b, L / 2);
+      const etaX = x => eta + (etaV - eta) * Math.max(0, 1 - Math.min(x, L - x) / Ltr);
+      const Vmax = r.Vmax ? r.Vmax.map((v, s) => v * etaX(secs[s].x) / n) : (r.Vm ? r.Vm.map((v, s) => v * etaX(secs[s].x) / n) : null);
+      const Vmin = r.Vmin ? r.Vmin.map((v, s) => v * etaX(secs[s].x) / n) : null;
+      out[id] = { Mmax, Mmin, eta, etaL, etaV, Vmax, Vmin, Rmax: (r.Rmax || r.R).map(v => v * etaV / n) };
     }
     return out;
   });

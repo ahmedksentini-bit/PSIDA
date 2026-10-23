@@ -55,7 +55,11 @@ export function seismicActions(st, sp, hGG, spLigne = null) {
     const F = d => efforts.appuis.reduce((s, ap) => s + Math.abs(d === 'x' ? ap.cas[0].Fx : ap.cas[1].Fy), 0);
     return { projet, problemes, efforts, repos, methode: 'multimodale', T: { x: T1('x'), y: T1('y') }, F: { x: F('x'), y: F('y') }, M: r.M, conditions: r.conditions };
   }
-  return { projet, problemes, repos, efforts: EC8.exporterEfforts(projet, a, r), methode: projet.tablier.continuite === 'isostatique' ? 'travees_independantes' : 'mode_fondamental', T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T }, F: { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 }, M: r.M, conditions: r.conditions };
+  // effort total = somme des efforts reçus par les appuis (comme l'onglet « Calcul sismique ») : en travées indépendantes, les
+  // modes sont combinés appui par appui (SRSS / CQC), et la somme des combinaisons dépasse un peu la combinaison du total
+  const efforts = EC8.exporterEfforts(projet, a, r);
+  const F = d => efforts.appuis.reduce((s, ap) => s + Math.abs(d === 'x' ? ap.cas[0].Fx : ap.cas[1].Fy), 0);
+  return { projet, problemes, repos, efforts, methode: projet.tablier.continuite === 'isostatique' ? 'travees_independantes' : 'mode_fondamental', T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T }, F: { x: F('x'), y: F('y') }, Fglobal: { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 }, M: r.M, conditions: r.conditions };
 }
 
 /**
@@ -106,7 +110,7 @@ export const SUPPORT_DEFAULTS = {
   mat: { fck: 25, fyk: 400, c: 0.05 },
   eps: { TLD: 3e-4, TCD: 1e-4 },
   // bossages sous les appareils (débord autour de l'appareil, béton) ; dalle précontrainte : actions PSI-DP transmises aux appuis
-  bossage: { debord: 0.05, fck: null },
+  bossage: { debord: null, fck: null },   // débord null : dimensionné (5 à 20 cm)
   epsPSIDP: true,
   // pile de joint (pile double) au début et/ou à la fin : rapports des réactions du tablier adjacent à celles du tablier étudié
   joint: { debut: false, fin: false, rG: 1, rQ: 1, rH: 1 },
@@ -126,8 +130,27 @@ const EiB = fc => 11000 * fc ** (1 / 3), EvB = fc => 3700 * fc ** (1 / 3), Ecm =
  * @param {object} st résultats de compute() (pipeline) ; @param {object} input données « Appuis » (voir SUPPORT_DEFAULTS)
  */
 export function computeSupports(st, input = {}) {
+  // semelles superficielles de largeur B non donnée (B vide) : dimensionnées ligne par ligne (plus petite largeur, par pas de
+  // 0,25 m, qui vérifie portance, glissement et excentrement dans toutes les combinaisons, à vide comprise), puis second
+  // calcul avec ces largeurs pour que la rotation des semelles dans la répartition des efforts horizontaux leur corresponde
+  const F = { ...SUPPORT_DEFAULTS.found, ...(input.found || {}) };
+  // semelle sur pieux (ou B saisie) : largeur donnée, 3 m par défaut (dimensions du groupe de pieux à la charge du projeteur)
+  if (!F.Bauto || F.type !== 'superficielle') return calculAppuis(st, F.B == null ? { ...input, found: { ...F, B: 3.0 } } : input);
+  const r1 = calculAppuis(st, { ...input, found: { ...F, B: F.B ?? 3.0 } });
+  const Bligne = r1.lines.map(L => (L.EC.found.type === 'superficielle' ? Math.max(L.EC.found.B, L.BAEL.found.B) : null));
+  return calculAppuis(st, { ...input, found: { ...F, B: F.B ?? 3.0, Bligne } });
+}
+
+function calculAppuis(st, input = {}) {
   const sp = merge(SUPPORT_DEFAULTS, input);
   const { deck, perm, f61, ec, bearings } = st;
+  // tablier à travées indépendantes : chaque pile porte deux rangées d'appareils (une par about). Voile d'épaisseur en tête
+  // non donnée : tête élargie pour recevoir les deux bossages (appareil + 2 × 10 cm chacun) et l'ouverture du joint (10 cm)
+  if (deck.continuite === 'isostatique' && (sp.pile.type || 'voile') === 'voile' && sp.pile.bTop == null && deck.spans.length > 1) {
+    const aMax = Math.max(0, ...bearings.rows.slice(1, -1).map(r => (r.sel ? r.sel.bd.a / 1000 : 0)));
+    const req = Math.ceil((2 * (aMax + 0.20) + 0.10) / 0.05 - 1e-9) * 0.05;
+    if (req > sp.pile.b + 1e-9) sp.pile = { ...sp.pile, bTop: req, bTopAuto: true };
+  }
   const width = 2 * deck.b, Ltot = deck.spans.reduce((a, v) => a + v, 0);
   const xs = [0]; deck.spans.forEach(L => xs.push(xs[xs.length - 1] + L));
   // dalle précontrainte (PSI-DP) : réactions hyperstatiques de précontrainte (enveloppe des phases mise en tension, mise en
@@ -165,7 +188,9 @@ export function computeSupports(st, input = {}) {
 
   // --- fondations sur pieux : modèle PSH (semelle rigide, pieux de Winkler, matrice de rigidité du groupe) ---
   // fondation de chaque ligne (type, semelle, pieux) : données générales ou propres à la ligne (plan de nivellement)
-  const F0 = i => S(i).found, onPiles = i => F0(i).type !== 'superficielle';
+  const BligneDe = i => { const Bl = sp.found.Bligne && sp.found.Bligne[i], bN = niv.parLigne[i] && niv.parLigne[i].found && niv.parLigne[i].found.B; return Bl != null && !(bN > 0) ? Bl : null; };
+  const F0 = i => { const f = S(i).found, Bl = BligneDe(i); return Bl != null ? { ...f, B: Bl } : f; }, onPiles = i => F0(i).type !== 'superficielle';
+  const parLigne = niv.actif || !!sp.found.Bligne, SL = i => ({ ...S(i), found: F0(i) });
   const nF0 = i => Math.max(1, F0(i).nFiles), nP0 = i => Math.max(1, F0(i).nPile), Dp = i => F0(i).pileD;
   const Lfoot = i => (isEnd(i) ? width : (sp.pile.type === 'voile' ? Lv : width)) + 1.0;
   const fileX = (i, f) => (nF0(i) === 1 ? 0 : (f - (nF0(i) - 1) / 2) * F0(i).sPile);
@@ -339,7 +364,7 @@ export function computeSupports(st, input = {}) {
   let seisme = null;
   if (sp.seisme.actif) {
     if (sp.seisme.source === 'onglet') seisme = externalSeismic(sp.seisme.externe, nL, deck.spans);
-    else { try { seisme = seismicActions(st, sp, hGG, niv.actif ? xs.map((_, i) => S(i)) : null); } catch (e) { seisme = { error: e.message }; } }
+    else { try { seisme = seismicActions(st, sp, hGG, parLigne ? xs.map((_, i) => SL(i)) : null); } catch (e) { seisme = { error: e.message }; } }
   }
   const accidental = (i, Nfreq) => {
     const out = [];
@@ -488,7 +513,7 @@ export function computeSupports(st, input = {}) {
     if (!brg || brg.error) return null;
     const end = isEnd(i), P = sp.pile, C = sp.culee, row = bearings.rows[i], nb = row.nb;
     const Ru = Math.max(...brg.rows.filter(r => !r.minimal).map(r => r.Fz));
-    const a0 = brg.g.a, b0 = brg.g.b, deb = sp.bossage?.debord ?? 0.05, ab = a0 + 2 * deb, bb = b0 + 2 * deb;
+    const a0 = brg.g.a, b0 = brg.g.b, debSaisi = sp.bossage?.debord;
     const pitch = bearingSpacing({ width, psi: st.p.concept.psi, n: nb });
     const dA = end ? (C.type === 'remblayee' ? C.em : C.lc) : (P.type === 'voile' ? bTop : P.lc);
     // pression localisée : contact appareil / bossage (rectangle homothétique limité au bossage, béton du bossage) ;
@@ -500,6 +525,11 @@ export function computeSupports(st, input = {}) {
       const fcd = fc / 1.5, k = Math.min(Math.sqrt(A1 * B1 / (a0 * b0)), 3), sig = Ru / 1000 / (a0 * b0);
       return { K: k, fbu: fcd, lim: k * fcd, sig, ok: sig <= k * fcd + 1e-9, rule: 'EN 1992-1-1 § 6.7' };
     };
+    // débord du bossage : saisi, ou dimensionné (vide) — plus petit débord de 5 à 20 cm, par pas de 5 cm, qui vérifie le
+    // contact appareil / bossage (règle du code affiché ; BAEL : K > 1 seulement si d ≥ a₀/6 et b₀/6)
+    let deb = debSaisi ?? 0.05, debDim = false;
+    if (debSaisi == null) { debDim = true; for (const d of [0.05, 0.10, 0.15, 0.20]) { deb = d; if (pr(fckB, a0 + 2 * d, b0 + 2 * d).ok) break; } }
+    const ab = a0 + 2 * deb, bb = b0 + 2 * deb;
     const press = { ...pr(fckB, ab, bb), fck: fckB };
     const sc = Math.min(dA / a0, Math.min(pitch, width) / b0), pressDiff = { ...pr(fck, a0 * sc, b0 * sc), a: a0 * sc, b: b0 * sc, fck };
     const Lline = end ? width : (P.type === 'voile' ? Math.min(Lv, width) : width), edge = Math.max(b0 / 2, (Lline - (nb - 1) * pitch) / 2);
@@ -519,7 +549,7 @@ export function computeSupports(st, input = {}) {
         if (!corbel.short) corbel.Along = (requiredSteelNM({ b: b0c, h: hc, c }, { code, fck, fyk }, 0, Mu).As ?? NaN) + Hb * aSide.length / (fyk * 1000 / 1.15);
       }
     }
-    return { Ru, a0, b0, ab, bb, deb, press, pressDiff, split, corbel, dA, pitch };
+    return { Ru, a0, b0, ab, bb, deb, debDim, press, pressDiff, split, corbel, dA, pitch };
   };
 
   // --- éléments d'appui ---
@@ -599,31 +629,40 @@ export function computeSupports(st, input = {}) {
         }
       }
       // --- fondation ---
-      const F = sp.found, bWall = end ? (sp.culee.type === 'remblayee' ? sp.culee.em : sp.culee.D) : (sp.pile.type === 'voile' ? sp.pile.b : sp.pile.D);
+      const Fl = F0(i), bWall = end ? (sp.culee.type === 'remblayee' ? sp.culee.em : sp.culee.D) : (sp.pile.type === 'voile' ? sp.pile.b : sp.pile.D);
       const Lf = (end ? width : (sp.pile.type === 'voile' ? Lv : width)) + 1.0;
-      const Wsem = 25 * F.B * Lf * F.hs;
       const wl = water[i], dAff = wl ? wl.dAff : 0;
       // crue : Archimède sur la semelle (ρ g V), effort transversal combiné (glissement, effort par pieu), moment transversal
       const armHead = end ? sp.culee.Hm + (sp.culee.type === 'remblayee' ? 0 : sp.culee.hc) : Hpile(i) + (sp.pile.type === 'colonnes' ? sp.pile.hc : 0);
-      const fd = base.map(b => {
+      const fdDe = Wsem => base.map(b => {
         const g = b.ls === 'ELU' && !b.vide ? gU : 1, Hy = b.Hyb || 0, wt = !!b.wat;
         // part instantanée (trafic, freinage, TCD, séisme, chocs) des efforts au niveau des têtes de pieux (modèle PSH)
         const Hi = (b.Hinst || 0) + (b.imp ? b.imp.F : 0), Vi = b.Nsus !== undefined && b.N !== undefined ? b.N - b.Nsus : 0;
         const Mi = (b.Hinst || 0) * (armHead + F.hs) + (b.imp ? b.imp.F * (b.imp.h + F.hs) : 0);
         return { label: b.label, ls: b.ls, V: b.Nb + g * Wsem - (wt ? 10 * Wsem / 25 : 0), H: Math.hypot(b.Hb, wt ? Hy : 0), Hx: b.Hb, Hy, M: b.Mb + b.Hb * F.hs, My: (b.Myb || 0) + Hy * F.hs, crue: wt, vide: !!b.vide, acc: !!b.acc, inst: { V: Vi, H: Hi, M: Mi } };
       });
+      const checksDe = (B, fd) => fd.map(f => {
+        const r = { ...f, ...shallowFooting({ code, B, L: Lf, D: F.De, De: F.De, V: f.V, H: f.H, M: f.M, ls: f.ls, profile, phi: soil.phi, gamma: soil.gamma, dAff: f.crue ? dAff : 0 }) };
+        // excentricité transversale (sens L) sous la crue : noyau central L/6 (contrôle simple, non intégré à la portance)
+        if (f.crue) { r.eY = Math.abs(f.My) / f.V; r.eYok = r.eY <= Lf / 6; r.excOk = r.excOk && r.eYok; }
+        return r;
+      });
+      // largeur de semelle : donnée, ou dimensionnée (1er calcul, B vide) — plus petite largeur vérifiant toutes les combinaisons
+      let F = Fl, Bdim = false;
+      if (Fl.type === 'superficielle' && sp.found.Bauto && !sp.found.Bligne && !(niv.parLigne[i] && niv.parLigne[i].found && niv.parLigne[i].found.B > 0)) {
+        const vaut = B => checksDe(B, fdDe(25 * B * Lf * Fl.hs)).every(k => Number.isFinite(k.ratioV) && k.ratioV <= 1 + 1e-9 && (k.ratioH ?? 0) <= 1 + 1e-9 && k.excOk);
+        let B = Math.max(1.5, Math.ceil((bWall + 0.5) / 0.25 - 1e-9) * 0.25);
+        while (B < 12 - 1e-9 && !vaut(B)) B += 0.25;
+        F = { ...Fl, B: Math.round(B * 100) / 100 }; Bdim = true;
+      } else if (sp.found.Bauto && BligneDe(i) != null) Bdim = true;
+      const Wsem = 25 * F.B * Lf * F.hs, fd = fdDe(Wsem);
       let found;
       if (F.type === 'superficielle') {
-        const checks = fd.map(f => {
-          const r = { ...f, ...shallowFooting({ code, B: F.B, L: Lf, D: F.De, De: F.De, V: f.V, H: f.H, M: f.M, ls: f.ls, profile, phi: soil.phi, gamma: soil.gamma, dAff: f.crue ? dAff : 0 }) };
-          // excentricité transversale (sens L) sous la crue : noyau central L/6 (contrôle simple, non intégré à la portance)
-          if (f.crue) { r.eY = Math.abs(f.My) / f.V; r.eYok = r.eY <= Lf / 6; r.excOk = r.excOk && r.eYok; }
-          return r;
-        });
+        const checks = checksDe(F.B, fd);
         const eluMax = fd.filter(f => f.ls === 'ELU').reduce((a, f) => (f.V * (1 + 3 * Math.abs(f.M) / f.V / F.B) > a.Nn ? { f, Nn: f.V * (1 + 3 * Math.abs(f.M) / f.V / F.B) } : a), { Nn: 0 });
         const d = F.hs - c - 0.01, fsu = fyk / 1.15;
         const eMax = Math.max(...fd.map(f => Math.abs(f.M) / f.V));
-        found = { type: 'superficielle', B: F.B, L: Lf, hs: F.hs, W: Wsem, checks, scour: wl ? { dAff, De: F.De, ok: F.De > dAff } : null, worstV: Math.max(...checks.map(k => k.ratioV)), worstH: Math.max(...checks.map(k => k.ratioH)), excOk: checks.every(k => k.excOk),
+        found = { type: 'superficielle', B: F.B, Bauto: Bdim, L: Lf, hs: F.hs, W: Wsem, checks, scour: wl ? { dAff, De: F.De, ok: F.De > dAff } : null, worstV: Math.max(...checks.map(k => k.ratioV)), worstH: Math.max(...checks.map(k => k.ratioH)), excOk: checks.every(k => k.excOk),
           bielles: { dOk: d >= (F.B - bWall) / 4, eOk: eMax <= F.B / 6, eMax, N: eluMax.Nn, label: eluMax.f ? eluMax.f.label : '', d, b: bWall, As: footingStrutTie({ N: eluMax.Nn, B: F.B, b: bWall, d, fsu }) } };
         // méthode des consoles (e > B/6 ou semelle trop mince pour les bielles) : combinaison ELU donnant le plus grand moment en S₁
         found.console = fd.filter(f => f.ls === 'ELU').map(f => ({ label: f.label, V: f.V, M: f.M, ...footingCantilever({ V: f.V, M: f.M, B: F.B, L: Lf, b: bWall, d, fsu }) })).reduce((a, r) => (!a || r.M1 > a.M1 ? r : a), null);
@@ -842,5 +881,5 @@ export function computeSupports(st, input = {}) {
     return out;
   });
   const footRotAll = xs.every((_, i) => onPiles(i)) ? null : xs.map((x, i) => (onPiles(i) ? null : { BAEL: footRot(i, 'BAEL'), EC: footRot(i, 'EC') }));
-  return { sp, niv, pente, centrifuge, distTB, distTE, spLigne: niv.actif ? xs.map((_, i) => S(i)) : null, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
+  return { sp, niv, pente, centrifuge, distTB, distTE, spLigne: parLigne ? xs.map((_, i) => SL(i)) : null, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
 }

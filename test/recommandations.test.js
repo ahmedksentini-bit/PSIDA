@@ -13,7 +13,8 @@ test('Dichotomie : plus petite valeur satisfaisante d\'une grille', async () => 
 });
 
 test('Exemple : semelles de culée et appareils signalés, largeur de semelle trouvée et vérifiée', async () => {
-  const d = formDefaults(), st = compute(parseData(d));
+  // semelle imposée à 3 m (l'ancienne valeur par défaut ; vide, la largeur est dimensionnée et rien n'est signalé)
+  const d = { ...formDefaults(), ap_B: '3' }, st = compute(parseData(d));
   st._recoRef = 'BAEL';
   const { items } = recommandations(st);
   assert.ok(items.some(i => i.domaine === 'Fondations superficielles' && /Culée/.test(i.lieu)));

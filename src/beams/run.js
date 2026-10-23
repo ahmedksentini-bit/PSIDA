@@ -70,8 +70,8 @@ export function computePoutres(inp) {
     const beams = S.beams.map(b => {
       const c = beamCombinations(b);
       const MuF = Math.max(...c.ELU_F61), MuE = Math.max(...c.ELU_EC);
-      const out = { k: b.k, y: b.y, mid: {}, eta: {}, V0: {}, comb: { ELS_F61: c.ELS_F61[mid], ELU_F61: c.ELU_F61[mid], ELS_EC: c.ELS_EC[mid], ELU_EC: c.ELU_EC[mid] }, MuF, MuE };
-      for (const id of ['G', 'A', 'Bc', 'Bt', 'Mc120', 'D240', 'trott', 'TS', 'UDL', 'gr1a', 'gr1b']) if (b[id]) { out.mid[id] = b[id].Mmax[mid]; out.eta[id] = b[id].eta; out.V0[id] = b[id].Vmax ? b[id].Vmax[x0] : null; }
+      const out = { k: b.k, y: b.y, mid: {}, eta: {}, etaL: {}, etaV: {}, V0: {}, comb: { ELS_F61: c.ELS_F61[mid], ELU_F61: c.ELU_F61[mid], ELS_EC: c.ELS_EC[mid], ELU_EC: c.ELU_EC[mid] }, MuF, MuE };
+      for (const id of ['G', 'A', 'Bc', 'Bt', 'Mc120', 'D240', 'trott', 'TS', 'UDL', 'gr1a', 'gr1b']) if (b[id]) { out.mid[id] = b[id].Mmax[mid]; out.eta[id] = b[id].eta; out.etaL[id] = b[id].etaL ?? null; out.etaV[id] = b[id].etaV ?? b[id].eta; out.V0[id] = b[id].Vmax ? b[id].Vmax[x0] : null; }
       const d = H - inp.cover;
       if ((inp.type === 'BP' || inp.type === 'PRAD') && inp.geo === 'dims') {
         out.vipp = chaineVIPP({ ...inp.vipp, b1: inp.b1, hd: inp.hd, gExtra: 0 }, S.L, b, { elsF61: c.ELS_F61, eluF61: c.ELU_F61 });

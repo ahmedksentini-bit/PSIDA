@@ -107,6 +107,7 @@
   .card .card { border:0; padding:0; margin-top:10px; } .card .card h2 { font-size:14px; }
   body:not([data-mode]) .res, body:not([data-mode]) .full-only { display:none; } body[data-mode] .nores { display:none; }
   body[data-mode=concept] .full-only { display:none; } body[data-mode=supports] .full-only:not(#card-supports) { display:none; }
+  body:not([data-mode=supports]) #btn-standalone-recalc { display:none; }
   pre#error:empty { display:none; }
   .stale { position: sticky; top: 0; z-index: 20; display: flex; gap: .8rem; align-items: center; justify-content: space-between; margin: .4rem 0; padding: .55rem .8rem; border: 1px solid #d97706; border-left-width: 5px; border-radius: 6px; background: #fffbeb; color: #78350f; font-size: .92rem; }
   .stale[hidden] { display: none; }
@@ -1034,7 +1035,7 @@
       </div>
       <div class="grp">Fondations</div>
       <label>Type de fondations<select name="ap_found"><option value="superficielle">semelles superficielles</option><option value="pieux">semelles sur pieux</option></select></label>
-      <label>Semelle : largeur B (sens longitudinal) [m]<input name="ap_B" value="3" type="number" step="any"></label>
+      <label>Semelle : largeur B (sens longitudinal) [m]<input name="ap_B" value="" type="number" step="any" placeholder="dimensionnée"></label>
       <label>Semelle : épaisseur [m]<input name="ap_hs" value="1" type="number" step="any"></label>
       <label>Semelle : encastrement D_e [m]<input name="ap_De" value="1" type="number" step="any"></label>
       <div data-show="ap_found=pieux">
@@ -1120,7 +1121,7 @@ e 18 33 2.7 1.6
       <div class="grp">Tablier et appareils d'appui</div>
       <label>F61 : raccourcissement ε TLD (appuis)<input name="ap_TLD" value="0.0003" type="number" step="any"></label>
       <label>F61 : raccourcissement ε TCD (appuis)<input name="ap_TCD" value="0.0001" type="number" step="any"></label>
-      <label>Bossages sous appareils : débord [m]<input name="ap_bosDeb" value="0.05" type="number" step="any"></label>
+      <label>Bossages sous appareils : débord [m]<input name="ap_bosDeb" value="" type="number" step="any" placeholder="dimensionné"></label>
       <div class="thumbs" role="group" aria-label="Schéma d'une tête d'appui"><button type="button" class="thumb" data-zoom="web/schemas/tete_appui.svg" data-cap="Tête d'appui : l'appareil repose sur un bossage qui le déborde de d de chaque côté ; frettage de surface sous l'appareil et aciers d'éclatement dans le sommier (BAEL, annexe E.8)." title="Agrandir"><img src="web/schemas/tete_appui.svg" alt="Tête d'appui" loading="lazy"><span>Tête d'appui</span></button></div>
       <label>Bossages : béton f_ck [MPa]<input name="ap_bosFck" value="" type="number" step="any" placeholder="béton appuis"></label>
       <label>Dalle précontrainte : raccourcissement et réactions hyperstatiques du calcul PSI-DP<select name="ap_epsPSIDP"><option value="oui">oui</option><option value="non">non (valeur ε saisie)</option></select></label>
@@ -1147,6 +1148,7 @@ e 18 33 2.7 1.6
 1275 ; 1275 ; 710 ; 650 ; 900 ; 50 ; 900 ; 600</textarea></label>
       <button type="button" class="secondary" id="btn-standalone">Calculer les appuis seuls</button>
       </details>
+      <button type="button" id="btn-standalone-recalc" title="Relance le calcul des appuis avec les données ci-dessus et le tablier transmis (volet « Appuis seuls »)">Recalculer les appuis</button>
     </div>
     <div>
 <p class="small nores">Lancer le calcul (« Calculer » pour le pont-dalle, ou « Calculer les appuis seuls » pour un tablier quelconque).</p>

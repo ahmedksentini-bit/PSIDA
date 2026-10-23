@@ -17,7 +17,7 @@ export const reglesAppuis = [
     if (!st.supports || !sp) return out;
     st.supports.lines.forEach((Lg, i) => {
       const L = Lg[ref]; if (!L || !L.found || L.found.type !== 'superficielle') return;
-      const F = L.found, lieu = nomLigne(Lg), B = sp.found.B;
+      const F = L.found, lieu = nomLigne(Lg), B = sp.found.B ?? F.B;   // B vide : largeur dimensionnée de la ligne
       const ok = r => { const f = ligneDe(r, i, ref)?.found; return f && f.worstV <= 1 && f.worstH <= 1 && f.excOk; };
       const rechB = { champ: 'ap_B', min: B, max: Math.max(12, 3 * B), pas: 0.05, vers: 'haut', depart: B, calcul: 'appuis', verifie: ok };
       if (F.worstV > 1) {
