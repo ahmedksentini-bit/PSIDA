@@ -132,6 +132,7 @@ function chrono(etapes, tFin, kFin) {
 
 /** Schémas en direct : { long, trans, chrono, synthese } (HTML). */
 export function schemasPhasage(d) {
+  if (d.ph_type === 'mixte') return schemasMixte(d);
   if (d.ph_type === 'fleau') {
     const p = lireFleau(d), D = p.dates, lv = (p.a - p.l0 / 2) / p.nv;
     const et = [
@@ -156,4 +157,67 @@ export function schemasPhasage(d) {
   const masse = (p.poutre.A + p.hourdis.A) * p.gBeton;
   return { long: longPoutres(p), trans: transPoutres(p), chrono: chrono(et, D.fin, 'ph_t5'),
     synthese: `<p class="small">${ok ? '<span class="badge ok">OK</span>' : '<span class="badge warn">ATTENTION</span> dates non croissantes. '} Section composée : poutre ${F(p.poutre.A, 3)} m² + hourdis ${F(p.hourdis.A, 3)} m² (poids ${F(masse, 1)} kN/m) ; contrainte moyenne de précontrainte sur la poutre ≈ ${F((p.cable.P0 ?? p.cable.P) / p.poutre.A / 1000, 1)} MPa ; moment isostatique sous poids propre et hourdis ${F(masse * p.L ** 2 / 8, 0)} kN·m par travée.</p>` };
+}
+
+/* -------------------------------------------------------------------------------------- pont mixte */
+import { lireBipoutre, transversal } from '../src/mixte/bipoutre.js';
+
+function longMixte(p) {
+  const w = 760, h = 230, ml = 60, Lt = p.L.reduce((a, b) => a + b, 0), k = (w - ml - 20) / Lt, sx = x => ml + x * k, yT = 70, s = [];
+  const Ht = p.travee.tfi + p.travee.hw + p.travee.tfs, kz = 70 / (Ht + p.hc), yd = yT + p.hc * kz, ya = yd + Ht * kz;
+  const x0 = [0]; p.L.forEach((l, i) => x0.push(x0[i] + l));
+  // plots : travées (ordre 1…n) puis appuis
+  let q = 0;
+  const zones = [];
+  p.L.forEach((l, i) => { const a = x0[i] + (i > 0 ? p.zone * l : 0), b = x0[i + 1] - (i < p.L.length - 1 ? p.zone * l : 0); zones.push({ a, b, n: ++q, appui: false }); });
+  for (let j = 1; j < p.L.length; j++) zones.push({ a: x0[j] - p.zone * p.L[j - 1], b: x0[j] + p.zone * p.L[j], n: ++q, appui: true });
+  for (const z of zones) {
+    s.push(g('mx_hc mx_t1 mx_cad', `<rect x="${sx(z.a)}" y="${yT}" width="${(z.b - z.a) * k}" height="${p.hc * kz}" fill="${z.appui ? '#e8d9a8' : '#c9d6c4'}" stroke="#456"/>${T(sx((z.a + z.b) / 2), yT + p.hc * kz / 2 + 4, String(z.n), { fs: 10, c: '#333' })}`));
+    if (z.appui && p.fissuration) s.push(g('mx_fiss mx_rhoa', `<line x1="${sx(z.a)}" x2="${sx(z.b)}" y1="${yT - 4}" y2="${yT - 4}" stroke="#d1335b" stroke-width="2" stroke-dasharray="4 3"/>`));
+  }
+  p.L.forEach((l, i) => {
+    const a = x0[i], b = x0[i + 1];
+    const ta = i > 0 ? a + p.zone * l : a, tb = i < p.L.length - 1 ? b - p.zone * l : b;
+    s.push(g('mx_thw mx_ttfi mx_ttfs', `<rect x="${sx(ta)}" y="${yd}" width="${(tb - ta) * k}" height="${Ht * kz}" fill="#dfe7f1" stroke="#456"/>`));
+    if (i > 0) s.push(g('mx_ahw mx_atfi mx_atfs', `<rect x="${sx(a)}" y="${yd}" width="${(ta - a) * k}" height="${Ht * kz}" fill="#b9cce4" stroke="#456"/>`));
+    if (i < p.L.length - 1) s.push(g('mx_ahw mx_atfi mx_atfs', `<rect x="${sx(tb)}" y="${yd}" width="${(b - tb) * k}" height="${Ht * kz}" fill="#b9cce4" stroke="#456"/>`));
+    s.push(cote(sx(a), sx(b), ya + 34, `${F(l, 1)} m`, 'mx_L'));
+  });
+  for (const x of x0) s.push(g('mx_L', `<path d="M${sx(x)} ${ya} l-7 12 h14 z" fill="#fff" stroke="#333"/>`));
+  s.push(coteV(sx(0) - 8, yd, ya, `${F(Ht)} m`, 'mx_thw'));
+  s.push(T(sx(0), yT - 26, `Charpente continue posée à 0 j ; dalle bétonnée par plots dans l'ordre indiqué (travées puis appuis, ${F(p.dates.cadence, 0)} j d'intervalle)`, { a: 'start', fs: 11 }));
+  if (p.fissuration) s.push(g('mx_fiss', T(sx(Lt), yT - 10, 'zones fissurées (15 %) en tireté rouge', { a: 'end', fs: 10, c: '#d1335b' })));
+  return svg(w, h, s.join(''));
+}
+
+function transMixte(p) {
+  const w = 420, h = 230, s = [], TR = transversal(p), Ht = p.travee.tfi + p.travee.hw + p.travee.tfs, k = Math.min((w - 30) / p.largeur, 120 / (Ht + p.hc + p.hg));
+  const cx = w / 2, y0 = 40, X = x => cx + x * k, Y = y => y0 + y * k;
+  s.push(g('mx_B mx_hc', `<rect x="${X(-p.largeur / 2)}" y="${Y(0)}" width="${p.largeur * k}" height="${p.hc * k}" fill="#c9d6c4" stroke="#456"/>`));
+  for (let i = 0; i < p.nPoutres; i++) {
+    const xp = -p.largeur / 2 + TR.debord + i * p.entraxe, P = p.travee, yb = p.hc + p.hg;
+    s.push(g('mx_hg', `<rect x="${X(xp - P.bfs / 2)}" y="${Y(p.hc)}" width="${P.bfs * k}" height="${p.hg * k}" fill="#c9d6c4" stroke="#456"/>`));
+    s.push(g('mx_tbfs mx_ttfs', `<rect x="${X(xp - P.bfs / 2)}" y="${Y(yb)}" width="${P.bfs * k}" height="${Math.max(P.tfs * k, 1.5)}" fill="#7d8fa8"/>`));
+    s.push(g('mx_thw mx_ttw', `<rect x="${X(xp) - Math.max(P.tw * k, 1.5) / 2}" y="${Y(yb + P.tfs)}" width="${Math.max(P.tw * k, 1.5)}" height="${P.hw * k}" fill="#7d8fa8"/>`));
+    s.push(g('mx_tbfi mx_ttfi', `<rect x="${X(xp - P.bfi / 2)}" y="${Y(yb + P.tfs + P.hw)}" width="${P.bfi * k}" height="${Math.max(P.tfi * k, 1.5)}" fill="#7d8fa8"/>`));
+  }
+  // poutre étudiée et sa part de dalle
+  const x1 = -p.largeur / 2, x2 = x1 + TR.part;
+  s.push(g('mx_e mx_B mx_np', `<rect x="${X(x1)}" y="${Y(0) - 12}" width="${(x2 - x1) * k}" height="6" fill="#0b5fa5" opacity=".5"/>${T(X((x1 + x2) / 2), Y(0) - 16, `poutre étudiée : ${F(TR.part)} m de dalle`, { fs: 10, c: '#0b5fa5' })}`));
+  s.push(cote(X(-p.largeur / 2), X(p.largeur / 2), Y(Ht + p.hc + p.hg) + 22, `${F(p.largeur)} m`, 'mx_B'));
+  if (p.nPoutres > 1) { const xa = -p.largeur / 2 + TR.debord; s.push(cote(X(xa), X(xa + p.entraxe), Y(Ht + p.hc + p.hg) + 8, `${F(p.entraxe)} m`, 'mx_e')); }
+  s.push(T(cx, h - 6, `${p.nPoutres} poutres PRS de ${F(Ht)} m (L/${F(Math.max(...p.L) / Ht, 0)}), dalle ${F(p.hc)} m`, { fs: 10.5 }));
+  return svg(w, h, s.join(''));
+}
+
+export function schemasMixte(d) {
+  const p = lireBipoutre(d), D = p.dates, nPlots = 2 * p.L.length - 1;
+  const et = [{ nom: 'Charpente posée', t: 0.5, k: 'mx_L', c: '#7d8fa8' },
+    { nom: `Bétonnage de ${nPlots} plots`, t: D.debut, t1: D.debut + (nPlots - 1) * D.cadence + 1, k: 'mx_t1 mx_cad' },
+    { nom: 'Superstructures', t: D.superstructures, k: 'mx_t4 mx_gsup', c: '#2a8f6a' }];
+  const ok = D.superstructures >= D.debut + (nPlots - 1) * D.cadence + 1;
+  let syn;
+  try { const TR = transversal(p); syn = `${ok ? '<span class="badge ok">OK</span>' : '<span class="badge warn">ATTENTION</span> superstructures avant la fin du bétonnage. '} Poutre de rive : ${F(TR.part)} m de dalle, débord ${F(TR.debord)} m ; acier de travée ${F((p.travee.bfi * p.travee.tfi + p.travee.hw * p.travee.tw + p.travee.bfs * p.travee.tfs) * 7850 * p.majAcier, 0)} kg/m, sur appui ${F((p.appui.bfi * p.appui.tfi + p.appui.hw * p.appui.tw + p.appui.bfs * p.appui.tfs) * 7850 * p.majAcier, 0)} kg/m.`; }
+  catch (e) { syn = `<span class="badge warn">ATTENTION</span> ${e.message}`; }
+  return { long: longMixte(p), trans: transMixte(p), chrono: chrono(et, D.fin, 'mx_t5'), synthese: `<p class="small">${syn}</p>` };
 }

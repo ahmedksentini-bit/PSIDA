@@ -57,6 +57,7 @@ function elevationSVG(p) {
 
 /** Calcul complet : modèle, résultats, blocs de note. */
 export function computePhasage(d) {
+  if (d.ph_type === 'mixte') return computeMixte(d);
   if (d.ph_type === 'fleau') { const p = lireFleau(d), { modele, reperes } = fleaux(p); return { type: 'fleau', p, modele, reperes, r: calculPhasage(modele) }; }
   const p = lirePhasage(d), { modele, reperes } = poutresContinues(p), r = calculPhasage(modele);
   return { type: 'poutres', p, modele, reperes, r };
@@ -90,6 +91,7 @@ function blocsPertesInst(B, pi, nom, c) {
 }
 
 export function phasageBlocks(out) {
+  if (out.type === 'mixte') return mixteBlocks(out);
   if (out.type === 'fleau') return fleauBlocks(out);
   const { p, modele, reperes: R, r } = out, B = [];
   const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
@@ -160,7 +162,7 @@ export function phasageBlocks(out) {
 
 export function phasageNote(out, { version = '' } = {}) {
   return {
-    title: out.type === 'fleau' ? 'Note de calcul — pont construit par encorbellements successifs : phasage et effets différés' : 'Note de calcul — tablier à poutres précontraintes rendues continues : effets différés',
+    title: out.type === 'mixte' ? 'Note de calcul — pont mixte acier-béton : phasage, fluage et retrait' : out.type === 'fleau' ? 'Note de calcul — pont construit par encorbellements successifs : phasage et effets différés' : 'Note de calcul — tablier à poutres précontraintes rendues continues : effets différés',
     meta: `PSIDA ${version} — calcul par phases avec fluage, retrait et relaxation (NF EN 1992-1-1)`,
     blocks: [{ t: 'h1', text: '1. Calcul par phases' }, ...phasageBlocks(out), { t: 'h1', text: '2. Références' },
       { t: 'ref', text: 'NF EN 1992-1-1 : § 3.1.2, § 3.1.4, § 3.3.2, § 5.10.5, § 5.10.6 et annexe B ; NF EN 1992-2.' },
@@ -244,5 +246,57 @@ export function fleauBlocks(out) {
   h2('Méthode et limites');
   para('Calcul par phases pas à pas (même moteur que pour les poutres rendues continues) : chaque voussoir est une barre avec son béton et sa date de coulage ; le béton frais est porté par l\'équipage au bout du fléau (force et moment) jusqu\'au décoffrage ; les câbles de fléau sont tendus des deux côtés après chaque paire de voussoirs, avec frottement et recul d\'ancrage (§ 5.10.5) ; les clavages réunissent les fléaux sans contrainte. Hauteur et inertie variables par barre (I ∝ h^{5/2}, BT n° 7 § 2.222).');
   para('Limites : ligne moyenne supposée droite (la variation du c.d.g. avec la hauteur n\'est prise en compte que dans les excentrements), fléaux construits simultanément et symétriquement (pas de déséquilibre de bétonnage ni de vent en phase de construction), pas de gradient thermique ni de charges d\'exploitation, flexion transversale du caisson et effort tranchant hors de ce module, contre-flèches non calculées.');
+  return B;
+}
+
+/* ---------------------------------------------------------------------------------------- pont mixte */
+import { bipoutre, lireBipoutre, sectionsRemarquables, contraintesMixtes, flechesBipoutre } from '../src/mixte/bipoutre.js';
+import { proprietes, equivalence, momentPlastique, classeSection } from '../src/mixte/section.js';
+
+export function computeMixte(d) { const p = lireBipoutre(d), { modele, reperes } = bipoutre(p); return { type: 'mixte', p, modele, reperes, r: calculPhasage(modele) }; }
+
+export function mixteBlocks(out) {
+  const { p, modele, reperes: R, r } = out, B = [];
+  const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
+  const bc = betonEC2({ fck: p.fck, RH: p.RH, h0: p.h0, ciment: p.ciment }), phi = bc.phi(p.dates.fin, 1), n = equivalence(bc.Ecm, phi);
+  h2(`Pont mixte ${p.nPoutres === 2 ? 'bipoutre' : `à ${p.nPoutres} poutres`} : données et sections`);
+  table(['Donnée', 'Valeur'], [
+    ['Travées', p.L.map(l => `${F(l, 1)} m`).join(' – ')],
+    ['Tablier', `largeur ${F(p.largeur, 2)} m, ${p.nPoutres} poutres à ${F(p.entraxe, 2)} m, débords ${F(R.TR.debord, 2)} m ; dalle ${F(p.hc, 2)} m (gousset ${F(p.hg, 2)} m)`],
+    ['Poutre étudiée (de rive)', `dalle reprise ${F(R.TR.part, 2)} m (poids) ; largeur efficace ${R.beffTravee.map(v => F(v, 2)).join(' / ')} m en travée, ${R.beffAppui.map(v => F(v, 2)).join(' / ') || '—'} m sur appuis`],
+    ['Béton', `C${p.fck}, ciment ${p.ciment}, h₀ ${p.h0} mm, HR ${p.RH} % ; E_cm = ${F(bc.Ecm)} MPa ; φ(∞, 1 j) = ${F(phi, 2)}`],
+    ['Coefficients d’équivalence (EN 1994-2 § 5.4.2.2)', `n₀ = ${F(n.n0, 2)} ; n_L = ${F(n.permanent, 1)} (permanentes), ${F(n.retrait, 1)} (retrait) — pour information : le calcul suit le fluage pas à pas`],
+    ['Acier', `${p.nuance}, majoration ${F((p.majAcier - 1) * 100, 0)} % (raidisseurs, entretoises) ; armatures ρ = ${F(p.rhoTravee * 100, 2)} % en travée, ${F(p.rhoAppui * 100, 2)} % sur appuis`],
+  ]);
+  const ligneSec = (nom, g, beff, rho) => {
+    const G = { ...g, beff, Asup: rho * beff * p.hc * 0.6, Ainf: rho * beff * p.hc * 0.4 }, a = proprietes(G, 'acier'), m0 = proprietes(G, 'mixte', n.n0), mL = proprietes(G, 'mixte', n.permanent), f = proprietes(G, 'fissuree');
+    const cp = classeSection(G, 1, n.n0), cn = classeSection(G, -1, n.n0);
+    return [nom, `${F(g.bfi, 2)}×${F(g.tfi * 1000, 0)} / ${F(g.hw, 2)}×${F(g.tw * 1000, 0)} / ${F(g.bfs, 2)}×${F(g.tfs * 1000, 0)}`, F(a.A, 4), F(a.I, 4), F(m0.I, 4), F(mL.I, 4), F(f.I, 4), `${cp.classe} / ${cn.classe}`, `${F(momentPlastique(G, 1).M / 1000, 1)} / ${F(momentPlastique(G, -1).M / 1000, 1)}`];
+  };
+  table(['Section', 'PRS (semelle inf / âme / semelle sup) [m × mm]', 'A acier [m²]', 'I acier [m⁴]', 'I mixte n₀', 'I mixte n_L', 'I fissurée', 'Classe M+ / M−', 'M_pl,Rd + / − [MN·m]'],
+    [ligneSec('travée', R.gT, R.beffTravee[0], p.rhoTravee), ...(p.L.length > 1 ? [ligneSec('sur appui', R.gA, R.beffAppui[0], p.rhoAppui)] : [])]);
+  para('Classes selon l’EN 1993-1-1 tableau 5.2 (semelle supérieure connectée : classe 1, EN 1994-1-1 § 5.5.2) ; M_pl,Rd selon l’EN 1994-2 § 6.2.1.2 (γ_M0 = 1,0, γ_c = 1,5, γ_s = 1,15), utilisable pour les classes 1 et 2 ; en classe 3 ou 4 la résistance est élastique (section efficace pour la classe 4), à vérifier avec les combinaisons ELU complètes.');
+  h2('Phases de construction');
+  table(['Phase', 'Date [j]', 'Opération'], modele.phases.map((ph, i) => [String(i + 1), F(ph.t), ph.nom]));
+  para(`Plots de travée bétonnés d’abord, plots sur appuis ensuite (cadence ${F(p.dates.cadence)} j) : le béton des zones d’appui est mis en place quand la charpente a déjà pris l’essentiel de la flèche, ce qui limite sa fissuration. ${p.fissuration ? `Zones fissurées sur ${F(p.zone * 100, 0)} % de chaque travée de part et d’autre des appuis intermédiaires : la dalle n’y compte que par ses armatures (EN 1994-2 § 5.4.2.3 (3)).` : 'Analyse non fissurée.'}`);
+  h2('Contraintes aux sections remarquables (actions permanentes)');
+  const S = sectionsRemarquables(R), debut = i => r.pas.findIndex(q => q.phase === i), iS = modele.phases.length - 1;
+  const inst = [[`avant superstructures (${F(p.dates.superstructures)} j)`, r.finPhase[iS - 1]], ['après superstructures', debut(iS)], [`fin (${F(p.dates.fin)} j)`, r.pas.length - 1]];
+  const rows = [];
+  for (const [ni, k] of inst) for (const sc of S) {
+    const c = contraintesMixtes(r.pas[k], modele, R, sc), fy = R.fibres[sc.ia].fy;
+    rows.push([ni, sc.nom, F(c.acier.sup, 0), F(c.acier.inf, 0), F(Math.max(Math.abs(c.acier.sup), Math.abs(c.acier.inf)) / fy, 2), c.dalle.armatures != null ? `armatures ${F(c.dalle.armatures, 0)}` : `${F(c.dalle.sup, 2)} / ${F(c.dalle.inf, 2)}`]);
+  }
+  table(['Instant', 'Section', 'σ acier semelle sup [MPa]', 'σ acier semelle inf [MPa]', 'σ / f_y', 'Dalle : σ sup / inf ou armatures [MPa]'], rows);
+  para('Traction positive. Acier : contraintes sous actions permanentes seules, à cumuler avec le trafic et le gradient thermique (EN 1994-2 § 7.2.2 : σ ≤ f_y/γ_M,ser sous combinaison caractéristique). Dalle hors zones fissurées : le retrait gêné la met en traction ; les armatures des zones d’appui reprennent l’effort de la dalle fissurée.');
+  // flèches
+  table(['Instant', ...p.L.map((_, s) => `flèche travée ${s + 1} [mm]`)], [[`fin de bétonnage (${F(p.dates.superstructures)} j)`, r.finPhase[iS - 1]], ['après superstructures', debut(iS)], [`fin (${F(p.dates.fin)} j)`, r.pas.length - 1]].map(([ni, k]) => [ni, ...flechesBipoutre(r.pas[k], R).map(v => F(v * 1000, 0))]));
+  para('Flèches à mi-travée depuis la pose de la charpente (poids propre de l’acier compris) : la flèche finale est la contre-flèche de fabrication à donner aux poutres pour obtenir le profil voulu en service.');
+  // diagramme des moments de la section mixte
+  const diag = k => { const pts = []; R.iAcier.forEach((ia, q) => { const id = R.iDalle[q], bb = modele.barres[ia], x0 = modele.noeuds[bb.i][0], Lb = modele.noeuds[bb.j][0] - x0; for (const xi of [0, 0.5, 1]) pts.push([x0 + xi * Lb, resultante(r.pas[k], [ia, id], xi * Lb).M / 1000]); }); return pts; };
+  B.push({ t: 'svg', svg: courbesSVG([{ nom: 'avant superstructures', pts: diag(r.finPhase[iS - 1]) }, { nom: 'après superstructures', pts: diag(debut(iS)), coul: '#2a8f6a' }, { nom: `t = ${F(p.dates.fin)} j`, pts: diag(r.pas.length - 1), coul: '#c8552b' }], { titre: 'Moment de la section mixte (acier + dalle) [MN·m]', xlab: 'abscisse [m]', ylab: 'M [MN·m]', marques: R.x0.map(x => ({ x, nom: '' })) }), caption: 'Moments rapportés au c.d.g. de l’acier de travée ; redistribution par fluage et retrait entre la fin des travaux et la fin du calcul.' });
+  h2('Méthode et limites');
+  para('Calcul par phases pas à pas : acier élastique, béton de chaque plot avec son âge (fluage et retrait EN 1992-1-1), sections mixtes par barres décalées (acier, dalle, armatures), plots activés le lendemain de leur bétonnage. Le retrait est recoupé, sur une travée isostatique, avec la méthode des coefficients d’équivalence n_L de l’EN 1994-2 (écart de 4 %).');
+  para('Limites : une poutre (de rive) et sa part de dalle — pas de répartition transversale des charges permanentes entre poutres ; trafic, gradient thermique et combinaisons ELS/ELU complètes à venir ; voilement, déversement en phase de bétonnage, connecteurs et fatigue non encore vérifiés ; zones fissurées forfaitaires (15 %).');
   return B;
 }

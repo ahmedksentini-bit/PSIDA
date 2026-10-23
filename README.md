@@ -500,3 +500,9 @@ v0.89 : phasage — contraintes normales du béton à chaque pas (src/phasage/co
 section, limites 0,6 f_ck(t) en construction, 0,45 f_ck en service, traction / f_ctm(t), décompression des parties
 précontraintes (EN 1992-1-1 § 3.1.2, 5.10.2.2, 7.2 ; EN 1992-2 tableau 7.101N) ; contraintes aux sections remarquables ;
 fléaux : plusieurs câbles par paire de voussoirs ; manuel § 28.9.
+v0.90 : ponts mixtes acier-béton (src/mixte) — section mixte EN 1994-2 (propriétés acier seul, mixte n₀ / n_L,
+fissurée ; largeur efficace § 5.4.1.2 ; classes EN 1993-1-1 tableau 5.2 ; M_pl,Rd § 6.2.1.2 ; f_y selon l'épaisseur
+EN 10025-2) ; pont bipoutre ou quadripoutre par phases dans l'onglet « Phasage » : charpente continue, bétonnage de la dalle
+par plots (travées puis appuis), zones fissurées forfaitaires (§ 5.4.2.3), fluage et retrait pas à pas — retrait recoupé
+avec la méthode n_L (4 %) ; contraintes acier et dalle, flèches (contre-flèches de fabrication), diagrammes ; assistant
+de saisie (élévation avec plots, coupe transversale) ; manuel § 28.10.
