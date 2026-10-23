@@ -131,7 +131,7 @@ export const DEFAUTS_FLEAU = {
   a: 40, nv: 8, l0: 8, hp: 4.0, hc: 2.0, Ac: 6.0, Ap: 9.0, Ic: 4.2, vh: 0.42,
   fck: 40, RH: 70, h0: 400, ciment: 'R', gBeton: 25, gSup: 40, Qeq: 400,
   cable: { n: 3, Ap: 0.0021, P0: 3000, mu: 0.19, k: 0.007, g: 0.006, enrob: 0.15, classe: 2, rho1000: 2.5 },
-  continuite: { n: 4, nv: 4, Ap: 0.0021, P0: 3000 },
+  continuite: { n: 4, nv: 4, Ap: 0.0021, P0: 3000, nRive: 0, nvRive: 3 },
   dates: { cycle: 7, durc: 3, clavage: 90, continuite: 95, superstructures: 120, fin: 36500 },
   parDecade: 6,
 };
@@ -156,7 +156,8 @@ function lireFleauValeurs(d = {}) {
     fck: num(d.fl_fck, D.fck), RH: num(d.fl_RH, D.RH), h0: num(d.fl_h0, D.h0), ciment: d.fl_cim || D.ciment,
     gBeton: num(d.fl_gb, D.gBeton), gSup: num(d.fl_gsup, D.gSup), Qeq: num(d.fl_Qeq, D.Qeq),
     cable: { n: Math.max(1, Math.round(num(d.fl_cn, D.cable.n))), Ap: num(d.fl_cAp, D.cable.Ap * 1e4) / 1e4, P0: num(d.fl_cP0, D.cable.P0), mu: num(d.fl_mu, D.cable.mu), k: num(d.fl_k, D.cable.k), g: num(d.fl_g, D.cable.g * 1000) / 1000, enrob: num(d.fl_enr, D.cable.enrob), classe: 2, rho1000: 2.5 },
-    continuite: { n: Math.max(0, Math.round(num(d.fl_ccn, D.continuite.n))), nv: Math.max(1, Math.round(num(d.fl_ccv, D.continuite.nv))), Ap: num(d.fl_ccAp, D.continuite.Ap * 1e4) / 1e4, P0: num(d.fl_ccP0, D.continuite.P0) },
+    continuite: { n: Math.max(0, Math.round(num(d.fl_ccn, D.continuite.n))), nv: Math.max(1, Math.round(num(d.fl_ccv, D.continuite.nv))), Ap: num(d.fl_ccAp, D.continuite.Ap * 1e4) / 1e4, P0: num(d.fl_ccP0, D.continuite.P0),
+      nRive: Math.max(0, Math.round(num(d.fl_crn, D.continuite.nRive))), nvRive: Math.max(1, Math.round(num(d.fl_crv, D.continuite.nvRive))) },
     dates: { cycle: num(d.fl_cyc, D.dates.cycle), durc: num(d.fl_dur, D.dates.durc), clavage: num(d.fl_tcl, D.dates.clavage), continuite: num(d.fl_tcc, D.dates.continuite), superstructures: num(d.fl_tsup, D.dates.superstructures), fin: num(d.fl_tfin, D.dates.fin) },
     parDecade: D.parDecade,
   };
@@ -236,6 +237,13 @@ export function fleaux(p = DEFAUTS_FLEAU) {
     for (let k = nv; k >= nv - cc.nv + 1; k--) { const b = barres[F[1].bG[k]]; segs.push({ barre: F[1].bG[k], ei: eBas(b.xi0), ej: eBas(b.xi1) }); }
     // n câbles identiques groupés (A_p et P₀ multipliés par n : frottement et zone d'influence du recul inchangés)
     cables.push({ nom: `continuité (${cc.n} câbles)`, Ap: cc.n * cc.Ap, P0: cc.n * cc.P0, mu: C.mu, k: C.k, g: C.g, tension: 'deux', classe: C.classe, rho1000: C.rho1000, phase: iCont, segments: segs, n: cc.n });
+  }
+  // câbles de continuité des travées de rive (éclissage) : sur les nvRive voussoirs d'extrémité, côté culée, en fibre inférieure
+  if (cc.nRive > 0) for (const [f, cote] of [[0, 'bG'], [1, 'bD']]) {
+    const segs = [], ks = []; for (let k = nv; k >= Math.max(1, nv - cc.nvRive + 1); k--) ks.push(k);
+    const ord = cote === 'bG' ? ks : ks.slice().reverse();
+    for (const k of ord) { const b = barres[F[f][cote][k]]; segs.push({ barre: F[f][cote][k], ei: eBas(b.xi0), ej: eBas(b.xi1) }); }
+    cables.push({ nom: `continuité de rive ${f + 1} (${cc.nRive} câbles)`, Ap: cc.nRive * cc.Ap, P0: cc.nRive * cc.P0, mu: C.mu, k: C.k, g: C.g, tension: 'deux', classe: C.classe, rho1000: C.rho1000, phase: iCont, segments: segs, n: cc.nRive });
   }
   phases.push({ t: T.superstructures, nom: 'Superstructures', charges: barres.map((_, i) => ({ barre: i, w: p.gSup })) });
   const fibres = barres.map(b => { const xi = (b.xi0 + b.xi1) / 2, v = vx(xi); return { vs: v, vi: h(xi) - v, precontraint: true, partie: 'caisson' }; });

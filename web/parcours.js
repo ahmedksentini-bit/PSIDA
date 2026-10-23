@@ -29,24 +29,24 @@ export const OUVRAGES = {
   },
   continues: {
     titre: 'Poutres rendues continues', sous: 'poutres préfabriquées précontraintes + hourdis, clavage sur appuis',
-    texte: 'Calcul par phases : pose isostatique, hourdis, clavage, superstructures ; fluage, retrait, relaxation, pertes, contraintes, flèches.',
-    etapes: [['phasage', 'Phasage et effets différés'], ['retenue', 'Retenue']], phType: 'poutres',
-    etat: ['non', 'non', 'partiel', 'partiel', 'non', 'non', 'non', 'partiel'],
-    manque: 'actions permanentes et précontrainte seulement ; à venir : trafic, combinaisons, ferraillage, appuis.',
+    texte: 'Calcul par phases (pose isostatique, hourdis, clavage, superstructures ; fluage, retrait, relaxation, pertes) puis ouvrage terminé : trafic réparti par Guyon-Massonnet, gradient thermique, ELS, ELU avec effets hyperstatiques, effort tranchant, armatures de continuité, réactions vers les appuis.',
+    etapes: [['phasage', 'Tablier par phases'], ['appuis', 'Appuis'], ['seisme', 'Séisme'], ['retenue', 'Retenue']], phType: 'poutres',
+    etat: ['non', 'oui', 'oui', 'partiel', 'oui', 'partiel', 'non', 'oui'],
+    manque: 'à venir : prédimensionnement, plans ; hourdis par l\'onglet Tablier à poutres.',
   },
   fleaux: {
     titre: 'Pont par encorbellements', sous: 'fléaux en caisson, voussoirs coulés en place',
-    texte: 'Calcul par phases voussoir par voussoir : équipage mobile, câbles de fléau et de continuité, clavages ; pertes, contraintes, contre-flèches.',
-    etapes: [['phasage', 'Phasage et effets différés'], ['retenue', 'Retenue']], phType: 'fleau',
-    etat: ['non', 'non', 'partiel', 'partiel', 'non', 'non', 'non', 'partiel'],
-    manque: 'actions permanentes et précontrainte seulement ; à venir : trafic, combinaisons, flexion transversale, appuis.',
+    texte: 'Calcul par phases voussoir par voussoir (équipage mobile, câbles de fléau et de continuité, clavages ; pertes, contre-flèches) puis ouvrage terminé : trafic, gradient thermique, ELS, ELU avec effets hyperstatiques, effort tranchant (effet Résal), réactions vers les appuis.',
+    etapes: [['phasage', 'Tablier par phases'], ['appuis', 'Appuis'], ['seisme', 'Séisme'], ['retenue', 'Retenue']], phType: 'fleau',
+    etat: ['non', 'oui', 'oui', 'partiel', 'oui', 'partiel', 'non', 'oui'],
+    manque: 'à venir : flexion transversale et distorsion du caisson, phase de construction (déséquilibre, vent), prédimensionnement, plans.',
   },
   mixte: {
     titre: 'Pont mixte acier-béton', sous: 'bipoutre, quadripoutre',
-    texte: 'Sections mixtes EN 1994-2 (classes, M_pl,Rd), calcul par phases : charpente, bétonnage par plots, zones fissurées, fluage et retrait ; contraintes, contre-flèches.',
-    etapes: [['phasage', 'Phasage et effets différés'], ['retenue', 'Retenue']], phType: 'mixte',
-    etat: ['non', 'non', 'partiel', 'non', 'non', 'non', 'non', 'partiel'],
-    manque: 'actions permanentes seulement ; à venir : trafic, ELU, voilement, déversement, connecteurs, fatigue, appuis.',
+    texte: 'Sections mixtes EN 1994-2, calcul par phases (charpente, plots, fissuration, fluage et retrait) ; structure achevée : trafic LM1, écart thermique, ELU par classe (âme efficace), voilement par cisaillement, déversement avec berceaux, connexion, fatigue, réactions vers les appuis.',
+    etapes: [['phasage', 'Tablier mixte'], ['appuis', 'Appuis'], ['seisme', 'Séisme'], ['retenue', 'Retenue']], phType: 'mixte',
+    etat: ['partiel', 'oui', 'oui', 'partiel', 'oui', 'partiel', 'non', 'oui'],
+    manque: 'à venir : plans de charpente, déversement en phase de bétonnage, fatigue des armatures ; prédimensionnement.',
   },
 };
 
@@ -95,8 +95,7 @@ export function rendreAccueil() {
   const box = $('#accueil-ouvrages'); if (!box) return;
   const cur = ouvrage(), puce = v => (v === 'oui' ? '<b class="et-oui">oui</b>' : v === 'partiel' ? '<b class="et-partiel">partiel</b>' : '<b class="et-non">à venir</b>');
   box.innerHTML = Object.entries(OUVRAGES).map(([k, o]) => `<div class="ouv-card${k === cur ? ' choisi' : ''}" data-ouvrage="${k}">
-    <svg viewBox="0 0 64 40" width="64" height="40" aria-hidden="true">${PICTO[k]}</svg>
-    <div class="ouv-txt"><h3>${o.titre}</h3><div class="small ouv-sous">${o.sous}</div><p class="small">${o.texte}</p>
+    <div class="ouv-txt"><svg class="ouv-lettrine" viewBox="0 0 64 40" width="160" height="100" aria-hidden="true">${PICTO[k]}</svg><h3>${o.titre}</h3><div class="small ouv-sous">${o.sous}</div><p class="small">${o.texte}</p>
     <div class="ouv-etat">${COLONNES.map((c, i) => `<div class="ouv-et"><span>${c}</span>${puce(o.etat[i])}</div>`).join('')}</div>
     ${o.manque ? `<p class="small ouv-manque">${o.manque}</p>` : ''}
     <button type="button" class="${k === cur ? '' : 'secondary'} ouv-choisir">${k === cur ? 'Ouvrage en cours — continuer' : 'Choisir cet ouvrage'}</button></div></div>`).join('');

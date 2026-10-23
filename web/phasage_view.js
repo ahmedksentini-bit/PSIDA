@@ -58,9 +58,19 @@ function elevationSVG(p) {
 /** Calcul complet : modèle, résultats, blocs de note. */
 export function computePhasage(d) {
   if (d.ph_type === 'mixte') return computeMixte(d);
-  if (d.ph_type === 'fleau') { const p = lireFleau(d), { modele, reperes } = fleaux(p); return { type: 'fleau', p, modele, reperes, r: calculPhasage(modele) }; }
-  const p = lirePhasage(d), { modele, reperes } = poutresContinues(p), r = calculPhasage(modele);
-  return { type: 'poutres', p, modele, reperes, r };
+  let out;
+  if (d.ph_type === 'fleau') { const p = lireFleau(d), { modele, reperes } = fleaux(p); out = { type: 'fleau', p, modele, reperes, r: calculPhasage(modele) }; }
+  else { const p = lirePhasage(d), { modele, reperes } = poutresContinues(p), r = calculPhasage(modele); out = { type: 'poutres', p, modele, reperes, r }; }
+  // ouvrage terminé : trafic, gradient thermique, ELS / ELU, réactions (sections définies par leurs dimensions)
+  if (out.reperes.fibres && (out.type === 'fleau' || out.p.n > 1 || true)) {
+    const v = (k, def) => (String(d[k] ?? '').trim() === '' || !Number.isFinite(+d[k]) ? def : +d[k]);
+    const fl = out.type === 'fleau', Lr = fl ? v('fl_Lr', (out.p.caisson ? out.p.caisson.B : 12) - 2) : v('ph_Lr', 8), tr = fl ? v('fl_trott', 0) : v('ph_trott', 1);
+    try {
+      out.acheve = structureAchevee(out, { nPoutres: v('ph_nP', 4), chaussee: { y1: -Lr / 2, y2: Lr / 2 }, trottoirs: tr > 0 ? [{ y1: -Lr / 2 - tr, y2: -Lr / 2 }, { y1: Lr / 2, y2: Lr / 2 + tr }] : [],
+        alpha: EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended, alphaKey: d.alpha || 'recommended', expo: (fl ? d.fl_expo : d.ph_expo) || 'XC' });
+    } catch (e) { out.acheveErreur = e.message; }
+  }
+  return out;
 }
 
 /** Bloc « contraintes » commun : vérifications enveloppes et tableau aux sections remarquables. */
@@ -154,19 +164,21 @@ export function phasageBlocks(out) {
   if (r.pertesInstantanees && r.pertesInstantanees[0]) blocsPertesInst(B, r.pertesInstantanees[0], 'câble T1', p.cable);
   para(`Pertes calculées pas à pas : raccourcissement du béton sous les charges successives, fluage et retrait (EN 1992-1-1 annexe B et § 3.1.4) et relaxation (§ 3.3.2), en interaction avec la structure. ${r.pertesInstantanees && r.pertesInstantanees[0] ? `Force au vérin P₀ = ${F(p.cable.P0)} kN, pertes instantanées calculées (frottement, recul d\'ancrage).` : 'La force après mise en tension est une donnée (pertes instantanées non calculées).'}`);
 
+  B.push(...acheveBlocks(out));
   h2('Méthode et limites');
   para('Méthode pas à pas (Bažant ; Ghali, Favre et Elbadry, Concrete Structures: Stresses and Deformations, ch. 5) sur une ossature plane : chaque incrément d\'effort est affecté de la fonction de fluage J(t, τ) de son béton et de son âge ; un changement de schéma (clavage, activation du hourdis) ne sollicite que par les incréments postérieurs. Moteur recoupé sur les solutions fermées de Dischinger, l\'équation intégrale de Volterra, le Bulletin technique Sétra n° 7 (1972, annexe I), le guide Sétra « Eurocode 2 — application aux ponts-routes en béton » (2008) et l\'éq. (5.46) de l\'EN 1992-1-1.');
-  para('Limites : effort normal constant par barre (le maillage doit rester fin), sections non fissurées, armatures passives non prises en compte dans le fluage (coefficient k_s du guide Sétra non appliqué), une poutre et sa largeur de hourdis (pas de répartition transversale), gradient thermique et charges d\'exploitation hors de ce module.');
+  para('Limites : effort normal constant par barre (le maillage doit rester fin), sections non fissurées, armatures passives non prises en compte dans le fluage (coefficient k_s du guide Sétra non appliqué), une poutre et sa largeur de hourdis pour les actions permanentes ; trafic réparti par les coefficients de Guyon-Massonnet d\'une travée de même portée ; hourdis (flexion locale) : onglet Tablier à poutres ; gradient thermique linéaire seul (approche 1).');
   return B;
 }
 
 export function phasageNote(out, { version = '' } = {}) {
   return {
-    title: out.type === 'mixte' ? 'Note de calcul — pont mixte acier-béton : phasage, fluage et retrait' : out.type === 'fleau' ? 'Note de calcul — pont construit par encorbellements successifs : phasage et effets différés' : 'Note de calcul — tablier à poutres précontraintes rendues continues : effets différés',
+    title: out.type === 'mixte' ? 'Note de calcul — pont mixte acier-béton : phasage, effets différés et structure achevée' : out.type === 'fleau' ? 'Note de calcul — pont construit par encorbellements successifs : phasage, effets différés et ouvrage terminé' : 'Note de calcul — tablier à poutres précontraintes rendues continues : phasage, effets différés et ouvrage terminé',
     meta: `PSIDA ${version} — calcul par phases avec fluage, retrait et relaxation (NF EN 1992-1-1)`,
     blocks: [{ t: 'h1', text: '1. Calcul par phases' }, ...phasageBlocks(out), { t: 'h1', text: '2. Références' },
       { t: 'ref', text: 'NF EN 1992-1-1 : § 3.1.2, § 3.1.4, § 3.3.2, § 5.10.5, § 5.10.6 et annexe B ; NF EN 1992-2.' },
       { t: 'ref', text: 'Z. P. Bažant, Prediction of concrete creep effects using age-adjusted effective modulus method, ACI Journal 69 (1972) ; A. Ghali, R. Favre, M. Elbadry, Concrete Structures: Stresses and Deformations, 4ᵉ éd., CRC Press (2012).' },
+      ...(out.type === 'mixte' ? [{ t: 'ref', text: 'NF EN 1994-2 : § 5.4, 6.2, 6.6, 6.8, 7.2, 7.4 ; NF EN 1993-2 : § 6.3.4.2, 9.5.2 et annexe D.2.4 ; NF EN 1993-1-5 : § 4.4, 5.2, 5.3, 7.1 ; NF EN 1993-1-1 : tableau 5.2, § 6.3.1 ; NF EN 1993-1-9 ; NF EN 1991-2 : § 4.2, 4.3, 4.6.4 ; NF EN 1991-1-5 : § 6.1.4.3.' }] : []),
       { t: 'ref', text: 'Sétra, Bulletin technique n° 7 : ponts en béton précontraint construits par encorbellements successifs (1972), annexe I § 2.2 ; Sétra, Guide méthodologique Eurocode 2 — application aux ponts-routes en béton (2008), ch. 4.' }],
   };
 }
@@ -243,17 +255,89 @@ export function fleauBlocks(out) {
   B.push({ t: 'svg', svg: courbesSVG([{ nom: 'contre-flèche totale', pts: cf.map(c => [c.x, c.contrefleche * 1000]) }, { nom: 'part de la construction', pts: cf.map(c => [c.x, -c.construction * 1000]), tirets: true }],
     { titre: 'Contre-flèches à donner aux coffrages des voussoirs [mm] (+ vers le haut)', xlab: 'abscisse [m]', ylab: 'mm', h: 260 }), caption: 'Fléau 1 ; le fléau 2 est symétrique.' });
   para('Chaque coffrage est réglé sur le bout du voussoir précédent juste avant le bétonnage ; le joint suit ce bout rigidement jusqu\'au décoffrage, puis la structure. La contre-flèche compense tout le déplacement vertical postérieur au réglage : poids des voussoirs suivants, câbles, clavages, superstructures, fluage et retrait jusqu\'à la fin du calcul. Non compris : la déformation propre de l\'équipage mobile (à ajouter d\'après sa raideur, fournie par l\'entreprise), les tassements d\'appuis et le gradient thermique.');
+  B.push(...acheveBlocks(out));
   h2('Méthode et limites');
   para('Calcul par phases pas à pas (même moteur que pour les poutres rendues continues) : chaque voussoir est une barre avec son béton et sa date de coulage ; le béton frais est porté par l\'équipage au bout du fléau (force et moment) jusqu\'au décoffrage ; les câbles de fléau sont tendus des deux côtés après chaque paire de voussoirs, avec frottement et recul d\'ancrage (§ 5.10.5) ; les clavages réunissent les fléaux sans contrainte. Hauteur et inertie variables par barre (I ∝ h^{5/2}, BT n° 7 § 2.222).');
-  para('Limites : ligne moyenne supposée droite (la variation du c.d.g. avec la hauteur n\'est prise en compte que dans les excentrements), fléaux construits simultanément et symétriquement (pas de déséquilibre de bétonnage ni de vent en phase de construction), pas de gradient thermique ni de charges d\'exploitation, flexion transversale du caisson et effort tranchant hors de ce module, contre-flèches non calculées.');
+  para('Limites : ligne moyenne supposée droite (la variation du c.d.g. avec la hauteur n\'est prise en compte que dans les excentrements), fléaux construits simultanément et symétriquement (pas de déséquilibre de bétonnage ni de vent en phase de construction) ; trafic sur le caisson entier (torsion et distorsion non calculées) ; flexion transversale du caisson à traiter à part ; gradient thermique linéaire seul (approche 1).');
+  return B;
+}
+
+/** Ouvrage terminé (poutres rendues continues, fléaux) : trafic, thermique, vérifications, réactions. */
+export function acheveBlocks(out) {
+  const v = out.acheve, B = [];
+  if (!v) { if (out.acheveErreur) B.push({ t: 'p', text: `Ouvrage terminé : calcul impossible (${out.acheveErreur}).` }); return B; }
+  const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
+  const fl = v.type === 'fleau';
+  h2('Ouvrage terminé : trafic et gradient thermique');
+  table(['Donnée', 'Valeur'], [
+    ['Charges de trafic', fl ? `tablier entier : tandems de ${F(v.QT, 0)} kN par essieu (toutes voies), UDL ${F(v.qT, 1)} kN/m` : `poutre la plus chargée (n° ${v.guyon.k + 1}, y = ${F(v.guyon.y, 2)} m) parmi ${v.nP} : coefficients de Guyon-Massonnet η_TS = ${F(v.eta.TS, 3)}, η_UDL = ${F(v.eta.UDL, 3)} (θ = ${F(v.guyon.theta, 3)}, α = ${F(v.guyon.alpha, 3)}) ; charges de la poutre : tandem ${F(v.Qb, 0)} kN par essieu, UDL ${F(v.qb, 1)} kN/m`],
+    ['Gradient thermique (EN 1991-1-5 § 6.1.4.1, approche 1)', `ΔT_M = +${v.dTh[0]} K (dessus plus chaud) / −${v.dTh[1]} K ; courbure α ΔT_M / h, effets hyperstatiques sur la structure continue`],
+    ['Combinaisons (EN 1990 A2)', 'caractéristique G + P + Q + 0,6 T ou G + P + T + ψ₀ Q ; fréquente G + P + ψ₁ Q + 0,5 T ou G + P + 0,6 T ; quasi permanente G + P + 0,5 T'],
+  ]);
+  const pas = Math.max(1, Math.round(v.sections.length / 14));
+  table(['x [m]', 'M_charges t∞ [kN·m]', 'M hyperstatique P', 'M_Q max / min', 'M_T + / −', 'M_Ed+ / M_Rd+', 'M_Ed− / M_Rd−', 'A_s inf. / sup. [cm²]', 'V_Ed (− V_pd − Résal) [kN]', 'A_sw/s [cm²/m]'],
+    v.sections.map((s, i) => ({ s, e: v.elu[i] })).filter((q, i) => i % pas === 0).map(({ s, e }) => [F(s.x, 1), F(s.MGch[1], 0), F(s.Mhyp[1], 0), `${F(s.eM.max, 0)} / ${F(s.eM.min, 0)}`, `${F(s.MT[0], 0)} / ${F(s.MT[1], 0)}`, `${F(e.MEdP, 0)} / ${F(e.MRdP, 0)}`, `${F(e.MEdN, 0)} / ${F(e.MRdN, 0)}`, `${F(e.AsInf * 1e4, 1)} / ${F(e.AsCont * 1e4, 1)}`, `${F(e.VEd0, 0)} (${F(e.VEd, 0)})`, F(e.V.AswS * 1e4, 1)]));
+  para('ELU : M_Ed = 1,35 M_charges + M_hyperstatique de la précontrainte (γ_P = 1,0, EN 1992-1-1 § 2.4.2.2 ; obtenu par un second calcul par phases sans câbles) + 1,35 Q + 1,5 × 0,6 T. M_Rd : câbles seuls ; A_s : armatures passives de complément nécessaires (face inférieure en moment positif, face supérieure en moment négatif). Effort tranchant réduit de la composante verticale des câbles et, pour les caissons de hauteur variable, de l\'effet Résal de la membrure inférieure inclinée (§ 6.2.1 (1)).');
+  h2('Vérifications de l\'ouvrage terminé');
+  table(['Vérification', 'Valeur', 'Limite', 'x [m]', 'Résultat', 'Référence'], v.verifs.map(q => [q.nom, F(q.val, 2), F(q.lim, 2), F(q.x, 1), q.ok ? 'OK' : 'NON', q.ref]));
+  h2('Réactions d\'appui (tablier entier)');
+  table(['Ligne', 'G [kN]', 'TS [kN]', 'UDL [kN]', 'Trottoirs [kN]'], v.reactions.map((q, j) => [j === 0 || j === v.reactions.length - 1 ? `Culée C${j}` : `Pile P${j}`, F(q.G, 0), F(q.TS, 0), F(q.UDL, 0), F(q.trott, 0)]));
+  para(`Permanentes : calcul par phases à t∞${fl ? '' : ` × ${v.nP} poutres`} ; trafic : voies chargées à plein sur les lignes d'influence des réactions. Le bouton « Transmettre les réactions aux appuis » les envoie à l'onglet Appuis et fondations.`);
   return B;
 }
 
 /* ---------------------------------------------------------------------------------------- pont mixte */
+/** Structure achevée du pont mixte : trafic, combinaisons, résistances, stabilité, connexion, fatigue, appuis. */
+export function mixteVerifsBlocks(out) {
+  const { p, v } = out, B = [];
+  const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
+  h2('Structure achevée : actions variables');
+  const CH = v.CH;
+  table(['Donnée', 'Valeur'], [
+    ['Répartition transversale', `${p.nPoutres === 2 ? 'règle du levier (bipoutre)' : 'Courbon (entretoisement rigide)'} ; poutre de rive à y = ${F(v.ys[v.kP], 2)} m`],
+    ['Voies (EN 1991-2 § 4.2)', `${CH.nl} voie(s) de ${F(CH.wl, 2)} m ; coefficients de la poutre : ${CH.voies.map((q, i) => `voie ${i + 1} ${F(q.eta, 3)}`).join(', ')}`],
+    ['Charges équivalentes sur la poutre', `tandem : 2 essieux de ${F(CH.Q, 0)} kN ; UDL ${F(CH.q, 1)} kN/m ; trottoirs ${F(CH.qTrott, 1)} kN/m`],
+    ['Écart thermique dalle – acier', `±${F(v.dT, 0)} K (EN 1991-1-5 § 6.1.4.3), effets primaires et hyperstatiques`],
+    ['Modèle de calcul', 'poutre continue : section mixte n₀ en travée, fissurée (acier + armatures) sur 15 % de part et d\'autre des appuis ; lignes d\'influence'],
+  ]);
+  const pas = Math.max(1, Math.round(v.sections.length / 16));
+  const lignes = v.sections.filter((q, i) => i % pas === 0 || q.zoneAppui !== v.sections[Math.max(0, i - 1)].zoneAppui || Math.abs(q.MGF) === Math.max(...v.sections.map(z => Math.abs(z.MGF))));
+  table(['x [m]', 'M_G t∞ [kN·m]', 'M_Q max / min', 'M_T ±', 'M_Ed ELU', 'Classe', 'M_pl,Rd', 'σ_ELU acier [MPa]', 'σ_ELS acier', 'V_Ed [kN]', 'V_b,Rd'],
+    lignes.map(q => [F(q.x, 1), F(q.MGF, 0), `${F(q.MQmax, 0)} / ${F(q.MQmin, 0)}`, F(Math.abs(q.MT[0]), 0), F(q.MEd, 0), String(q.classe) + (q.eff && q.eff.classe4 ? ` (ρ ${F(q.eff.rho, 2)})` : ''), F(q.signe * q.Mpl, 0), F(q.sEluMax, 0), F(q.sElsMax, 0), F(q.VEd, 0), F(q.Vr.Vb, 0)]));
+  para('ELU : 1,35 G + 1,35 (LM1 + trottoirs) + 1,5 × 0,6 T ; ELS caractéristique : G + Q + 0,6 T (EN 1990 A2). Permanentes : calcul par phases à la mise en service et à t∞ (l\'enveloppe des deux est retenue), effets hyperstatiques du retrait compris. Classes 1 et 2 : M_Ed ≤ M_pl,Rd ; classes 3 et 4 : contraintes cumulées par phase, âme efficace en classe 4 (EN 1993-1-5 § 4.4).');
+  h2('Vérifications');
+  table(['Vérification', 'Valeur', 'Limite', 'x [m]', 'Résultat', 'Référence'], v.verifs.map(q => [q.nom, F(q.val, 2), F(q.lim, 2), F(q.x, 1), q.ok ? 'OK' : 'NON', q.ref]));
+  const dv = v.sections.filter(q => q.deversement).reduce((a, b) => (!a || b.deversement.sigma / b.deversement.lim > a.deversement.sigma / a.deversement.lim ? b : a), null);
+  if (dv) para(`Déversement : berceaux de raideur C_d = ${F(dv.deversement.Cd, 0)} kN/m tous les ${F(v.ac, 1)} m (montants I_v = ${F(v.Iv * 1e8, 0)} cm⁴, entretoises I_q = ${F(v.Iq * 1e8, 0)} cm⁴, EN 1993-2 annexe D.2.4), N_crit = ${F(dv.deversement.Ncr, 0)} kN, λ̄ = ${F(dv.deversement.lam, 2)}, χ = ${F(dv.deversement.chi, 2)} ; compression supposée uniforme (du côté de la sécurité).`);
+  h2('Connexion (goujons)');
+  const g = v.goujons, cx = v.connexion.filter((q, i) => i % pas === 0);
+  table(['x [m]', 'v_L,Ed ELU [kN/m]', 'v_L ELS car.', 's ELU [m]', 's ELS [m]', 's fatigue [m]', 'Espacement retenu [m]'], cx.map(q => [F(q.x, 1), F(q.vElu, 0), F(q.vEls, 0), F(Math.min(q.sELU, 9.99), 2), F(Math.min(q.sELS, 9.99), 2), F(Math.min(q.sFat, 9.99), 2), F(q.s, 2)]));
+  para(`Goujons Ø${F(g.d * 1000, 0)} × ${F(g.h * 1000, 0)} mm (f_u = ${g.fu} MPa), ${g.n} par rangée : P_Rd = ${F(v.PRd, 1)} kN (EN 1994-2 § 6.6.3.1) ; flux élastique sur section non fissurée (§ 6.6.2.1) sous l\'effort tranchant appliqué après la connexion (superstructures, trafic) ; ELS : 0,75 P_Rd (§ 6.8.1 (3)) ; fatigue : Δτ_E2 = 1,55 λ_v,2 Δτ ≤ 90 MPa ; espacement ≤ min(4 h_c ; 0,80 m) (§ 6.6.5.5). Effort concentré d\'about dû au retrait (§ 6.6.2.4) à reprendre par une densification locale.`);
+  h2('Réactions d\'appui (tablier complet)');
+  table(['Ligne', 'Permanentes G [kN]', 'TS [kN]', 'UDL [kN]', 'Trottoirs [kN]', 'Ligne d\'influence : ∑ η tandem', 'aire positive [m]'], v.reactions.map((q, j) => [j === 0 || j === v.reactions.length - 1 ? `Culée C${j}` : `Pile P${j}`, F(q.G, 0), F(q.TS, 0), F(q.UDL, 0), F(q.trott, 0), F(q.infTS, 2), F(q.infUDL, 1)]));
+  para('Réactions G : calcul par phases à t∞ × nombre de poutres. Trafic (tablier entier, voies chargées à plein) : TS = Σ Q_i × ∑η du tandem, UDL = Σ q_i w_i × aire positive de la ligne d\'influence de la réaction. Le bouton « Transmettre les réactions aux appuis » les envoie à l\'onglet Appuis et fondations (mode appuis seuls).');
+  return B;
+}
+
 import { bipoutre, lireBipoutre, sectionsRemarquables, contraintesMixtes, flechesBipoutre } from '../src/mixte/bipoutre.js';
 import { proprietes, equivalence, momentPlastique, classeSection } from '../src/mixte/section.js';
+import { verifierMixte } from '../src/mixte/verifs.js';
+import { structureAchevee } from '../src/phasage/acheve.js';
+import { EC_ALPHA } from '../src/loads_ec.js';
 
-export function computeMixte(d) { const p = lireBipoutre(d), { modele, reperes } = bipoutre(p); return { type: 'mixte', p, modele, reperes, r: calculPhasage(modele) }; }
+/** Options des vérifications de la structure achevée (champs mx_* du formulaire). */
+export function optionsMixte(d, p) {
+  const v = (k, def) => (String(d[k] ?? '').trim() === '' || !Number.isFinite(+d[k]) ? def : +d[k]);
+  const Lr = v('mx_Lr', p.largeur - 2), tr = v('mx_trott', 0);
+  return { chaussee: { y1: -Lr / 2, y2: Lr / 2 }, trottoirs: tr > 0 ? [{ y1: -Lr / 2 - tr, y2: -Lr / 2 }, { y1: Lr / 2, y2: Lr / 2 + tr }] : [],
+    alpha: EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended, dT: v('mx_dT', 10), ac: v('mx_ac', 6), a: v('mx_a', 6), Iv: v('mx_Iv', 40000) * 1e-8, Iq: v('mx_Iq', 180000) * 1e-8,
+    goujons: { d: v('mx_gd', 22) / 1000, h: v('mx_gh', 200) / 1000, n: Math.max(1, Math.round(v('mx_gn', 3))), fu: 450 }, Nobs: v('mx_Nobs', 5e5) };
+}
+export function computeMixte(d) {
+  const p = lireBipoutre(d), { modele, reperes } = bipoutre(p), out = { type: 'mixte', p, modele, reperes, r: calculPhasage(modele) };
+  try { out.v = verifierMixte(out, optionsMixte(d, p)); } catch (e) { out.vErreur = e.message; }
+  return out;
+}
 
 export function mixteBlocks(out) {
   const { p, modele, reperes: R, r } = out, B = [];
@@ -295,8 +379,10 @@ export function mixteBlocks(out) {
   // diagramme des moments de la section mixte
   const diag = k => { const pts = []; R.iAcier.forEach((ia, q) => { const id = R.iDalle[q], bb = modele.barres[ia], x0 = modele.noeuds[bb.i][0], Lb = modele.noeuds[bb.j][0] - x0; for (const xi of [0, 0.5, 1]) pts.push([x0 + xi * Lb, resultante(r.pas[k], [ia, id], xi * Lb).M / 1000]); }); return pts; };
   B.push({ t: 'svg', svg: courbesSVG([{ nom: 'avant superstructures', pts: diag(r.finPhase[iS - 1]) }, { nom: 'après superstructures', pts: diag(debut(iS)), coul: '#2a8f6a' }, { nom: `t = ${F(p.dates.fin)} j`, pts: diag(r.pas.length - 1), coul: '#c8552b' }], { titre: 'Moment de la section mixte (acier + dalle) [MN·m]', xlab: 'abscisse [m]', ylab: 'M [MN·m]', marques: R.x0.map(x => ({ x, nom: '' })) }), caption: 'Moments rapportés au c.d.g. de l’acier de travée ; redistribution par fluage et retrait entre la fin des travaux et la fin du calcul.' });
+  if (out.v) B.push(...mixteVerifsBlocks(out));
+  else if (out.vErreur) para(`Vérifications de la structure achevée impossibles : ${out.vErreur}.`);
   h2('Méthode et limites');
   para('Calcul par phases pas à pas : acier élastique, béton de chaque plot avec son âge (fluage et retrait EN 1992-1-1), sections mixtes par barres décalées (acier, dalle, armatures), plots activés le lendemain de leur bétonnage. Le retrait est recoupé, sur une travée isostatique, avec la méthode des coefficients d’équivalence n_L de l’EN 1994-2 (écart de 4 %).');
-  para('Limites : une poutre (de rive) et sa part de dalle — pas de répartition transversale des charges permanentes entre poutres ; trafic, gradient thermique et combinaisons ELS/ELU complètes à venir ; voilement, déversement en phase de bétonnage, connecteurs et fatigue non encore vérifiés ; zones fissurées forfaitaires (15 %).');
+  para('Limites : poutre de rive et sa part de dalle (charges permanentes non réparties entre poutres) ; répartition transversale du trafic par la règle du levier (bipoutre) ou Courbon ; zones fissurées forfaitaires (15 %) ; déversement en phase de bétonnage (charpente seule) non vérifié ; fatigue par la méthode des coefficients λ simplifiée (λ₃ = λ₄ = 1), armatures non vérifiées en fatigue ; voilement des panneaux comprimés sans raidisseurs longitudinaux.');
   return B;
 }

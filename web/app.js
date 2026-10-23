@@ -531,7 +531,7 @@ const FORM_UI = enhanceForm($('#f')); // saisie valeur par valeur des champs mul
 const NIV = initNivellement($('#f'), () => state);
 const TRACE = initTrace($('#f'), { setField });
 // manuel d'utilisation : PDF publié avec le site (docs/manuel), paramètre de version pour ne pas servir un ancien PDF en cache
-const MANUEL = { version: '0.92', url: 'docs/manuel/PSIDA_Manuel.pdf' };
+const MANUEL = { version: '0.93', url: 'docs/manuel/PSIDA_Manuel.pdf' };
 $('#btn-manuel').addEventListener('click', () => window.open(`${MANUEL.url}?v=${MANUEL.version}`, '_blank', 'noopener'));
 $('#f').addEventListener('change', ev => { if (ev.target.name === 'niv_actif') NIV.refresh(); });
 applyHelp($('#f'), $('#help-list'));
@@ -585,7 +585,7 @@ async function saveProject() {
   const form = $('#f');
   const spans = String(form.spans.value || '').split(/[,;\s]+/).filter(Boolean).join('-');
   const name = projName || `projet-psida-${spans || 'ouvrage'}.json`;
-  const file = { format: PROJ_FORMAT, version: '0.92', date: new Date().toISOString(), data: formSnapshot(form) };
+  const file = { format: PROJ_FORMAT, version: '0.93', date: new Date().toISOString(), data: formSnapshot(form) };
   if (ec8Data) file.ec8 = ec8Data;
   const txt = JSON.stringify(file, null, 1);
   if (window.showSaveFilePicker) { // Chrome, Edge : choix du nom et du dossier
@@ -668,7 +668,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.92', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = await buildReport({ ...state, version: '0.93', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -705,7 +705,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.92', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.93', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -748,7 +748,7 @@ $('#btn-cadre').addEventListener('click', runCadre);
 initCadrePlans(() => cadre);
 $('#btn-cadre-note').addEventListener('click', () => {
   if (!cadre) runCadre(); if (!cadre) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.92' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.93' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-cadre.html'; aEl.click(); }
 });
@@ -756,7 +756,7 @@ $('#btn-cadre-docx').addEventListener('click', async () => {
   if (!cadre) runCadre(); if (!cadre) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.92' })), docx);
+    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.93' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = `note-cadre-${cadre.inp.geom.nom || 'ouvrage'}.docx`; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -799,7 +799,7 @@ initPoutresPlans(() => poutres);
 initParcours();
 $('#btn-phasage-note').addEventListener('click', () => {
   if (!phasage) runPhasage(); if (!phasage) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.92' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.93' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-phasage.html'; aEl.click(); }
 });
@@ -807,7 +807,7 @@ $('#btn-phasage-docx').addEventListener('click', async () => {
   if (!phasage) runPhasage(); if (!phasage) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.92' })), docx);
+    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.93' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = 'note-phasage.docx'; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -839,7 +839,7 @@ $('#btn-poutres').addEventListener('click', () => {
 });
 $('#btn-poutres-note').addEventListener('click', () => {
   if (!poutres) $('#btn-poutres').click(); if (!poutres) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(poutresNote(poutres, { version: '0.92' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(poutresNote(poutres, { version: '0.93' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-pont-poutres.html'; aEl.click(); }
 });
@@ -847,7 +847,7 @@ $('#btn-poutres-docx').addEventListener('click', async () => {
   if (!poutres) $('#btn-poutres').click(); if (!poutres) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(poutresNote(poutres, { version: '0.92' })), docx);
+    const blob = await noteToDocx(await svgToImg(poutresNote(poutres, { version: '0.93' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = 'note-pont-poutres.docx'; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -860,6 +860,24 @@ $('#btn-poutres-appuis').addEventListener('click', () => {
   f.ss_area.value = (inp.n * poutres.sec.A).toFixed(3); f.ss_lines.value = linesToStandaloneText(poutres.lines);
   $('#btn-standalone').click();
 });
+$('#btn-mixte-appuis').addEventListener('click', () => {
+  if (!phasage) runPhasage();
+  if (!phasage) return;
+  const f = $('#f'), p = phasage.p;
+  let reac, spans, larg, Lc, h;
+  if (phasage.type === 'mixte' && phasage.v) {
+    const v = phasage.v, g = p.travee; reac = v.reactions; spans = p.L; larg = p.largeur; Lc = v.CH.wl * v.CH.nl; h = g.tfi + g.hw + g.tfs + p.hg + p.hc;
+  } else if (phasage.acheve) {
+    const v = phasage.acheve, fl = phasage.type === 'fleau'; reac = v.reactions;
+    spans = fl ? [p.a, 2 * p.a, p.a] : Array.from({ length: p.n }, () => p.L);
+    larg = fl ? (p.caisson ? p.caisson.B : 12) : v.nP * (p.forme ? p.forme.bh : 2.5); Lc = +(fl ? f.fl_Lr.value : f.ph_Lr.value) || 8; h = fl ? p.hp : (p.forme ? p.forme.H + p.forme.hd : 1.6);
+  } else { $('#error').textContent = 'Réactions indisponibles : sections à définir par leurs dimensions.'; return; }
+  const Ltot = spans.reduce((a, b) => a + b, 0);
+  f.ss_spans.value = spans.join(', '); f.ss_width.value = larg.toFixed(2); f.ss_Lc.value = Lc.toFixed(2); f.ss_h.value = h.toFixed(2);
+  f.ss_area.value = (reac.reduce((a, q) => a + q.G, 0) / Ltot / 25).toFixed(3);
+  f.ss_lines.value = reac.map(q => [q.G, q.G, 0, 0, 0, q.trott, q.TS, q.UDL].map(x => Math.round(x)).join(' ; ')).join('\n');
+  $('#btn-standalone').click();
+});
 $('#btn-standalone').addEventListener('click', () => {
   setMode('supports'); goTab('appuis');
   try {
@@ -869,7 +887,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.92', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.93', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));

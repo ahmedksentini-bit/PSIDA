@@ -530,3 +530,16 @@ ferraillage par mètre et poinçonnement ; entretoises d'about (src/beams/entret
 ferraillage de principe ; aperçu, DXF, PDF) ; assistant de saisie (coupe du tablier, section et câblage) ; note de calcul
 HTML et Word ; manuel chapitre 29.
 Projets antérieurs (section par valeurs) inchangés.
+v0.93 : pont mixte — structure achevée (src/mixte/trafic.js, verifs.js) : poutre continue à inertie variable (n₀ en travée,
+fissurée sur appuis), lignes d'influence, répartition transversale (levier / Courbon), LM1 et trottoirs, écart thermique ±10 K
+(effets primaires et hyperstatiques) ; ELU par classe de section (M_pl,Rd ou contraintes cumulées par phase, âme efficace
+EN 1993-1-5 § 4.4), voilement par cisaillement et interaction M-V, déversement de la semelle comprimée sur berceaux élastiques
+(EN 1993-2 § 6.3.4.2, annexe D.2.4), ELS acier / dalle / armatures, armatures minimales, connexion (goujons : ELU, ELS,
+fatigue), fatigue FLM3 (λ₁ λ₂) ; réactions transmises à l'onglet Appuis ; PRS d'appui de longueur réglable, sections par défaut
+renforcées ; parcours « Tablier mixte → Appuis → Séisme » ; manuel § 28.11.
+Poutres rendues continues et fléaux — ouvrage terminé (src/phasage/acheve.js) : trafic LM1 sur la structure continue
+(répartition de Guyon-Massonnet pour les poutres, caisson entier pour les fléaux), gradient thermique linéaire (EN 1991-1-5
+approche 1), combinaisons EN 1990 A2, ELS (compression, décompression XC / XD, traction fréquente), ELU de flexion avec
+effets hyperstatiques de la précontrainte à γ_P = 1 (second calcul par phases sans câbles), armatures passives de complément
+et de continuité, effort tranchant (V_pd, effet Résal des caissons), réactions transmises aux appuis ; câbles de continuité
+des travées de rive des fléaux ; manuel § 28.12.

@@ -11,7 +11,8 @@
  * Fissuration (EN 1994-2 § 5.4.2.3 (3)) : sur 15 % de chaque travée de part et d'autre des appuis intermédiaires, la
  * dalle est réduite à ses armatures (béton tendu négligé) — méthode simplifiée admise si les travées adjacentes ont un
  * rapport de portées ≥ 0,6.
- * Sections : PRS de travée et PRS sur appui (zone d'appui = 15 % de part et d'autre, comme la fissuration, sauf indication).
+ * Sections : PRS de travée et PRS sur appui (zone d'appui : 20 % de part et d'autre par défaut, champ du formulaire) ; zones
+ * fissurées : 15 % de part et d'autre des appuis, indépendamment des PRS.
  * La ligne des nœuds est le c.d.g. de l'acier de travée ; acier sur appui, dalle et armatures sont des barres décalées.
  */
 import { couches, proprietes, largeurEfficace, longueursEquivalentes, fyEpaisseur } from './section.js';
@@ -21,11 +22,11 @@ const num = (v, d) => (Number.isFinite(+v) && String(v).trim() !== '' ? +v : d);
 export const DEFAUTS_BIPOUTRE = {
   L: [45, 60, 45], nb: 20, nPoutres: 2,
   largeur: 10.5, entraxe: 6.0, hc: 0.28, hg: 0.05,
-  travee: { bfi: 0.80, tfi: 0.035, hw: 2.20, tw: 0.018, bfs: 0.60, tfs: 0.030 },
-  appui: { bfi: 1.00, tfi: 0.070, hw: 2.20, tw: 0.022, bfs: 0.80, tfs: 0.060 },
+  travee: { bfi: 1.00, tfi: 0.050, hw: 2.30, tw: 0.020, bfs: 0.70, tfs: 0.040 },
+  appui: { bfi: 1.20, tfi: 0.090, hw: 2.30, tw: 0.026, bfs: 0.80, tfs: 0.070 },
   nuance: 'S355', majAcier: 1.10, rhoTravee: 0.006, rhoAppui: 0.012,
   fck: 35, RH: 70, h0: 280, ciment: 'N', gSup: 13.5, gBeton: 25, gAcier: 78.5,
-  zone: 0.15, fissuration: true,
+  zone: 0.20, zoneFiss: 0.15, fissuration: true,
   dates: { charpente: 0, debut: 30, cadence: 2, superstructures: 120, fin: 36500 },
   parDecade: 6,
 };
@@ -43,7 +44,7 @@ export function lireBipoutre(d = {}) {
     travee: T, appui: A, nuance: d.mx_nuance || D.nuance, majAcier: num(d.mx_maj, D.majAcier),
     rhoTravee: num(d.mx_rhot, D.rhoTravee * 100) / 100, rhoAppui: num(d.mx_rhoa, D.rhoAppui * 100) / 100,
     fck: num(d.mx_fck, D.fck), RH: num(d.mx_RH, D.RH), h0: num(d.mx_h0, D.h0), ciment: d.mx_cim || D.ciment,
-    gSup: num(d.mx_gsup, D.gSup), gBeton: D.gBeton, gAcier: D.gAcier, zone: D.zone, fissuration: d.mx_fiss !== 'non',
+    gSup: num(d.mx_gsup, D.gSup), gBeton: D.gBeton, gAcier: D.gAcier, zone: num(d.mx_zone, D.zone * 100) / 100, zoneFiss: D.zoneFiss, fissuration: d.mx_fiss !== 'non',
     dates: { charpente: 0, debut: num(d.mx_t1, D.dates.debut), cadence: num(d.mx_cad, D.dates.cadence), superstructures: num(d.mx_t4, D.dates.superstructures), fin: num(d.mx_t5, D.dates.fin) },
     parDecade: D.parDecade,
   };
@@ -79,16 +80,18 @@ export function bipoutre(p = DEFAUTS_BIPOUTRE) {
     const xm = (k + 0.5) / nb, dG = xm * L[s], dD = (1 - xm) * L[s];
     const surAppuiG = s > 0 && dG <= p.zone * L[s] + 1e-9, surAppuiD = s < nT - 1 && dD <= p.zone * L[s] + 1e-9;
     const zoneAppui = surAppuiG || surAppuiD, jApp = surAppuiG ? s : surAppuiD ? s + 1 : null;
+    // fissuration forfaitaire (EN 1994-2 § 5.4.2.3 (3)) : 15 % de part et d'autre des appuis, indépendamment des PRS
+    const zf = p.zoneFiss ?? p.zone, fissG = s > 0 && dG <= zf * L[s] + 1e-9, fissD = s < nT - 1 && dD <= zf * L[s] + 1e-9, jFiss = fissG ? s : fissD ? s + 1 : null;
     const g = zoneAppui ? gA : gT, A = zoneAppui ? aA : aT, C = zoneAppui ? cA : cT;
     // acier
     iAcier.push(barres.length);
     barres.push({ i: nn(s) + k, j: nn(s) + k + 1, A: A.A, I: A.I, e: A.yG - yRef, beton: 'ACIER', nom: `acier T${s + 1}` });
     fibres.push({ vs: C.ha - A.yG, vi: A.yG, partie: 'acier', acier: true, fy: Math.min(...C.acier.filter((_, q) => q !== 1).map(c => c.fy)) });
     // dalle (ou armatures seules en zone fissurée)
-    const beff = zoneAppui ? beffAppui[jApp - 1] : beffTravee[s], rho = zoneAppui ? p.rhoAppui : p.rhoTravee, As = rho * beff * p.hc;
-    const yd = C.dalle.y0 + p.hc / 2, fiss = p.fissuration && zoneAppui;
+    const zf2 = jFiss !== null, beff = zf2 ? beffAppui[jFiss - 1] : beffTravee[s], rho = zoneAppui || zf2 ? p.rhoAppui : p.rhoTravee, As = rho * beff * p.hc;
+    const yd = C.dalle.y0 + p.hc / 2, fiss = p.fissuration && zf2;
     iDalle.push(barres.length);
-    const plot = zoneAppui ? plots[nT - 1 + jApp] : plots[s];
+    const plot = zf2 ? plots[nT - 1 + jFiss] : plots[s];
     plot.barres.push({ acier: barres.length - 1, dalle: barres.length });
     if (fiss) {
       barres.push({ i: nn(s) + k, j: nn(s) + k + 1, A: As, I: As * (p.hc / 2 - 0.06) ** 2, e: yd - yRef, beton: 'ARM', nom: `armatures T${s + 1}` });
@@ -97,7 +100,7 @@ export function bipoutre(p = DEFAUTS_BIPOUTRE) {
       barres.push({ i: nn(s) + k, j: nn(s) + k + 1, A: beff * p.hc, I: beff * p.hc ** 3 / 12, e: yd - yRef, beton: 'TBD', nom: `dalle T${s + 1}` });
       fibres.push({ vs: p.hc / 2, vi: p.hc / 2, partie: 'dalle', precontraint: false });
     }
-    info.push({ s, k, zoneAppui, fiss, beff, As, x: x0[s] + xm * L[s] });
+    info.push({ s, k, zoneAppui, zoneFiss: zf2, fiss, beff, As, x: x0[s] + xm * L[s] });
     info.push(info[info.length - 1]);
   }
   // dates des plots : travées dans l'ordre, puis appuis
