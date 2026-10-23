@@ -40,6 +40,9 @@ export function toPontEC8(st, opt = {}) {
     return { type: 'elastomere', nombre: r.nb, a: bd.a / 1000, b: bd.b / 1000, nbFeuillets: nl, ti: bd.t / 1000, enrobage: 0.0025, ts: bd.ts / 1000,
       plaqueExterieure: 0, Gg: 0.9, enrobageLateral: 0.005, fixation: 'mecanique' };
   };
+  // appareils glissants (à pot ou élastomère-PTFE) : guidés, donc libres en long et bloqués en travers (guides de la
+  // NF EN 1337-2, butées transversales du modèle) — un pont tenu en travers par un seul appui serait irréaliste
+  const butees = i => ({ transversales: bearings.rows[i].liaison === 'glissant', longitudinales: false });
   const charges = i => ({ Nmax: Math.max(perm.Rmax[i], perm.Rmin[i]) / 1000, Nmin: Math.min(perm.Rmax[i], perm.Rmin[i]) / 1000, rotation: Math.abs((bearings.rotPerm || [])[i] || 0) });
   const Lfoot = (end) => (end ? width : (sp.pile.type === 'voile' ? (sp.pile.Lv ?? width) : width)) + 1.0;
   const semelle = (end, i) => ({ long: spL(i).found.B, trans: Lfoot(end), epaisseur: spL(i).found.hs });
@@ -58,7 +61,7 @@ export function toPontEC8(st, opt = {}) {
         type: 'pile', id: `P${i}`,
         futs: col ? { forme: 'circulaire', nombre: P.nCol, long: P.D, trans: P.D, entraxe: width / P.nCol, hauteur: Hpile(i) + (P.hc || 0) }
           : { forme: 'rectangulaire', nombre: 1, long: P.b, trans: P.Lv ?? width, entraxe: 0, hauteur: Hpile(i) },
-        semelle: semelle(false, i), appareils: appareils(i), butees: { transversales: false, longitudinales: false }, chargesPermanentes: charges(i),
+        semelle: semelle(false, i), appareils: appareils(i), butees: butees(i), chargesPermanentes: charges(i),
         ...armatures(i),
         // travées indépendantes : recouvrement de chaque côté = demi-largeur de la tête de pile (chevêtre, ou voile en tête)
         // moins la demi-ouverture nominale du joint (2,5 cm)
@@ -78,7 +81,7 @@ export function toPontEC8(st, opt = {}) {
       gardeGreve: { hauteur: supports.hGG, epaisseur: 0.30, retrait: 0 },
       longrine: null, semelle: semelle(true, i), excentrementAppui: 0,
       rigide: { longitudinal: true, transversal: rem },
-      appareils: ap, butees: { transversales: false, longitudinales: false }, chargesPermanentes: charges(i),
+      appareils: ap, butees: butees(i), chargesPermanentes: charges(i),
     };
   });
   const site = { commune: '', zone: 3, categorie: 'III', classeSol: 'B', ST: 1.0, trafic: 'cas_general', ...(opt.site || {}) };

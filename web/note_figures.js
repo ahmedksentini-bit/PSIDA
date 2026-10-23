@@ -13,6 +13,19 @@ const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const f1 = v => (Number.isFinite(v) ? v.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) : '—');
 const f2 = v => (Number.isFinite(v) ? v.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) : '—');
 export const svgBlock = (svgStr, caption) => ({ t: 'svg', svg: svgStr, caption });
+/** Valeurs tracées au-delà de ce module : figure abandonnée (donnée aberrante, erreur d'unité) plutôt qu'une graduation sans fin. */
+const BORNE_MAX = 1e12;
+/**
+ * Étendue [a, b] rendue traçable : étendue nulle ou négligeable devant les valeurs (le pas de graduation y serait absorbé
+ * par l'arrondi flottant : v + pas = v, boucle sans fin) élargie autour du milieu ; null si une borne n'est pas finie ou
+ * dépasse BORNE_MAX.
+ */
+export function etendueTracable(a, b) {
+  if (!Number.isFinite(a) || !Number.isFinite(b) || Math.abs(a) > BORNE_MAX || Math.abs(b) > BORNE_MAX) return null;
+  const m = Math.max(Math.abs(a), Math.abs(b));
+  if (b - a < Math.max(1e-12, 1e-9 * m)) { const d = Math.max(1, 0.1 * m); return [a - d, b + d]; }
+  return [a, b];
+}
 
 /** Graphique de courbes : bornes arrondies, zéro inclus, légende sous le graphique. */
 export function lineChart({ titre = '', xlabel = '', ylabel = '', series, invertY = false, zones = [], marques = [], largeur = 680, hauteur = 300, includeZero = true, xRange = null }) {
@@ -21,9 +34,10 @@ export function lineChart({ titre = '', xlabel = '', ylabel = '', series, invert
   let [x0, x1] = xRange || [Math.min(...pts.map(p => p[0])), Math.max(...pts.map(p => p[0]))];
   let y0 = Math.min(...pts.map(p => p[1])), y1 = Math.max(...pts.map(p => p[1]));
   if (includeZero) { y0 = Math.min(y0, 0); y1 = Math.max(y1, 0); }
-  if (y1 - y0 < 1e-12) { y1 += 1; y0 -= 1; }
+  const ey = etendueTracable(y0, y1), ex = etendueTracable(x0, x1);
+  if (!ey || !ex) return '';
+  [y0, y1] = ey; [x0, x1] = ex;
   const py = pasJoli(y1 - y0, 6); y0 = Math.floor(y0 / py - 1e-9) * py; y1 = Math.ceil(y1 / py + 1e-9) * py;
-  if (x1 - x0 < 1e-12) x1 = x0 + 1;
   return graphe({ largeur, hauteur, xmin: x0, xmax: x1, ymin: y0, ymax: y1, xlabel, ylabel, titre, inverserY: invertY, zones, marques,
     series: series.map((s, k) => ({ points: s.points, couleur: s.couleur || PAL[k % PAL.length], tirets: s.tirets, epaisseur: s.epaisseur ?? 2, libelle: s.libelle, marqueurs: s.marqueurs })) });
 }
@@ -32,14 +46,18 @@ export function lineChart({ titre = '', xlabel = '', ylabel = '', series, invert
 export function barChart({ titre = '', cats, series, ylabel = '', largeur = 680, hauteur = 280 }) {
   const all = series.flatMap(s => s.values).filter(Number.isFinite);
   if (!all.length) return '';
-  let y0 = Math.min(0, ...all), y1 = Math.max(0, ...all);
-  const py = pasJoli(y1 - y0 || 1, 5); y0 = Math.floor(y0 / py) * py; y1 = Math.ceil(y1 / py) * py || py;
+  const ey = etendueTracable(Math.min(0, ...all), Math.max(0, ...all));
+  if (!ey) return '';
+  let [y0, y1] = ey;
+  const py = pasJoli(y1 - y0, 5); y0 = Math.floor(y0 / py) * py; y1 = Math.ceil(y1 / py) * py || py;
   const g = { l: 64, r: 14, t: 14, b: 46 }, W = largeur - g.l - g.r, H = hauteur - g.t - g.b;
   const Y = v => g.t + H - (v - y0) / (y1 - y0) * H, n = cats.length, m = series.length, cw = W / n, bw = Math.min(34, cw * 0.8 / m);
   const legH = 20;
   return svg({ largeur, hauteur: hauteur + legH, titre, contenu: () => {
     let s = '';
-    for (let v = y0; v <= y1 + 1e-9; v += py) { s += ligne(g.l, Y(v), g.l + W, Y(v), COULEURS.grille, 1); s += texte(g.l - 7, Y(v) + 4, f1(v), 'text-anchor="end" class="pt"'); }
+    // graduations comptées (et non cumulées) : au plus 60, même si le pas est absorbé par l'arrondi
+    const nG = Math.min(60, Math.round((y1 - y0) / py));
+    for (let k = 0, v = y0; k <= nG; k++, v = y0 + k * py) { s += ligne(g.l, Y(v), g.l + W, Y(v), COULEURS.grille, 1); s += texte(g.l - 7, Y(v) + 4, f1(v), 'text-anchor="end" class="pt"'); }
     cats.forEach((c, i) => {
       const xc = g.l + cw * (i + 0.5);
       series.forEach((se, k) => {

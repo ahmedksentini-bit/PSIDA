@@ -142,7 +142,7 @@ const EiB = fc => 11000 * fc ** (1 / 3), EvB = fc => 3700 * fc ** (1 / 3), Ecm =
  * @param {object} st résultats de compute() (pipeline) ; @param {object} input données « Appuis » (voir SUPPORT_DEFAULTS)
  */
 export function computeSupports(st, input = {}) {
-  const r = calculAvecSemelles(st, input);
+  const r = calculAvecTete(st, input);
   // appareils choisis automatiquement (règles du guide 1989) qui ne vérifient pas la NF EN 1337-3 alors qu'un appareil de
   // la gamme la vérifie : cet appareil est retenu et le calcul est refait (raideurs des lignes, répartition des efforts
   // horizontaux, têtes d'appui). Les appareils imposés par l'utilisateur ne sont jamais remplacés.
@@ -158,9 +158,26 @@ export function computeSupports(st, input = {}) {
     const g = row.Pmax != null && row.ug != null ? checkBearing(bd, p0.n, { Pmax: row.Pmax, Pmin: row.Pmin ?? 0, H: row.Hb ?? 0, ug: row.ug, alpha: row.alpha ?? 0.003 }) : { T: p0.n * p0.t };
     remplace.set(i, { ...row.sel, ...g, bd, n: p0.n, area: a * bb, label: designation(bd, p0.n), hTot: totalHeight(bd, p0.n), ajusteEN1337: { de: row.sel.label || b.label } });
   });
-  if (!remplace.size) return r;
-  const st2 = { ...st, bearings: { ...st.bearings, rows: rows.map((row, i) => (remplace.has(i) ? { ...row, sel: remplace.get(i) } : row)) } };
-  const r2 = calculAvecSemelles(st2, input);
+  // aucun élastomère fretté de la gamme ne vérifie la NF EN 1337-3 sur une ligne dont l'appareil a été choisi d'office
+  // (cas typique : culée éloignée du point fixe d'un long tablier, déplacement trop grand pour la hauteur d'élastomère
+  // admissible) : la ligne reçoit un appareil glissant (élastomère-PTFE ou à pot glissant, NF EN 1337-2 et -5, à
+  // dimensionner avec le fabricant), comme les piles où aucun élastomère ne porte la réaction. Elle ne reprend alors plus
+  // d'effort horizontal (frottement négligé). Jamais si toutes les autres lignes glissent déjà.
+  const glisse = new Set();
+  r.lines.forEach((L, i) => {
+    const b = L.EC && L.EC.brg, row = rows[i];
+    if (!b || b.error || b.ok || b.proposal || remplace.has(i) || !row || !row.sel || row.sel.imposed || (row.liaison && row.liaison !== 'elastomere')) return;
+    glisse.add(i);
+  });
+  if (glisse.size && rows.every((row, i) => glisse.has(i) || row.liaison === 'glissant')) glisse.clear();
+  if (!remplace.size && !glisse.size) return r;
+  const st2 = { ...st, bearings: { ...st.bearings, rows: rows.map((row, i) => (remplace.has(i) ? { ...row, sel: remplace.get(i) } : glisse.has(i) ? { ...row, sel: null, liaison: 'glissant', glissantAuto: row.sel.label || true } : row)) } };
+  const r2 = calculAvecTete(st2, input);
+  for (const i of glisse) {
+    const L = r2.lines[i]; if (!L) continue;
+    (L.warnings ||= []).push(`aucun élastomère fretté de la gamme ne vérifie la NF EN 1337-3 sous ces efforts (l'appareil ${rows[i].sel.label || ''} choisi par les règles de 1989 non plus) : appareil glissant guidé retenu (élastomère-PTFE ou à pot glissant, NF EN 1337-2 et -5, à dimensionner avec le fabricant) : libre en long, la ligne ne reprend plus d'effort longitudinal (frottement négligé), mais elle reste bloquée en travers par les guides`);
+    L.appareilGlissant = true;
+  }
   for (const [i, sel] of remplace) {
     const L = r2.lines[i]; if (!L) continue;
     (L.warnings ||= []).push(`appareil ${sel.label} retenu au lieu de ${sel.ajusteEN1337.de} (choisi par les règles du guide 1989) : seul le premier vérifie la NF EN 1337-3 sous les mêmes efforts${L.EC && L.EC.brg && !L.EC.brg.ok ? ' — il ne la vérifie toujours pas après le nouveau calcul, voir le tableau des appareils' : ''}`);
@@ -169,6 +186,38 @@ export function computeSupports(st, input = {}) {
   // appareils effectivement retenus : repris par l'export vers l'onglet « Calcul sismique » (Pont EC8)
   r2.bearingsRetenus = st2.bearings;
   return r2;
+}
+
+/**
+ * Tête de voile non donnée (épaisseur en tête vide) : si la diffusion de la charge d'un appareil dans la section de la pile
+ * ne passe pas (pression localisée sous le bossage, rectangle homothétique inscrit dans l'épaisseur d'appui : EN 1992-1-1
+ * § 6.7 ou BAEL A.8.4,1), la tête du voile est élargie (par pas de 5 cm) à la plus petite épaisseur d_A qui la vérifie, et
+ * au moins à la largeur du bossage ; puis le calcul est refait (masse, raideur et efforts de la pile élargie). Cas typique :
+ * appareils de grandes dimensions (tabliers mixtes, caissons) sur un voile mince. Rien ne change quand la diffusion passe.
+ */
+function calculAvecTete(st, input) {
+  const r = calculAvecSemelles(st, input);
+  const P = { ...SUPPORT_DEFAULTS.pile, ...(input.pile || {}) };
+  if ((P.type || 'voile') !== 'voile' || P.bTop != null || !r || !r.lines) return r;
+  let req = 0;
+  r.lines.forEach(L => {
+    if (L.kind === 'culee') return;
+    for (const code of ['EC', 'BAEL']) {
+      const h = L[code] && L[code].headChk;
+      if (!h || h.error || !h.pressDiff || h.pressDiff.ok) continue;
+      const { Ru, a0, b0, pitch, ab } = h, fck = h.pressDiff.fck, wid = Math.min(pitch, 2 * st.deck.b), scMax = Math.min(3, wid / b0);
+      let sc = null;
+      for (let k = 1; k <= scMax + 1e-9; k += 0.01) {
+        const ok = code === 'BAEL' ? localPressure({ R: Ru, a0, b0, a: a0 * k, b: b0 * k, fcj: fck }).ok : Ru / 1000 / (a0 * b0) <= k * fck / 1.5 + 1e-9;
+        if (ok) { sc = k; break; }
+      }
+      if (sc != null) req = Math.max(req, sc * a0, ab);
+    }
+  });
+  const b0 = (r.sp && r.sp.pile && (r.sp.pile.bTop ?? r.sp.pile.b)) || P.b;
+  if (!(req > b0 + 1e-9)) return r;
+  const bTop = Math.ceil(req / 0.05 - 1e-9) * 0.05;
+  return calculAvecSemelles(st, { ...input, pile: { ...(input.pile || {}), bTop, bTopAuto: 'diffusion' } });
 }
 
 function calculAvecSemelles(st, input) {
@@ -945,6 +994,11 @@ function calculAppuis(st, input = {}) {
     if (bearings.rows[i] && bearings.rows[i].liaison && bearings.rows[i].liaison !== 'elastomere') out.liaison = bearings.rows[i].liaison;
     if (jointAt(i)) out.warnings.push(`pile de joint : réactions du tablier adjacent prises égales à r_G = ${J.rG ?? 1}, r_Q = ${J.rQ ?? 1}, r_H = ${J.rH ?? 1} fois celles du tablier étudié (géométrie de pile commune aux autres piles)${sp.seisme.actif ? ' ; le calcul sismique (Pont EC8) traite encore cette ligne comme une culée' : ''}`);
     const hv = Math.max(0, ...(per.EC.found.rows || per.EC.found.checks || []).filter(r => r.ls === 'ELU' && !r.vide).map(r => Math.abs(r.H) / Math.max(1e-9, r.V)));
+    // semelle superficielle qui ne passe pas (glissement, portance ou excentrement), même élargie au maximum dimensionné
+    // (12 m) : fondations profondes à envisager pour cette ligne (le dimensionnement automatique s'arrête à 12 m)
+    { const fs = ['EC', 'BAEL'].map(k => per[k] && per[k].found).filter(f => f && f.type === 'superficielle');
+      const ko = fs.find(f => (f.worstH > 1 + 1e-9 || f.worstV > 1 + 1e-9 || !f.excOk));
+      if (ko) out.warnings.push(`semelle superficielle non vérifiée${ko.Bauto && ko.B >= 12 - 1e-9 ? ' même élargie à 12 m' : ''} (${[ko.worstH > 1 + 1e-9 ? `glissement H/R_h = ${ko.worstH.toFixed(2)}` : '', ko.worstV > 1 + 1e-9 ? `portance V/R_v = ${ko.worstV.toFixed(2)}` : '', !ko.excOk ? 'excentrement' : ''].filter(Boolean).join(', ')}) : fondations profondes (semelle sur pieux, « Type de fondations ») à envisager pour cette ligne, ou bêche et butée à justifier`); }
     if (sp.found.type !== 'superficielle' && hv > 0.20) out.warnings.push(`H/V = ${hv.toFixed(2)} > 0,20 à l'ELU : envisager des pieux inclinés (PP73 1.1.3 § 2.2.2.7)`);
     if (end && sp.found.type !== 'superficielle' && sp.found.nFiles === 1 && sp.found.pileD < 0.80 - 1e-9) out.warnings.push(`culée sur une file de pieux Ø ${sp.found.pileD} m : Ø 0,80 m minimal (PP73 1.2.3 § 1.2.3)`);
     return out;

@@ -69,7 +69,7 @@ export function standaloneState(inp, supportsInput) {
     const inter = echecs.filter(r => r.i > 0 && r.i < n - 1), cand = (inter.length ? inter : echecs).reduce((a, r) => (Math.abs(r.x - xm) < Math.abs(a.x - xm) ? r : a));
     for (const r of echecs) {
       r.liaison = !dejaFixe && r === cand ? 'fixe' : 'glissant';
-      notes.push(`ligne ${r.i + 1} : aucun élastomère fretté standard ne porte ${Math.round(r.Pmax)} kN par appareil — appareils à pot ${r.liaison === 'fixe' ? 'fixes (point fixe)' : 'glissants'} retenus (NF EN 1337-5 et -2, à dimensionner avec le fabricant)`);
+      notes.push(`ligne ${r.i + 1} : aucun élastomère fretté standard ne porte ${Math.round(r.Pmax)} kN par appareil — appareils à pot ${r.liaison === 'fixe' ? 'fixes (point fixe)' : 'glissants guidés (libres en long, bloqués en travers)'} retenus (NF EN 1337-5 et -2, à dimensionner avec le fabricant)`);
     }
   }
   const width = inp.width;
