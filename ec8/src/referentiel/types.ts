@@ -17,7 +17,8 @@ export type IdSource =
   | "NF_EN_1337_3"
   | "NF_EN_15129"
   | "NF_EN_1992"
-  | "GUIDE_CEREMA_2015";
+  | "GUIDE_CEREMA_2015"
+  | "CAPRA_GODREAU_2015";
 
 export type NatureSource = "reglementaire" | "norme" | "annexe_nationale" | "guide";
 

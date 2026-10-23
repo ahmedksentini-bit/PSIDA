@@ -10,8 +10,9 @@ import { Axe } from '../geom/axe.js';
 import { forceCentrifuge, qvEC, forceCentrifugeF61 } from '../geom/centrifuge.js';
 import { BC } from '../loads_f61.js';
 import { neopreneFlexibility, cantileverFlexibility, horizontalDistribution, horizontalDistributionIso, brakingF61Deck, headCombinationsBAEL, headCombinationsEC, repartitionPlan } from './actions.js';
-import { designShaft, pierCap, buckling, chevetreTorsion } from './pier.js';
+import { designShaft, pierCap, buckling, chevetreTorsion, gammaAcc } from './pier.js';
 import { gardeGreve, murEnRetour, earthPressure, earthPressureUpper, videCombos, dalleTransition, Ka } from './abutment.js';
+import { culeeSismique, inertieRemblaiTalon } from './culee_seisme.js';
 import { shallowFooting, footingStrutTie, pileCapStrutTie, pileGroupForces, menardReaction, lateralPile, pileMinSteel, pileCapacity, minPileLength, PILE_TYPES, pileCapTwoRows, paroiFlechie, negativeFrictionPiles, pileGroupSettlement, footingRotationStiffness, footingSettlement, footingCantilever, sigmaSBAEL, pileConcrete, efficaciteCoherentF62, efficaciteEC7, isCohesive, soilProfile } from './foundation.js';
 import { requiredSteelNM } from './section_nm.js';
 import { winklerPile, pileGroup, headFlexibility, pileProfile, pileShear, pileCapFiles, blevot } from './psh.js';
@@ -45,6 +46,7 @@ export function seismicActions(st, sp, hGG, spLigne = null) {
   const projet = EC8.lireProjet(JSON.parse(JSON.stringify(toPontEC8({ ...st, supports: { sp, hGG, spLigne } }, { site: sp.ec8, q: sp.seisme.q }))));
   const problemes = EC8.valider(projet);
   const a = EC8.actionSismique(projet), m = EC8.modele(projet), r = EC8.analyse(projet, a, m);
+  const site = { ag: a.ag, S: a.S, ST: a.ST ?? 1, g: projet.options?.g ?? 9.81 };
   // repos d'appui (EN 1998-2 6.6.4) : culées, et piles d'un tablier à travées indépendantes
   let repos = null;
   try { const v = EC8.verifierAppuis(projet, a, m, r); repos = v.repos.map(q => ({ ...q, etat: (v.criteres.find(c => c.id === `${q.id}_repos`) || {}).etat })); } catch { repos = null; }
@@ -55,13 +57,20 @@ export function seismicActions(st, sp, hGG, spLigne = null) {
     const mm = EC8.multimodale(projet, a, m, r), efforts = EC8.exporterEfforts(projet, a, r, { multimodale: mm }, 'multimodale');
     const T1 = d => (mm.comparaison.find(c => c.direction === d) || {}).T1 ?? 0;
     const F = d => efforts.appuis.reduce((s, ap) => s + Math.abs(d === 'x' ? ap.cas[0].Fx : ap.cas[1].Fy), 0);
-    return { projet, problemes, efforts, repos, methode: 'multimodale', motifMethode: choix.motif, T: { x: T1('x'), y: T1('y') }, F: { x: F('x'), y: F('y') }, M: r.M, conditions: r.conditions };
+    return { projet, problemes, efforts, repos, site, methode: 'multimodale', motifMethode: choix.motif, T: { x: T1('x'), y: T1('y') }, F: { x: F('x'), y: F('y') }, M: r.M, conditions: r.conditions };
   }
   // effort total = somme des efforts reçus par les appuis (comme l'onglet « Calcul sismique ») : en travées indépendantes, les
   // modes sont combinés appui par appui (SRSS / CQC), et la somme des combinaisons dépasse un peu la combinaison du total
   const efforts = EC8.exporterEfforts(projet, a, r);
   const F = d => efforts.appuis.reduce((s, ap) => s + Math.abs(d === 'x' ? ap.cas[0].Fx : ap.cas[1].Fy), 0);
-  return { projet, problemes, repos, efforts, methode: projet.tablier.continuite === 'isostatique' ? 'travees_independantes' : 'mode_fondamental', T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T }, F: { x: F('x'), y: F('y') }, Fglobal: { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 }, M: r.M, conditions: r.conditions };
+  return { projet, problemes, repos, efforts, site, methode: projet.tablier.continuite === 'isostatique' ? 'travees_independantes' : 'mode_fondamental', T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T }, F: { x: F('x'), y: F('y') }, Fglobal: { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 }, M: r.M, conditions: r.conditions };
+}
+
+/** Action sismique du site (a_g, S, S_T) pour les efforts propres des culées quand les efforts viennent de l'onglet. */
+export function siteSismique(st, sp, hGG, spLigne = null) {
+  const projet = EC8.lireProjet(JSON.parse(JSON.stringify(toPontEC8({ ...st, supports: { sp, hGG, spLigne } }, { site: sp.ec8, q: sp.seisme.q }))));
+  const a = EC8.actionSismique(projet);
+  return { ag: a.ag, S: a.S, ST: a.ST ?? 1, g: projet.options?.g ?? 9.81 };
 }
 
 /**
@@ -397,18 +406,23 @@ function calculAppuis(st, input = {}) {
   if (sp.seisme.actif) {
     if (sp.seisme.source === 'onglet') seisme = externalSeismic(sp.seisme.externe, nL, deck.spans);
     else { try { seisme = seismicActions(st, sp, hGG, parLigne ? xs.map((_, i) => SL(i)) : null); } catch (e) { seisme = { error: e.message }; } }
+    if (seisme && seisme.efforts && !seisme.site) { try { seisme.site = siteSismique(st, sp, hGG, parLigne ? xs.map((_, i) => SL(i)) : null); } catch { seisme.site = null; } }
   }
+  // culées : efforts sismiques propres (inertie, poussée dynamique), k_h = a_g S S_T / g (r = 1)
+  const khCulee = seisme && seisme.site ? seisme.site.ag * seisme.site.S * (seisme.site.ST || 1) / (seisme.site.g || 9.81) : 0;
+  // inertie propre des fûts (Pont EC8, export des efforts) : effort tranchant et moment au pied, par direction
+  const futOf = k => (k.fut ? { fut: { Fx: Math.abs(k.fut.Fx), Mx: Math.abs(k.fut.Mx), Fy: Math.abs(k.fut.Fy), My: Math.abs(k.fut.My) } } : {});
   const accidental = (i, Nfreq) => {
     const out = [];
     if (seisme && seisme.efforts) {
       // EN 1990 6.4.3.4 : G + ψ2,1 Q + A_Ed (ψ2,1 = 0 pour le trafic routier courant) ; Fz pris avec ± (G max + Fz, G min − Fz)
       for (const k of seisme.efforts.appuis[i].cas) for (const sgn of [1, -1]) {
-        out.push({ label: `ACC séisme ${k.nom} ${sgn > 0 ? '(+Z)' : '(−Z)'}`, ls: 'ACC', acc: true, N: (sgn > 0 ? Gmax(i) : Gmin(i)) + sgn * Math.abs(k.Fz), H: Math.abs(k.Fx), Hy: Math.abs(k.Fy), Nsus: Gmax(i), Ninst: 0, Hsus: 0, Hinst: Math.abs(k.Fx) });
+        out.push({ label: `ACC séisme ${k.nom} ${sgn > 0 ? '(+Z)' : '(−Z)'}`, ls: 'ACC', acc: true, sis: true, N: (sgn > 0 ? Gmax(i) : Gmin(i)) + sgn * Math.abs(k.Fz), H: Math.abs(k.Fx), Hy: Math.abs(k.Fy), Nsus: Gmax(i), Ninst: 0, Hsus: 0, Hinst: Math.abs(k.Fx), cx: /^X/.test(k.nom) ? 1 : 0.3, ...futOf(k) });
       }
       // fondations seules (EN 1998-2 5.8.2) : effets × q (ductilité limitée, pont isolé) ou dimensionnement en capacité des
       // piles ; non repris pour les fûts, dimensionnés sous A_Ed
       for (const k of seisme.efforts.appuis[i].casFondations || []) for (const sgn of [1, -1]) {
-        out.push({ label: `ACC séisme ${k.nom} ${sgn > 0 ? '(+Z)' : '(−Z)'}`, ls: 'ACC', acc: true, fond: true, N: (sgn > 0 ? Gmax(i) : Gmin(i)) + sgn * Math.abs(k.Fz), H: Math.abs(k.Fx), Hy: Math.abs(k.Fy), Nsus: Gmax(i), Ninst: 0, Hsus: 0, Hinst: Math.abs(k.Fx) });
+        out.push({ label: `ACC séisme ${k.nom} ${sgn > 0 ? '(+Z)' : '(−Z)'}`, ls: 'ACC', acc: true, sis: true, fond: true, N: (sgn > 0 ? Gmax(i) : Gmin(i)) + sgn * Math.abs(k.Fz), H: Math.abs(k.Fx), Hy: Math.abs(k.Fy), Nsus: Gmax(i), Ninst: 0, Hsus: 0, Hinst: Math.abs(k.Fx), cx: /^X/.test(k.nom) ? 1 : 0.3, ...futOf(k) });
       }
     }
     if (!isEnd(i)) {
@@ -603,10 +617,12 @@ function calculAppuis(st, input = {}) {
         base = combos.map(cb => {
           const g = cb.ls === 'ELU' ? gU : 1, Mimp = cb.imp ? cb.imp.F * cb.imp.h : 0;
           const wt = cb.wat;   // crue : courant + embâcles appliqués au fût (sens du courant, transversal), Archimède sur le fût
-          return { ...cb, Nb: cb.N + g * (Wchev + Wfut) - (wt ? wt.U : 0), Mb: cb.H * arm + Mimp, Mimp, Myb: (cb.Hy || 0) * arm + (wt ? wt.M : 0), Hb: cb.H + (cb.imp ? cb.imp.F : 0), Hyb: (cb.Hy || 0) + (wt ? wt.F : 0) };
+          // séisme : inertie propre du fût ajoutée au pied (effort fu.Fx, moment fu.Mx ; idem en transversal)
+          const fu = cb.fut || { Fx: 0, Mx: 0, Fy: 0, My: 0 };
+          return { ...cb, Nb: cb.N + g * (Wchev + Wfut) - (wt ? wt.U : 0), Mb: cb.H * arm + Mimp + fu.Mx, Mimp, Myb: (cb.Hy || 0) * arm + (wt ? wt.M : 0) + fu.My, Hb: cb.H + (cb.imp ? cb.imp.F : 0) + fu.Fx, Hyb: (cb.Hy || 0) + (wt ? wt.F : 0) + fu.Fy };
         });
         const shape = col ? { D: P.D, c: c + 0.01, nBars: 12 } : { b: Lv, h: bBot, c: c + 0.01, ...(bTop !== bBot ? { hBuck: bMin } : {}) };
-        shaftRes = designShaft({ shape, code, fck, fyk, Hf, combos: base.filter(b => b.ls !== 'ELS' && !b.fond).map(b => ({ label: b.label, N: b.Nb, M: b.Mb - b.Mimp, Mloc: b.Mimp, My: b.Myb, acc: !!b.acc })), n: col ? P.nCol : 1 });
+        shaftRes = designShaft({ shape, code, fck, fyk, Hf, combos: base.filter(b => b.ls !== 'ELS' && !b.fond).map(b => ({ label: b.label, N: b.Nb, M: b.Mb - b.Mimp, Mloc: b.Mimp, My: b.Myb, acc: !!b.acc, sis: !!b.sis })), n: col ? P.nCol : 1 });
         if (col && P.hc > 0) {
           const nb = bearings.nb, pitch = bearingSpacing({ width, psi: st.p.concept.psi, n: nb });
           const ys = Array.from({ length: nb }, (_, k) => width / 2 + (k - (nb - 1) / 2) * pitch);
@@ -626,16 +642,24 @@ function calculAppuis(st, input = {}) {
         const Wwall = rem ? 25 * C.em * Hm * width : 25 * C.nCol * Math.PI * C.D ** 2 / 4 * Hm;
         const mr = murEnRetour({ L: C.Lret, h: Hm + hGG });
         const Wret = 2 * 25 * mr.e * C.Lret * (Hm + hGG) / 2;
+        // séisme : efforts propres de la culée (EN 1998-2 6.7, EN 1998-5 annexe E) — inertie du corps de culée F1 et incrément de
+        // poussée dynamique F3 (Mononobe-Okabe si la liaison au tablier est souple, ΔP_d de structure rigide si elle est fixe),
+        // en phase avec l'effort des appareils, dans la direction longitudinale (coefficient cx de la combinaison 100/30/30)
+        const Hter = Hm + hGG, Bter = rem ? width : C.nCol * Math.min(3 * C.D, width / C.nCol);
+        const sisC = khCulee > 0 ? culeeSismique({ connexion: bearings.rows[i] && bearings.rows[i].liaison === 'fixe' ? 'rigide' : 'flexible', kh: khCulee, gamma: soil.gamma, phi: sp.soil.phi, H: Hter, B: Bter,
+          masses: [{ W: Wwall, z: Hm / 2 }, { W: Wtop, z: Hm + (rem ? hGG / 2 : C.hc / 2) }, { W: Wret, z: Hter / 2 }] }) : null;
+        if (sisC) extra.seisme = sisC;
         base = combos.map(cb => {
           const elu = cb.ls === 'ELU', g = elu ? gU : 1, gq = cb.ls === 'ACC' ? 0 : code === 'BAEL' ? (elu ? 1.605 : 1.2) : (elu ? 1.35 : 1);
-          const Hb = cb.H + g * ep.Pg + gq * ep.Pq;
-          return { ...cb, Nb: cb.N + g * (Wtop + Wwall + Wret + dt.Rg * width) + gq * dt.Rq * width / 3, Mb: cb.H * (Hm + (rem ? 0 : C.hc)) + g * ep.Mg + gq * ep.Mq, Hb };
+          const kS = cb.sis && sisC ? (cb.cx ?? 1) : 0, dH = kS ? kS * sisC.H : 0, dM = kS ? kS * sisC.M : 0;
+          return { ...cb, Nb: cb.N + g * (Wtop + Wwall + Wret + dt.Rg * width) + gq * dt.Rq * width / 3, Mb: cb.H * (Hm + (rem ? 0 : C.hc)) + g * ep.Mg + gq * ep.Mq + dM, Hb: cb.H + g * ep.Pg + gq * ep.Pq + dH,
+            ...(kS ? { culeeSis: kS, sisInst: { H: dH, M: dM } } : {}) };
         });
         // culée sans tablier (remblai mis en place avant la pose du tablier, PP73 1.3.2 § 3.1.4.6)
         base.push(...videCombos({ W: Wtop + Wwall + Wret, ep, code }));
         extra.earth = { ...ep, K: app ? ep.i : KA, Htot: Hm + hGG, mode: app ? 'partie haute (PP73 § 3.1.3.1)' : rem ? 'mur de front' : 'colonnes, largeur fictive min(3D ; entraxe)' };
         const shape = rem ? { b: 1, h: C.em, c: c + 0.01 } : { D: C.D, c: c + 0.01, nBars: 12 };
-        shaftRes = designShaft({ shape, code, fck, fyk, Hf: Hm, combos: base.filter(b => b.ls !== 'ELS' && !b.fond).map(b => ({ label: b.label, N: b.Nb, M: b.Mb, My: (b.Hy || 0) * Hm, acc: !!b.acc })), n: rem ? width : C.nCol, pileCulee: !rem, strip: rem });
+        shaftRes = designShaft({ shape, code, fck, fyk, Hf: Hm, combos: base.filter(b => b.ls !== 'ELS' && !b.fond).map(b => ({ label: b.label, N: b.Nb, M: b.Mb, My: (b.Hy || 0) * Hm, acc: !!b.acc, sis: !!b.sis })), n: rem ? width : C.nCol, pileCulee: !rem, strip: rem });
         const gg = gardeGreve({ h: hGG, K: KA, gamma: soil.gamma, dalleSurGG: !!C.dalle });
         const ggAs = (requiredSteelNM({ b: 1, h: gg.e, c }, { code, fck, fyk }, 0, gg.ELU).As ?? NaN) / 2;
         // face avant : moment de sens opposé M' = −3,2 t·m/m (PP73 1.3.2 § 2.3.3, sollicitation du 1er genre → ELU × 1,6/1,2)
@@ -669,9 +693,14 @@ function calculAppuis(st, input = {}) {
       const fdDe = Wsem => base.map(b => {
         const g = b.ls === 'ELU' && !b.vide ? gU : 1, Hy = b.Hyb || 0, wt = !!b.wat;
         // part instantanée (trafic, freinage, TCD, séisme, chocs) des efforts au niveau des têtes de pieux (modèle PSH)
-        const Hi = (b.Hinst || 0) + (b.imp ? b.imp.F : 0), Vi = b.Nsus !== undefined && b.N !== undefined ? b.N - b.Nsus : 0;
-        const Mi = (b.Hinst || 0) * (armHead + F.hs) + (b.imp ? b.imp.F * (b.imp.h + F.hs) : 0);
-        return { label: b.label, ls: b.ls, V: b.Nb + g * Wsem - (wt ? 10 * Wsem / 25 : 0), H: Math.hypot(b.Hb, wt ? Hy : 0), Hx: b.Hb, Hy, M: b.Mb + b.Hb * F.hs, My: (b.Myb || 0) + Hy * F.hs, crue: wt, vide: !!b.vide, acc: !!b.acc, inst: { V: Vi, H: Hi, M: Mi } };
+        // efforts instantanés ajoutés au pied : inertie des fûts (piles), efforts sismiques propres de la culée
+        const fu = !end && b.fut ? { H: b.fut.Fx, M: b.fut.Mx } : b.sisInst || { H: 0, M: 0 };
+        const Hi = (b.Hinst || 0) + (b.imp ? b.imp.F : 0) + fu.H, Vi = b.Nsus !== undefined && b.N !== undefined ? b.N - b.Nsus : 0;
+        const Mi = (b.Hinst || 0) * (armHead + F.hs) + (b.imp ? b.imp.F * (b.imp.h + F.hs) : 0) + fu.M + fu.H * F.hs;
+        // culée en séisme : inertie du remblai sur le débord arrière de la semelle F2 = M_R a_g S (EN 1998-2 6.7.2)
+        const F2 = end && b.culeeSis && extra.seisme ? b.culeeSis * inertieRemblaiTalon({ kh: extra.seisme.kh, gamma: soil.gamma, debord: (F.B - bWall) / 2, hauteur: sp.culee.Hm + hGG, L: Lf }) : null;
+        const Hx = b.Hb + (F2 ? F2.F2 : 0), Mx = b.Mb + b.Hb * F.hs + (F2 ? F2.F2 * (F.hs + F2.z) : 0);
+        return { label: b.label, ls: b.ls, V: b.Nb + g * Wsem - (wt ? 10 * Wsem / 25 : 0), H: Math.hypot(Hx, wt ? Hy : 0), Hx, Hy, M: Mx, My: (b.Myb || 0) + Hy * F.hs, crue: wt, vide: !!b.vide, acc: !!b.acc, sis: !!b.sis, inst: { V: Vi, H: Hi + (F2 ? F2.F2 : 0), M: Mi + (F2 ? F2.F2 * (F.hs + F2.z) : 0) } };
       });
       const checksDe = (B, fd) => fd.map(f => {
         const r = { ...f, ...shallowFooting({ code, B, L: Lf, D: F.De, De: F.De, V: f.V, H: f.H, M: f.M, ls: f.ls, profile, phi: soil.phi, gamma: soil.gamma, dAff: f.crue ? dAff : 0 }) };
@@ -790,7 +819,10 @@ function calculAppuis(st, input = {}) {
         const shapeP = { D, c: 0.07, nBars: 12 };
         // béton de pieu foré : BAEL / F62-V f_c = min(f_c28 ; 25)/(k₁ k₂), k₁ = 1,2 (groupe B), k₂ = 1,05 ; EC2 § 2.4.2.5 : γ_c × k_f = 1,1
         const pileMat = code === 'BAEL' ? { code, fck: pc.fc, fyk } : { code, fck: Math.min(fck, 30), fyk, gammaC: 1.5 * 1.1 };
-        const pileMatAcc = { ...pileMat, gammaC: code === 'BAEL' ? 1.15 : 1.2, gammaS: 1.0 };
+        // situations accidentelles : séisme γ_c = 1,3 (NF EN 1998-2/NA 5.2.4), chocs 1,2 (EC2) / 1,15 (BAEL), γ_s = 1,0 ;
+        // pieu foré EC2 : × k_f = 1,1 comme en situation durable
+        const kfP = code === 'BAEL' ? 1 : 1.1;
+        const pileMatAccOf = r => { const gA = gammaAcc(code, !!r.sis); return { ...pileMat, gammaC: gA.gammaC * kfP, gammaS: gA.gammaS }; };
         // option : excentricités additionnelle et du second ordre dans les pieux (pratique de certaines notes, BAEL A.4.4) —
         // e_a = max(2 cm ; l_f/250), e₂ = 3 l_f²/(10⁴ D) (2 + α φ), φ = 2, α = part permanente de N, l_f = 2 l₀,
         // l₀ = (4 E I/k)^¼ longueur de transfert du pieu (module de réaction en tête) ; ELU seulement
@@ -802,7 +834,7 @@ function calculAppuis(st, input = {}) {
         }
         const eSO = r => { if (!pileSO || r.ls !== 'ELU') return 0; const p0 = r.psh.piles.reduce((m, q) => (q.N > m.N ? q : m)); const al = p0.N > 0 ? Math.min(1, Math.max(0, p0.Nsus / p0.N)) : 1; return pileSO.ea + pileSO.e2(al); };
         const AsOf = (r, mt) => { const M = r.Mmax + Math.max(0, r.Nmax) * eSO(r); return Math.max(requiredSteelNM(shapeP, mt, Math.max(0, r.Nmin), r.Mmax + Math.max(0, r.Nmin) * eSO(r)).As ?? Infinity, requiredSteelNM(shapeP, mt, r.Nmax, M).As ?? Infinity); };
-        const AsP = Math.max(...eluAll.map(r => AsOf(r, pileMat)), ...accR.map(r => AsOf(r, pileMatAcc)));
+        const AsP = Math.max(...eluAll.map(r => AsOf(r, pileMat)), ...accR.map(r => AsOf(r, pileMatAccOf(r))));
         // remblai traversé (culées) : frottement compté dans le terrain naturel seulement
         const DheadC = hR > 0 ? 0 : F.De, LpileC = F.Lpile - hR;
         const cap = pileCapacity({ code, type: F.pileType, D, Lpile: LpileC, profile, Dhead: DheadC });
@@ -879,8 +911,12 @@ function calculAppuis(st, input = {}) {
         }
         // effort tranchant des pieux (T max le long du pieu, résultante des deux plans)
         const TmaxU = Math.max(0, ...eluAll.map(r => r.Tmax)), TmaxA = accR.length ? Math.max(...accR.map(r => r.Tmax)) : 0;
-        const shear = { ELU: pileShear({ V: TmaxU, D, As: Math.max(AsP, pileMinSteel({ D, code })), fck: code === 'BAEL' ? pc.fc : Math.min(fck, 30), fyk, code, gammaC: 1.65 }),
-          ACC: accR.length ? pileShear({ V: TmaxA, D, As: Math.max(AsP, pileMinSteel({ D, code })), fck: code === 'BAEL' ? pc.fc : Math.min(fck, 30), fyk, code, gammaC: 1.2 }) : null, TmaxU, TmaxA };
+        const AsV = Math.max(AsP, pileMinSteel({ D, code })), fcV = code === 'BAEL' ? pc.fc : Math.min(fck, 30);
+        // situation accidentelle déterminante : la plus défavorable des combinaisons sismiques (γ_c = 1,3 k_f) et des chocs (1,2 k_f)
+        const shearAcc = accR.length ? accR.map(r => ({ r, s: pileShear({ V: r.Tmax, D, As: AsV, fck: fcV, fyk, code, gammaC: gammaAcc(code, !!r.sis).gammaC * kfP }) }))
+          .reduce((a, x) => { const u = x.s.VRdmax ? Math.abs(x.r.Tmax) / x.s.VRdmax : (x.s.tau / x.s.lim); return !a || u > a.u ? { ...x, u } : a; }, null) : null;
+        const shear = { ELU: pileShear({ V: TmaxU, D, As: AsV, fck: fcV, fyk, code, gammaC: 1.65 }),
+          ACC: shearAcc ? { ...shearAcc.s, V: shearAcc.r.Tmax, sis: !!shearAcc.r.sis, label: shearAcc.r.label } : null, TmaxU, TmaxA };
         // sorties PSH : matrices de souplesse de la tête d'appui, cas dimensionnants (N max ELU, M max ELU, ELS)
         const pick = (rs, key) => rs.reduce((a, r) => (!a || r[key] > a[key] ? r : a), null);
         const psh = { flex: { inst: headFlex(i, code, 'inst'), sus: headFlex(i, code, 'sus') }, K: { inst: G.inst.long.K, sus: G.sus.long.K }, kSus: soil.kSus ?? 0.5, head, tip: F0.pied || 'libre',

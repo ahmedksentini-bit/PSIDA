@@ -241,18 +241,19 @@ export const GLISSEMENT_ELASTOMERE: Formule = {
   type: "formule",
   etape: "verif_appareils_appui",
   libelle: "Non-glissement d'un appareil en élastomère",
-  latex: "F_{xy,d} \\le \\left(0{,}1 + \\dfrac{K_f}{\\sigma_m}\\right) N_{Ed,min}, \\qquad \\sigma_m = \\dfrac{N_{Ed,min}}{A_r} \\ge 3{,}0\\ \\text{MPa}",
+  latex: "F_{xy,d} \\le \\mu_e\\,N_{Ed,min}, \\quad \\mu_e = 0{,}1 + 1{,}5\\,\\dfrac{K_f}{\\sigma_m}, \\qquad \\sigma_m = \\dfrac{N_{Ed,min}}{A_r} \\ge 3{,}0\\ \\text{MPa}",
   variables: [
     { symbole: "F_{xy,d}", description: "effort horizontal résultant de calcul", unite: "MN" },
     { symbole: "N_{Ed,min}", description: "effort normal minimal (séisme vertical ascendant)", unite: "MN" },
-    { symbole: "K_f", description: "coefficient de frottement (non chiffré par le guide)", unite: "MPa" },
+    { symbole: "K_f", description: "0,6 sur béton, 0,2 sur d'autres surfaces (NF EN 1337-3 5.3.3.6)", unite: "MPa" },
   ],
   references: [
-    { source: "NF_EN_1337_3", localisation: "5.3.3.6", etat: "a_confirmer" },
+    { source: "CAPRA_GODREAU_2015", localisation: "annexe D, vérification du comportement a)", page: "110", etat: "lue" },
+    { source: "NF_EN_1337_3", localisation: "5.3.3.6", etat: "citee_par_guide" },
     { source: "GUIDE_CEREMA_2015", localisation: "ch. 5 §5.4", page: "197" },
   ],
-  statut: "a_verifier",
-  note: "Kf à reprendre de la NF EN 1337-3 (de mémoire 0,6 sur béton, 0,2 sur autres surfaces : à confirmer). La NF EN 15129 ne prévoit pas cette vérification.",
+  statut: "verifie",
+  note: "μ_e = 0,1 + 1,5 K_f/σ_m avec K_f = 0,6 sur béton et 0,2 sur d'autres surfaces (NF EN 1337-3 5.3.3.6, citée par Capra et Godreau 2015, annexe D : μ = 0,1 + 0,9/σ_m sur béton). Le guide Cerema (p. 197 et exemple p. 258) écrit 0,1 + K_f/σ_m : PSIDA suit la norme, plus favorable. La NF EN 15129 ne prévoit pas cette vérification.",
 };
 
 export const ANTI_SOULEVEMENT: ParametreTable<{ ductile: number; ductilite_limitee: number }> = {

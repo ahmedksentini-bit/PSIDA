@@ -122,4 +122,13 @@ export const SOURCES: Record<IdSource, Source> = {
     disponibilite: "fourni",
     remarque: "Pages citées = pagination imprimée du livre (page du PDF − 2).",
   },
+  CAPRA_GODREAU_2015: {
+    id: "CAPRA_GODREAU_2015",
+    abrege: "Capra et Godreau 2015",
+    titre: "A. Capra, A. Godreau — Ouvrages d'art en zone sismique, guide d'application de l'Eurocode 8",
+    edition: "2e édition, Eyrolles / Afnor, 2015",
+    nature: "guide",
+    disponibilite: "fourni",
+    remarque: "Lu en entier (oct. 2026) : culées (ch. 10), appareils d'appui (ch. 11, annexe D), masses (§ 5.4), coefficients partiels sismiques (§ 7.5.2).",
+  },
 };

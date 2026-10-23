@@ -2,6 +2,7 @@
 // (EN 1998-2 6.6.4) et joints de chaussée. Unités : MN, m, MPa, rad.
 
 import { derives, epaisseurElastomere } from "../projet/geometrie.ts";
+import { effetsFondations } from "./export-efforts.ts";
 import type { AppareilsElastomere, Appui, Culee, Pile, Projet } from "../projet/types.ts";
 import { LG } from "../referentiel/combinaisons.ts";
 import type { ActionSismique } from "./action.ts";
@@ -172,11 +173,24 @@ export function verifierAppuis(p: Projet, a: ActionSismique, m: Modele, r: Analy
     });
 
     if (app.type !== "elastomere") {
+      // Appareils fixes (EN 1998-2 6.6.2.1 ; Capra et Godreau 2015, § 11.2) : ductilité limitée (q ≤ 1,5) : effets de
+      // l'action de calcul × q, au moins 1,3 (guide Cerema 2015) ; comportement ductile : efforts du dimensionnement en
+      // capacité des piles (γ0 M_Rd, 5.3), au moins 1,3 × l'effort de calcul.
+      const fixe = (dir: "x" | "y", F: number): { Fd: number; regle: string } => {
+        const q = dir === "x" ? p.comportement.qLongitudinal : p.comportement.qTransversal;
+        if (q <= 1.5) return { Fd: Math.max(1.3, q) * F, regle: q > 1.3 ? `× q = ${nombre(q, 2)}` : "× 1,3" };
+        const VE = p.appuis.map((_, j) => r.directions[dir].ubdp.appuis[j]?.F ?? 0);
+        let VC: number | undefined;
+        try { VC = effetsFondations(p, m, dir, q, VE, false, p.appuis.map((_, j) => r.directions[dir].lbdp.appuis[j]?.dAppareils ?? 0))[i]?.VC; } catch { VC = undefined; }
+        return Number.isFinite(VC) ? { Fd: Math.max(1.3 * F, VC as number), regle: "capacité γ0 M_Rd" } : { Fd: q * F, regle: `× q = ${nombre(q, 2)} (capacité non calculable)` };
+      };
+      // efforts avec les propriétés limites supérieures (UBDP : appuis les plus raides, efforts maximaux)
+      const fX = fixe("x", r.directions.x.ubdp.appuis[i]?.F ?? 0), fY = fixe("y", r.directions.y.ubdp.appuis[i]?.F ?? 0);
       criteres.push({
         id: `${appui.id}_rigides`,
         appui: appui.id,
-        libelle: app.type === "fixe" ? "Appareils fixes : dimensionnement en capacité (sur-résistance ≥ 1,3) par le fabricant" : "Appareils glissants : course ≥ déplacement majoré, à justifier par le fabricant",
-        valeur: app.type === "fixe" ? 1.3 * Math.max(rx?.F ?? 0, ry?.F ?? 0) : dEd,
+        libelle: app.type === "fixe" ? `Appareils fixes : effort de calcul à garantir par le fabricant (X ${fX.regle}, Y ${fY.regle})` : "Appareils glissants : course ≥ déplacement majoré, à justifier par le fabricant",
+        valeur: app.type === "fixe" ? Math.max(fX.Fd, fY.Fd) : dEd,
         limite: null,
         unite: app.type === "fixe" ? "MN" : "m",
         etat: "info",
@@ -305,12 +319,14 @@ export function verifierAppuis(p: Projet, a: ActionSismique, m: Modele, r: Analy
     const khdyn = (m.directions.x.appuis[i]?.kAppareils.lbdp ?? 0) / n;
     const khstat = (e.a * e.b * e.Gg) / Tq;
     const F = gammaIS * dbd * khdyn + (0.5 * dT + dDiff) * khstat;
-    const R = NminApp > 0 ? (0.1 + Kf / sigmaM) * NminApp : 0;
+    // EN 1337-3 § 5.3.3.6 : μ_e = 0,1 + 1,5 K_f/σ_m (σ_m en MPa ; K_f = 0,6 sur béton, 0,2 sur d'autres surfaces) —
+    // Capra et Godreau 2015, annexe D ; même formule que src/supports/bearings1337.js
+    const R = NminApp > 0 ? (0.1 + 1.5 * Kf / sigmaM) * NminApp : 0;
     const glisseOk = F <= R;
     criteres.push({
       id: `${appui.id}_glissement`,
       appui: appui.id,
-      libelle: "Non-glissement : Fxy,Ed ≤ (0,1 + Kf/σm)·NEd,min",
+      libelle: "Non-glissement : Fxy,Ed ≤ (0,1 + 1,5 Kf/σm)·NEd,min",
       valeur: F,
       limite: R,
       unite: "MN",
@@ -329,8 +345,8 @@ export function verifierAppuis(p: Projet, a: ActionSismique, m: Modele, r: Analy
     lignes.push({
       id: `${appui.id}_glissement`,
       titre: `${appui.id} — non-glissement`,
-      formule: "F_{xy,Ed} = \\gamma_{IS}\\,d_{bd}\\,k_{h,dyn} + (0{,}5\\,d_T + d_{diff})\\,k_{h,stat} \\le \\left(0{,}1 + \\dfrac{K_f}{\\sigma_m}\\right) N_{Ed,min}",
-      application: `${tex(gammaIS, 2)} \\times ${tex(dbd, 4)} \\times ${tex(khdyn, 3)} + ${tex(0.5 * dT + dDiff, 4)} \\times ${tex(khstat, 3)} = ${tex(F, 3)} \\ \\text{vs}\\ \\left(0{,}1 + \\dfrac{${tex(Kf, 2)}}{${tex(sigmaM, 2)}}\\right) \\times ${tex(NminApp, 3)}`,
+      formule: "F_{xy,Ed} = \\gamma_{IS}\\,d_{bd}\\,k_{h,dyn} + (0{,}5\\,d_T + d_{diff})\\,k_{h,stat} \\le \\left(0{,}1 + 1{,}5\\,\\dfrac{K_f}{\\sigma_m}\\right) N_{Ed,min}",
+      application: `${tex(gammaIS, 2)} \\times ${tex(dbd, 4)} \\times ${tex(khdyn, 3)} + ${tex(0.5 * dT + dDiff, 4)} \\times ${tex(khstat, 3)} = ${tex(F, 3)} \\ \\text{vs}\\ \\left(0{,}1 + 1{,}5 \\times \\dfrac{${tex(Kf, 2)}}{${tex(sigmaM, 2)}}\\right) \\times ${tex(NminApp, 3)}`,
       resultat: { symbole: "R", valeur: R, unite: "MN", decimales: 3 },
       references: ["elastomere_glissement", "elastomere_effort_glissement"],
       commentaire: `NEd,min = (Nmin − 0,3 Rv)/n = ${nombre(NminApp * 1000, 0)} kN ; σm = ${nombre(sigmaM, 2)} MPa${sigmaM < 3 ? " (< 3 MPa)" : ""}.`,

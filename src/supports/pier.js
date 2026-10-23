@@ -69,6 +69,15 @@ export function minimumSteelPier({ code = 'BAEL', Ac, perimeter, Ned = 0, fyk = 
  * @param {object} p  shape ({ b, h, c } longitudinal × transversal, ou { D, c, nBars }), code, fck, fyk, Ev (MPa), Hf (hauteur), Lf,
  *   combos : [{ label, N, M }] en pied (ELU) ; n : nombre de fûts identiques (colonnes) partageant N et M
  */
+/**
+ * Coefficients partiels des matériaux en situation accidentelle.
+ *  - séisme : γ_c = 1,30 et γ_s = 1,00 (NF EN 1998-1/NA et NF EN 1998-2/NA, § 5.2.4 (3) ; PS 92 § 11.3 : γ_b = 1,3 —
+ *    Capra et Godreau 2015, § 7.5.2) ;
+ *  - autres situations accidentelles (chocs de véhicule ou de bateau) : γ_c = 1,2 (EN 1992-1-1 § 2.4.2.4, tableau 2.1N) ou
+ *    γ_b = 1,15 (BAEL A.4.3,41), γ_s = 1,0.
+ */
+export function gammaAcc(code, sis) { return sis ? { gammaC: 1.3, gammaS: 1.0 } : { gammaC: code === 'BAEL' ? 1.15 : 1.2, gammaS: 1.0 }; }
+
 export function designShaft({ shape, code = 'BAEL', fck = 25, fyk = 400, Ev = null, Hf, Lf = null, combos = [], n = 1, alphaGQ = 0.5, pileCulee = false, strip = false }) {
   const lf = Lf ?? 2 * Hf;
   const h = shape.D || shape.h;
@@ -84,11 +93,12 @@ export function designShaft({ shape, code = 'BAEL', fck = 25, fyk = 400, Ev = nu
     // c.Mloc : moment local d'un seul fût (choc de véhicule ou de bateau sur une colonne), non partagé
     const N = c.N / n, Mx = Math.abs(c.M) / n, My = shape.D ? Math.abs(c.My || 0) / n : 0;
     const M1 = Math.hypot(Mx, My) + Math.abs(c.Mloc || 0), e1 = N > 0 ? M1 / N : 0;
-    // situations accidentelles : ε_yd = f_yk/(γ_s E_s) avec γ_s = 1,0 et n = N_Ed/(A_c f_cd), γ_c = 1,2 (EC2 2.4.2.4)
-    const so = secondOrder({ code, Lf: lf, h: hB, d: h - (shape.c ?? 0.05), L: Hf, alpha: alphaGQ, fyk, fck, N, e1, Ev: Evv, I: shape.hBuck ? I * (hB / h) ** 3 : I, Ac, ...(c.acc ? { gammaC: 1.2, gammaS: 1.0 } : {}) });
+    // situations accidentelles : ε_yd = f_yk/(γ_s E_s) avec γ_s = 1,0 et n = N_Ed/(A_c f_cd) — γ_c = 1,3 au séisme, 1,2 aux chocs
+    const gA = c.acc ? gammaAcc(code === 'BAEL' ? 'EC' : code, !!c.sis) : null;
+    const so = secondOrder({ code, Lf: lf, h: hB, d: h - (shape.c ?? 0.05), L: Hf, alpha: alphaGQ, fyk, fck, N, e1, Ev: Evv, I: shape.hBuck ? I * (hB / h) ** 3 : I, Ac, ...(gA || {}) });
     const Mtot = Number.isFinite(so.etot) ? Math.max(M1, N * so.etot) : Infinity;
-    // situations accidentelles (séisme, chocs) : γ_b = 1,15 (BAEL A.4.3,41) / γ_c = 1,2 (EC2 2.4.2.4), γ_s = 1,0
-    const mat = c.acc ? { code, fck, fyk, gammaC: code === 'BAEL' ? 1.15 : 1.2, gammaS: 1.0 } : { code, fck, fyk };
+    // situations accidentelles : séisme γ_c (γ_b) = 1,3 ; chocs γ_b = 1,15 (BAEL A.4.3,41) / γ_c = 1,2 (EC2 2.4.2.4) ; γ_s = 1,0
+    const mat = c.acc ? { code, fck, fyk, ...gammaAcc(code, !!c.sis) } : { code, fck, fyk };
     const r = Number.isFinite(Mtot) ? requiredSteelNM(shape, mat, N, Mtot) : { As: null };
     return { ...c, Nshaft: N, M1, Mtot, e1, secondOrder: so, As: r.As, sigma: N / Ac / 1000 };
   });

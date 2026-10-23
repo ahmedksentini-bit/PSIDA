@@ -169,8 +169,8 @@ export const CONTROLES_APPUIS: PointDeControle<VerifAppuis>[] = [
   { id: "Nflamb_P", libelle: "Effort normal par appareil (Z dominant), pile", symbole: "N_{V,P}", unite: "kN", guide: 1134, decimales: 0, page: "257", calcule: (v) => (P(v)?.combinaisons[2]?.N ?? NaN) * 1000 },
   { id: "Fxy_C", libelle: "Effort horizontal de glissement, culée", symbole: "F_{xy,C}", unite: "MN", guide: 0.207, decimales: 3, page: "258", calcule: (v) => C(v)?.glissement?.F ?? NaN, toleranceRelative: 0.01, remarque: "La raideur dynamique utilise Gb exact (0,99 MPa) ; le guide prend 1,0 MPa." },
   { id: "Fxy_P", libelle: "Effort horizontal de glissement, pile", symbole: "F_{xy,P}", unite: "MN", guide: 0.278, decimales: 3, page: "258", calcule: (v) => P(v)?.glissement?.F ?? NaN, toleranceRelative: 0.01, remarque: "La raideur dynamique utilise Gb exact (0,99 MPa) ; le guide prend 1,0 MPa." },
-  { id: "Rg_C", libelle: "Résistance au glissement, culée", symbole: "R_{C}", unite: "MN", guide: 0.076, decimales: 3, page: "258", calcule: (v) => C(v)?.glissement?.R ?? NaN },
-  { id: "Rg_P", libelle: "Résistance au glissement, pile", symbole: "R_{P}", unite: "MN", guide: 0.166, decimales: 3, page: "258", calcule: (v) => P(v)?.glissement?.R ?? NaN },
+  { id: "Rg_C", libelle: "Résistance au glissement, culée", symbole: "R_{C}", unite: "MN", guide: 0.076, decimales: 3, page: "258", calcule: (v) => C(v)?.glissement?.R ?? NaN, toleranceRelative: 0.45, remarque: "Le guide applique μ = 0,1 + K_f/σ_m ; NF EN 1337-3 5.3.3.6 (et Capra et Godreau 2015, annexe D) : μ = 0,1 + 1,5 K_f/σ_m, retenu par PSIDA." },
+  { id: "Rg_P", libelle: "Résistance au glissement, pile", symbole: "R_{P}", unite: "MN", guide: 0.166, decimales: 3, page: "258", calcule: (v) => P(v)?.glissement?.R ?? NaN, toleranceRelative: 0.45, remarque: "Le guide applique μ = 0,1 + K_f/σ_m ; NF EN 1337-3 5.3.3.6 (et Capra et Godreau 2015, annexe D) : μ = 0,1 + 1,5 K_f/σ_m, retenu par PSIDA." },
   {
     id: "souffle",
     libelle: "Souffle sismique total du joint",

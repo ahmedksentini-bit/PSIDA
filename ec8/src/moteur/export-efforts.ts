@@ -8,6 +8,7 @@
 
 import type { MethodeEfforts, Pile, Projet } from "../projet/types.ts";
 import type { ActionSismique } from "./action.ts";
+import { valeur } from "./spectres.ts";
 import type { Analyse } from "./analyse.ts";
 import type { PontIsole } from "./isolation.ts";
 import { inerties, modele as construireModele, type Modele } from "./modele.ts";
@@ -23,6 +24,16 @@ export interface CasEfforts {
   Fy: number;
   /** Réaction verticale sismique (kN), à prendre avec ±. */
   Fz: number;
+  /** Inertie propre des fûts (piles) : effort tranchant (kN) et moment (kN·m) au pied du fût, mêmes coefficients 1/0,3/0,3. */
+  fut?: { Fx: number; Mx: number; Fy: number; My: number };
+}
+
+/** Inertie propre des fûts d'une pile, par direction (MN, MN·m au pied du fût dans le moteur ; kN, kN·m dans l'export). */
+export interface InertieFut {
+  masse: number;
+  hauteur: number;
+  x: { Tf: number; a0: number; aH: number; F: number; M: number };
+  y: { Tf: number; a0: number; aH: number; F: number; M: number };
 }
 
 /** Détail du passage AEd → effets pour les fondations, dans une direction (kN, kN·m). */
@@ -54,6 +65,8 @@ export interface EffortsAppui {
   dTete: { x: number; y: number };
   /** Distorsion sismique des appareils d'appui (m), LBDP. */
   dAppareils: { x: number; y: number };
+  /** Inertie propre des fûts (piles seulement). */
+  inertieFut?: InertieFut;
 }
 
 export interface ExportEfforts {
@@ -92,11 +105,39 @@ interface Base {
   remarques: string[];
 }
 
-const combiner = (Fx: number, Fy: number, Fz: number): CasEfforts[] => [
-  { nom: "X + 0,3 Y + 0,3 Z", Fx, Fy: 0.3 * Fy, Fz: 0.3 * Fz },
-  { nom: "0,3 X + Y + 0,3 Z", Fx: 0.3 * Fx, Fy, Fz: 0.3 * Fz },
-  { nom: "0,3 X + 0,3 Y + Z", Fx: 0.3 * Fx, Fy: 0.3 * Fy, Fz },
-];
+const combiner = (Fx: number, Fy: number, Fz: number, f?: InertieFut, k = { x: 1, y: 1 }): CasEfforts[] => {
+  const fut = (cx: number, cy: number) => (f ? { fut: { Fx: cx * k.x * f.x.F, Mx: cx * k.x * f.x.M, Fy: cy * k.y * f.y.F, My: cy * k.y * f.y.M } } : {});
+  return [
+    { nom: "X + 0,3 Y + 0,3 Z", Fx, Fy: 0.3 * Fy, Fz: 0.3 * Fz, ...fut(1, 0.3) },
+    { nom: "0,3 X + Y + 0,3 Z", Fx: 0.3 * Fx, Fy, Fz: 0.3 * Fz, ...fut(0.3, 1) },
+    { nom: "0,3 X + 0,3 Y + Z", Fx: 0.3 * Fx, Fy: 0.3 * Fy, Fz, ...fut(0.3, 0.3) },
+  ];
+};
+
+/**
+ * Inertie propre des fûts d'une pile (EN 1998-2 4.1.2 ; Capra et Godreau 2015, § 5.4) — approche simplifiée documentée.
+ * Les appareils découplent le fût du tablier : le fût vibre dans son mode propre de console (masse répartie, période
+ * T_f = 2π √(0,24 m / k), k = 3 E I / H³, inertie du modèle), généralement courte. On retient une accélération linéaire
+ * du pied à la tête : a₀ = a_g·S·S_T au pied (mouvement du sol, non réduit par q) et a_H = max(S_d(T_f) ; S_d(T₁)) en tête
+ * (spectre de calcul de la direction). Effort tranchant au pied F = m (a₀ + a_H)/2, moment au pied M = m H (a₀ + 2 a_H)/6,
+ * ajoutés en valeur absolue aux efforts transmis par le tablier (cumul prudent, plutôt qu'une combinaison quadratique).
+ */
+export function inertieFuts(p: Projet, a: ActionSismique, T: { x: number; y: number }): (InertieFut | undefined)[] {
+  const E = 22 * ((p.materiaux.beton.fck + 8) / 10) ** 0.3 * 1000; // MPa (MN/m²)
+  const agS = a.ag * a.S * (a.ST ?? 1);
+  return p.appuis.map((ap) => {
+    if (ap.type !== "pile") return undefined;
+    const pile = ap as Pile, H = pile.futs.hauteur, n = pile.futs.nombre;
+    const sec = inerties(pile), masse = n * inerties({ ...pile, facteurInertie: 1 }).aire * H * p.materiaux.beton.masseVolumique;
+    const dir = (f: Parameters<typeof valeur>[0], T1: number, I: number) => {
+      const k = (3 * E * n * I) / H ** 3, Tf = 2 * Math.PI * Math.sqrt((0.24 * masse / 1000) / k);
+      const a0 = agS, aH = Math.max(valeur(f, Tf), valeur(f, T1));
+      // masse en t, accélérations en m/s² : efforts en MN (unités du moteur)
+      return { Tf, a0, aH, F: (masse * (a0 + aH)) / 2 / 1000, M: (masse * H * (a0 + 2 * aH)) / 6 / 1000 };
+    };
+    return { masse, hauteur: H, x: dir(a.spectres.calculLong, T.x, sec.Ix), y: dir(a.spectres.calculTrans, T.y, sec.Iy) };
+  });
+}
 
 /** Coefficient de sur-résistance γ0 des éléments en béton (EN 1998-2 5.3(4), valeur recommandée 1,35), majoré si ηk > 0,1. */
 export function gamma0(etaK: number): number {
@@ -156,7 +197,7 @@ function baseMethode(p: Projet, a: ActionSismique, r: Analyse, s: SourcesEfforts
       remarques: [
         "Analyse spectrale multimodale (EN 1998-2 4.2.1) : modes jusqu'à 90 % de la masse, combinaison SRSS ou CQC ; efforts horizontaux transmis par le tablier en tête d'appui, propriétés limites supérieures (UBDP), combinaison des directions 100/30/30 (EN 1998-2 4.2.1.4).",
         "Réactions verticales sismiques issues de l'analyse multimodale verticale (spectre élastique vertical).",
-        "Inertie propre des fûts non comprise dans l'effort en tête : elle figure dans l'effort au pied des piles de l'analyse multimodale.",
+        
       ],
     };
   }
@@ -198,11 +239,11 @@ function baseMethode(p: Projet, a: ActionSismique, r: Analyse, s: SourcesEfforts
     remarques: p.tablier.continuite === "isostatique" && p.tablier.travees.length > 1 ? [
       "Travées indépendantes : modèle dynamique à travées séparées (une translation par travée en X, une poutre par travée en Y, piles en console, une rangée d'appareils par about), analyse spectrale multimodale (EN 1998-2 4.2.1) ; efforts transmis en tête d'appui (somme des deux rangées sur une pile), propriétés limites supérieures (UBDP), combinaison des directions 100/30/30.",
       "Réactions verticales sismiques forfaitaires de chaque travée sur deux appuis (b = 0,41, guide Cerema 2015), cumulées sur les piles.",
-      "Inertie propre des fûts non comprise : à ajouter au pied des appuis si elle n'est pas négligeable.",
+      
     ] : [
       "Efforts horizontaux transmis par le tablier en tête d'appui, propriétés limites supérieures (UBDP), combinaison des directions 100/30/30 (EN 1998-2 4.2.1.4).",
       "Réactions verticales sismiques forfaitaires (guide Cerema 2015) ; nulles si la méthode n'est pas applicable.",
-      "Inertie propre des fûts non comprise : à ajouter au pied des appuis si elle n'est pas négligeable.",
+      
     ],
   };
 }
@@ -223,6 +264,9 @@ export function exporterEfforts(p: Projet, a: ActionSismique, r: Analyse, source
   const isole = b.methode === "pont_isole";
   let fx: DetailCapacite[] = [], fy: DetailCapacite[] = [];
   const remarques = [...b.remarques];
+  // inertie propre des fûts (kN, kN·m) : spectre de calcul de chaque direction (pont isolé : pas de réduction par q)
+  const futs = inertieFuts(p, a, b.T);
+  if (futs.some(Boolean)) remarques.push("Inertie propre des fûts ajoutée au pied des piles (approche simplifiée : accélération linéaire de a_g·S au pied à max(S_d(T_fût) ; S_d(T₁)) en tête, mode propre du fût en console découplé du tablier par les appareils ; EN 1998-2 4.1.2, Capra et Godreau 2015 § 5.4).");
   try {
     const m = construireModele(p);
     fx = effetsFondations(p, m, "x", b.q.x, b.Fx, isole, b.dApp.map((d) => d.x));
@@ -235,6 +279,9 @@ export function exporterEfforts(p: Projet, a: ActionSismique, r: Analyse, source
     remarques.push("Armatures des fûts non transmises pour au moins une pile : M_Rd calculé avec 1 % de la section (barres de 25 mm, enrobage 5 cm) ; envoyer le projet depuis PSIDA après le calcul des appuis pour reprendre les aciers dimensionnés.");
   if (insuff) remarques.push("Capacité γ0 M_Rd / L inférieure à l'effort de calcul pour au moins une pile : la section d'acier des fûts est insuffisante ; l'effort de calcul est retenu pour les fondations.");
   if (fx.length) remarques.push(`Fondations (EN 1998-2 5.8.2) — X : ${LIB_REGLE(b.q.x, isole, fx)} ; Y : ${LIB_REGLE(b.q.y, isole, fy)}. Réactions verticales inchangées.`);
+  const kNfut = (f: InertieFut): InertieFut => ({ ...f, x: { ...f.x, F: kN(f.x.F), M: kN(f.x.M) }, y: { ...f.y, F: kN(f.y.F), M: kN(f.y.M) } });
+  // fondations : inertie des fûts × q (règle q·AEd) ou × 1 (AEd, capacité : l'effort de capacité borne déjà la pile)
+  const kFond = (d: DetailCapacite | undefined, q: number) => (d && d.regle === "q_fois_AEd" ? q : 1);
   const det = (d: DetailCapacite | undefined): DetailCapacite => (d ? { ...d, VE: kN(d.VE), VC: kN(d.VC), ...(d.VCbrut !== undefined ? { VCbrut: kN(d.VCbrut) } : {}), ...(d.Vappareils !== undefined ? { Vappareils: kN(d.Vappareils) } : {}) } : { regle: "AEd", VE: 0, VC: 0 });
   return {
     format: "pont-ec8-efforts",
@@ -252,19 +299,24 @@ export function exporterEfforts(p: Projet, a: ActionSismique, r: Analyse, source
         id: ap.id,
         x: r.directions.x.lbdp.appuis[i]?.x ?? 0,
         type: ap.type,
-        cas: combiner(kN(Fx), kN(Fy), kN(Fz)),
+        cas: combiner(kN(Fx), kN(Fy), kN(Fz), futs[i] ? kNfut(futs[i]!) : undefined),
         ...(cx && cy ? {
           // capacité : calculée séparément dans chaque direction (5.3(6)), les autres composantes étant celles de l'action de calcul
           // composante orthogonale : action de calcul (capacité, 5.3(3)) ou action × q (5.8.2(2)P)
-          casFondations: [
-            { nom: "X + 0,3 Y + 0,3 Z (fondations)", Fx: kN(cx.VC), Fy: 0.3 * kN(cy.regle.startsWith("capacite") || cy.regle === "appareils" ? Fy : cy.VC), Fz: 0.3 * kN(Fz) },
-            { nom: "0,3 X + Y + 0,3 Z (fondations)", Fx: 0.3 * kN(cx.regle.startsWith("capacite") || cx.regle === "appareils" ? Fx : cx.VC), Fy: kN(cy.VC), Fz: 0.3 * kN(Fz) },
-            { nom: "0,3 X + 0,3 Y + Z (fondations)", Fx: 0.3 * kN(cx.VC), Fy: 0.3 * kN(cy.VC), Fz: kN(Fz) },
-          ],
+          casFondations: ((): CasEfforts[] => {
+            const fF = futs[i] ? kNfut(futs[i]!) : undefined, kx = kFond(cx, b.q.x), ky = kFond(cy, b.q.y);
+            const fut = (ax: number, ay: number) => (fF ? { fut: { Fx: ax * kx * fF.x.F, Mx: ax * kx * fF.x.M, Fy: ay * ky * fF.y.F, My: ay * ky * fF.y.M } } : {});
+            return [
+              { nom: "X + 0,3 Y + 0,3 Z (fondations)", Fx: kN(cx.VC), Fy: 0.3 * kN(cy.regle.startsWith("capacite") || cy.regle === "appareils" ? Fy : cy.VC), Fz: 0.3 * kN(Fz), ...fut(1, 0.3) },
+              { nom: "0,3 X + Y + 0,3 Z (fondations)", Fx: 0.3 * kN(cx.regle.startsWith("capacite") || cx.regle === "appareils" ? Fx : cx.VC), Fy: kN(cy.VC), Fz: 0.3 * kN(Fz), ...fut(0.3, 1) },
+              { nom: "0,3 X + 0,3 Y + Z (fondations)", Fx: 0.3 * kN(cx.VC), Fy: 0.3 * kN(cy.VC), Fz: kN(Fz), ...fut(0.3, 0.3) },
+            ];
+          })(),
           capacite: { x: det(cx), y: det(cy) },
         } : {}),
         dTete: b.dTete[i] ?? { x: 0, y: 0 },
         dAppareils: b.dApp[i] ?? { x: 0, y: 0 },
+        ...(futs[i] ? { inertieFut: kNfut(futs[i]!) } : {}),
       };
     }),
     ...(fx.length ? { fondations: { x: LIB_REGLE(b.q.x, isole, fx), y: LIB_REGLE(b.q.y, isole, fy) } } : {}),
