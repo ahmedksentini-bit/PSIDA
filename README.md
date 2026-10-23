@@ -557,3 +557,11 @@ des semelles, efforts de cadres, soulèvement) ; manuel § 28.14 et 28.15.
 Fléaux : flexion transversale du caisson (src/phasage/caisson_transversal.js : cadre avec flux de flexion et de torsion,
 distortion majorée, ferraillage par mètre), déséquilibres de construction et clouage provisoire (src/phasage/desequilibre.js) ;
 plans des fléaux et des poutres rendues continues (src/plans/ouvrages_phases.js) ; manuel § 28.16.
+v0.95 : pont mixte — flexion transversale de la dalle (plaque du hourdis, src/beams/hourdis.js avec largeur imposée :
+charges de bord, revêtement, roues, poinçonnement EC2 § 6.4.4) et fatigue des armatures sur appui (src/mixte/fatigue_armatures.js :
+FLM4 EN 1991-2 § 4.6.5, section fissurée EN 1994-2 § 6.8.5.4, courbe S-N et règle de Miner EC2 § 6.8.4) ; manuel § 28.17.
+Fléaux : distortion du caisson avec diaphragmes (analogie de la poutre sur appui élastique, Wright et al. 1968 : raideur du
+cadre k_D, gauchissement I_dw, diaphragmes θ = 0 ; correction des lignes d'influence du cadre) ; manuel § 28.18.
+Nomenclatures des armatures des ouvrages par phases (src/plans/nomenclature_phases.js) : poutres rendues continues (PC-FER-01)
+et voussoir courant de fléau (FL-FER-01), bordereau ISO 4066 ; manuel § 28.19. Accueil et manuel § 2.10 : pourquoi un
+ouvrage se calcule directement ou par phases.

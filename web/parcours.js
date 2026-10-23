@@ -13,6 +13,7 @@ export const OUVRAGES = {
     texte: 'Dalle continue de 1 à plusieurs travées, droite, biaise ou courbe : répartition de Guyon-Massonnet ou plaque, Eurocodes ou Fascicule 61 / BAEL, ferraillage et plans, appuis, séisme, notes.',
     etapes: [['projet', 'Tablier'], ['conception', 'Conception'], ['tablier', 'Calcul'], ['ferraillage', 'Ferraillage, plans'], ['precontrainte', 'Précontrainte'], ['complements', 'Compléments'], ['appuis', 'Appuis'], ['seisme', 'Séisme'], ['retenue', 'Retenue'], ['notes', 'Notes']],
     etat: ['oui', 'oui', 'oui', 'oui', 'oui', 'oui', 'oui', 'oui'],
+    manque: 'à venir : pont-dalle coulé par phases successives (travée par travée, reprises avec coupleurs), avec la redistribution par fluage entre phases.',
   },
   poutres: {
     titre: 'Pont à poutres', sous: 'VIPP (post-tension), PRAD (pré-tension) et poutres en béton armé, travées indépendantes',
@@ -28,24 +29,24 @@ export const OUVRAGES = {
   },
   continues: {
     titre: 'Poutres rendues continues', sous: 'poutres préfabriquées précontraintes + hourdis, clavage sur appuis',
-    texte: 'Prédimensionnement (règles Sétra, affinage par le calcul) ; calcul par phases (pose isostatique, hourdis, clavage, superstructures ; fluage, retrait, relaxation, pertes) puis ouvrage terminé : trafic réparti par Guyon-Massonnet, gradient thermique, ELS, ELU avec effets hyperstatiques, effort tranchant, armatures de continuité, réactions vers les appuis ; plans de coffrage, clavage et câblage.',
+    texte: 'Prédimensionnement (règles Sétra, affinage par le calcul) ; calcul par phases (pose isostatique, hourdis, clavage, superstructures ; fluage, retrait, relaxation, pertes) puis ouvrage terminé : trafic réparti par Guyon-Massonnet, gradient thermique, ELS, ELU avec effets hyperstatiques, effort tranchant, armatures de continuité, réactions vers les appuis ; plans de coffrage, clavage et câblage, nomenclature des armatures.',
     etapes: [['phasage', 'Tablier par phases'], ['appuis', 'Appuis'], ['seisme', 'Séisme'], ['retenue', 'Retenue']], phType: 'poutres',
-    etat: ['oui', 'oui', 'oui', 'partiel', 'oui', 'partiel', 'oui', 'oui'],
-    manque: 'hourdis par l\'onglet Tablier à poutres ; à venir : bordereau de façonnage des poutres continues.',
+    etat: ['oui', 'oui', 'oui', 'oui', 'oui', 'partiel', 'oui', 'oui'],
+    manque: 'flexion locale du hourdis par l\'onglet Tablier à poutres (la nomenclature y met le minimum).',
   },
   fleaux: {
     titre: 'Pont par encorbellements', sous: 'fléaux en caisson, voussoirs coulés en place',
-    texte: 'Prédimensionnement (règles Sétra, affinage) ; calcul par phases voussoir par voussoir (équipage mobile, câbles de fléau et de continuité, clavages ; pertes, contre-flèches) ; déséquilibres de construction et clouage provisoire ; ouvrage terminé : trafic, gradient thermique, ELS, ELU avec effets hyperstatiques, effort tranchant (effet Résal), flexion transversale du caisson (cadre, torsion, distortion), réactions vers les appuis ; plans de coffrage des voussoirs et de câblage.',
+    texte: 'Prédimensionnement (règles Sétra, affinage) ; calcul par phases voussoir par voussoir (équipage mobile, câbles de fléau et de continuité, clavages ; pertes, contre-flèches) ; déséquilibres de construction et clouage provisoire ; ouvrage terminé : trafic, gradient thermique, ELS, ELU avec effets hyperstatiques, effort tranchant (effet Résal), flexion transversale du caisson (cadre, torsion, distortion répartie par le gauchissement et les diaphragmes), réactions vers les appuis ; plans de coffrage des voussoirs et de câblage, nomenclature d\'un voussoir courant.',
     etapes: [['phasage', 'Tablier par phases'], ['appuis', 'Appuis'], ['seisme', 'Séisme'], ['retenue', 'Retenue']], phType: 'fleau',
     etat: ['oui', 'oui', 'oui', 'partiel', 'oui', 'partiel', 'oui', 'oui'],
-    manque: 'à venir : distortion avec diaphragmes intermédiaires (analogie de la poutre sur appuis élastiques), bordereau de façonnage.',
+    manque: 'nomenclature d\'un voussoir courant seulement : voussoirs sur pile, diaphragmes et bossages d\'ancrage à ferrailler par le projeteur.',
   },
   mixte: {
     titre: 'Pont mixte acier-béton', sous: 'bipoutre, quadripoutre, droit ou courbe en plan',
-    texte: 'Prédimensionnement (règles Sétra, affinage par le calcul) ; sections mixtes EN 1994-2, calcul par phases (charpente, plots, fissuration, fluage et retrait) ; charpente au bétonnage (déversement des semelles, déversement d\'ensemble) ; structure achevée : trafic LM1, écart thermique, ELU par classe (âme efficace), voilement par cisaillement, déversement avec berceaux, connexion, fatigue ; tablier courbe (grillage, flexion latérale des semelles, soulèvement) ; plans de charpente ; réactions vers les appuis.',
+    texte: 'Prédimensionnement (règles Sétra, affinage par le calcul) ; sections mixtes EN 1994-2, calcul par phases (charpente, plots, fissuration, fluage et retrait) ; charpente au bétonnage (déversement des semelles, déversement d\'ensemble) ; structure achevée : trafic LM1, écart thermique, ELU par classe (âme efficace), voilement par cisaillement, déversement avec berceaux, connexion, fatigue de la charpente et des armatures (FLM4) ; dalle : flexion transversale et poinçonnement ; tablier courbe (grillage, flexion latérale des semelles, soulèvement) ; plans de charpente ; réactions vers les appuis.',
     etapes: [['phasage', 'Tablier mixte'], ['appuis', 'Appuis'], ['seisme', 'Séisme'], ['retenue', 'Retenue']], phType: 'mixte',
-    etat: ['oui', 'oui', 'oui', 'partiel', 'oui', 'partiel', 'oui', 'oui'],
-    manque: 'à venir : fatigue des armatures de la dalle, ferraillage transversal de la dalle.',
+    etat: ['oui', 'oui', 'oui', 'oui', 'oui', 'partiel', 'oui', 'oui'],
+    manque: 'nomenclature des armatures de la dalle non dessinée (sections calculées : flexion transversale, poinçonnement, fatigue).',
   },
 };
 

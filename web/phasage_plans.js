@@ -5,6 +5,7 @@
  */
 import { planCharpenteElevation, planCharpenteCoupes } from '../src/plans/charpente.js';
 import { planFleauCoffrage, planFleauCablage, planContinuesCoffrage, planContinuesCablage } from '../src/plans/ouvrages_phases.js';
+import { planNomenclatureContinues, planNomenclatureVoussoir } from '../src/plans/nomenclature_phases.js';
 import { feuilleSVG } from '../src/plans/svg.js';
 import { feuilleDXF, octetsCp1252 } from '../src/plans/dxf.js';
 import { cartouche } from './plans_view.js';
@@ -13,10 +14,10 @@ const $ = s => document.querySelector(s);
 export const PLANS_PHASAGE = {
   mixte: { txt: 'Charpente : élévation d\'une poutre (zones de PRS, épaisseurs, montants, entretoises, joints de chantier des tronçons), vue en plan, tôles par tronçon ; coupes courante et sur appui, connexion (espacements des goujons par zone), quantités (masse, ratio, surface à protéger), notes d\'exécution.',
     plans: [{ k: 'ch1', titre: 'Charpente : élévation et vue en plan', num: 'MX-CH-01', f: planCharpenteElevation, nom: 'PONT MIXTE' }, { k: 'ch2', titre: 'Charpente : coupes, connexion, quantités', num: 'MX-CH-02', f: planCharpenteCoupes, nom: 'PONT MIXTE' }] },
-  fleau: { txt: 'Coffrage des voussoirs (élévation du fléau, coupes sur pile et à la clé, tableau des voussoirs avec contre-flèches de réglage) et câblage (câbles de fléau par paire de voussoirs, continuité centrale et de rive, familles de câbles).',
-    plans: [{ k: 'cof', titre: 'Coffrage des voussoirs', num: 'FL-COF-01', f: planFleauCoffrage, nom: 'PONT PAR ENCORBELLEMENTS' }, { k: 'cab', titre: 'Câblage du fléau', num: 'FL-CAB-01', f: planFleauCablage, nom: 'PONT PAR ENCORBELLEMENTS' }] },
-  poutres: { txt: 'Coffrage d\'une poutre et détail du clavage sur appui ; câblage (tracé parabolique, ordonnées, précontrainte, armatures de continuité du hourdis).',
-    plans: [{ k: 'cof', titre: 'Coffrage et clavage', num: 'PC-COF-01', f: planContinuesCoffrage, nom: 'POUTRES RENDUES CONTINUES' }, { k: 'cab', titre: 'Câblage et continuité', num: 'PC-CAB-01', f: planContinuesCablage, nom: 'POUTRES RENDUES CONTINUES' }] },
+  fleau: { txt: 'Coffrage des voussoirs (élévation du fléau, coupes sur pile et à la clé, tableau des voussoirs avec contre-flèches de réglage) et câblage (câbles de fléau par paire de voussoirs, continuité centrale et de rive, familles de câbles) ; nomenclature des armatures passives d\'un voussoir courant (cadre transversal, longitudinales).',
+    plans: [{ k: 'cof', titre: 'Coffrage des voussoirs', num: 'FL-COF-01', f: planFleauCoffrage, nom: 'PONT PAR ENCORBELLEMENTS' }, { k: 'cab', titre: 'Câblage du fléau', num: 'FL-CAB-01', f: planFleauCablage, nom: 'PONT PAR ENCORBELLEMENTS' }, { k: 'nom', titre: 'Nomenclature d\'un voussoir courant', num: 'FL-FER-01', f: planNomenclatureVoussoir, nom: 'PONT PAR ENCORBELLEMENTS' }] },
+  poutres: { txt: 'Coffrage d\'une poutre et détail du clavage sur appui ; câblage (tracé parabolique, ordonnées, précontrainte, armatures de continuité du hourdis) ; nomenclature des armatures passives (poutres, hourdis, continuité, clavages).',
+    plans: [{ k: 'cof', titre: 'Coffrage et clavage', num: 'PC-COF-01', f: planContinuesCoffrage, nom: 'POUTRES RENDUES CONTINUES' }, { k: 'cab', titre: 'Câblage et continuité', num: 'PC-CAB-01', f: planContinuesCablage, nom: 'POUTRES RENDUES CONTINUES' }, { k: 'nom', titre: 'Nomenclature des armatures', num: 'PC-FER-01', f: planNomenclatureContinues, nom: 'POUTRES RENDUES CONTINUES' }] },
 };
 const liste = r => (r && PLANS_PHASAGE[r.type]) || null;
 const feuille = (r, k) => { const P = liste(r).plans.find(p => p.k === k); return P.f(r, cartouche(P.num), { nom: P.nom }); };
