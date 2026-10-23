@@ -10,8 +10,8 @@
  *   - part symétrique : réaction verticale V/2 par âme, répartie uniformément sur sa hauteur ;
  *   - torsion de Bredt : T = Σ F·y (centre de torsion sur l'axe, caisson symétrique), flux q = T / (2 Ω) tout autour de la
  *     cellule (Ω : aire intérieure aux feuillets moyens) ;
- *   - la part restante déforme le cadre en distortion : sans diaphragme intermédiaire (gauchissement de distortion
- *     négligé), les moments de cadre obtenus en sont un majorant (du côté de la sécurité).
+ *   - la part restante déforme le cadre en distortion : seule, la tranche d'un mètre la reprend par flexion (majorant) ;
+ *     avec p.dist (distortionCaisson), elle est répartie le long du caisson par le gauchissement et les diaphragmes.
  * Actions par mètre : poids propre (25 kN/m³), superstructures (charges de bord, revêtement 24 kN/m³), LM1 (EN 1991-2 §
  * 4.3.2) : UDL par voie conventionnelle, tandems TS répartis longitudinalement sur l_x = 1,20 + b₀ + 2d avec
  * b₀ = 0,40 + 2 t_rev + t_s (diffusion à 45° jusqu'au feuillet moyen) et d la distance de la roue à la section étudiée
@@ -177,14 +177,20 @@ export function flexionTransversale(p) {
     const d = xs0 === null ? Math.min(Math.abs(y - C.xw), Math.abs(y + C.xw)) : Math.abs(y - xs0);
     return 1.2 + b0 + 2 * Math.min(d, 3);
   };
+  // distortion répartie par le gauchissement et les diaphragmes (p.dist = { m1, uTs, uUdl } de distortionCaisson) : la
+  // part de distortion d'une charge unité en y (moment de cadre M_D1 × (−y)) est ramenée à u × (−y) M_D1 —
+  // roues : u = u_ts l_x/2 (deux couples d'essieu au lieu de la ligne de roue Q/l_x), UDL : u = u_udl
+  const corr = (nom, y, f) => (p.dist ? (1 - f) * (p.dist.m1[nom] || 0) * y : 0);
+  const etaT = (nom, y, lxr) => eta(nom, y) + corr(nom, y, p.dist ? p.dist.uTs * lxr / 2 : 1), etaU = (nom, y) => eta(nom, y) + corr(nom, y, p.dist ? p.dist.uUdl : 1);
   const lane = (nom, i, y0) => {   // effet d'une voie i (0 = voie 1) d'axe y0 + wl/2 : UDL sur la voie, deux roues de Q/l_x (kN/m) réparties sur b₀
-    const ln = L1.lanes[i] || { Q: 0, q: 2.5 * al.qr }; let ts = 0, udl = 0;
-    for (const dy of [-1, 1]) { const yc = y0 + wl / 2 + dy, lxr = lxAt(nom, yc); for (let k = -2; k <= 2; k++) ts += ln.Q / lxr * eta(nom, yc + k * b0 / 5) / 5; }
-    for (let k = 0; k < 10; k++) udl += ln.q * wl / 10 * eta(nom, y0 + (k + 0.5) * wl / 10);
-    return { ts, udl };
+    const ln = L1.lanes[i] || { Q: 0, q: 2.5 * al.qr }; let ts = 0, udl = 0, tF = 0, tAx = 0;
+    for (const dy of [-1, 1]) { const yc = y0 + wl / 2 + dy, lxr = lxAt(nom, yc); for (let k = -2; k <= 2; k++) ts += ln.Q / lxr * etaT(nom, yc + k * b0 / 5, lxr) / 5; tF += ln.Q / lxr * yc; tAx += ln.Q / 2 * yc; }
+    for (let k = 0; k < 10; k++) udl += ln.q * wl / 10 * etaU(nom, y0 + (k + 0.5) * wl / 10);
+    // couples de torsion (pour la distortion) : par mètre dans le cadre (roues de Q/l_x), par essieu (Q/2 par roue), UDL par mètre
+    return { ts, udl, tF, tAx, tU: ln.q * wl * (y0 + wl / 2) };
   };
   const enveloppe = (nom, sg) => {   // sg = +1 : max ; −1 : min
-    const pris = [], tot = { ts: 0, udl: 0 };
+    const pris = [], tot = { ts: 0, udl: 0, tF: 0, tAx: 0, tU: 0 };
     for (let i = 0; i < NL.n; i++) {
       let best = null;
       for (let y0 = -Lr / 2; y0 <= Lr / 2 - wl + 1e-9; y0 += 0.1) {
@@ -192,10 +198,10 @@ export function flexionTransversale(p) {
         const e = lane(nom, i, y0), v = sg * (e.ts + e.udl);
         if (v > 0 && (!best || v > best.v)) best = { v, y0, ...e };
       }
-      if (!best) break; pris.push(best.y0); tot.ts += best.ts; tot.udl += best.udl;
+      if (!best) break; pris.push(best.y0); for (const k of ['ts', 'udl', 'tF', 'tAx', 'tU']) tot[k] += best[k];
     }
     // aire résiduelle (2,5 kN/m² × α_qr) hors des voies, parties défavorables
-    for (let y = -Lr / 2 + 0.05; y < Lr / 2; y += 0.1) if (!pris.some(a => y > a && y < a + wl)) { const v = 2.5 * (al.qr ?? 1) * 0.1 * eta(nom, y); if (sg * v > 0) tot.udl += v; }
+    for (let y = -Lr / 2 + 0.05; y < Lr / 2; y += 0.1) if (!pris.some(a => y > a && y < a + wl)) { const v = 2.5 * (al.qr ?? 1) * 0.1 * etaU(nom, y); if (sg * v > 0) { tot.udl += v; tot.tU += 2.5 * (al.qr ?? 1) * 0.1 * y; } }
     return tot;
   };
   const res = C.sections.map(s => {
@@ -205,8 +211,116 @@ export function flexionTransversale(p) {
     // épaisseur de calcul : gousset au droit des âmes (encastrement de l'encorbellement, nu intérieur), sinon feuillet
     const tCalc = /encastrement/.test(s.nom) ? (p.tEnc ?? s.t) : /nu intérieur/.test(s.nom) ? (p.tGou ?? s.t) : s.t;
     const dim = (m, sens) => cantileverDesign({ ELU: Math.max(sens * m.ELU, 0), CAR: Math.max(sens * m.CAR, 0), FREQ: Math.max(sens * m.FREQ, 0), hr: tCalc }, { fck: p.fck ?? 40, fyk: p.fyk ?? 500, c: p.c ?? 0.04, phi: 0.016, wkMax: 0.2, kSlab: 1.0 });
-    return { ...s, tCalc, G: g, Gpp: G0[s.nom], Gsup: G1[s.nom], Qmax: qp.ts + qp.udl, Qmin: qm.ts + qm.udl, ELUmax: cp.ELU, ELUmin: cm.ELU, CARmax: cp.CAR, CARmin: cm.CAR,
+    return { ...s, tCalc, cp, cm, tors: { pos: qp, neg: qm }, G: g, Gpp: G0[s.nom], Gsup: G1[s.nom], Qmax: qp.ts + qp.udl, Qmin: qm.ts + qm.udl, ELUmax: cp.ELU, ELUmin: cm.ELU, CARmax: cp.CAR, CARmin: cm.CAR,
       AsTendu: { pos: dim(cp, 1).As, neg: dim(cm, -1).As } };
   });
   return { C, sections: res, NL, lx, b0, Lr, tRev, gBord };
+}
+
+/* =====================================================================================================================
+ * Distortion du caisson avec diaphragmes : analogie de la poutre sur appui élastique (BEF, Wright, Abdel-Samad et
+ * Robinson, ASCE J. Struct. Div. 94(ST7), 1968 ; Hambly, « Bridge Deck Behaviour », chap. 10).
+ *   E I_dw θ'''' + k_D θ = t_D(x)
+ *  - θ : déformée de distortion (variable conjuguée du couple de distortion t_D, travail t_D θ) ;
+ *  - k_D : raideur de distortion du cadre par mètre, obtenue sur le cadre de flexion transversale sous le chargement de
+ *    distortion pure D(T) : âmes ± T/(2b) verticalement, hourdis ∓ T/(2h) horizontalement (sens opposé à la torsion),
+ *    charges réparties sur les parois ; θ = uᵀF / T, k_D = T / θ ;
+ *  - I_dw = ∫ ω² t ds : gauchissement de distortion des parois fléchies dans leur plan (translation de chaque paroi :
+ *    âmes ± b/2, hourdis ∓ h/2 par unité de θ ; ω linéaire par paroi, continu aux angles, encorbellements dans le
+ *    prolongement du hourdis), rendu orthogonal à l'effort normal et aux flexions (moindres carrés pondérés) ;
+ *    contrainte de gauchissement σ_dw = E ω θ'' ;
+ *  - diaphragmes rigides (θ = 0) sur piles et tous les s_d ; la charge de trafic excentrée (tandem de la voie 1 au bord
+ *    de la chaussée) est appliquée au milieu du panneau central ; la référence est le cadre par mètre sans gauchissement
+ *    (θ_réf = t_D / k_D, t_D = couple par mètre du § flexion transversale) : ρ = θ_max / θ_réf mesure la réduction de la
+ *    part de distortion des moments de cadre.
+ * ================================================================================================================== */
+
+/** Chargement de distortion pure D(T) (vecteur nodal) sur le cadre C. */
+function chargementDistortion(C, T = 1) {
+  const F = new Float64Array(3 * C.N.length), b = 2 * C.xw, h = -C.yb;
+  for (const e of C.E) {
+    const [xi, yi] = C.N[e.i], [xj, yj] = C.N[e.j], L = Math.hypot(xj - xi, yj - yi);
+    let f = null;
+    if (e.paroi === 'âme D') f = [0, T / (2 * b) / h * L];
+    else if (e.paroi === 'âme G') f = [0, -T / (2 * b) / h * L];
+    else if (e.paroi === 'hourdis sup.' && Math.min(xi, xj) >= -C.xw - 1e-9 && Math.max(xi, xj) <= C.xw + 1e-9) f = [T / (2 * h) / b * L, 0];
+    else if (e.paroi === 'hourdis inf.') f = [-T / (2 * h) / b * L, 0];
+    if (f) for (const k of [e.i, e.j]) { F[3 * k] += f[0] / 2; F[3 * k + 1] += f[1] / 2; }
+  }
+  return F;
+}
+
+/** Gauchissement de distortion ω (m² par unité de θ') aux points des parois et inertie I_dw (m⁶). */
+export function gauchissementDistortion(K, h) {
+  const xw = K.Bi / 2 - K.bw / 2, hh = h - K.ts / 2 - K.ti / 2, b = 2 * xw, pts = [];
+  const add = (x, y, w, t, ds) => pts.push({ x, y, w, a: t * ds });
+  const n = 200;
+  // hourdis supérieur (encorbellements compris) : w = (h/2)(x_w − x) ; âme gauche : w = w_TL − (b/2) s ; inférieur ; âme droite
+  for (let i = 0; i < n; i++) { const x = -K.B / 2 + K.B * (i + 0.5) / n; add(x, 0, (hh / 2) * (xw - x), K.ts, K.B / n); }
+  for (let i = 0; i < n; i++) { const s = hh * (i + 0.5) / n; add(-xw, -s, hh * b / 2 - (b / 2) * s, K.bw, hh / n); }
+  for (let i = 0; i < n; i++) { const s = b * (i + 0.5) / n; add(-xw + s, -hh, (hh / 2) * s, K.ti, b / n); }
+  for (let i = 0; i < n; i++) { const s = hh * (i + 0.5) / n; add(xw, -hh + s, hh * b / 2 - (b / 2) * s, K.bw, hh / n); }
+  // orthogonalisation : w ← w − (c₀ + c₁ x + c₂ y), moindres carrés pondérés par t ds
+  const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], r = [0, 0, 0];
+  for (const q of pts) { const f = [1, q.x, q.y]; for (let i = 0; i < 3; i++) { r[i] += q.a * f[i] * q.w; for (let j = 0; j < 3; j++) M[i][j] += q.a * f[i] * f[j]; } }
+  const c = lu(M)(r);
+  let I = 0, wmax = 0; for (const q of pts) { q.w -= c[0] + c[1] * q.x + c[2] * q.y; I += q.a * q.w * q.w; wmax = Math.max(wmax, Math.abs(q.w)); }
+  const coin = (x, y) => pts.reduce((a, q) => (Math.hypot(q.x - x, q.y - y) < Math.hypot(a.x - x, a.y - y) ? q : a)).w;
+  return { Idw: I, wmax, coins: { TL: coin(-xw, 0), TR: coin(xw, 0), BL: coin(-xw, -hh), BR: coin(xw, -hh) }, b, h: hh };
+}
+
+/** Poutre sur appui élastique (éléments de Hermite) : θ(x) sous charges ponctuelles et réparties, θ = 0 aux diaphragmes. */
+export function poutreSurAppuiElastique({ L, EI, k, diaphragmes, ponctuelles = [], repartie = null, pas = 0.25 }) {
+  const xs = [...new Set([0, L, ...diaphragmes, ...ponctuelles.map(q => q.x), ...Array.from({ length: Math.ceil(L / pas) + 1 }, (_, i) => Math.min(L, i * pas))].map(v => +v.toFixed(6)))].sort((a, b) => a - b);
+  const n = xs.length, nd = 2 * n, Km = Array.from({ length: nd }, () => new Float64Array(nd)), F = new Float64Array(nd);
+  for (let e = 0; e < n - 1; e++) {
+    const l = xs[e + 1] - xs[e], d = [2 * e, 2 * e + 1, 2 * e + 2, 2 * e + 3];
+    const kb = [[12, 6 * l, -12, 6 * l], [6 * l, 4 * l * l, -6 * l, 2 * l * l], [-12, -6 * l, 12, -6 * l], [6 * l, 2 * l * l, -6 * l, 4 * l * l]].map(r => r.map(v => v * EI / l ** 3));
+    const kf = [[156, 22 * l, 54, -13 * l], [22 * l, 4 * l * l, 13 * l, -3 * l * l], [54, 13 * l, 156, -22 * l], [-13 * l, -3 * l * l, -22 * l, 4 * l * l]].map(r => r.map(v => v * k * l / 420));
+    for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) Km[d[a]][d[b]] += kb[a][b] + kf[a][b];
+    if (repartie) { const xm = (xs[e] + xs[e + 1]) / 2; if (xm >= repartie.x0 && xm <= repartie.x1) { const q = repartie.t; F[d[0]] += q * l / 2; F[d[1]] += q * l * l / 12; F[d[2]] += q * l / 2; F[d[3]] -= q * l * l / 12; } }
+  }
+  for (const p of ponctuelles) F[2 * xs.findIndex(v => Math.abs(v - +p.x.toFixed(6)) < 1e-9)] += p.T;
+  const big = 1e10 * Math.max(...Km.map((r, i) => r[i]));
+  for (const xd of diaphragmes) { const i = xs.findIndex(v => Math.abs(v - +xd.toFixed(6)) < 1e-9); Km[2 * i][2 * i] += big; }
+  const u = lu(Km)(F), th = xs.map((_, i) => u[2 * i]);
+  // courbure θ'' aux nœuds (différences finies sur les rotations)
+  const cour = xs.map((x, i) => { const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1); return (u[2 * b + 1] - u[2 * a + 1]) / (xs[b] - xs[a]); });
+  return { xs, th, cour, thMax: Math.max(...th.map(Math.abs)), courMax: Math.max(...cour.map(Math.abs)) };
+}
+
+/**
+ * Distortion avec diaphragmes. p = { K, h, Lspan (portée centrale), sd (entraxe des diaphragmes, 0 = piles seules),
+ * Lr, tRev, fck, alpha }. Utilise la flexion transversale déjà calculée (sections, l_x) pour la référence.
+ */
+export function distortionCaisson(p) {
+  const K = p.K, C = cadreCaisson(K, p.h), S = rigidite(C); definirSections(C);
+  const T = 1, F = chargementDistortion(C, T), u = S.solve(F), thetaCadre = u.reduce((s, v, i) => s + v * F[i], 0) / T;   // E = 1
+  const Ecm = 22000 * ((p.fck + 8) / 10) ** 0.3 * 1000, kD = T / thetaCadre;   // raideur pour E = 1 → multipliée par E
+  const kDE = kD * Ecm, G = gauchissementDistortion(K, p.h), EIdw = Ecm * G.Idw;
+  const MD = momentsSections(C, S, F);   // moments de cadre sous D(1) ; par unité de θ : × k_D
+  // moments de cadre par unité de θ réel (θ_réel = θ_{E=1} / E) : M_D × k_D,E (les moments ne dépendent pas de E)
+  const parTheta = Object.fromEntries(C.sections.map(s => [s.nom, MD[s.nom] * kDE]));
+  // charge excentrée : tandem de la voie 1 contre la bordure (axe de la voie à L_r/2 − 1,5 m), deux essieux à 1,20 m
+  const al = p.alpha || EC_ALPHA.recommended, L1 = lm1(notionalLanes(p.Lr).n, al), Q = L1.lanes[0].Q, e = p.Lr / 2 - 1.5;
+  // couple d'un essieu (kN·m) : le chargement de distortion pure D(T) associé à une charge excentrée de couple T a pour
+  // intensité T (âmes ± T/2b : moitié de la part antisymétrique, l'autre moitié étant la torsion de Bredt)
+  const Td = Q * e, tD1 = Td, b0 = 0.4 + 2 * (p.tRev ?? 0.08) + K.ts, lx = 1.2 + b0;
+  const Ls = p.Lspan, sd = p.sd || 0, dia = [0, Ls]; if (sd > 0) for (let x = sd; x < Ls - 1e-6; x += sd) dia.push(x);
+  dia.sort((a, b) => a - b);
+  // panneau central : le plus proche du milieu de la travée
+  let pi = 0; for (let i = 0; i < dia.length - 1; i++) if (Math.abs((dia[i] + dia[i + 1]) / 2 - Ls / 2) < Math.abs((dia[pi] + dia[pi + 1]) / 2 - Ls / 2)) pi = i;
+  const xc = (dia[pi] + dia[pi + 1]) / 2;
+  const calc = diaph => poutreSurAppuiElastique({ L: Ls, EI: EIdw, k: kDE, diaphragmes: diaph, ponctuelles: [{ x: xc - 0.6, T: tD1 }, { x: xc + 0.6, T: tD1 }] });
+  const avec = calc(dia), sans = calc([0, Ls]);
+  // réponses unitaires : deux couples ponctuels de 1 kN·m (essieux du tandem) au milieu du panneau central, couple réparti
+  // de 1 kN·m/m sur toute la travée ; θ_max × k_D = couple par mètre « vu » par le cadre
+  const unit = diaph => ({ ts: poutreSurAppuiElastique({ L: Ls, EI: EIdw, k: kDE, diaphragmes: diaph, ponctuelles: [{ x: xc - 0.6, T: 1 }, { x: xc + 0.6, T: 1 }] }).thMax * kDE,
+    udl: poutreSurAppuiElastique({ L: Ls, EI: EIdw, k: kDE, diaphragmes: diaph, repartie: { x0: 0, x1: Ls, t: 1 } }).thMax * kDE });
+  const u1 = { avec: unit(dia), sans: unit([0, Ls]) };
+  const thRef = (2 * tD1 / lx) / kDE;   // cadre par mètre sans gauchissement : couple par mètre des deux essieux répartis sur l_x
+  const sigma = r => Ecm * G.wmax * r.courMax / 1000;   // MPa
+  const ligne = r => ({ thMax: r.thMax, rho: r.thMax / thRef, sigma: sigma(r), M: Object.fromEntries(Object.entries(parTheta).map(([k, v]) => [k, v * r.thMax])) });
+  return { kD: kDE, Idw: G.Idw, EIdw, beta: (kDE / (4 * EIdw)) ** 0.25, G, diaphragmes: dia, sd, Td, tD1, lx, thRef,
+    avec: ligne(avec), sans: ligne(sans), MD1: Object.fromEntries(C.sections.map(s => [s.nom, MD[s.nom]])), u1, ref: { M: Object.fromEntries(Object.entries(parTheta).map(([k, v]) => [k, v * thRef])) }, courbe: avec };
 }

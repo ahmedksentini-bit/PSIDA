@@ -70,8 +70,16 @@ export function computePhasage(d) {
         alpha: EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended, alphaKey: d.alpha || 'recommended', expo: (fl ? d.fl_expo : d.ph_expo) || 'XC' });
     } catch (e) { out.acheveErreur = e.message; }
     if (fl) {
-      // caisson : flexion transversale (cadre par mètre) et fléaux en construction (déséquilibre, clouage provisoire)
-      try { if (out.p.caisson) out.transversal = flexionTransversale({ K: { ...out.p.caisson, ti: out.p.caisson.tic }, h: out.p.hc, Lr, gBord: v('fl_gbord', 8), tRev: v('fl_trev', 0.08), tEnc: v('fl_tenc', 0.45), tGou: v('fl_tgou', 0.40), fck: out.p.fck, alpha: EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended }); } catch (e) { out.transversalErreur = e.message; }
+      // caisson : distortion (poutre sur appui élastique, diaphragmes), puis flexion transversale du cadre avec la part de
+      // distortion répartie (calcul de dimensionnement) et sans (cadre par mètre, référence) ; fléaux en construction
+      const al = EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended, base = out.p.caisson ? { K: { ...out.p.caisson, ti: out.p.caisson.tic }, h: out.p.hc, Lr, gBord: v('fl_gbord', 8), tRev: v('fl_trev', 0.08), tEnc: v('fl_tenc', 0.45), tGou: v('fl_tgou', 0.40), fck: out.p.fck, alpha: al } : null;
+      try { if (base) out.distortion = distortionCaisson({ ...base, Lspan: 2 * out.p.a, sd: v('fl_sdia', 0) }); } catch (e) { out.distortionErreur = e.message; }
+      try {
+        if (base) {
+          out.transversalBrut = flexionTransversale(base);
+          out.transversal = out.distortion ? flexionTransversale({ ...base, dist: { m1: out.distortion.MD1, uTs: out.distortion.u1.avec.ts, uUdl: out.distortion.u1.avec.udl } }) : out.transversalBrut;
+        }
+      } catch (e) { out.transversalErreur = e.message; }
       try { out.desequilibre = desequilibreFleau(out, { dc: v('fl_dcal', 3.0) }); } catch (e) { out.desequilibreErreur = e.message; }
     }
   }
@@ -267,7 +275,7 @@ export function fleauBlocks(out) {
   B.push(...transversalBlocks(out));
   h2('Méthode et limites');
   para('Calcul par phases pas à pas (même moteur que pour les poutres rendues continues) : chaque voussoir est une barre avec son béton et sa date de coulage ; le béton frais est porté par l\'équipage au bout du fléau (force et moment) jusqu\'au décoffrage ; les câbles de fléau sont tendus des deux côtés après chaque paire de voussoirs, avec frottement et recul d\'ancrage (§ 5.10.5) ; les clavages réunissent les fléaux sans contrainte. Hauteur et inertie variables par barre (I ∝ h^{5/2}, BT n° 7 § 2.222).');
-  para('Limites : ligne moyenne supposée droite (la variation du c.d.g. avec la hauteur n\'est prise en compte que dans les excentrements) ; le calcul par phases suppose des fléaux construits symétriquement, les déséquilibres de construction étant traités à part (moments de déséquilibre ajoutés sur pile) ; flexion longitudinale sous trafic sur le caisson entier, torsion et distorsion traitées dans le cadre transversal (sans diaphragme intermédiaire, du côté de la sécurité) ; gradient thermique linéaire seul (approche 1).');
+  para('Limites : ligne moyenne supposée droite (la variation du c.d.g. avec la hauteur n\'est prise en compte que dans les excentrements) ; le calcul par phases suppose des fléaux construits symétriquement, les déséquilibres de construction étant traités à part (moments de déséquilibre ajoutés sur pile) ; flexion longitudinale sous trafic sur le caisson entier, torsion et distorsion traitées dans le cadre transversal, la distortion étant répartie par l\'analogie de la poutre sur appui élastique (diaphragmes sur piles et intermédiaires) ; gradient thermique linéaire seul (approche 1).');
   return B;
 }
 
@@ -292,7 +300,23 @@ export function transversalBlocks(out) {
   h2('Caisson : flexion transversale et distortion (cadre par mètre, section de la clé)');
   table(['Section', 'M_pp [kN·m/m]', 'M_superstr.', 'M_Q max / min', 'M_ELU max / min', 'Épaisseur de calcul [m]', 'A_s face tendue par M > 0 [cm²/m]', 'A_s face tendue par M < 0 [cm²/m]'],
     T.sections.map(s => [s.nom, F(s.Gpp, 1), F(s.Gsup, 1), `${F(s.Qmax, 1)} / ${F(s.Qmin, 1)}`, `${F(s.ELUmax, 1)} / ${F(s.ELUmin, 1)}`, F(s.tCalc, 2), `${F(s.AsTendu.pos * 1e4, 1)} (${s.faces[0]})`, `${F(s.AsTendu.neg * 1e4, 1)} (${s.faces[1]})`]));
-  para(`Cadre fermé suivant les feuillets moyens, chaque cas équilibré par les flux de cisaillement de flexion (V/2 par âme) et de torsion de Bredt (q = T/2Ω) ; sans diaphragme intermédiaire, la distortion est entièrement reprise par la flexion du cadre (majorant). Charges : poids propre, bords ${F(T.gBord, 1)} kN/m, revêtement ${F(T.tRev * 100, 0)} cm ; LM1 sur ${F(T.Lr, 2)} m (${T.NL.n} voies), tandems répartis longitudinalement sur 1,20 + b₀ + 2d (b₀ = ${F(T.b0, 2)} m ; d : distance de la roue à la section) et, dans la travée du hourdis, selon les largeurs participantes du DAfStb Heft 240. Moments positifs : traction de la fibre inférieure des hourdis et de la face extérieure des âmes. Ferraillage : ELU, σ_s à l'ELS caractéristique, w_k ≤ 0,2 mm à l'ELS fréquent, minimums EC2. Diaphragmes à prévoir sur piles et culées (reprise de la torsion et de la distortion aux appuis).`);
+  const D = out.distortion;
+  if (D) {
+    h2('Caisson : distortion avec diaphragmes (poutre sur appui élastique)');
+    table(['Grandeur', 'Valeur'], [
+      ['Raideur de distortion du cadre k_D', `${F(D.kD, 0)} kN·m/m par rad`], ['Inertie de gauchissement de distortion I_dw', `${F(D.Idw, 2)} m⁶ (ω max ${F(D.G.wmax, 2)} m²)`],
+      ['Paramètre β = (k_D / 4 E I_dw)^¼ ; longueur π/β', `${F(D.beta, 4)} m⁻¹ ; ${F(Math.PI / D.beta, 1)} m`],
+      ['Diaphragmes', D.sd > 0 ? `sur piles et tous les ${F(D.sd, 1)} m (${D.diaphragmes.length} dans la travée centrale)` : 'sur piles seulement'],
+      ['Tandem de la voie 1 au bord : couple par essieu', `${F(D.Td, 0)} kN·m`],
+      ['θ max / θ du cadre par mètre (ρ)', `${F(D.avec.rho, 3)} avec les diaphragmes ; ${F(D.sans.rho, 3)} sans diaphragme intermédiaire`],
+      ['Contrainte de gauchissement de distortion σ_dw (caractéristique)', `${F(D.avec.sigma, 2)} MPa (${F(D.sans.sigma, 2)} MPa sans diaphragme intermédiaire)`],
+    ]);
+    const Tb = out.transversalBrut;
+    if (Tb && Tb !== out.transversal) table(['Section', 'M_ELU max / min, cadre par mètre [kN·m/m]', 'A_s M > 0 / M < 0 [cm²/m]', 'M_ELU max / min, distortion répartie', 'A_s M > 0 / M < 0 retenus'],
+      out.transversal.sections.map((c, i) => { const b = Tb.sections[i]; return [c.nom, `${F(b.ELUmax, 1)} / ${F(b.ELUmin, 1)}`, `${F(b.AsTendu.pos * 1e4, 1)} / ${F(b.AsTendu.neg * 1e4, 1)}`, `${F(c.ELUmax, 1)} / ${F(c.ELUmin, 1)}`, `${F(c.AsTendu.pos * 1e4, 1)} / ${F(c.AsTendu.neg * 1e4, 1)}`]; }));
+    para(`Analogie de la poutre sur appui élastique (Wright, Abdel-Samad et Robinson, ASCE 1968 ; Hambly, Bridge Deck Behaviour, chap. 10) : E I_dw θ'''' + k_D θ = t_D, diaphragmes rigides (θ = 0). k_D vient du cadre ci-dessus sous le chargement de distortion pure (âmes ± T/2b, hourdis ∓ T/2h) ; I_dw du gauchissement des parois fléchies dans leur plan. Le cadre par mètre suppose la distortion reprise sur la seule largeur de répartition l_x = ${F(D.lx, 2)} m ; la rigidité de gauchissement la répartit sur une longueur de l'ordre de π/β, et les diaphragmes la bloquent : la part de distortion des moments de cadre est ramenée à ρ fois sa valeur. Les lignes d'influence du cadre sont corrigées en conséquence (roues : deux couples d'essieu au lieu de la ligne de roue Q/l_x ; UDL : couple réparti sur la travée) et les voies replacées au plus défavorable ; le ferraillage retenu (tableau de flexion transversale ci-dessus) est celui de la distortion répartie, le cadre par mètre étant donné pour comparaison.`);
+  } else if (out.distortionErreur) para(`Distortion : calcul impossible (${out.distortionErreur}).`);
+  para(`Cadre fermé suivant les feuillets moyens, chaque cas équilibré par les flux de cisaillement de flexion (V/2 par âme) et de torsion de Bredt (q = T/2Ω) ; la part de distortion est répartie le long du caisson par le gauchissement et les diaphragmes (§ suivant, poutre sur appui élastique). Charges : poids propre, bords ${F(T.gBord, 1)} kN/m, revêtement ${F(T.tRev * 100, 0)} cm ; LM1 sur ${F(T.Lr, 2)} m (${T.NL.n} voies), tandems répartis longitudinalement sur 1,20 + b₀ + 2d (b₀ = ${F(T.b0, 2)} m ; d : distance de la roue à la section) et, dans la travée du hourdis, selon les largeurs participantes du DAfStb Heft 240. Moments positifs : traction de la fibre inférieure des hourdis et de la face extérieure des âmes. Ferraillage : ELU, σ_s à l'ELS caractéristique, w_k ≤ 0,2 mm à l'ELS fréquent, minimums EC2. Diaphragmes à prévoir sur piles et culées (reprise de la torsion et de la distortion aux appuis).`);
   return B;
 }
 
@@ -385,7 +409,7 @@ import { verifierCourbure } from '../src/mixte/courbe.js';
 import { fatigueArmatures } from '../src/mixte/fatigue_armatures.js';
 import { hourdisLocal } from '../src/beams/hourdis.js';
 import { localBlocks } from './beams_view.js';
-import { flexionTransversale } from '../src/phasage/caisson_transversal.js';
+import { flexionTransversale, distortionCaisson } from '../src/phasage/caisson_transversal.js';
 import { desequilibreFleau, BARRE_36 } from '../src/phasage/desequilibre.js';
 import { EC_ALPHA } from '../src/loads_ec.js';
 
