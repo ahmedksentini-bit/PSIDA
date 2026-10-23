@@ -358,6 +358,14 @@ export function mixteVerifsBlocks(out) {
     table(['x [m]', 'k', 'σ_ELU amplifié [MPa]', 'f_l sup. / inf. [MPa]', 'σ + f_l', 'f_y', 'M_lat [kN·m]', 'H cadre (V-load) [kN]'], c.lignes.filter((q, i) => i % pas2 === 0).map(q => [F(q.x, 1), F(q.k, 3), F(q.sig, 0), `${F(q.flS, 0)} / ${F(q.flI, 0)}`, F(q.tot, 0), F(q.fy, 0), F(q.Mlat, 1), F(q.H, 1)]));
     para(`Grillage plan : poutres en arcs de rayon R ± e/2 (cordes de 1,5 m au plus), entretoises radiales aux cadres (E I_q, rigidifiées ×5 sur appuis), section mixte n₀ en travée et fissurée sur appui, torsion de Saint-Venant des tôles et de la dalle ; même grillage droit en référence. Les rapports k = M courbe / M droit de la poutre extérieure (permanentes : k_G, trafic placé côté extérieur : k_Q) amplifient les contraintes ELU du modèle droit (k = max(k_G ; k_Q), du côté de la sécurité). Flexion latérale des semelles entre cadres M_lat = M l²/(10 R D) (AASHTO LRFD § 4.6.1.2.4b), f_l = 6 M_lat/(t_f b_f²) ; effort radial transmis aux cadres H = M l/(R D) (méthode V-load) pour le dimensionnement des entretoises. Effort maximal dans un cadre : ${F(c.Hmax, 0)} kN.`);
   }
+  if (v.fatigueArm && v.fatigueArm.pire) {
+    const fa = v.fatigueArm, w = fa.pire;
+    h2('Fatigue des armatures de la dalle sur appui (FLM4)');
+    table(['Camion FLM4', 'Essieux [kN]', 'ΔM poutre [kN·m]', 'Δσ_s [MPa]', 'n (durée de projet)', 'N admissible', 'n/N'], w.cam.map((c, k) => [`${k + 1}`, ['70 + 130', '70 + 2 × 120', '70 + 150 + 3 × 90', '70 + 140 + 2 × 90', '70 + 130 + 90 + 2 × 80'][k], F(c.dM, 0), F(c.ds, 1), c.n.toExponential(2).replace('.', ','), Number.isFinite(c.N) ? c.N.toExponential(2).replace('.', ',') : '∞', (c.n / c.N).toExponential(2).replace('.', ',')]));
+    para(`Section la plus endommagée : x = ${F(w.x, 1)} m, D_Ed = ${w.D.toExponential(2).replace('.', ',')} (≤ 1). FLM4 (EN 1991-2 § 4.6.5) : composition « ${fa.trafic === 'longue' ? 'longue distance' : fa.trafic === 'moyenne' ? 'moyenne distance' : 'locale'} », ${F(fa.Nobs, 0)} poids lourds par an sur la voie lente pendant ${fa.ans} ans, charges × ${F(fa.f, 3)} (part de la poutre). Étendue par passage (M_max − M_min) z / I₂ sur la section fissurée (EN 1994-2 § 6.8.5.4) ; courbe S-N des barres droites N* = 10⁶, Δσ_Rsk = 162,5 MPa, k₁ = 5, k₂ = 9, γ_S,fat = 1,15 (EN 1992-1-1 tableau 6.3N) ; règle de Miner (§ 6.8.4, éq. 6.70).`);
+  }
+  if (v.dalle) { h2('Dalle : flexion locale transversale'); B.push(...localBlocks({ hourdis: v.dalle, inp: { hd: p.hc, local: { c: 0.04 } } })); }
+  else if (v.dalleErreur) para(`Dalle : calcul impossible (${v.dalleErreur}).`);
   h2('Connexion (goujons)');
   const g = v.goujons, cx = v.connexion.filter((q, i) => i % pas === 0);
   table(['x [m]', 'v_L,Ed ELU [kN/m]', 'v_L ELS car.', 's ELU [m]', 's ELS [m]', 's fatigue [m]', 'Espacement retenu [m]'], cx.map(q => [F(q.x, 1), F(q.vElu, 0), F(q.vEls, 0), F(Math.min(q.sELU, 9.99), 2), F(Math.min(q.sELS, 9.99), 2), F(Math.min(q.sFat, 9.99), 2), F(q.s, 2)]));
@@ -374,6 +382,9 @@ import { verifierMixte } from '../src/mixte/verifs.js';
 import { structureAchevee } from '../src/phasage/acheve.js';
 import { verifierBetonnage } from '../src/mixte/betonnage.js';
 import { verifierCourbure } from '../src/mixte/courbe.js';
+import { fatigueArmatures } from '../src/mixte/fatigue_armatures.js';
+import { hourdisLocal } from '../src/beams/hourdis.js';
+import { localBlocks } from './beams_view.js';
 import { flexionTransversale } from '../src/phasage/caisson_transversal.js';
 import { desequilibreFleau, BARRE_36 } from '../src/phasage/desequilibre.js';
 import { EC_ALPHA } from '../src/loads_ec.js';
@@ -384,7 +395,7 @@ export function optionsMixte(d, p) {
   const Lr = v('mx_Lr', p.largeur - 2), tr = v('mx_trott', 0);
   return { chaussee: { y1: -Lr / 2, y2: Lr / 2 }, trottoirs: tr > 0 ? [{ y1: -Lr / 2 - tr, y2: -Lr / 2 }, { y1: Lr / 2, y2: Lr / 2 + tr }] : [],
     alpha: EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended, dT: v('mx_dT', 10), ac: v('mx_ac', 6), a: v('mx_a', 6), Iv: v('mx_Iv', 40000) * 1e-8, Iq: v('mx_Iq', 180000) * 1e-8,
-    goujons: { d: v('mx_gd', 22) / 1000, h: v('mx_gh', 200) / 1000, n: Math.max(1, Math.round(v('mx_gn', 3))), fu: 450 }, Nobs: v('mx_Nobs', 5e5), qc: v('mx_qc', 1.0), R: v('mx_R', 0) };
+    goujons: { d: v('mx_gd', 22) / 1000, h: v('mx_gh', 200) / 1000, n: Math.max(1, Math.round(v('mx_gn', 3))), fu: 450 }, Nobs: v('mx_Nobs', 5e5), qc: v('mx_qc', 1.0), R: v('mx_R', 0), gBord: v('mx_gbord', 8), tRev: v('mx_trev', 0.08), cDalle: v('mx_cdal', 0.04) };
 }
 export function computeMixte(d) {
   const p = lireBipoutre(d), { modele, reperes } = bipoutre(p), out = { type: 'mixte', p, modele, reperes, r: calculPhasage(modele) };
@@ -396,6 +407,17 @@ export function computeMixte(d) {
     out.v.betonnage = b; out.v.verifs.push(...b.verifs); out.v.ok = out.v.ok && b.ok;
     // tablier courbe en plan : grillage et effets de la courbure (rayon de l'axe, 0 = droit)
     if (o.R > 0) { const c = verifierCourbure(out, o); out.v.courbe = c; out.v.verifs.push(...c.verifs); out.v.ok = out.v.ok && c.ok; }
+    // fatigue des armatures de la dalle sur appui (FLM4, Miner)
+    const fa = fatigueArmatures(out, out.v, { Nobs: o.Nobs, trafic: d.mx_trafic || 'longue' }); out.v.fatigueArm = fa; out.v.verifs.push(...fa.verifs); out.v.ok = out.v.ok && fa.ok;
+    // dalle : flexion locale transversale (plaque sur les poutres, roues EC et F61), ferraillage, poinçonnement
+    try {
+      const B = p.largeur, gb = o.gBord, tR = o.tRev, ch = o.chaussee;
+      const H = hourdisLocal({ n: p.nPoutres, b1: p.entraxe, W: B, hd: p.hc, bt: p.travee.bfs, eTab: p.hg, L: Math.max(...p.L), roadway: ch, footways: o.trottoirs,
+        lines: [{ g: gb, e: -B / 2 + 0.25 }, { g: gb, e: B / 2 - 0.25 }], bands: [{ q: 24 * tR, y1: ch.y1, y2: ch.y2 }], tRev: tR, fck: p.fck, fyk: 500, c: o.cDalle, alphaEC: d.alpha || 'recommended' });
+      out.v.dalle = H;
+      out.v.verifs.push({ nom: 'Dalle : poinçonnement sous une roue du tandem [kN]', val: H.poinc.VEd, lim: H.poinc.VRdc, ok: H.poinc.ok, ref: 'EN 1992-1-1 § 6.4.4', x: null });
+      out.v.ok = out.v.ok && H.poinc.ok;
+    } catch (e) { out.v.dalleErreur = e.message; }
   } catch (e) { out.vErreur = e.message; }
   return out;
 }
@@ -444,6 +466,6 @@ export function mixteBlocks(out) {
   else if (out.vErreur) para(`Vérifications de la structure achevée impossibles : ${out.vErreur}.`);
   h2('Méthode et limites');
   para('Calcul par phases pas à pas : acier élastique, béton de chaque plot avec son âge (fluage et retrait EN 1992-1-1), sections mixtes par barres décalées (acier, dalle, armatures), plots activés le lendemain de leur bétonnage. Le retrait est recoupé, sur une travée isostatique, avec la méthode des coefficients d’équivalence n_L de l’EN 1994-2 (écart de 4 %).');
-  para('Limites : poutre de rive et sa part de dalle (charges permanentes non réparties entre poutres) ; répartition transversale du trafic par la règle du levier (bipoutre) ou Courbon ; tablier courbe : contraintes du modèle droit amplifiées par les rapports courbe / droit du grillage, flexion latérale des semelles par la formule de la méthode « V-load » ; zones fissurées forfaitaires (15 %) ; fatigue par la méthode des coefficients λ simplifiée (λ₃ = λ₄ = 1), armatures non vérifiées en fatigue ; voilement des panneaux comprimés sans raidisseurs longitudinaux.');
+  para('Limites : poutre de rive et sa part de dalle (charges permanentes non réparties entre poutres) ; répartition transversale du trafic par la règle du levier (bipoutre) ou Courbon ; tablier courbe : contraintes du modèle droit amplifiées par les rapports courbe / droit du grillage, flexion latérale des semelles par la formule de la méthode « V-load » ; zones fissurées forfaitaires (15 %) ; fatigue de l\'acier de charpente par la méthode des coefficients λ simplifiée (λ₃ = λ₄ = 1), des armatures de la dalle par FLM4 et la règle de Miner ; voilement des panneaux comprimés sans raidisseurs longitudinaux.');
   return B;
 }

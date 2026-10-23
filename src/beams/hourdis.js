@@ -34,13 +34,14 @@ const pasGrille = (bornes, pas) => {
 };
 
 /**
- * p = { n, b1, hd, bt (largeur de table), eTab (épaisseur moyenne de la table), L (portée des poutres), roadway {y1,y2},
+ * p = { n, b1, W (largeur du tablier, défaut n b₁), hd, bt (largeur de table), eTab (épaisseur moyenne de la table), L (portée), roadway {y1,y2},
  *       footways [{y1,y2}], lines [{g,e}], bands [{q,y1,y2}], tRev (0,08), fck (hourdis), fyk, c (enrobage, 0,03),
  *       alphaEC ('recommended'), classe F61 (auto), nRetenue, mil ('Mc120' | 'aucune'), gamma (25) }
  */
 export function hourdisLocal(p) {
-  const n = p.n, b1 = p.b1, hd = p.hd, W = n * b1, b = W / 2, bt = Math.min(p.bt, b1 - 0.2), tRev = p.tRev ?? 0.08;
-  const ys0 = Array.from({ length: n }, (_, k) => -b + b1 * (k + 0.5));
+  // largeur W donnée (pont mixte : encorbellements différents de b₁/2), sinon W = n b₁ (pont à poutres)
+  const n = p.n, b1 = p.b1, hd = p.hd, W = p.W || n * b1, b = W / 2, bt = Math.min(p.bt, b1 - 0.2), tRev = p.tRev ?? 0.08;
+  const ys0 = Array.from({ length: n }, (_, k) => (k - (n - 1) / 2) * b1);
   const Lm = Math.min(12, Math.max(p.L || 12, 6)), x0 = Lm / 2;
   // pas fin (0,10 m) près de la section étudiée, 0,40 m ailleurs
   const xsF = pasGrille([0, x0 - 2.0, x0 + 2.0, Lm], 0.4).flatMap((x, i, a) => (i && a[i - 1] >= x0 - 2.0 - 1e-9 && x <= x0 + 2.0 + 1e-9 ? Array.from({ length: Math.ceil((x - a[i - 1]) / 0.1) }, (_, q) => a[i - 1] + (x - a[i - 1]) * (q + 1) / Math.ceil((x - a[i - 1]) / 0.1)) : [x]));

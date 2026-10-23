@@ -164,7 +164,8 @@ function ajusterMixte(c, defauts, V) {
     } else if (/effort tranchant|Interaction/.test(q.nom)) pas(`mx_${z}tw`, 2, 60);
     else if (/Déversement/.test(q.nom)) { if (c.mx_abfi < 1.4) pas('mx_abfi', 0.05); else semelle('a', 'fi'); }
     else if (/Fatigue : semelle/.test(q.nom)) semelle(z, 'fi');
-    else if (/compression de la dalle/.test(q.nom)) pas('mx_hc', 0.01, 0.40);
+    else if (/compression de la dalle|Dalle : poinçonnement/.test(q.nom)) pas('mx_hc', 0.01, 0.40);
+    else if (/Fatigue des armatures/.test(q.nom)) { c.mx_rhoa = +((c.mx_rhoa ?? 1.2) + 0.1).toFixed(2); }
     else if (/armatures/.test(q.nom)) { c.mx_rhoa = +((c.mx_rhoa ?? 1.2) + 0.1).toFixed(2); }
   }
 }

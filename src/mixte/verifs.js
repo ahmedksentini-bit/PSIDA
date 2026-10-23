@@ -32,7 +32,7 @@ import { EC_ALPHA, lm1 } from '../loads_ec.js';
 const EA = 210000;
 
 /** Section de calcul d'une zone : PRS, dalle de largeur efficace, armatures (60 % en nappe supérieure). */
-function sectionZone(p, zoneAppui, beff, As) {
+export function sectionZone(p, zoneAppui, beff, As) {
   const g = zoneAppui ? p.appui : p.travee;
   return { ...g, hg: p.hg, hc: p.hc, nuance: p.nuance, beff, Asup: 0.6 * As, Ainf: 0.4 * As, fck: p.fck, fsk: 500, csup: 0.06, cinf: 0.06 };
 }
