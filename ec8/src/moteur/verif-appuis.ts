@@ -2,7 +2,7 @@
 // (EN 1998-2 6.6.4) et joints de chaussée. Unités : MN, m, MPa, rad.
 
 import { derives, epaisseurElastomere } from "../projet/geometrie.ts";
-import type { AppareilsElastomere, Appui, Culee, Projet } from "../projet/types.ts";
+import type { AppareilsElastomere, Appui, Culee, Pile, Projet } from "../projet/types.ts";
 import { LG } from "../referentiel/combinaisons.ts";
 import type { ActionSismique } from "./action.ts";
 import type { Analyse } from "./analyse.ts";
@@ -138,9 +138,13 @@ export function verifierAppuis(p: Projet, a: ActionSismique, m: Modele, r: Analy
   }
   const Rv = r.vertical.reactions;
 
+  // travées indépendantes : chaque travée se dilate autour de son milieu (appareils identiques aux deux abouts)
+  const iso = p.tablier.continuite === "isostatique" && p.tablier.travees.length > 1;
+  const tr = p.tablier.travees;
+  const demiTravee = (i: number) => Math.max(...[i - 1, i].filter((k) => k >= 0 && k < tr.length).map((k) => (tr[k] ?? 0) / 2));
   const appareils: VerifAppareils[] = p.appuis.map((appui, i) => {
     const xi = positions[i] ?? 0;
-    const distance = Math.abs(xi - x0);
+    const distance = iso ? demiTravee(i) : Math.abs(xi - x0);
     const dT = alpha * deltaT * distance;
     const dDiff = retraitFluage * distance;
     const rx = r.directions.x.lbdp.appuis[i];
@@ -163,7 +167,7 @@ export function verifierAppuis(p: Projet, a: ActionSismique, m: Modele, r: Analy
       application: `${tex(alpha * 1e5, 2)}\\cdot 10^{-5} \\times ${tex(deltaT, 1)} \\times ${tex(distance, 3)}, \\quad ${tex(retraitFluage * 1e4, 2)}\\cdot 10^{-4} \\times ${tex(distance, 3)}`,
       resultat: { symbole: "d_T ;\\ d_{diff}", valeur: `${nombre(dT * 100, 2)} cm ; ${nombre(dDiff * 100, 2)} cm` },
       references: ["deplacements_service"],
-      commentaire: `Point fixe x0 = ${nombre(x0, 3)} m (centre des raideurs longitudinales). Charges permanentes : ${permanentes.source === "saisie" ? "calcul de service saisi" : "poutre continue (estimation)"} — Nmax = ${nombre(permanentes.Nmax, 3)} MN, Nmin = ${nombre(permanentes.Nmin, 3)} MN, rotation ${nombre(permanentes.rotation * 1000, 2)}·10⁻³ rad.`,
+      commentaire: `${iso ? "Travées indépendantes : dilatation de chaque travée autour de son milieu (demi-travée la plus longue)." : `Point fixe x0 = ${nombre(x0, 3)} m (centre des raideurs longitudinales).`} Charges permanentes : ${permanentes.source === "saisie" ? "calcul de service saisi" : "poutre continue (estimation)"} — Nmax = ${nombre(permanentes.Nmax, 3)} MN, Nmin = ${nombre(permanentes.Nmin, 3)} MN, rotation ${nombre(permanentes.rotation * 1000, 2)}·10⁻³ rad.`,
       niveau: permanentes.source === "poutre continue" ? "info" : undefined,
     });
 
@@ -367,7 +371,8 @@ export function verifierAppuis(p: Projet, a: ActionSismique, m: Modele, r: Analy
     if (!v) return;
     const Leff = v.service.distance;
     const deg = Math.min(epsE * Leff, 2 * a.dg);
-    const des = dE + v.service.dDiff + 0.5 * v.service.dT;
+    const dEi = iso ? r.directions.x.lbdp.appuis[i]?.dTablier ?? dE : dE;
+    const des = dEi + v.service.dDiff + 0.5 * v.service.dT;
     const lm = 0.4;
     const lov = lm + deg + des;
     // Recouvrement disponible : du nu avant du sommier à l'extrémité du tablier.
@@ -391,33 +396,33 @@ export function verifierAppuis(p: Projet, a: ActionSismique, m: Modele, r: Analy
       id: `${c.id}_lov`,
       titre: `${c.id} — longueur minimale de repos d'appui`,
       formule: "l_{ov} = l_m + d_{eg} + d_{es}, \\quad d_{eg} = \\dfrac{2\\,d_g}{L_g}\\,L_{eff} \\le 2\\,d_g, \\quad d_{es} = d_E + d_{diff} + 0{,}5\\,d_T",
-      application: `0{,}40 + \\dfrac{2 \\times ${tex(a.dg, 4)}}{${tex(Lg, 0)}} \\times ${tex(Leff, 3)} + (${tex(dE, 4)} + ${tex(v.service.dDiff, 4)} + 0{,}5 \\times ${tex(v.service.dT, 4)})`,
+      application: `0{,}40 + \\dfrac{2 \\times ${tex(a.dg, 4)}}{${tex(Lg, 0)}} \\times ${tex(Leff, 3)} + (${tex(dEi, 4)} + ${tex(v.service.dDiff, 4)} + 0{,}5 \\times ${tex(v.service.dT, 4)})`,
       resultat: { symbole: "l_{ov}", valeur: lov, unite: "m", decimales: 3 },
       references: ["lov_repos_appui", "Lg", "dg"],
-      commentaire: `Leff = distance au point fixe (aucune liaison rigide). Recouvrement disponible (nu du sommier → extrémité du tablier) : ${nombre(disponible, 2)} m.`,
+      commentaire: `${iso ? "Leff = demi-travée (travée de rive indépendante sur appareils)." : "Leff = distance au point fixe (aucune liaison rigide)."} Recouvrement disponible (nu du sommier → extrémité du tablier) : ${nombre(disponible, 2)} m.`,
     });
 
     // Joint de chaussée.
-    const souffle = 2 * dE + 2 * v.service.dT + v.service.dDiff;
+    const souffle = 2 * dEi + 2 * v.service.dT + v.service.dDiff;
     const service = v.service.dDiff + 0.5 * v.service.dT;
     const cat = p.site.categorie;
     const regle =
       cat === "I" || cat === "II"
         ? "Catégorie II : séisme pouvant être ignoré pour le joint (about et culée non endommagés)."
-        : dE <= 0.02
+        : dEi <= 0.02
           ? "dE ≤ 2 cm : joint dimensionné au séisme ultime."
           : "dE > 2 cm : souffle = souffle de service + 0,4 × souffle sismique (séisme de service), garde-grève fusible au-delà.";
-    const souffleRetenu = cat === "I" || cat === "II" ? 2 * v.service.dT + v.service.dDiff : dE <= 0.02 ? souffle : 2 * service + 0.4 * 2 * dE;
+    const souffleRetenu = cat === "I" || cat === "II" ? 2 * v.service.dT + v.service.dDiff : dEi <= 0.02 ? souffle : 2 * service + 0.4 * 2 * dEi;
     const faceGG = c.sommier.long - c.poteaux.cote / 2 - c.sommier.debordAvant - c.gardeGreve.retrait - c.gardeGreve.epaisseur;
     const jeuGardeGreve = faceGG - c.excentrementAppui - p.tablier.debordAbout;
-    const dEdJoint = dE + v.service.dDiff + 0.5 * v.service.dT;
-    joints.push({ id: c.id, dE, dG: v.service.dDiff, dT: v.service.dT, souffle, souffleRetenu, regle, jeuGardeGreve, dEd: dEdJoint });
+    const dEdJoint = dEi + v.service.dDiff + 0.5 * v.service.dT;
+    joints.push({ id: c.id, dE: dEi, dG: v.service.dDiff, dT: v.service.dT, souffle, souffleRetenu, regle, jeuGardeGreve, dEd: dEdJoint });
     lignesJoints.push(
       {
         id: `${c.id}_souffle`,
         titre: `${c.id} — souffle sismique total du joint`,
         formule: "\\text{souffle} = 2\\,d_E + 2\\,d_T + d_G",
-        application: `2 \\times ${tex(dE * 100, 2)} + 2 \\times ${tex(v.service.dT * 100, 2)} + ${tex(v.service.dDiff * 100, 2)}`,
+        application: `2 \\times ${tex(dEi * 100, 2)} + 2 \\times ${tex(v.service.dT * 100, 2)} + ${tex(v.service.dDiff * 100, 2)}`,
         resultat: { symbole: "\\text{souffle}", valeur: souffle * 100, unite: "cm", decimales: 1 },
         references: ["souffle_joint", "joints_chaussee"],
         commentaire: `${regle} Souffle retenu : ${nombre(souffleRetenu * 100, 1)} cm.`,
@@ -445,6 +450,65 @@ export function verifierAppuis(p: Projet, a: ActionSismique, m: Modele, r: Analy
       references: ["joints_chaussee"],
     });
   });
+
+  // --- Travées indépendantes : repos d'appui sur les piles (EN 1998-2 6.6.4) et ouverture des joints ------------------
+  if (iso) {
+    p.appuis.forEach((appui, i) => {
+      if (appui.type !== "pile") return;
+      const pile = appui as Pile;
+      const rx = r.directions.x.lbdp.appuis[i];
+      const dTete = rx?.dTete ?? 0;
+      // une valeur par travée portée (à gauche, à droite) ; Leff = demi-travée
+      const cotes = [i - 1, i].filter((k) => k >= 0 && k < tr.length).map((k) => {
+        const Leff = (tr[k] ?? 0) / 2;
+        const deg = Math.min(epsE * Leff, 2 * a.dg);
+        const dRow = (rx as { dTablier?: number } | undefined)?.dTablier ?? dE;
+        const dDiff = retraitFluage * Leff, dT = alpha * deltaT * Leff;
+        const des = dRow + dDiff + 0.5 * dT;
+        return { k, Leff, deg, des, lov: 0.4 + deg + des + dTete };
+      });
+      const lov = Math.max(...cotes.map((c) => c.lov));
+      const disponible = pile.reposDisponible;
+      const c0 = cotes.reduce((b, c) => (c.lov > b.lov ? c : b), cotes[0]!);
+      repos.push({ id: pile.id, lm: 0.4, deg: c0.deg, des: c0.des + dTete, lov, disponible: disponible ?? NaN, Leff: c0.Leff });
+      criteres.push({
+        id: `${pile.id}_repos`,
+        appui: pile.id,
+        libelle: "Travées indépendantes — repos d'appui sur pile : lov = lm + deg + des + dE,tête ≤ recouvrement disponible",
+        valeur: lov,
+        limite: disponible ?? null,
+        unite: "m",
+        etat: disponible === undefined ? "info" : lov <= disponible ? "ok" : "non_verifie",
+        references: ["lov_repos_appui", "Lg"],
+        commentaire: disponible === undefined ? "Recouvrement disponible sur la tête de pile non saisi." : undefined,
+        conseils: disponible === undefined || lov <= disponible ? undefined : [
+          `Élargir la tête de pile (chevêtre) de ${nombre(2 * (lov - disponible) * 100, 1)} cm, ou réduire le déplacement des travées (appareils plus raides), ou prévoir des dispositifs anti-chute (EN 1998-2 § 6.6.4 et 6.6.3).`,
+        ],
+      });
+      lignesRepos.push({
+        id: `${pile.id}_lov`,
+        titre: `${pile.id} — longueur minimale de repos d'appui (travées indépendantes)`,
+        formule: "l_{ov} = l_m + d_{eg} + d_{es} + d_{E,tête}, \\quad d_{eg} = \\dfrac{2\\,d_g}{L_g}\\,\\dfrac{L}{2} \\le 2\\,d_g, \\quad d_{es} = d_E + d_{diff} + 0{,}5\\,d_T",
+        application: `0{,}40 + ${tex(c0.deg, 4)} + ${tex(c0.des, 4)} + ${tex(dTete, 4)}`,
+        resultat: { symbole: "l_{ov}", valeur: lov, unite: "m", decimales: 3 },
+        references: ["lov_repos_appui", "Lg", "dg"],
+        commentaire: `Appui d'une travée sur une pile intermédiaire : le déplacement sismique de la tête de pile s'ajoute (EN 1998-2 6.6.4). ${disponible === undefined ? "Recouvrement disponible non saisi." : `Recouvrement disponible de chaque côté : ${nombre(disponible, 2)} m.`}`,
+        niveau: disponible !== undefined && lov > disponible ? "alerte" : undefined,
+      });
+      if (rx?.dJoint !== undefined) {
+        const souffle = rx.dJoint + 2 * alpha * deltaT * c0.Leff + retraitFluage * 2 * c0.Leff;
+        lignesJoints.push({
+          id: `${pile.id}_joint`,
+          titre: `${pile.id} — ouverture du joint entre travées`,
+          formule: "\\text{souffle} = d_{E,rel} + d_{T} + d_G \\ \\text{(deux demi-travées)}",
+          application: `${tex(rx.dJoint * 100, 2)} + ${tex(2 * alpha * deltaT * c0.Leff * 100, 2)} + ${tex(retraitFluage * 2 * c0.Leff * 100, 2)}`,
+          resultat: { symbole: "\\text{souffle}", valeur: souffle * 100, unite: "cm", decimales: 1 },
+          references: ["souffle_joint", "joints_chaussee"],
+          commentaire: "Déplacement relatif sismique des deux abouts (combinaison modale), dilatation et retrait des deux demi-travées.",
+        });
+      }
+    });
+  }
 
   const note: SectionNote[] = [
     { id: "appareils", titre: "Appareils d'appui", lignes },

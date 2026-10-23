@@ -195,7 +195,11 @@ function baseMethode(p: Projet, a: ActionSismique, r: Analyse, s: SourcesEfforts
     dTete: p.appuis.map((_, i) => ({ x: r.directions.x.lbdp.appuis[i]?.dTete ?? 0, y: r.directions.y.lbdp.appuis[i]?.dTete ?? 0 })),
     dApp: p.appuis.map((_, i) => ({ x: r.directions.x.lbdp.appuis[i]?.dAppareils ?? 0, y: r.directions.y.lbdp.appuis[i]?.dAppareils ?? 0 })),
     q: qAe, T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T }, M: r.M, methode: "mode_fondamental",
-    remarques: [
+    remarques: p.tablier.continuite === "isostatique" && p.tablier.travees.length > 1 ? [
+      "Travées indépendantes : modèle dynamique à travées séparées (une translation par travée en X, une poutre par travée en Y, piles en console, une rangée d'appareils par about), analyse spectrale multimodale (EN 1998-2 4.2.1) ; efforts transmis en tête d'appui (somme des deux rangées sur une pile), propriétés limites supérieures (UBDP), combinaison des directions 100/30/30.",
+      "Réactions verticales sismiques forfaitaires de chaque travée sur deux appuis (b = 0,41, guide Cerema 2015), cumulées sur les piles.",
+      "Inertie propre des fûts non comprise : à ajouter au pied des appuis si elle n'est pas négligeable.",
+    ] : [
       "Efforts horizontaux transmis par le tablier en tête d'appui, propriétés limites supérieures (UBDP), combinaison des directions 100/30/30 (EN 1998-2 4.2.1.4).",
       "Réactions verticales sismiques forfaitaires (guide Cerema 2015) ; nulles si la méthode n'est pas applicable.",
       "Inertie propre des fûts non comprise : à ajouter au pied des appuis si elle n'est pas négligeable.",

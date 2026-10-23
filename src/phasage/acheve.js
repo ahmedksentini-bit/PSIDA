@@ -16,7 +16,12 @@
  *    par bloc rectangulaire sur les rectangles de la section, câbles avec allongement préalable et palier f_pd, armatures
  *    passives de complément et effort tranchant (§ 6.2.3 : V_pd des câbles inclinés, effet Résal de la membrure inclinée des
  *    caissons de hauteur variable, § 6.2.1 (1)) ;
- *  - réactions d'appui du tablier entier, transmises à l'onglet Appuis.
+ *  - réactions d'appui du tablier entier, transmises à l'onglet Appuis ;
+ *  - séisme vertical sur le tablier précontraint (EN 1998-2 § 4.1.7(2)P, option o.spectreV) : analyse spectrale
+ *    multimodale de la poutre continue (§ 4.2.1 ; rigidité condensée sur les translations, masses W/g recalées sur les
+ *    réactions permanentes, modes jusqu'à 90 % de la masse, CQC à ξ = 2 %), période de Rayleigh en contrôle ;
+ *    combinaison sismique G + P ± E_z (ψ₂ = 0 pour le trafic), ascendante « à vide » : traction des fibres, compression,
+ *    et ELU de flexion.
  * Unités : m, kN, kN·m, MPa (traction positive).
  */
 import { PoutreContinue, enveloppe } from '../mixte/trafic.js';
@@ -25,6 +30,7 @@ import { betonEC2 } from './fluage.js';
 import { lm1, notionalLanes, EC_ALPHA } from '../loads_ec.js';
 import { etriersEC2 } from '../beams/design.js';
 import { beamDeck, kTorsion } from '../beams/index.js';
+import { solve, jacobiSym } from '../linalg.js';
 
 const fcdOf = fck => 0.85 * fck / 1.5;
 
@@ -80,6 +86,46 @@ export function structureAchevee(out, o = {}) {
   xs.push(els[els.length - 1].x1);
   const appX = fleau ? [0, p.a, 3 * p.a, 4 * p.a] : Array.from({ length: p.n + 1 }, (_, s) => s * p.L);
   const PC = new PoutreContinue(xs, EI, appX);
+  // ---- séisme vertical : poids nodaux (géométrie des éléments, total recalé sur les réactions permanentes du calcul par
+  //      phases), déformée sous le poids, période de Rayleigh, forces sismiques équivalentes
+  let sisV = null;
+  if (o.spectreV) {
+    const nN = xs.length, W = new Array(nN).fill(0), g0 = 9.81;
+    const aireReelle = el => (fleau ? el.A : modele.barres[el.k].A + modele.barres[el.kH].A);
+    for (let e = 0; e < nN - 1; e++) { const w = aireReelle(els[elOf[e]]) * (xs[e + 1] - xs[e]); W[e] += w / 2; W[e + 1] += w / 2; }
+    const nPr = fleau ? 1 : Math.max(2, Math.round(o.nPoutres || 4)), iSup0 = modele.phases.length - 1;
+    const Gsum = appX.reduce((acc, xa) => { let t = 0; nd.forEach((n0, i) => { if (Math.abs(n0[0] - xa) < 1e-6) t += r.final.reactions[3 * i + 1] || 0; }); return acc + Math.abs(t); }, 0);
+    const k0 = Gsum / W.reduce((a, b) => a + b, 0); for (let m = 0; m < nN; m++) W[m] *= k0;   // kN par nœud, par poutre (ou caisson)
+    const F = new Array(2 * nN).fill(0); W.forEach((w, m) => { F[2 * m] = w; });
+    const u = solve(PC.K.map(row => row.slice()), F), dv = W.map((_, m) => u[2 * m]);
+    const sWd = W.reduce((a, w, m) => a + w * dv[m], 0), sWd2 = W.reduce((a, w, m) => a + w * dv[m] ** 2, 0);
+    const TR = 2 * Math.PI * Math.sqrt(sWd2 / (g0 * sWd));   // période de Rayleigh (contrôle)
+    // analyse modale verticale : rigidité condensée sur les translations des nœuds libres (rotations éliminées), masses
+    // concentrées W/g ; modes jusqu'à 90 % de la masse, combinaison CQC (ξ = 2 %, EN 1998-2 éq. 4.9)
+    const libres = W.map((_, m) => m).filter(m => !PC.iApp.includes(m)), nl = libres.length;
+    const K = PC.K, Krr = Array.from({ length: nN }, (_, i) => Array.from({ length: nN }, (_, j) => K[2 * i + 1][2 * j + 1]));
+    const X = libres.map(j => solve(Krr, Array.from({ length: nN }, (_, i) => K[2 * i + 1][2 * j])));   // K_rr⁻¹ K_rt (colonnes)
+    const Kt = libres.map(i => libres.map((j, cj) => K[2 * i][2 * j] - Array.from({ length: nN }, (_, r2) => K[2 * i][2 * r2 + 1] * X[cj][r2]).reduce((a, b) => a + b, 0)));
+    const Mt = libres.map(m => W[m] / g0), sq = Mt.map(Math.sqrt);
+    const Sm = Kt.map((row, i) => row.map((k, j) => k / (sq[i] * sq[j])));
+    for (let i = 0; i < nl; i++) for (let j = i + 1; j < nl; j++) { const a = (Sm[i][j] + Sm[j][i]) / 2; Sm[i][j] = Sm[j][i] = a; }
+    const E = jacobiSym(Sm), ordre = E.valeurs.map((v, k) => k).sort((a, b) => E.valeurs[a] - E.valeurs[b]);
+    const Mtot = Mt.reduce((a, b) => a + b, 0), modes = [];
+    let cumul = 0;
+    for (const k of ordre) {
+      if (cumul >= 0.9 * Mtot) break;
+      const w2 = E.valeurs[k]; if (!(w2 > 0)) continue;
+      const phi = libres.map((_, i) => E.V[i][k] / sq[i]), gam = phi.reduce((a, f, i) => a + f * Mt[i], 0), Meff = gam * gam;
+      const T = 2 * Math.PI / Math.sqrt(w2), Sv = o.spectreV(T);
+      const f = new Array(nN).fill(0); libres.forEach((m, i) => { f[m] = Mt[i] * gam * Sv * phi[i]; });
+      modes.push({ T, omega: Math.sqrt(w2), Meff, Sv, f }); cumul += Meff;
+    }
+    const xiV = 0.02, rho = (wi, wj) => { const r2 = wj / wi; return 8 * xiV * xiV * (1 + r2) * r2 ** 1.5 / ((1 - r2 * r2) ** 2 + 4 * xiV * xiV * r2 * (1 + r2) ** 2); };
+    const cqc = vals => Math.sqrt(Math.max(0, vals.reduce((a, vi, i) => a + vals.reduce((b, vj, j) => b + vi * vj * (i === j ? 1 : rho(modes[i].omega, modes[j].omega)), 0), 0)));
+    const dom = modes.reduce((a, b) => (b.Meff > a.Meff ? b : a), modes[0]);
+    sisV = { T: dom.T, TR, Sve: dom.Sv, W: Gsum, fleche: Math.max(...dv), participation: cumul / Mtot, modes, cqc,
+      FEtot: cqc(modes.map(md => md.f.reduce((a, b) => a + b, 0))) };
+  }
 
   // ---- charges de trafic de la poutre étudiée (ou du caisson entier)
   const ch = o.chaussee || { y1: -4, y2: 4 }, w = ch.y2 - ch.y1, NL = notionalLanes(w), L1 = lm1(NL.n, alpha);
@@ -160,7 +206,17 @@ export function structureAchevee(out, o = {}) {
         const qp = g.flatMap(gv => MT.map(mt => gv + 0.5 * sQ(mt)));
         return { nom, prec, car: [Math.min(...car), Math.max(...car)], freq: [Math.min(...freq), Math.max(...freq)], qp: [Math.min(...qp), Math.max(...qp)] };
       });
-      sections.push({ x, q, xi, el, MG, MGext, MGch, Mhyp, VG, eM, VQ, MT, fib });
+      let sis = null;
+      if (sisV) {
+        const lm = PC.ligneM(x), MEz = sisV.cqc(sisV.modes.map(md => md.f.reduce((a, f, m) => a + f * lm[m], 0)));
+        const fibS = el.fibres.map(([nom, y, prec]) => {
+          const yy = y - (el.dG || 0), sQ = M => -M * yy / el.I / 1000 * (nom.startsWith('hourdis') ? el.nH : 1), g = SG.map(S => S[nom] ?? 0);
+          const v = g.flatMap(gv => [gv + sQ(MEz), gv - sQ(MEz)]);
+          return { nom, prec, min: Math.min(...v), max: Math.max(...v) };
+        });
+        sis = { MEz, fib: fibS };
+      }
+      sections.push({ x, q, xi, el, MG, MGext, MGch, Mhyp, VG, eM, VQ, MT, fib, sis });
     }
   });
 
@@ -186,7 +242,15 @@ export function structureAchevee(out, o = {}) {
     // armatures passives nécessaires en complément des câbles : face supérieure (moment négatif : continuité du hourdis
     // des poutres, hourdis supérieur du caisson) et face inférieure (moment positif)
     const besoin = (signe, Med, y) => { if (Med <= 0 || (signe > 0 ? rP.M : rN.M) >= Med) return 0; let lo = 0, hi = 0.08; for (let it = 0; it < 60; it++) { const m = (lo + hi) / 2; if (resistanceCouches(couches, cab, [{ A: m, y }], signe, { fpd, Ep }).M >= Med) hi = m; else lo = m; } return hi; };
-    const AsCont = besoin(-1, -MEdN, yArm), AsInf = besoin(1, MEdP, o.cs ?? 0.05);
+    let AsCont = besoin(-1, -MEdN, yArm), AsInf = besoin(1, MEdP, o.cs ?? 0.05);
+    // situation sismique : G + P ± E_z (γ = 1, effets hyperstatiques de la précontrainte compris), mêmes résistances
+    let sis = null;
+    if (s.sis) {
+      const MG1 = [0, 1].map(k => s.MGch[k] + s.Mhyp[k]), MEdEP = Math.max(...MG1) + s.sis.MEz, MEdEN = Math.min(...MG1) - s.sis.MEz;
+      const AsInfE = besoin(1, MEdEP, o.cs ?? 0.05), AsContE = besoin(-1, -MEdEN, yArm);
+      sis = { MEdEP, MEdEN, AsInfE, AsContE, gouverne: AsInfE > AsInf + 1e-7 || AsContE > AsCont + 1e-7 };
+      AsInf = Math.max(AsInf, AsInfE); AsCont = Math.max(AsCont, AsContE);
+    }
     // effort tranchant
     const VEd0 = 1.35 * s.VG + 1.35 * s.VQ, cs2 = cablesAt(pF, el, s.xi), Vpd = Math.abs(cs2.reduce((a, c) => a + c.N * Math.sin(Math.atan(c.pente)), 0));
     const Pn = cs2.reduce((a, c) => a + c.N, 0), z = 0.9 * (H - Math.min(...cab.map(c => Math.min(c.y, H - c.y)), 0.1));
@@ -194,7 +258,7 @@ export function structureAchevee(out, o = {}) {
     if (fleau) { const dh = Math.abs((R.h(Math.min(1, Math.abs(el.x1 - nearestPile(el.x1, p)) / p.a)) - R.h(Math.min(1, Math.abs(el.x0 - nearestPile(el.x0, p)) / p.a))) / (el.x1 - el.x0)); VRes = Math.abs(Math.min(MEdN, 0)) / Math.max(z, 0.5) * dh; }
     const VEd = Math.max(VEd0 - Vpd - VRes, 0), bw = fleau ? 2 * (p.caisson ? p.caisson.bw : 0.4) : (p.forme ? p.forme.bw : 0.2);
     const V = etriersEC2({ VEd, bw, bwNom: bw - 0.5 * 0.08 * (fleau ? 2 : 1), z: Math.max(z, 0.3), fck, fyk, scp: Pn / el.A / 1000 });
-    return { x: s.x, MEdP, MEdN, MRdP: rP.M, MRdN: rN.M, AsCont, AsInf, VEd0, Vpd, VRes, VEd, V };
+    return { x: s.x, MEdP, MEdN, MRdP: rP.M, MRdN: rN.M, AsCont, AsInf, VEd0, Vpd, VRes, VEd, V, sis };
   });
 
   // ---- synthèse des vérifications ELS / ELU
@@ -211,10 +275,23 @@ export function structureAchevee(out, o = {}) {
   add(`Armatures passives inférieures nécessaires à l'ELU [cm²${fleau ? '' : ' par poutre'}]`, aI.AsInf * 1e4, aI.AsInf * 1e4, true, 'complément des câbles en moment positif', aI.x);
   add(`Armatures passives supérieures nécessaires à l'ELU [cm²${fleau ? '' : ' par poutre, continuité du hourdis'}]`, aS.AsCont * 1e4, aS.AsCont * 1e4, true, 'complément des câbles en moment négatif', aS.x);
   const eV = elu.reduce((a, b) => (b.VEd / b.V.VRdmax > a.VEd / a.V.VRdmax ? b : a)); add(`ELU effort tranchant : V_Ed / V_Rd,max (cot θ = ${eV.V.cot.toFixed(2)})`, eV.VEd, eV.V.VRdmax, eV.V.ok, 'EN 1992-1-1 § 6.2.3', eV.x);
+  // ---- séisme vertical (EN 1998-2 § 4.1.7(2)P) : composante ascendante à vide et descendante
+  let seismeV = null;
+  if (sisV) {
+    const fS = sections.flatMap(s2 => s2.sis.fib.map(f => ({ ...f, x: s2.x })));
+    const pr = fS.filter(f => f.prec && (fleau || f.nom === 'poutre inf.' || f.nom === 'poutre sup.'));
+    const wT = pr.reduce((a, b) => (b.max > a.max ? b : a)), wCm = fS.reduce((a, b) => (b.min < a.min ? b : a));
+    add(`Séisme vertical, G + P ± E_z : traction (${wT.nom || 'caisson'})`, wT.max, fctm, wT.max <= fctm, 'EN 1998-2 § 4.1.7(2)P ; σ ≤ f_ctm : section non fissurée', wT.x);
+    add(`Séisme vertical, G + P ± E_z : compression (${wCm.nom || 'caisson'})`, wCm.min, -0.6 * fck, wCm.min >= -0.6 * fck, 'EN 1992-1-1 § 7.2 (2)', wCm.x);
+    const gv = elu.filter(e => e.sis && e.sis.gouverne);
+    add('Séisme vertical, ELU de flexion G + P ± E_z : sections où il gouverne les armatures passives', gv.length, 0, true, gv.length ? `armatures passives augmentées en ${gv.length} section(s)` : 'couvert par l\'ELU fondamental', gv.length ? gv[0].x : null);
+    const MEzMax = Math.max(...sections.map(s2 => s2.sis.MEz));
+    seismeV = { T: sisV.T, TR: sisV.TR, Sve: sisV.Sve, W: sisV.W, fleche: sisV.fleche, participation: sisV.participation, FEtot: sisV.FEtot, nModes: sisV.modes.length, modes: sisV.modes.map(md => ({ T: md.T, Meff: md.Meff, Sv: md.Sv })), MEzMax, gouverne: gv.map(e => e.x), site: o.siteV || null };
+  }
   // ---- réactions d'appui du tablier entier
   const reacG = appX.map(xa => { let s = 0; nd.forEach((n0, i) => { if (Math.abs(n0[0] - xa) < 1e-6) s += pF.reactions[3 * i + 1] || 0; }); return Math.abs(s) * nP; });
   const reactions = appX.map((xa, j) => { const eR = enveloppe(xs, PC.ligneR(j), { q: 1, essieux: [{ d: 0, P: 1 }, { d: 1.2, P: 1 }] }); const infTS = eR.max - eR.pos; return { j, G: reacG[j], TS: QT * infTS, UDL: qT * eR.pos, trott: qFw * eR.pos, infTS, infUDL: eR.pos }; });
-  return { type, nP, eta, guyon, Qb, qb, QT, qT, dTh, sections, elu, verifs, reactions, expo, fck, ok: verifs.every(v => v.ok) && elu.every(e => e.V.ok) };
+  return { type, nP, eta, guyon, Qb, qb, QT, qT, dTh, sections, elu, verifs, reactions, expo, fck, seismeV, ok: verifs.every(v => v.ok) && elu.every(e => e.V.ok) };
 }
 
 function nearestPile(x, p) { return Math.abs(x - p.a) < Math.abs(x - 3 * p.a) ? p.a : 3 * p.a; }

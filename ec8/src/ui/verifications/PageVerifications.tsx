@@ -230,7 +230,7 @@ function ReposJoints({ v }: { v: VerifAppuis }) {
                 <td className="num">{f(r.deg, 4)}</td>
                 <td className="num">{f(r.des, 4)}</td>
                 <td className="num"><strong>{f(r.lov)}</strong></td>
-                <td className="num">{f(r.disponible, 2)}</td>
+                <td className="num">{Number.isFinite(r.disponible) ? f(r.disponible, 2) : "—"}</td>
               </tr>
             ))}
           </tbody>

@@ -54,6 +54,11 @@ export interface Tablier {
   inertieVerticale?: number;
   /** Inertie de flexion transversale (axe vertical), m⁴ ; par défaut A·B²/12. Analyse multimodale. */
   inertieTransversale?: number;
+  /**
+   * Continuité du tablier : « continu » (défaut) ou « isostatique » — travées indépendantes, joint sur chaque pile,
+   * chaque travée sur ses propres appareils (deux rangées par pile, la moitié des appareils de la ligne chacune).
+   */
+  continuite?: "continu" | "isostatique";
 }
 
 export interface AppareilsElastomere {
@@ -138,6 +143,8 @@ export interface Pile {
   appareils: LigneAppareils;
   butees: Butees;
   chargesPermanentes?: ChargesPermanentes;
+  /** Travées indépendantes : recouvrement disponible de chaque côté de l'axe, de l'extrémité de la travée au bord de la tête de pile (m). */
+  reposDisponible?: number;
 }
 
 export interface Culee {

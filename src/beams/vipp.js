@@ -21,6 +21,7 @@
  *  7. flèches et contre-flèches, pertes par câble, quantités et diagnostic de conception (guide Sétra VIPP 1996).
  * Unités : m, kN, kN·m ; contraintes en MPa, traction positive (comme le module de phasage).
  */
+import { momentVerticalIsostatique } from '../seisme_vertical.js';
 import { calculPhasage } from '../phasage/phasage.js';
 import { betonEC2 } from '../phasage/fluage.js';
 import { sectionVIPP, contourVIPP, largeurEfficaceT } from './vipp_section.js';
@@ -263,6 +264,24 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
     elu.push({ x, MEdE, MEdF, MEd, MRd: r.M, As, AsMin, xn: r.x, ok: r.M >= MEd - 1e-6, xd: r.xd });
   }
 
+  // ---- séisme vertical du tablier précontraint (EN 1998-2 § 4.1.7(2)P) : travée isostatique, modes symétriques 1, 3, 5,
+  //      masse des charges permanentes de la poutre (w_G), section composée ; combinaison sismique G + P ± E_z (ψ₂ = 0)
+  let seismeV = null;
+  if (p.spectreV) {
+    const g0 = 9.81, mL = wG / g0, EIc = bP.Ecm * 1000 * Cc.I;
+    const MV = momentVerticalIsostatique({ m: mL, EI: EIc, L, spectreV: p.spectreV });
+    const lignes = sections.map(r => {
+      const MEz = MV.M(r.x), qE = sigQ(MEz), cas = [r.permS, r.perm].flatMap(pm => [add(pm, qE), add(pm, qE, -1)]);
+      const fib = k => cas.map(c => c[k]).filter(v => v != null);
+      return { x: r.x, MEz, tMax: Math.max(...fib('pi'), ...fib('ps')), cMin: Math.min(...fib('pi'), ...fib('ps'), ...fib('hs')) };
+    });
+    const eluE = elu.map(e => ({ x: e.x, MEdE: Mq('G', e.x) + MV.M(e.x), MRd: e.MRd }));
+    const wt = lignes.reduce((a, b) => (b.tMax > a.tMax ? b : a)), wc = lignes.reduce((a, b) => (b.cMin < a.cMin ? b : a)), we = eluE.reduce((a, b) => (b.MEdE / b.MRd > a.MEdE / a.MRd ? b : a));
+    ver('Séisme vertical, G + P ± E_z : traction (poutre)', wt.tMax, fctm, wt.tMax <= fctm, 'EN 1998-2 § 4.1.7(2)P ; σ ≤ f_ctm : section non fissurée', wt.x);
+    ver('Séisme vertical, G + P ± E_z : compression', wc.cMin, -0.6 * fck, wc.cMin >= -0.6 * fck, 'EN 1992-1-1 § 7.2 (2)', wc.x);
+    seismeV = { modes: MV.modes, T: MV.modes[0].T, Sve: MV.modes[0].S, m: mL, EI: EIc, lignes, eluE, eluPire: we, eluOk: we.MEdE <= we.MRd + 1e-6, MEzMax: Math.max(...lignes.map(q => q.MEz)), site: p.siteV || null };
+  }
+
   // ---- effort tranchant (EC2 § 6.2.3) : étriers verticaux
   const tranchant = [];
   const fywd = p.fyk / 1.15, nu1 = 0.6 * (1 - fck / 250), fcdV = fcd(fck), rhoMin = 0.08 * Math.sqrt(fck) / p.fyk;
@@ -299,8 +318,8 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
   return {
     L, S, beff, nh, trace: tr, sigP0, P0, Ptot, pertes, modele, out, sections, verifs, elu, tranchant, fleches,
     charges: { wP, wH, wS, wG }, betons: { P: { fck, Ecm: bP.Ecm, h0: P.h0, phi: bP.phi(T.fin, T.t1), eps: bP.retrait(T.fin) }, H: { fck: fckH, Ecm: bH.Ecm, h0: H.h0, phi: bH.phi(T.fin - T.t2, T.t3 - T.t2), eps: bH.retrait(T.fin - T.t2) } },
-    dates: T, expo: p.expo, quantites: { volP, volT, kgP, ratioP }, conception, n1, n2, prad: prad ? tr.prad : null, ancrage,
-    ok: verifs.every(v => v.ok) && elu.every(e => e.ok) && tranchant.every(t => t.ok),
+    dates: T, expo: p.expo, quantites: { volP, volT, kgP, ratioP }, conception, n1, n2, prad: prad ? tr.prad : null, ancrage, seismeV,
+    ok: verifs.every(v => v.ok) && elu.every(e => e.ok) && tranchant.every(t => t.ok) && (!seismeV || seismeV.eluOk),
   };
 }
 

@@ -565,3 +565,13 @@ cadre k_D, gauchissement I_dw, diaphragmes θ = 0 ; correction des lignes d'infl
 Nomenclatures des armatures des ouvrages par phases (src/plans/nomenclature_phases.js) : poutres rendues continues (PC-FER-01)
 et voussoir courant de fléau (FL-FER-01), bordereau ISO 4066 ; manuel § 28.19. Accueil et manuel § 2.10 : pourquoi un
 ouvrage se calcule directement ou par phases.
+v0.96 : séisme des ouvrages autres que le pont-dalle. Transfert vers « Appuis seuls » (web/transfert_appuis.js) : aire de la
+structure et superstructures résiduelles (masse = poids permanent, comptée une fois), nature du tablier (poutres, caisson,
+mixte), inerties de la section réelle, nombre d'appareils ; liaisons par ligne (élastomère, fixe, glissant), appareils à pot
+retenus d'office quand aucun élastomère standard ne convient (point fixe sur la pile la plus centrale) ; fléaux : analyse
+multimodale. Travées indépendantes (VIPP, PRAD) dans le moteur Pont EC8 (ec8/src/moteur/multimodal.ts, analyse.ts,
+verif-appuis.ts) : une translation par travée en X, une poutre par travée en Y, deux rangées d'appareils par pile, repos
+d'appui sur chaque pile (EN 1998-2 § 6.6.4), ouverture des joints ; répartition horizontale de service par travée
+(src/supports/actions.js). Composante verticale des tabliers précontraints (EN 1998-2 § 4.1.7(2)P, src/seisme_vertical.js) :
+poutres continues et fléaux par analyse modale de la poutre continue (CQC, ξ = 2 %), VIPP et PRAD par les modes de la
+travée isostatique ; contraintes et ELU sous G + P ± E_z. Manuel § 16.16.

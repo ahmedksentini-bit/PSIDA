@@ -8,6 +8,7 @@ import { FORME_VIPP, sectionVIPP } from './vipp_section.js';
 import { chaineVIPP, DEFAUTS_VIPP } from './vipp.js';
 import { hourdisLocal } from './hourdis.js';
 import { entretoiseVerinage } from './entretoise.js';
+import { spectreVerticalDuFormulaire } from '../seisme_vertical.js';
 
 const nums = s => String(s ?? '').split(/[,;\s]+/).filter(Boolean).map(Number);
 const pairs = s => String(s ?? '').split(';').map(t => t.trim()).filter(Boolean).map(t => nums(t));
@@ -38,6 +39,9 @@ export function parsePoutres(d) {
     vipp.beton.decalage = h > 0 ? Math.max(0, h * (Math.exp(-4000 / (273 + T) + 13.65) - 1)) : 0;
   }
   const local = { tRev: v('pt_trev', 0.08), te: v('pt_te', 0.25), dv: v('pt_dv', 0.6), verinsRive: d.pt_vrive === undefined ? true : !!+d.pt_vrive || d.pt_vrive === 'on', fckH: v('pt_fckh', 30), c: v('pt_ch', 0.03) };
+  // séisme vertical des tabliers précontraints (EN 1998-2 § 4.1.7(2)P), quand le séisme est activé dans l'onglet Appuis
+  const sv = spectreVerticalDuFormulaire(d);
+  if (sv) { vipp.spectreV = sv.spectreV; vipp.siteV = sv.site; }
   return {
     geo, vipp, local,
     spans: nums(d.pt_spans), n: v('pt_n', 4), b1: v('pt_b1', 3.28), hd: v('pt_hd', 0.30),

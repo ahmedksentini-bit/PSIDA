@@ -3484,372 +3484,6 @@ const MODELE = [
 	}
 ];
 //#endregion
-//#region src/moteur/analyse.ts
-const BORNES = ["lbdp", "ubdp"];
-/** Interpolation linéaire dans une ligne du tableau 22 (Ψ = 0,5 à 1,0). */
-function interpoler(ligne, psi) {
-	const pts = Object.entries(ligne).map(([k, v]) => [Number(k.replace("Ψ = ", "").replace(",", ".")), v]).sort((a, b) => a[0] - b[0]);
-	const p = Math.min(Math.max(psi, pts[0]?.[0] ?? .5), pts.at(-1)?.[0] ?? 1);
-	for (let i = 1; i < pts.length; i++) {
-		const [x0, y0] = pts[i - 1] ?? [0, 0];
-		const [x1, y1] = pts[i] ?? [0, 0];
-		if (p <= x1) return y0 + (p - x0) / (x1 - x0) * (y1 - y0);
-	}
-	return pts.at(-1)?.[1] ?? NaN;
-}
-function analyse(p, a, m) {
-	const d = derives(p);
-	const M = m.masses.M;
-	const L = d.longueur;
-	const positions = d.positions;
-	const notes = {
-		conditions: [],
-		x: [],
-		y: [],
-		vertical: [],
-		combinaisons: []
-	};
-	const rapportMasse = m.masses.piles.reduce((s, x) => s + x.masseFuts, 0) / M;
-	const LsurB = L / p.tablier.largeur;
-	const conditions = [
-		{
-			id: "tablier_continu",
-			libelle: "Tablier continu, droit et à peu près rectiligne",
-			valeur: `${p.tablier.travees.length} travée(s), pont droit`,
-			respectee: true,
-			references: ["conditions_monomodal"]
-		},
-		{
-			id: "masse_piles",
-			libelle: "Masse des piles < 20 % de celle du tablier (longitudinal)",
-			valeur: `${nombre(100 * rapportMasse, 1)} %`,
-			respectee: rapportMasse < .2,
-			references: ["conditions_monomodal"],
-			conseils: rapportMasse < .2 ? void 0 : ["Choisir la méthode multimodale (onglet Méthodes) : cette condition ne vaut que pour la méthode du mode fondamental.", `Ou alléger les fûts d'au moins ${nombre(100 * (1 - .2 / rapportMasse), 0)} % (fûts plus minces, colonnes au lieu d'un voile, fûts creux) pour descendre sous 20 %.`]
-		},
-		{
-			id: "L_sur_B",
-			libelle: "Tablier rigide en transversal : L/B ≤ 4",
-			valeur: `L/B = ${nombre(LsurB, 2)}`,
-			respectee: LsurB <= 4,
-			references: ["tablier_rigide"],
-			conseils: LsurB <= 4 ? void 0 : [`Le tablier n'est pas rigide en transversal : il faudrait B ≥ L/4 = ${nombre(L / 4, 2)} m (B = ${nombre(p.tablier.largeur, 2)} m).`, "Choisir la méthode multimodale, qui tient compte de la souplesse transversale du tablier (onglet Méthodes)."]
-		}
-	];
-	const appuisY = m.directions.y.appuis;
-	const infinis = appuisY.filter((x) => x.kTotal.lbdp === Infinity);
-	const xK = infinis.length ? infinis.reduce((s, x) => s + (positions[p.appuis.findIndex((ap) => ap.id === x.id)] ?? 0), 0) / infinis.length : appuisY.reduce((s, x, i) => s + (positions[i] ?? 0) * x.kTotal.lbdp, 0) / Math.max(m.directions.y.K.lbdp, 1e-12);
-	const e0 = Math.abs(xK - L / 2);
-	const torsionAppliquee = e0 > .05 * L;
-	conditions.push({
-		id: "excentricite",
-		libelle: "Excentricité centre de raideur / centre de masse ≤ 5 % de L (sinon torsion)",
-		valeur: `e0 = ${nombre(e0, 2)} m ; 5 % L = ${nombre(.05 * L, 2)} m`,
-		respectee: !torsionAppliquee,
-		references: [
-			"conditions_monomodal",
-			"centre_raideur",
-			"torsion_excentricite"
-		],
-		conseils: !torsionAppliquee ? void 0 : ["Non bloquant : l'effet de torsion est alors ajouté automatiquement (EN 1998-2 § 4.2.2.5).", `Pour l'éviter, rapprocher le centre des raideurs transversales du milieu de l'ouvrage (e0 = ${nombre(e0, 2)} m → ≤ ${nombre(.05 * L, 2)} m) : équilibrer hauteurs, sections ou appareils des piles de part et d'autre.`]
-	});
-	for (const c of conditions) notes.conditions.push({
-		id: c.id,
-		titre: c.libelle,
-		resultat: {
-			symbole: "",
-			valeur: `${c.valeur} — ${c.respectee ? "respectée" : "non respectée"}`
-		},
-		references: c.references,
-		niveau: c.respectee ? void 0 : "alerte",
-		commentaire: c.respectee ? void 0 : c.id === "excentricite" ? "Moment de torsion ajouté aux efforts transversaux." : c.id === "L_sur_B" ? "Tablier flexible : la méthode de Rayleigh (non traitée en V1) serait plus appropriée ; résultats indicatifs." : "Hors domaine de la méthode du mode fondamental : résultats indicatifs."
-	});
-	const spectreDe = (dir) => dir === "x" ? a.spectres.calculLong : a.spectres.calculTrans;
-	const qDe = (dir) => dir === "x" ? a.q.longitudinal : a.q.transversal;
-	const directions = {};
-	for (const dir of ["x", "y"]) {
-		const nomDir = dir === "x" ? "longitudinale" : "transversale";
-		const q = qDe(dir);
-		directions[dir] = {};
-		for (const borne of BORNES) {
-			const K = m.directions[dir].K[borne];
-			const T = K === Infinity ? 0 : 2 * Math.PI * Math.sqrt(M / (K * 1e3));
-			const Sd = valeur(spectreDe(dir), T);
-			const F = M * Sd / 1e3;
-			const dEe = K === Infinity || K === 0 ? 0 : F / K;
-			const T0 = 1.25 * a.TC;
-			const muD = T < .033 ? 1 : T >= T0 ? q : Math.min((q - 1) * (T0 / T) + 1, 5 * q - 4);
-			const dE = a.eta * muD * dEe;
-			const appuis = m.directions[dir].appuis.map((ap, i) => {
-				const Fi = ap.part[borne] * F;
-				return {
-					id: ap.id,
-					x: positions[i] ?? 0,
-					F: Fi,
-					part: ap.part[borne],
-					torsion: 0,
-					dTete: ap.kSupport === Infinity ? 0 : Fi / ap.kSupport * a.eta * muD,
-					dAppareils: ap.kAppareils[borne] === Infinity || ap.kAppareils[borne] === 0 ? 0 : Fi / ap.kAppareils[borne] * a.eta * muD
-				};
-			});
-			if (dir === "y" && torsionAppliquee) {
-				const Mt = (e0 + .05 * L) * F;
-				const finis = m.directions.y.appuis.map((ap, i) => ({
-					k: ap.kTotal[borne],
-					dx: (positions[i] ?? 0) - xK
-				}));
-				const J = finis.reduce((s, x) => s + (Number.isFinite(x.k) ? x.k * x.dx * x.dx : 0), 0);
-				appuis.forEach((ap, i) => {
-					const f = finis[i];
-					if (!f || !Number.isFinite(f.k) || J === 0) return;
-					ap.torsion = Mt * f.k * Math.abs(f.dx) / J;
-					ap.F += ap.torsion;
-				});
-			}
-			directions[dir][borne] = {
-				K,
-				T,
-				Sd,
-				F,
-				dEe,
-				muD,
-				dE,
-				appuis
-			};
-		}
-		const L_ = directions[dir].lbdp;
-		const U = directions[dir].ubdp;
-		const etiquette = (b) => m.elastomeres ? b === "lbdp" ? "^{LBDP}" : "^{UBDP}" : "";
-		for (const borne of m.elastomeres ? BORNES : ["lbdp"]) {
-			const r = directions[dir][borne];
-			const K = r.K;
-			notes[dir].push({
-				id: `T_${dir}_${borne}`,
-				titre: `Période propre ${nomDir}${m.elastomeres ? ` (${borne.toUpperCase()})` : ""}`,
-				formule: "T = 2\\pi\\sqrt{\\dfrac{M}{K}}",
-				application: K === Infinity ? "K \\to \\infty" : `2\\pi\\sqrt{\\dfrac{${tex(M * 1e3, 0)}}{${tex(K * 1e6, 0)}}}`,
-				resultat: {
-					symbole: `T${etiquette(borne)}`,
-					valeur: r.T,
-					unite: "s",
-					decimales: 3
-				},
-				references: ["tablier_rigide"],
-				commentaire: K === Infinity ? "Tablier bloqué sur un appui rigide : période nulle." : void 0
-			}, {
-				id: `Sd_${dir}_${borne}`,
-				titre: `Accélération spectrale (q = ${nombre(q, 2)})`,
-				resultat: {
-					symbole: `S_d(T)${etiquette(borne)}`,
-					valeur: r.Sd,
-					unite: "m/s²",
-					decimales: 3
-				},
-				references: ["Sd"],
-				commentaire: r.T < a.TB ? "T < TB." : r.T <= a.TC ? "Plateau du spectre (TB ≤ T ≤ TC)." : r.T <= a.TD ? "Branche en 1/T (TC ≤ T ≤ TD)." : "Branche en 1/T² (T > TD)."
-			}, {
-				id: `F_${dir}_${borne}`,
-				titre: "Effort sismique total",
-				formule: "F = M\\,S_d(T)",
-				application: `${tex(M, 1)}\\ \\text{t} \\times ${tex(r.Sd, 3)}`,
-				resultat: {
-					symbole: `F${etiquette(borne)}`,
-					valeur: r.F,
-					unite: "MN",
-					decimales: 3
-				},
-				references: ["tablier_rigide"]
-			}, {
-				id: `d_${dir}_${borne}`,
-				titre: "Déplacement sismique du tablier",
-				formule: "d_E = \\eta\\,\\mu_d\\,d_{Ee}, \\qquad d_{Ee} = \\dfrac{F}{K}",
-				application: K === Infinity ? "0" : `${tex(a.eta, 3)} \\times ${tex(r.muD, 3)} \\times \\dfrac{${tex(r.F, 3)}}{${tex(K, 2)}}`,
-				resultat: {
-					symbole: `d_E${etiquette(borne)}`,
-					valeur: r.dE * 100,
-					unite: "cm",
-					decimales: 2
-				},
-				references: ["mu_d", "tablier_rigide"],
-				commentaire: `μd = ${nombre(r.muD, 3)}${q === 1 ? " (q = 1)" : ""}.`
-			});
-		}
-		for (const ap of U.appuis) {
-			const apL = L_.appuis.find((x) => x.id === ap.id);
-			notes[dir].push({
-				id: `F_${dir}_${ap.id}`,
-				titre: `${ap.id} — effort ${dir === "x" ? "longitudinal" : "transversal"} transmis par le tablier`,
-				formule: "F_i = \\dfrac{k_i}{K}\\,F" + (ap.torsion > 0 ? " + \\dfrac{M_t\\,k_i\\,|x_i - x_K|}{\\sum k_j (x_j - x_K)^2}" : ""),
-				application: `${tex(ap.part, 4)} \\times ${tex(U.F, 3)}` + (ap.torsion > 0 ? ` + ${tex(ap.torsion, 3)}` : ""),
-				resultat: {
-					symbole: `F_{${ap.id}}${etiquette("ubdp")}`,
-					valeur: ap.F,
-					unite: "MN",
-					decimales: 3
-				},
-				references: ap.torsion > 0 ? ["tablier_rigide", "torsion_excentricite"] : ["tablier_rigide"],
-				commentaire: `Déplacement de la tête d'appui${m.elastomeres ? " (LBDP)" : ""} : ${nombre((apL?.dTete ?? 0) * 100, 2)} cm ; distorsion des appareils : ${nombre((apL?.dAppareils ?? 0) * 100, 2)} cm.`
-			});
-		}
-	}
-	const t = p.tablier.travees;
-	const n = t.length;
-	const Lp = Math.max(...t);
-	const psi = n >= 2 ? (t[0] ?? 0) / Lp : 1;
-	const egal = (u, v) => Math.abs(u - v) <= .05 * Math.max(u, v);
-	const regulier = n === 1 || egal(t[0] ?? 0, t[n - 1] ?? 0) && t.slice(1, -1).every((x) => egal(x, Lp)) && psi >= .5 - 1e-9 && psi <= 1 + 1e-9;
-	const aV = a.plateaux.Sve;
-	const mu = m.masses.masseLineique;
-	const reactions = [];
-	let motif = "";
-	if (!regulier) motif = "Travées de rive inégales, travées intermédiaires différentes ou Ψ hors de [0,5 ; 1] : méthode forfaitaire non applicable.";
-	else {
-		const tab = TABLEAU_B_VERTICAL.valeurs;
-		const bDe = (i) => {
-			if (n === 1) return .41;
-			const culee = i === 0 || i === n;
-			if (n === 2) return culee ? interpoler(i === 0 ? tab["2 travées"]?.R1 ?? {} : tab["2 travées"]?.R3 ?? {}, psi) : interpoler(tab["2 travées"]?.R2 ?? {}, psi);
-			if (n === 3) return interpoler((culee ? tab["3 travées"]?.R1 : tab["3 travées"]?.R2) ?? {}, psi);
-			const g = tab["4 travées et plus"] ?? {};
-			if (culee) return interpoler(g["R1 (culée)"] ?? {}, psi);
-			if (i === 1 || i === n - 1) return interpoler(g["R2 (1re pile)"] ?? {}, psi);
-			return interpoler(g["Ri (piles intermédiaires)"] ?? {}, psi);
-		};
-		p.appuis.forEach((ap, i) => {
-			const b = bDe(i);
-			reactions.push({
-				id: ap.id,
-				b,
-				R: aV * b * mu * Lp / 1e3
-			});
-		});
-		motif = `${n} travée(s), Ψ = ${nombre(psi, 3)}.`;
-	}
-	notes.vertical.push({
-		id: "a_vertical",
-		titre: "Accélération du plateau vertical",
-		formule: "a = a_{vg}\\,S_T \\cdot 3{,}0\\,\\eta",
-		resultat: {
-			symbole: "a",
-			valeur: aV,
-			unite: "m/s²",
-			decimales: 3
-		},
-		references: ["reactions_verticales", "Sve"]
-	});
-	for (const r of reactions) notes.vertical.push({
-		id: `Rv_${r.id}`,
-		titre: `${r.id} — réaction verticale sous séisme vertical`,
-		formule: "R_i = \\pm\\,a\\,b\\,\\mu\\,L",
-		application: `${tex(aV, 3)} \\times ${tex(r.b, 3)} \\times ${tex(mu, 3)}\\ \\text{t/m} \\times ${tex(Lp, 3)}`,
-		resultat: {
-			symbole: `R_{${r.id}}`,
-			valeur: r.R,
-			unite: "MN",
-			decimales: 3
-		},
-		references: ["reactions_verticales", "b_reactions_verticales"]
-	});
-	if (!regulier) notes.vertical.push({
-		id: "vertical_na",
-		titre: "Méthode forfaitaire",
-		resultat: {
-			symbole: "",
-			valeur: "non applicable"
-		},
-		references: ["reactions_verticales"],
-		commentaire: motif,
-		niveau: "alerte"
-	});
-	const combinaisons = p.appuis.map((ap, i) => {
-		const Fx = directions.x.ubdp.appuis[i]?.F ?? 0;
-		const Fy = directions.y.ubdp.appuis[i]?.F ?? 0;
-		const Fz = reactions[i]?.R ?? 0;
-		return {
-			id: ap.id,
-			cas: [
-				{
-					nom: "X + 0,3 Y + 0,3 Z",
-					Fx,
-					Fy: .3 * Fy,
-					Fz: .3 * Fz
-				},
-				{
-					nom: "0,3 X + Y + 0,3 Z",
-					Fx: .3 * Fx,
-					Fy,
-					Fz: .3 * Fz
-				},
-				{
-					nom: "0,3 X + 0,3 Y + Z",
-					Fx: .3 * Fx,
-					Fy: .3 * Fy,
-					Fz
-				}
-			]
-		};
-	});
-	for (const c of combinaisons) notes.combinaisons.push({
-		id: `comb_${c.id}`,
-		titre: `${c.id} — combinaisons des directions (± sur chaque terme)`,
-		formule: "E = \\pm E_1 \\pm 0{,}3\\,E_2 \\pm 0{,}3\\,E_3",
-		resultat: {
-			symbole: "(F_x ; F_y ; F_z)",
-			valeur: c.cas.map((k) => `${k.nom} : (${nombre(k.Fx, 3)} ; ${nombre(k.Fy, 3)} ; ${nombre(k.Fz, 3)}) MN`).join(" — ")
-		},
-		references: ["combinaison_100_30_30"],
-		commentaire: m.elastomeres ? "Efforts horizontaux en propriétés limites supérieures (UBDP)." : void 0
-	});
-	const note = [
-		{
-			id: "conditions",
-			titre: "Conditions d'application",
-			lignes: notes.conditions
-		},
-		{
-			id: "longitudinal",
-			titre: "Direction longitudinale",
-			lignes: notes.x
-		},
-		{
-			id: "transversal",
-			titre: "Direction transversale",
-			lignes: notes.y
-		},
-		{
-			id: "vertical",
-			titre: "Composante verticale",
-			lignes: notes.vertical
-		},
-		{
-			id: "combinaisons",
-			titre: "Combinaison des directions",
-			lignes: notes.combinaisons
-		}
-	];
-	return {
-		M,
-		directions,
-		torsion: {
-			e0,
-			L,
-			appliquee: torsionAppliquee
-		},
-		vertical: {
-			applicable: regulier,
-			motif,
-			a: aV,
-			mu,
-			L: Lp,
-			psi,
-			reactions
-		},
-		conditions,
-		combinaisons,
-		note
-	};
-}
-//#endregion
 //#region src/moteur/valeurs-propres.ts
 const zeros = (n, m = n) => Array.from({ length: n }, () => new Array(m).fill(0));
 /** Factorisation de Cholesky : renvoie L triangulaire inférieure telle que A = L Lᵀ. */
@@ -4042,7 +3676,68 @@ function modeleDynamique(p, m, direction, borne) {
 	const ddlTablier = [];
 	let inertiesTab = null;
 	let masseTablierX = 0;
-	if (direction === "x") {
+	const iso = p.tablier.continuite === "isostatique" && p.tablier.travees.length > 1;
+	/** Travées indépendantes : ddl du tablier aux abouts de chaque travée [début, fin]. */
+	const abouts = [];
+	const massesTravees = [];
+	if (iso) {
+		xs.length = 0;
+		if (direction !== "x") {
+			const I = inertiesTablier(p);
+			inertiesTab = direction === "y" ? {
+				I: I.transversale,
+				saisie: I.saisie.transversale
+			} : {
+				I: I.verticale,
+				saisie: I.saisie.verticale
+			};
+		}
+		let x0 = 0;
+		for (const t of p.tablier.travees) {
+			if (direction === "x") {
+				const u = nouveau();
+				translation.push(u);
+				for (let k = 0; k <= net; k++) {
+					xs.push(x0 + t * k / net);
+					ddlTablier.push(u);
+				}
+				abouts.push([u, u]);
+				massesTravees.push({
+					ddl: u,
+					m: muTablier * t
+				});
+			} else {
+				const w = [], rot = [];
+				for (let k = 0; k <= net; k++) {
+					xs.push(x0 + t * k / net);
+					const wi = nouveau();
+					translation.push(wi);
+					ddlTablier.push(wi);
+					w.push(wi);
+					rot.push(nouveau());
+				}
+				for (let k = 0; k < net; k++) {
+					const l = t / net;
+					const el = elementPoutre(E * inertiesTab.I, muTablier, l);
+					elements.push({
+						e: {
+							ddl: [
+								w[k],
+								rot[k],
+								w[k + 1],
+								rot[k + 1]
+							],
+							k: el.k,
+							longueur: l
+						},
+						m: el.m
+					});
+				}
+				abouts.push([w[0], w[net]]);
+			}
+			x0 += t;
+		}
+	} else if (direction === "x") {
 		const u = nouveau();
 		translation.push(u);
 		xs.forEach(() => ddlTablier.push(u));
@@ -4086,12 +3781,16 @@ function modeleDynamique(p, m, direction, borne) {
 	const appuis = [];
 	const liaisonsRigides = [];
 	const raideurs = direction === "z" ? null : m.directions[direction].appuis;
+	const nT = p.tablier.travees.length;
+	/** ddl du tablier portés par l'appui ia : un (tablier continu, culées) ou deux (pile d'un tablier à travées indépendantes). */
+	const ddlPortes = (ia) => iso ? [...ia > 0 ? [abouts[ia - 1][1]] : [], ...ia < nT ? [abouts[ia][0]] : []] : [ddlTablier[indicesAppuis[ia] ?? 0] ?? 0];
 	p.appuis.forEach((ap, ia) => {
-		const dT = ddlTablier[indicesAppuis[ia] ?? 0] ?? 0;
+		const portes = ddlPortes(ia);
+		const dT = portes[0] ?? 0;
 		const x = d.positions[ia] ?? 0;
 		if (direction === "z") {
-			liaisonsRigides.push({
-				i: dT,
+			for (const q of portes) liaisonsRigides.push({
+				i: q,
 				j: -1
 			});
 			appuis.push({
@@ -4103,7 +3802,12 @@ function modeleDynamique(p, m, direction, borne) {
 				ddlTete: -1,
 				rigide: true,
 				kSupport: Infinity,
-				kAppareils: Infinity
+				kAppareils: Infinity,
+				...portes.length > 1 ? { rangees: portes.map((q) => ({
+					ddlTablier: q,
+					ressort: null,
+					rigide: true
+				})) } : {}
 			});
 			return;
 		}
@@ -4196,7 +3900,34 @@ function modeleDynamique(p, m, direction, borne) {
 			kSupport: nf * 3 * E * I / h ** 3,
 			kAppareils: kApp
 		};
-		if (kApp === Infinity) {
+		if (portes.length > 1) {
+			entree.rangees = portes.map((q) => {
+				if (kApp === Infinity) {
+					liaisonsRigides.push({
+						i: q,
+						j: tete
+					});
+					return {
+						ddlTablier: q,
+						ressort: null,
+						rigide: true
+					};
+				}
+				const rs = kApp > 0 ? {
+					i: q,
+					j: tete,
+					k: kApp / portes.length
+				} : null;
+				if (rs) ressorts.push(rs);
+				return {
+					ddlTablier: q,
+					ressort: rs,
+					rigide: false
+				};
+			});
+			entree.rigide = kApp === Infinity;
+			entree.ressort = entree.rangees[0].ressort;
+		} else if (kApp === Infinity) {
 			entree.rigide = true;
 			liaisonsRigides.push({
 				i: dT,
@@ -4224,7 +3955,8 @@ function modeleDynamique(p, m, direction, borne) {
 			M[ia][ib] += me[a][b];
 		}
 	}
-	if (direction === "x") M[0][0] += masseTablierX;
+	if (iso && direction === "x") for (const t of massesTravees) M[t.ddl][t.ddl] += t.m;
+	else if (direction === "x") M[0][0] += masseTablierX;
 	for (let i = 0; i < n; i++) r.push(translation.includes(i) ? 1 : 0);
 	let masse = 0;
 	for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) masse += r[i] * M[i][j] * r[j];
@@ -4236,9 +3968,15 @@ function modeleDynamique(p, m, direction, borne) {
 			k: kRigide
 		};
 		ressorts.push(s);
+		const rg = appuis.flatMap((a) => a.rangees ?? []).find((g) => g.rigide && g.ddlTablier === l.i && !g.ressort);
+		if (rg) {
+			rg.ressort = s;
+			continue;
+		}
 		const ap = appuis.find((a) => a.rigide && a.ddlTablier === l.i && (l.j === -1 ? a.ddlTete === -1 : a.ddlTete === l.j) && !a.ressort);
 		if (ap) ap.ressort = s;
 	}
+	for (const a of appuis) if (a.rangees && !a.ressort) a.ressort = a.rangees[0]?.ressort ?? null;
 	for (const s of ressorts) {
 		if (s.i >= 0) K[s.i][s.i] += s.k;
 		if (s.j >= 0) K[s.j][s.j] += s.k;
@@ -4262,7 +4000,8 @@ function modeleDynamique(p, m, direction, borne) {
 		piles,
 		appuis,
 		kRigide,
-		inerties: inertiesTab
+		inerties: inertiesTab,
+		...iso ? { isostatique: true } : {}
 	};
 }
 /** Coefficient de corrélation CQC (EN 1998-2 éq. 4.9), amortissements ξi, ξj, rapport ρ = ωj/ωi. */
@@ -4290,7 +4029,34 @@ function combiner$1(valeurs, omegas, xi, regle) {
 function grandeursAppuis(md, u) {
 	const val = (i) => i < 0 ? 0 : u[i] ?? 0;
 	return md.appuis.map((ap) => {
-		const F = ap.ressort ? ap.ressort.k * (val(ap.ressort.i) - val(ap.ressort.j)) / 1e3 : 0;
+		const effort = (rs) => rs ? rs.k * (val(rs.i) - val(rs.j)) / 1e3 : 0;
+		if (ap.rangees) {
+			const F = ap.rangees.reduce((s, g) => s + effort(g.ressort), 0);
+			const dT = ap.rangees.map((g) => val(g.ddlTablier));
+			const dTete = md.direction === "z" ? 0 : val(ap.ddlTete);
+			const dApp = dT.map((v) => md.direction === "z" ? 0 : v - dTete);
+			const g = {
+				F,
+				dTablier: dT[0] ?? 0,
+				dTete,
+				dAppareils: dApp[0] ?? 0,
+				rangees: {
+					dTablier: dT,
+					dAppareils: dApp
+				},
+				dJoint: (dT[0] ?? 0) - (dT[1] ?? 0)
+			};
+			const pile = md.piles.find((pl) => pl.id === ap.id);
+			if (pile) {
+				const base = pile.elements[0];
+				const ue = base.ddl.map((i) => val(i));
+				const f = base.k.map((l) => l.reduce((s, v, j) => s + v * ue[j], 0));
+				g.Vpied = (f[0] ?? 0) / 1e3;
+				g.Mpied = (f[1] ?? 0) / 1e3;
+			}
+			return g;
+		}
+		const F = effort(ap.ressort);
 		const dTablier = val(ap.ddlTablier);
 		let dTete, dAppareils;
 		if (ap.type === "pile" && md.direction !== "z") {
@@ -4410,6 +4176,17 @@ function reponseDirection(p, a, m, direction, borne) {
 		if (g[0]?.Vpied !== void 0) {
 			sortie.Vpied = comb(g.map((x) => x.Vpied ?? 0));
 			sortie.Mpied = comb(g.map((x) => x.Mpied ?? 0));
+		}
+		if (g[0]?.rangees) {
+			const nr = g[0].rangees.dTablier.length;
+			const parRangee = (cle) => Array.from({ length: nr }, (_, k) => ampD * comb(g.map((x) => x.rangees[cle][k] ?? 0)));
+			sortie.rangees = {
+				dTablier: parRangee("dTablier"),
+				dAppareils: parRangee("dAppareils")
+			};
+			sortie.dTablier = Math.max(...sortie.rangees.dTablier);
+			sortie.dAppareils = Math.max(...sortie.rangees.dAppareils);
+			if (nr > 1) sortie.dJoint = ampD * comb(g.map((x) => x.dJoint ?? 0));
 		}
 		return sortie;
 	});
@@ -4672,6 +4449,457 @@ function multimodale(p, a, m, mono) {
 	return {
 		directions,
 		comparaison,
+		combinaisons,
+		note
+	};
+}
+//#endregion
+//#region src/moteur/analyse.ts
+const BORNES = ["lbdp", "ubdp"];
+/** Interpolation linéaire dans une ligne du tableau 22 (Ψ = 0,5 à 1,0). */
+function interpoler(ligne, psi) {
+	const pts = Object.entries(ligne).map(([k, v]) => [Number(k.replace("Ψ = ", "").replace(",", ".")), v]).sort((a, b) => a[0] - b[0]);
+	const p = Math.min(Math.max(psi, pts[0]?.[0] ?? .5), pts.at(-1)?.[0] ?? 1);
+	for (let i = 1; i < pts.length; i++) {
+		const [x0, y0] = pts[i - 1] ?? [0, 0];
+		const [x1, y1] = pts[i] ?? [0, 0];
+		if (p <= x1) return y0 + (p - x0) / (x1 - x0) * (y1 - y0);
+	}
+	return pts.at(-1)?.[1] ?? NaN;
+}
+function analyse(p, a, m) {
+	const d = derives(p);
+	const M = m.masses.M;
+	const L = d.longueur;
+	const positions = d.positions;
+	const notes = {
+		conditions: [],
+		x: [],
+		y: [],
+		vertical: [],
+		combinaisons: []
+	};
+	const rapportMasse = m.masses.piles.reduce((s, x) => s + x.masseFuts, 0) / M;
+	const LsurB = L / p.tablier.largeur;
+	const iso = p.tablier.continuite === "isostatique" && p.tablier.travees.length > 1;
+	const conditions = iso ? [{
+		id: "tablier_continu",
+		libelle: "Travées indépendantes : modèle à travées indépendantes, analyse spectrale multimodale (EN 1998-2 4.2.1)",
+		valeur: `${p.tablier.travees.length} travées indépendantes, joint sur chaque pile`,
+		respectee: true,
+		references: ["conditions_monomodal"]
+	}] : [
+		{
+			id: "tablier_continu",
+			libelle: "Tablier continu, droit et à peu près rectiligne",
+			valeur: `${p.tablier.travees.length} travée(s), pont droit`,
+			respectee: true,
+			references: ["conditions_monomodal"]
+		},
+		{
+			id: "masse_piles",
+			libelle: "Masse des piles < 20 % de celle du tablier (longitudinal)",
+			valeur: `${nombre(100 * rapportMasse, 1)} %`,
+			respectee: rapportMasse < .2,
+			references: ["conditions_monomodal"],
+			conseils: rapportMasse < .2 ? void 0 : ["Choisir la méthode multimodale (onglet Méthodes) : cette condition ne vaut que pour la méthode du mode fondamental.", `Ou alléger les fûts d'au moins ${nombre(100 * (1 - .2 / rapportMasse), 0)} % (fûts plus minces, colonnes au lieu d'un voile, fûts creux) pour descendre sous 20 %.`]
+		},
+		{
+			id: "L_sur_B",
+			libelle: "Tablier rigide en transversal : L/B ≤ 4",
+			valeur: `L/B = ${nombre(LsurB, 2)}`,
+			respectee: LsurB <= 4,
+			references: ["tablier_rigide"],
+			conseils: LsurB <= 4 ? void 0 : [`Le tablier n'est pas rigide en transversal : il faudrait B ≥ L/4 = ${nombre(L / 4, 2)} m (B = ${nombre(p.tablier.largeur, 2)} m).`, "Choisir la méthode multimodale, qui tient compte de la souplesse transversale du tablier (onglet Méthodes)."]
+		}
+	];
+	const appuisY = m.directions.y.appuis;
+	const infinis = appuisY.filter((x) => x.kTotal.lbdp === Infinity);
+	const xK = infinis.length ? infinis.reduce((s, x) => s + (positions[p.appuis.findIndex((ap) => ap.id === x.id)] ?? 0), 0) / infinis.length : appuisY.reduce((s, x, i) => s + (positions[i] ?? 0) * x.kTotal.lbdp, 0) / Math.max(m.directions.y.K.lbdp, 1e-12);
+	const e0 = Math.abs(xK - L / 2);
+	const torsionAppliquee = !iso && e0 > .05 * L;
+	if (!iso) conditions.push({
+		id: "excentricite",
+		libelle: "Excentricité centre de raideur / centre de masse ≤ 5 % de L (sinon torsion)",
+		valeur: `e0 = ${nombre(e0, 2)} m ; 5 % L = ${nombre(.05 * L, 2)} m`,
+		respectee: !torsionAppliquee,
+		references: [
+			"conditions_monomodal",
+			"centre_raideur",
+			"torsion_excentricite"
+		],
+		conseils: !torsionAppliquee ? void 0 : ["Non bloquant : l'effet de torsion est alors ajouté automatiquement (EN 1998-2 § 4.2.2.5).", `Pour l'éviter, rapprocher le centre des raideurs transversales du milieu de l'ouvrage (e0 = ${nombre(e0, 2)} m → ≤ ${nombre(.05 * L, 2)} m) : équilibrer hauteurs, sections ou appareils des piles de part et d'autre.`]
+	});
+	for (const c of conditions) notes.conditions.push({
+		id: c.id,
+		titre: c.libelle,
+		resultat: {
+			symbole: "",
+			valeur: `${c.valeur} — ${c.respectee ? "respectée" : "non respectée"}`
+		},
+		references: c.references,
+		niveau: c.respectee ? void 0 : "alerte",
+		commentaire: c.respectee ? void 0 : c.id === "excentricite" ? "Moment de torsion ajouté aux efforts transversaux." : c.id === "L_sur_B" ? "Tablier flexible : la méthode de Rayleigh (non traitée en V1) serait plus appropriée ; résultats indicatifs." : "Hors domaine de la méthode du mode fondamental : résultats indicatifs."
+	});
+	const spectreDe = (dir) => dir === "x" ? a.spectres.calculLong : a.spectres.calculTrans;
+	const qDe = (dir) => dir === "x" ? a.q.longitudinal : a.q.transversal;
+	const directions = {};
+	for (const dir of ["x", "y"]) {
+		const nomDir = dir === "x" ? "longitudinale" : "transversale";
+		const q = qDe(dir);
+		directions[dir] = {};
+		for (const borne of BORNES) {
+			if (iso) {
+				const mm = reponseDirection(p, a, m, dir, borne);
+				const ret = mm.modes.filter((x) => x.retenu);
+				const dom = ret.reduce((b, x) => x.masseEffective > b.masseEffective ? x : b, ret[0] ?? mm.modes[0]);
+				const Ftot = mm.Ftablier;
+				const appuis = mm.appuis.map((ap) => ({
+					id: ap.id,
+					x: ap.x,
+					F: ap.F,
+					part: Ftot > 0 ? ap.F / Ftot : 0,
+					torsion: 0,
+					dTete: ap.dTete,
+					dAppareils: ap.dAppareils,
+					dTablier: ap.dTablier,
+					...ap.dJoint !== void 0 ? { dJoint: ap.dJoint } : {}
+				}));
+				const dE = Math.max(0, ...mm.appuis.map((x) => x.dTablier));
+				const K = m.directions[dir].K[borne];
+				directions[dir][borne] = {
+					K,
+					T: dom?.T ?? 0,
+					Sd: dom?.Sd ?? 0,
+					F: Ftot,
+					dEe: dE / Math.max(mm.eta * mm.muD, 1e-12),
+					muD: mm.muD,
+					dE,
+					appuis
+				};
+				continue;
+			}
+			const K = m.directions[dir].K[borne];
+			const T = K === Infinity ? 0 : 2 * Math.PI * Math.sqrt(M / (K * 1e3));
+			const Sd = valeur(spectreDe(dir), T);
+			const F = M * Sd / 1e3;
+			const dEe = K === Infinity || K === 0 ? 0 : F / K;
+			const T0 = 1.25 * a.TC;
+			const muD = T < .033 ? 1 : T >= T0 ? q : Math.min((q - 1) * (T0 / T) + 1, 5 * q - 4);
+			const dE = a.eta * muD * dEe;
+			const appuis = m.directions[dir].appuis.map((ap, i) => {
+				const Fi = ap.part[borne] * F;
+				return {
+					id: ap.id,
+					x: positions[i] ?? 0,
+					F: Fi,
+					part: ap.part[borne],
+					torsion: 0,
+					dTete: ap.kSupport === Infinity ? 0 : Fi / ap.kSupport * a.eta * muD,
+					dAppareils: ap.kAppareils[borne] === Infinity || ap.kAppareils[borne] === 0 ? 0 : Fi / ap.kAppareils[borne] * a.eta * muD
+				};
+			});
+			if (dir === "y" && torsionAppliquee) {
+				const Mt = (e0 + .05 * L) * F;
+				const finis = m.directions.y.appuis.map((ap, i) => ({
+					k: ap.kTotal[borne],
+					dx: (positions[i] ?? 0) - xK
+				}));
+				const J = finis.reduce((s, x) => s + (Number.isFinite(x.k) ? x.k * x.dx * x.dx : 0), 0);
+				appuis.forEach((ap, i) => {
+					const f = finis[i];
+					if (!f || !Number.isFinite(f.k) || J === 0) return;
+					ap.torsion = Mt * f.k * Math.abs(f.dx) / J;
+					ap.F += ap.torsion;
+				});
+			}
+			directions[dir][borne] = {
+				K,
+				T,
+				Sd,
+				F,
+				dEe,
+				muD,
+				dE,
+				appuis
+			};
+		}
+		const L_ = directions[dir].lbdp;
+		const U = directions[dir].ubdp;
+		const etiquette = (b) => m.elastomeres ? b === "lbdp" ? "^{LBDP}" : "^{UBDP}" : "";
+		for (const borne of m.elastomeres ? BORNES : ["lbdp"]) {
+			const r = directions[dir][borne];
+			const K = r.K;
+			if (iso) {
+				notes[dir].push({
+					id: `T_${dir}_${borne}`,
+					titre: `Période du mode dominant ${nomDir}${m.elastomeres ? ` (${borne.toUpperCase()})` : ""} — travées indépendantes`,
+					resultat: {
+						symbole: `T${etiquette(borne)}`,
+						valeur: r.T,
+						unite: "s",
+						decimales: 3
+					},
+					references: ["conditions_monomodal"],
+					commentaire: "Modèle dynamique : une translation par travée en X, une poutre par travée en Y, piles en console ; chaque travée liée à sa rangée d'appareils (la moitié des appareils de la ligne sur une pile). Modes jusqu'à 90 % de la masse, combinaison SRSS ou CQC (EN 1998-2 4.2.1.2, 4.2.1.3)."
+				}, {
+					id: `F_${dir}_${borne}`,
+					titre: "Effort transmis par le tablier à l'ensemble des appuis",
+					resultat: {
+						symbole: `F${etiquette(borne)}`,
+						valeur: r.F,
+						unite: "MN",
+						decimales: 3
+					},
+					references: ["conditions_monomodal"]
+				}, {
+					id: `d_${dir}_${borne}`,
+					titre: "Plus grand déplacement sismique du tablier",
+					resultat: {
+						symbole: `d_E${etiquette(borne)}`,
+						valeur: r.dE * 100,
+						unite: "cm",
+						decimales: 2
+					},
+					references: ["mu_d"],
+					commentaire: `η·μd inclus (μd = ${nombre(r.muD, 3)}).`
+				});
+				continue;
+			}
+			notes[dir].push({
+				id: `T_${dir}_${borne}`,
+				titre: `Période propre ${nomDir}${m.elastomeres ? ` (${borne.toUpperCase()})` : ""}`,
+				formule: "T = 2\\pi\\sqrt{\\dfrac{M}{K}}",
+				application: K === Infinity ? "K \\to \\infty" : `2\\pi\\sqrt{\\dfrac{${tex(M * 1e3, 0)}}{${tex(K * 1e6, 0)}}}`,
+				resultat: {
+					symbole: `T${etiquette(borne)}`,
+					valeur: r.T,
+					unite: "s",
+					decimales: 3
+				},
+				references: ["tablier_rigide"],
+				commentaire: K === Infinity ? "Tablier bloqué sur un appui rigide : période nulle." : void 0
+			}, {
+				id: `Sd_${dir}_${borne}`,
+				titre: `Accélération spectrale (q = ${nombre(q, 2)})`,
+				resultat: {
+					symbole: `S_d(T)${etiquette(borne)}`,
+					valeur: r.Sd,
+					unite: "m/s²",
+					decimales: 3
+				},
+				references: ["Sd"],
+				commentaire: r.T < a.TB ? "T < TB." : r.T <= a.TC ? "Plateau du spectre (TB ≤ T ≤ TC)." : r.T <= a.TD ? "Branche en 1/T (TC ≤ T ≤ TD)." : "Branche en 1/T² (T > TD)."
+			}, {
+				id: `F_${dir}_${borne}`,
+				titre: "Effort sismique total",
+				formule: "F = M\\,S_d(T)",
+				application: `${tex(M, 1)}\\ \\text{t} \\times ${tex(r.Sd, 3)}`,
+				resultat: {
+					symbole: `F${etiquette(borne)}`,
+					valeur: r.F,
+					unite: "MN",
+					decimales: 3
+				},
+				references: ["tablier_rigide"]
+			}, {
+				id: `d_${dir}_${borne}`,
+				titre: "Déplacement sismique du tablier",
+				formule: "d_E = \\eta\\,\\mu_d\\,d_{Ee}, \\qquad d_{Ee} = \\dfrac{F}{K}",
+				application: K === Infinity ? "0" : `${tex(a.eta, 3)} \\times ${tex(r.muD, 3)} \\times \\dfrac{${tex(r.F, 3)}}{${tex(K, 2)}}`,
+				resultat: {
+					symbole: `d_E${etiquette(borne)}`,
+					valeur: r.dE * 100,
+					unite: "cm",
+					decimales: 2
+				},
+				references: ["mu_d", "tablier_rigide"],
+				commentaire: `μd = ${nombre(r.muD, 3)}${q === 1 ? " (q = 1)" : ""}.`
+			});
+		}
+		for (const ap of U.appuis) {
+			const apL = L_.appuis.find((x) => x.id === ap.id);
+			notes[dir].push({
+				id: `F_${dir}_${ap.id}`,
+				titre: `${ap.id} — effort ${dir === "x" ? "longitudinal" : "transversal"} transmis par le tablier`,
+				...iso ? {} : {
+					formule: "F_i = \\dfrac{k_i}{K}\\,F" + (ap.torsion > 0 ? " + \\dfrac{M_t\\,k_i\\,|x_i - x_K|}{\\sum k_j (x_j - x_K)^2}" : ""),
+					application: `${tex(ap.part, 4)} \\times ${tex(U.F, 3)}` + (ap.torsion > 0 ? ` + ${tex(ap.torsion, 3)}` : "")
+				},
+				resultat: {
+					symbole: `F_{${ap.id}}${etiquette("ubdp")}`,
+					valeur: ap.F,
+					unite: "MN",
+					decimales: 3
+				},
+				references: ap.torsion > 0 ? ["tablier_rigide", "torsion_excentricite"] : ["tablier_rigide"],
+				commentaire: `Déplacement de la tête d'appui${m.elastomeres ? " (LBDP)" : ""} : ${nombre((apL?.dTete ?? 0) * 100, 2)} cm ; distorsion des appareils : ${nombre((apL?.dAppareils ?? 0) * 100, 2)} cm${apL?.dJoint !== void 0 ? ` ; ouverture relative du joint sur pile : ${nombre(apL.dJoint * 100, 2)} cm` : ""}.`
+			});
+		}
+	}
+	const t = p.tablier.travees;
+	const n = t.length;
+	const Lp = Math.max(...t);
+	const psi = n >= 2 ? (t[0] ?? 0) / Lp : 1;
+	const egal = (u, v) => Math.abs(u - v) <= .05 * Math.max(u, v);
+	const regulier = n === 1 || egal(t[0] ?? 0, t[n - 1] ?? 0) && t.slice(1, -1).every((x) => egal(x, Lp)) && psi >= .5 - 1e-9 && psi <= 1 + 1e-9;
+	const aV = a.plateaux.Sve;
+	const mu = m.masses.masseLineique;
+	const reactions = [];
+	let motif = "";
+	if (iso) {
+		p.appuis.forEach((ap, i) => {
+			const R = [i - 1, i].filter((s) => s >= 0 && s < n).reduce((acc, s) => acc + aV * .41 * mu * (t[s] ?? 0) / 1e3, 0);
+			reactions.push({
+				id: ap.id,
+				b: .41,
+				R
+			});
+		});
+		motif = `${n} travées indépendantes : réaction de chaque travée sur deux appuis (b = 0,41), cumulée sur les piles.`;
+	} else if (!regulier) motif = "Travées de rive inégales, travées intermédiaires différentes ou Ψ hors de [0,5 ; 1] : méthode forfaitaire non applicable.";
+	else {
+		const tab = TABLEAU_B_VERTICAL.valeurs;
+		const bDe = (i) => {
+			if (n === 1) return .41;
+			const culee = i === 0 || i === n;
+			if (n === 2) return culee ? interpoler(i === 0 ? tab["2 travées"]?.R1 ?? {} : tab["2 travées"]?.R3 ?? {}, psi) : interpoler(tab["2 travées"]?.R2 ?? {}, psi);
+			if (n === 3) return interpoler((culee ? tab["3 travées"]?.R1 : tab["3 travées"]?.R2) ?? {}, psi);
+			const g = tab["4 travées et plus"] ?? {};
+			if (culee) return interpoler(g["R1 (culée)"] ?? {}, psi);
+			if (i === 1 || i === n - 1) return interpoler(g["R2 (1re pile)"] ?? {}, psi);
+			return interpoler(g["Ri (piles intermédiaires)"] ?? {}, psi);
+		};
+		p.appuis.forEach((ap, i) => {
+			const b = bDe(i);
+			reactions.push({
+				id: ap.id,
+				b,
+				R: aV * b * mu * Lp / 1e3
+			});
+		});
+		motif = `${n} travée(s), Ψ = ${nombre(psi, 3)}.`;
+	}
+	notes.vertical.push({
+		id: "a_vertical",
+		titre: "Accélération du plateau vertical",
+		formule: "a = a_{vg}\\,S_T \\cdot 3{,}0\\,\\eta",
+		resultat: {
+			symbole: "a",
+			valeur: aV,
+			unite: "m/s²",
+			decimales: 3
+		},
+		references: ["reactions_verticales", "Sve"]
+	});
+	for (const r of reactions) notes.vertical.push({
+		id: `Rv_${r.id}`,
+		titre: `${r.id} — réaction verticale sous séisme vertical`,
+		formule: iso ? "R_i = \\pm\\,a\\,b\\,\\mu\\,\\sum L_{travées\\ portées}" : "R_i = \\pm\\,a\\,b\\,\\mu\\,L",
+		application: `${tex(aV, 3)} \\times ${tex(r.b, 3)} \\times ${tex(mu, 3)}\\ \\text{t/m} \\times ${tex(iso ? r.R * 1e3 / (aV * r.b * mu) : Lp, 3)}`,
+		resultat: {
+			symbole: `R_{${r.id}}`,
+			valeur: r.R,
+			unite: "MN",
+			decimales: 3
+		},
+		references: ["reactions_verticales", "b_reactions_verticales"]
+	});
+	if (!regulier) notes.vertical.push({
+		id: "vertical_na",
+		titre: "Méthode forfaitaire",
+		resultat: {
+			symbole: "",
+			valeur: "non applicable"
+		},
+		references: ["reactions_verticales"],
+		commentaire: motif,
+		niveau: "alerte"
+	});
+	const combinaisons = p.appuis.map((ap, i) => {
+		const Fx = directions.x.ubdp.appuis[i]?.F ?? 0;
+		const Fy = directions.y.ubdp.appuis[i]?.F ?? 0;
+		const Fz = reactions[i]?.R ?? 0;
+		return {
+			id: ap.id,
+			cas: [
+				{
+					nom: "X + 0,3 Y + 0,3 Z",
+					Fx,
+					Fy: .3 * Fy,
+					Fz: .3 * Fz
+				},
+				{
+					nom: "0,3 X + Y + 0,3 Z",
+					Fx: .3 * Fx,
+					Fy,
+					Fz: .3 * Fz
+				},
+				{
+					nom: "0,3 X + 0,3 Y + Z",
+					Fx: .3 * Fx,
+					Fy: .3 * Fy,
+					Fz
+				}
+			]
+		};
+	});
+	for (const c of combinaisons) notes.combinaisons.push({
+		id: `comb_${c.id}`,
+		titre: `${c.id} — combinaisons des directions (± sur chaque terme)`,
+		formule: "E = \\pm E_1 \\pm 0{,}3\\,E_2 \\pm 0{,}3\\,E_3",
+		resultat: {
+			symbole: "(F_x ; F_y ; F_z)",
+			valeur: c.cas.map((k) => `${k.nom} : (${nombre(k.Fx, 3)} ; ${nombre(k.Fy, 3)} ; ${nombre(k.Fz, 3)}) MN`).join(" — ")
+		},
+		references: ["combinaison_100_30_30"],
+		commentaire: m.elastomeres ? "Efforts horizontaux en propriétés limites supérieures (UBDP)." : void 0
+	});
+	const note = [
+		{
+			id: "conditions",
+			titre: "Conditions d'application",
+			lignes: notes.conditions
+		},
+		{
+			id: "longitudinal",
+			titre: "Direction longitudinale",
+			lignes: notes.x
+		},
+		{
+			id: "transversal",
+			titre: "Direction transversale",
+			lignes: notes.y
+		},
+		{
+			id: "vertical",
+			titre: "Composante verticale",
+			lignes: notes.vertical
+		},
+		{
+			id: "combinaisons",
+			titre: "Combinaison des directions",
+			lignes: notes.combinaisons
+		}
+	];
+	return {
+		M,
+		directions,
+		torsion: {
+			e0,
+			L,
+			appliquee: torsionAppliquee
+		},
+		vertical: {
+			applicable: iso || regulier,
+			motif,
+			a: aV,
+			mu,
+			L: Lp,
+			psi,
+			reactions
+		},
+		conditions,
 		combinaisons,
 		note
 	};
@@ -5025,9 +5253,12 @@ function verifierAppuis(p, a, m, r) {
 		references: ["reactions_verticales", "composante_verticale_a_considerer"]
 	});
 	const Rv = r.vertical.reactions;
+	const iso = p.tablier.continuite === "isostatique" && p.tablier.travees.length > 1;
+	const tr = p.tablier.travees;
+	const demiTravee = (i) => Math.max(...[i - 1, i].filter((k) => k >= 0 && k < tr.length).map((k) => (tr[k] ?? 0) / 2));
 	const appareils = p.appuis.map((appui, i) => {
 		const xi = positions[i] ?? 0;
-		const distance = Math.abs(xi - x0);
+		const distance = iso ? demiTravee(i) : Math.abs(xi - x0);
 		const dT = alpha * deltaT * distance;
 		const dDiff = retraitFluage * distance;
 		const rx = r.directions.x.lbdp.appuis[i];
@@ -5071,7 +5302,7 @@ function verifierAppuis(p, a, m, r) {
 				valeur: `${nombre(dT * 100, 2)} cm ; ${nombre(dDiff * 100, 2)} cm`
 			},
 			references: ["deplacements_service"],
-			commentaire: `Point fixe x0 = ${nombre(x0, 3)} m (centre des raideurs longitudinales). Charges permanentes : ${permanentes.source === "saisie" ? "calcul de service saisi" : "poutre continue (estimation)"} — Nmax = ${nombre(permanentes.Nmax, 3)} MN, Nmin = ${nombre(permanentes.Nmin, 3)} MN, rotation ${nombre(permanentes.rotation * 1e3, 2)}·10⁻³ rad.`,
+			commentaire: `${iso ? "Travées indépendantes : dilatation de chaque travée autour de son milieu (demi-travée la plus longue)." : `Point fixe x0 = ${nombre(x0, 3)} m (centre des raideurs longitudinales).`} Charges permanentes : ${permanentes.source === "saisie" ? "calcul de service saisi" : "poutre continue (estimation)"} — Nmax = ${nombre(permanentes.Nmax, 3)} MN, Nmin = ${nombre(permanentes.Nmin, 3)} MN, rotation ${nombre(permanentes.rotation * 1e3, 2)}·10⁻³ rad.`,
 			niveau: permanentes.source === "poutre continue" ? "info" : void 0
 		});
 		if (app.type !== "elastomere") {
@@ -5318,7 +5549,8 @@ function verifierAppuis(p, a, m, r) {
 		if (!v) return;
 		const Leff = v.service.distance;
 		const deg = Math.min(epsE * Leff, 2 * a.dg);
-		const des = dE + v.service.dDiff + .5 * v.service.dT;
+		const dEi = iso ? r.directions.x.lbdp.appuis[i]?.dTablier ?? dE : dE;
+		const des = dEi + v.service.dDiff + .5 * v.service.dT;
 		const lm = .4;
 		const lov = lm + deg + des;
 		const disponible = c.excentrementAppui + c.poteaux.cote / 2 + c.sommier.debordAvant + p.tablier.debordAbout;
@@ -5346,7 +5578,7 @@ function verifierAppuis(p, a, m, r) {
 			id: `${c.id}_lov`,
 			titre: `${c.id} — longueur minimale de repos d'appui`,
 			formule: "l_{ov} = l_m + d_{eg} + d_{es}, \\quad d_{eg} = \\dfrac{2\\,d_g}{L_g}\\,L_{eff} \\le 2\\,d_g, \\quad d_{es} = d_E + d_{diff} + 0{,}5\\,d_T",
-			application: `0{,}40 + \\dfrac{2 \\times ${tex(a.dg, 4)}}{${tex(Lg, 0)}} \\times ${tex(Leff, 3)} + (${tex(dE, 4)} + ${tex(v.service.dDiff, 4)} + 0{,}5 \\times ${tex(v.service.dT, 4)})`,
+			application: `0{,}40 + \\dfrac{2 \\times ${tex(a.dg, 4)}}{${tex(Lg, 0)}} \\times ${tex(Leff, 3)} + (${tex(dEi, 4)} + ${tex(v.service.dDiff, 4)} + 0{,}5 \\times ${tex(v.service.dT, 4)})`,
 			resultat: {
 				symbole: "l_{ov}",
 				valeur: lov,
@@ -5358,18 +5590,18 @@ function verifierAppuis(p, a, m, r) {
 				"Lg",
 				"dg"
 			],
-			commentaire: `Leff = distance au point fixe (aucune liaison rigide). Recouvrement disponible (nu du sommier → extrémité du tablier) : ${nombre(disponible, 2)} m.`
+			commentaire: `${iso ? "Leff = demi-travée (travée de rive indépendante sur appareils)." : "Leff = distance au point fixe (aucune liaison rigide)."} Recouvrement disponible (nu du sommier → extrémité du tablier) : ${nombre(disponible, 2)} m.`
 		});
-		const souffle = 2 * dE + 2 * v.service.dT + v.service.dDiff;
+		const souffle = 2 * dEi + 2 * v.service.dT + v.service.dDiff;
 		const service = v.service.dDiff + .5 * v.service.dT;
 		const cat = p.site.categorie;
-		const regle = cat === "I" || cat === "II" ? "Catégorie II : séisme pouvant être ignoré pour le joint (about et culée non endommagés)." : dE <= .02 ? "dE ≤ 2 cm : joint dimensionné au séisme ultime." : "dE > 2 cm : souffle = souffle de service + 0,4 × souffle sismique (séisme de service), garde-grève fusible au-delà.";
-		const souffleRetenu = cat === "I" || cat === "II" ? 2 * v.service.dT + v.service.dDiff : dE <= .02 ? souffle : 2 * service + .8 * dE;
+		const regle = cat === "I" || cat === "II" ? "Catégorie II : séisme pouvant être ignoré pour le joint (about et culée non endommagés)." : dEi <= .02 ? "dE ≤ 2 cm : joint dimensionné au séisme ultime." : "dE > 2 cm : souffle = souffle de service + 0,4 × souffle sismique (séisme de service), garde-grève fusible au-delà.";
+		const souffleRetenu = cat === "I" || cat === "II" ? 2 * v.service.dT + v.service.dDiff : dEi <= .02 ? souffle : 2 * service + .8 * dEi;
 		const jeuGardeGreve = c.sommier.long - c.poteaux.cote / 2 - c.sommier.debordAvant - c.gardeGreve.retrait - c.gardeGreve.epaisseur - c.excentrementAppui - p.tablier.debordAbout;
-		const dEdJoint = dE + v.service.dDiff + .5 * v.service.dT;
+		const dEdJoint = dEi + v.service.dDiff + .5 * v.service.dT;
 		joints.push({
 			id: c.id,
-			dE,
+			dE: dEi,
 			dG: v.service.dDiff,
 			dT: v.service.dT,
 			souffle,
@@ -5382,7 +5614,7 @@ function verifierAppuis(p, a, m, r) {
 			id: `${c.id}_souffle`,
 			titre: `${c.id} — souffle sismique total du joint`,
 			formule: "\\text{souffle} = 2\\,d_E + 2\\,d_T + d_G",
-			application: `2 \\times ${tex(dE * 100, 2)} + 2 \\times ${tex(v.service.dT * 100, 2)} + ${tex(v.service.dDiff * 100, 2)}`,
+			application: `2 \\times ${tex(dEi * 100, 2)} + 2 \\times ${tex(v.service.dT * 100, 2)} + ${tex(v.service.dDiff * 100, 2)}`,
 			resultat: {
 				symbole: "\\text{souffle}",
 				valeur: souffle * 100,
@@ -5414,6 +5646,86 @@ function verifierAppuis(p, a, m, r) {
 			etat: jeuGardeGreve >= dEdJoint ? "ok" : "info",
 			references: ["joints_chaussee"]
 		});
+	});
+	if (iso) p.appuis.forEach((appui, i) => {
+		if (appui.type !== "pile") return;
+		const pile = appui;
+		const rx = r.directions.x.lbdp.appuis[i];
+		const dTete = rx?.dTete ?? 0;
+		const cotes = [i - 1, i].filter((k) => k >= 0 && k < tr.length).map((k) => {
+			const Leff = (tr[k] ?? 0) / 2;
+			const deg = Math.min(epsE * Leff, 2 * a.dg);
+			const dRow = rx?.dTablier ?? dE;
+			const dDiff = retraitFluage * Leff, dT = alpha * deltaT * Leff;
+			const des = dRow + dDiff + .5 * dT;
+			return {
+				k,
+				Leff,
+				deg,
+				des,
+				lov: .4 + deg + des + dTete
+			};
+		});
+		const lov = Math.max(...cotes.map((c) => c.lov));
+		const disponible = pile.reposDisponible;
+		const c0 = cotes.reduce((b, c) => c.lov > b.lov ? c : b, cotes[0]);
+		repos.push({
+			id: pile.id,
+			lm: .4,
+			deg: c0.deg,
+			des: c0.des + dTete,
+			lov,
+			disponible: disponible ?? NaN,
+			Leff: c0.Leff
+		});
+		criteres.push({
+			id: `${pile.id}_repos`,
+			appui: pile.id,
+			libelle: "Travées indépendantes — repos d'appui sur pile : lov = lm + deg + des + dE,tête ≤ recouvrement disponible",
+			valeur: lov,
+			limite: disponible ?? null,
+			unite: "m",
+			etat: disponible === void 0 ? "info" : lov <= disponible ? "ok" : "non_verifie",
+			references: ["lov_repos_appui", "Lg"],
+			commentaire: disponible === void 0 ? "Recouvrement disponible sur la tête de pile non saisi." : void 0,
+			conseils: disponible === void 0 || lov <= disponible ? void 0 : [`Élargir la tête de pile (chevêtre) de ${nombre(2 * (lov - disponible) * 100, 1)} cm, ou réduire le déplacement des travées (appareils plus raides), ou prévoir des dispositifs anti-chute (EN 1998-2 § 6.6.4 et 6.6.3).`]
+		});
+		lignesRepos.push({
+			id: `${pile.id}_lov`,
+			titre: `${pile.id} — longueur minimale de repos d'appui (travées indépendantes)`,
+			formule: "l_{ov} = l_m + d_{eg} + d_{es} + d_{E,tête}, \\quad d_{eg} = \\dfrac{2\\,d_g}{L_g}\\,\\dfrac{L}{2} \\le 2\\,d_g, \\quad d_{es} = d_E + d_{diff} + 0{,}5\\,d_T",
+			application: `0{,}40 + ${tex(c0.deg, 4)} + ${tex(c0.des, 4)} + ${tex(dTete, 4)}`,
+			resultat: {
+				symbole: "l_{ov}",
+				valeur: lov,
+				unite: "m",
+				decimales: 3
+			},
+			references: [
+				"lov_repos_appui",
+				"Lg",
+				"dg"
+			],
+			commentaire: `Appui d'une travée sur une pile intermédiaire : le déplacement sismique de la tête de pile s'ajoute (EN 1998-2 6.6.4). ${disponible === void 0 ? "Recouvrement disponible non saisi." : `Recouvrement disponible de chaque côté : ${nombre(disponible, 2)} m.`}`,
+			niveau: disponible !== void 0 && lov > disponible ? "alerte" : void 0
+		});
+		if (rx?.dJoint !== void 0) {
+			const souffle = rx.dJoint + 2 * alpha * deltaT * c0.Leff + retraitFluage * 2 * c0.Leff;
+			lignesJoints.push({
+				id: `${pile.id}_joint`,
+				titre: `${pile.id} — ouverture du joint entre travées`,
+				formule: "\\text{souffle} = d_{E,rel} + d_{T} + d_G \\ \\text{(deux demi-travées)}",
+				application: `${tex(rx.dJoint * 100, 2)} + ${tex(2 * alpha * deltaT * c0.Leff * 100, 2)} + ${tex(retraitFluage * 2 * c0.Leff * 100, 2)}`,
+				resultat: {
+					symbole: "\\text{souffle}",
+					valeur: souffle * 100,
+					unite: "cm",
+					decimales: 1
+				},
+				references: ["souffle_joint", "joints_chaussee"],
+				commentaire: "Déplacement relatif sismique des deux abouts (combinaison modale), dilatation et retrait des deux demi-travées."
+			});
+		}
 	});
 	return {
 		appareils,
@@ -5945,7 +6257,11 @@ function baseMethode(p, a, r, s, methode) {
 		},
 		M: r.M,
 		methode: "mode_fondamental",
-		remarques: [
+		remarques: p.tablier.continuite === "isostatique" && p.tablier.travees.length > 1 ? [
+			"Travées indépendantes : modèle dynamique à travées séparées (une translation par travée en X, une poutre par travée en Y, piles en console, une rangée d'appareils par about), analyse spectrale multimodale (EN 1998-2 4.2.1) ; efforts transmis en tête d'appui (somme des deux rangées sur une pile), propriétés limites supérieures (UBDP), combinaison des directions 100/30/30.",
+			"Réactions verticales sismiques forfaitaires de chaque travée sur deux appuis (b = 0,41, guide Cerema 2015), cumulées sur les piles.",
+			"Inertie propre des fûts non comprise : à ajouter au pied des appuis si elle n'est pas négligeable."
+		] : [
 			"Efforts horizontaux transmis par le tablier en tête d'appui, propriétés limites supérieures (UBDP), combinaison des directions 100/30/30 (EN 1998-2 4.2.1.4).",
 			"Réactions verticales sismiques forfaitaires (guide Cerema 2015) ; nulles si la méthode n'est pas applicable.",
 			"Inertie propre des fûts non comprise : à ajouter au pied des appuis si elle n'est pas négligeable."

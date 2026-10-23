@@ -65,8 +65,10 @@ export function computePhasage(d) {
   if (out.reperes.fibres && (out.type === 'fleau' || out.p.n > 1 || true)) {
     const v = (k, def) => (String(d[k] ?? '').trim() === '' || !Number.isFinite(+d[k]) ? def : +d[k]);
     const fl = out.type === 'fleau', Lr = fl ? v('fl_Lr', (out.p.caisson ? out.p.caisson.B : 12) - 2) : v('ph_Lr', 8), tr = fl ? v('fl_trott', 0) : v('ph_trott', 1);
+    // séisme vertical du tablier précontraint (EN 1998-2 § 4.1.7(2)P) quand le séisme est activé dans l'onglet Appuis
+    const sv = spectreVerticalDuFormulaire(d), spectreV = sv ? sv.spectreV : null, siteV = sv ? sv.site : null;
     try {
-      out.acheve = structureAchevee(out, { nPoutres: v('ph_nP', 4), chaussee: { y1: -Lr / 2, y2: Lr / 2 }, trottoirs: tr > 0 ? [{ y1: -Lr / 2 - tr, y2: -Lr / 2 }, { y1: Lr / 2, y2: Lr / 2 + tr }] : [],
+      out.acheve = structureAchevee(out, { spectreV, siteV, nPoutres: v('ph_nP', 4), chaussee: { y1: -Lr / 2, y2: Lr / 2 }, trottoirs: tr > 0 ? [{ y1: -Lr / 2 - tr, y2: -Lr / 2 }, { y1: Lr / 2, y2: Lr / 2 + tr }] : [],
         alpha: EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended, alphaKey: d.alpha || 'recommended', expo: (fl ? d.fl_expo : d.ph_expo) || 'XC' });
     } catch (e) { out.acheveErreur = e.message; }
     if (fl) {
@@ -338,6 +340,20 @@ export function acheveBlocks(out) {
   para('ELU : M_Ed = 1,35 M_charges + M_hyperstatique de la précontrainte (γ_P = 1,0, EN 1992-1-1 § 2.4.2.2 ; obtenu par un second calcul par phases sans câbles) + 1,35 Q + 1,5 × 0,6 T. M_Rd : câbles seuls ; A_s : armatures passives de complément nécessaires (face inférieure en moment positif, face supérieure en moment négatif). Effort tranchant réduit de la composante verticale des câbles et, pour les caissons de hauteur variable, de l\'effet Résal de la membrure inférieure inclinée (§ 6.2.1 (1)).');
   h2('Vérifications de l\'ouvrage terminé');
   table(['Vérification', 'Valeur', 'Limite', 'x [m]', 'Résultat', 'Référence'], v.verifs.map(q => [q.nom, F(q.val, 2), F(q.lim, 2), F(q.x, 1), q.ok ? 'OK' : 'NON', q.ref]));
+  if (v.seismeV) {
+    const S = v.seismeV, si = S.site || {};
+    h2('Séisme vertical sur le tablier précontraint (EN 1998-2 § 4.1.7(2)P)');
+    table(['Grandeur', 'Valeur'], [
+      ['Site (onglet Appuis)', `zone ${si.zone}, catégorie ${si.categorie}, sol ${si.classeSol} ; a_vg S_T = ${F(si.avg, 2)} m/s², plateau S_ve = ${F(si.Sve, 2)} m/s² (ξ = 2 %, béton précontraint, § 4.1.3)`],
+      [`Analyse modale verticale${fl ? '' : ' (une poutre)'}`, `${S.nModes} modes, ${F(100 * S.participation, 1)} % de la masse ; mode dominant T = ${F(S.T, 3)} s, S_ve = ${F(S.Sve, 2)} m/s² ; contrôle de Rayleigh sur la déformée du poids T_R = ${F(S.TR, 3)} s (flèche ${F(S.fleche * 1000, 1)} mm) ; poids ${F(S.W, 0)} kN`],
+      ['Modes principaux', S.modes.filter(m => m.Meff > 0.02 * S.W / 9.81).slice(0, 6).map(m => `T = ${F(m.T, 3)} s (${F(100 * m.Meff / (S.W / 9.81), 1)} %)`).join(' ; ')],
+      ['Moment sismique vertical maximal', `M_Ez = ${F(S.MEzMax, 0)} kN·m${fl ? '' : ' par poutre'}`],
+    ]);
+    const pas2 = Math.max(1, Math.round(v.sections.length / 12));
+    table(['x [m]', 'M_Ez [kN·m]', 'σ min / max (G + P ± E_z) [MPa]', 'M_Ed,E+ / M_Ed,E− [kN·m]', 'A_s inf. / sup. sismique [cm²]'],
+      v.sections.map((s, i) => ({ s, e: v.elu[i] })).filter((q, i) => i % pas2 === 0).map(({ s, e }) => [F(s.x, 1), F(s.sis.MEz, 0), s.sis.fib.map(f => `${f.nom || 'caisson'} ${F(f.min, 2)} / ${F(f.max, 2)}`).join(' ; '), `${F(e.sis.MEdEP, 0)} / ${F(e.sis.MEdEN, 0)}`, `${F(e.sis.AsInfE * 1e4, 1)} / ${F(e.sis.AsContE * 1e4, 1)}`]));
+    para('Analyse spectrale multimodale de la poutre continue (EN 1998-2 § 4.2.1) : rigidité condensée sur les translations verticales des nœuds, masses concentrées W/g (poids nodaux de la géométrie des voussoirs ou des poutres, total égal aux réactions permanentes du calcul par phases), modes retenus jusqu\'à 90 % de la masse (§ 4.2.1.2), forces modales M Γ S_ve(T) φ, moments par les lignes d\'influence, combinaison CQC à ξ = 2 % (§ 4.2.1.3, éq. 4.9). La période de Rayleigh sur la déformée du poids est donnée en contrôle (borne inférieure de la période fondamentale). Combinaison sismique G + P ± E_z (EN 1990 § 6.4.3.4, ψ₂ = 0 pour le trafic) : la composante ascendante, à vide, réduit les moments du poids et laisse agir la précontrainte. Contraintes à la mise en service et à t∞ ; ELU de flexion avec les résistances de la situation durable (du côté de la sécurité), les armatures passives retenues étant le maximum des deux situations.');
+  } else para('Séisme vertical du tablier précontraint (EN 1998-2 § 4.1.7(2)P) : non calculé — cocher le séisme dans l\'onglet Appuis (zone de sismicité 2 à 5) pour l\'obtenir.');
   h2('Réactions d\'appui (tablier entier)');
   table(['Ligne', 'G [kN]', 'TS [kN]', 'UDL [kN]', 'Trottoirs [kN]'], v.reactions.map((q, j) => [j === 0 || j === v.reactions.length - 1 ? `Culée C${j}` : `Pile P${j}`, F(q.G, 0), F(q.TS, 0), F(q.UDL, 0), F(q.trott, 0)]));
   para(`Permanentes : calcul par phases à t∞${fl ? '' : ` × ${v.nP} poutres`} ; trafic : voies chargées à plein sur les lignes d'influence des réactions. Le bouton « Transmettre les réactions aux appuis » les envoie à l'onglet Appuis et fondations.`);
@@ -412,6 +428,7 @@ import { localBlocks } from './beams_view.js';
 import { flexionTransversale, distortionCaisson } from '../src/phasage/caisson_transversal.js';
 import { desequilibreFleau, BARRE_36 } from '../src/phasage/desequilibre.js';
 import { EC_ALPHA } from '../src/loads_ec.js';
+import { spectreVerticalDuFormulaire } from '../src/seisme_vertical.js';
 
 /** Options des vérifications de la structure achevée (champs mx_* du formulaire). */
 export function optionsMixte(d, p) {

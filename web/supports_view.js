@@ -32,6 +32,18 @@ const L0s = (Ls, code) => Ls[0][code].found;
 /**
  * @param {object} opts { noWater : sans la section « piles en rivière » (chapitre séparé de la note globale), onlyWater }
  */
+/** Description du modèle sismique retenu (tablier, liaisons, méthode). */
+function modeleSismique(S, iso) {
+  const pr = S.projet, T = { dalle_ba: 'dalle en béton armé', dalle_bp: 'dalle précontrainte', poutres: 'poutres en béton', caisson: 'caisson en béton', mixte: 'mixte acier-béton' };
+  const tab = pr ? `tablier ${T[pr.tablier.type] || pr.tablier.type}${pr.tablier.inertieVerticale ? `, inerties de la section réelle (I_v = ${pr.tablier.inertieVerticale.toFixed(2).replace('.', ',')} m⁴${pr.tablier.inertieTransversale ? `, I_t = ${pr.tablier.inertieTransversale.toFixed(1).replace('.', ',')} m⁴` : ''}, béton des appuis)` : ''}` : 'tablier';
+  const L = { elastomere: 'élastomère', fixe: 'appareils fixes', glissant: 'appareils glissants' };
+  const lia = pr ? ` ; liaisons ${pr.appuis.map(a => `${a.id} ${L[a.appareils.type] || a.appareils.type}`).join(', ')}` : '';
+  const mod = iso ? 'travées indépendantes : chaque travée sur sa rangée d\'appareils à chaque about (deux rangées par pile), une translation par travée en X et une poutre par travée en Y, piles en console, modes jusqu\'à 90 % de la masse (EN 1998-2 4.2.1), repos d\'appui sur chaque pile (6.6.4)'
+    : S.methode === 'multimodale' ? 'analyse multimodale sur le modèle à tablier flexible (ouvrage construit par encorbellements, hors du domaine du mode fondamental — guide Cerema 2015, ch. 4 § 5.3.1)'
+      : 'tablier rigide, efforts répartis selon les raideurs (appareils et fûts)';
+  return `${tab}${lia} ; ${mod}`;
+}
+
 export function supportsBlocks(sup, ref = 'F61', opts = {}) {
   const B = [], code = ref === 'F61' ? 'BAEL' : 'EC', isF = code === 'BAEL';
   const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), comment = text => B.push({ t: 'comment', text });
@@ -95,8 +107,9 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
   }
 
   if (sup.seisme) {
+    const isoS = !!(sup.seisme.projet && sup.seisme.projet.tablier.continuite === 'isostatique');
     { const ML = { mode_fondamental: 'méthode du mode fondamental', multimodale: 'analyse multimodale', temporel_lineaire: 'calcul temporel linéaire', pont_isole: 'pont isolé (chapitre 7)' };
-      const meth = sup.seisme.efforts && sup.seisme.efforts.methode ? ML[sup.seisme.efforts.methode] || sup.seisme.efforts.methode : 'méthode du mode fondamental';
+      const meth = isoS ? 'travées indépendantes, analyse multimodale' : sup.seisme.efforts && sup.seisme.efforts.methode ? ML[sup.seisme.efforts.methode] || sup.seisme.efforts.methode : 'méthode du mode fondamental';
       h2(`Séisme — EN 1998-2, ${meth} (${sup.seisme.source === 'onglet' ? 'onglet « Calcul sismique » : Pont EC8 complet' : 'moteur de Pont EC8, projet PSIDA'})`); }
     if (sup.seisme.error) para(`Calcul sismique impossible : ${sup.seisme.error}`);
     else {
@@ -107,6 +120,10 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
         ['Coefficient de comportement q', F2(qq.long), F2(qq.trans)],
       ]);
       table(['Ligne', 'X + 0,3 Y + 0,3 Z : F_x / F_y / F_z [kN]', '0,3 X + Y + 0,3 Z', '0,3 X + 0,3 Y + Z', 'Déplacement tête / appareils X [cm]'], sup.seisme.efforts.appuis.map((a, i) => [lineName(Ls[i], n), ...a.cas.map(k => `${F0(k.Fx)} / ${F0(k.Fy)} / ${F0(k.Fz)}`), `${F2(a.dTete.x * 100)} / ${F2(a.dAppareils.x * 100)}`]), { small: true });
+      if (sup.seisme.repos && sup.seisme.repos.length) {
+        table(['Appui', 'l_m [m]', 'd_eg [m]', 'd_es [m]', 'l_ov requis [m]', 'Disponible [m]', 'Résultat'], sup.seisme.repos.map(q => [q.id, F2(q.lm), F3(q.deg), F3(q.des), F3(q.lov), Number.isFinite(q.disponible) ? F2(q.disponible) : '—', q.etat === 'ok' ? 'OK' : q.etat === 'non_verifie' ? 'NON' : '—']), { small: true });
+        comment(`Repos d'appui (EN 1998-2 § 6.6.4) : l_ov = l_m + d_eg + d_es, l_m = 0,40 m, d_eg = 2 d_g L_eff/L_g ≤ 2 d_g, d_es = d_E + d_G + 0,5 d_T${isoS ? ' ; travées indépendantes : sur chaque pile, L_eff = demi-travée et le déplacement sismique de la tête de pile s\'ajoute ; disponible = demi-largeur de la tête de pile (chevêtre, ou voile en tête) moins 2,5 cm de demi-joint' : ' ; culées : disponible = du nu avant du sommier à l\'extrémité du tablier (modèle de culée de Pont EC8)'}.`);
+      }
       const ef = sup.seisme.efforts;
       if (ef.appuis.some(a => a.capacite)) {
         const RG = { AEd: 'A_Ed', q_fois_AEd: 'q·A_Ed', capacite: 'capacité', capacite_plafonnee: 'q·A_Ed (plafond)', appareils: 'appareils 1,3 K_b d_b' };
@@ -114,7 +131,7 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
         table(['Ligne', 'Fondations X : V_E → V [kN]', 'Fondations Y : V_E → V [kN]'], ef.appuis.map((a, i) => [lineName(Ls[i], n), dc(a.capacite && a.capacite.x), dc(a.capacite && a.capacite.y)]), { small: true });
         comment(`Efforts pour les fondations (EN 1998-2 5.8.2), combinés 100/30/30 comme A_Ed et appliqués en tête d'appui, uniquement dans les vérifications des fondations (les fûts restent dimensionnés sous A_Ed) — X : ${ef.fondations ? ef.fondations.x : '—'} ; Y : ${ef.fondations ? ef.fondations.y : '—'}. Capacité (annexe G.2, (G.3)) : V_C = γ0 n M_Rd/L, M_Rd résistance de calcul en flexion d'un fût en pied sous l'effort normal permanent (armatures transmises par PSIDA), γ0 = 1,35 (valeur recommandée, 5.3(4)) majoré de 1 + 2(η_k − 0,1)² si η_k > 0,1 ; appareils en élastomère (5.3(8)P) : un élément sans rotule plastique qui reprend l'effort des appareils est dimensionné pour l'effort des appareils à leur déformation de calcul (déplacement de calcul du tablier), raideur accrue de 30 %, V_b = 1,3 K_b d_b — culées sur élastomères : V_b ; piles : min(V_C ; V_b) ; culées sans élastomère : A_Ed × ΣV_C/ΣV_E (G.4) ; le tout borné inférieurement par V_E et supérieurement par q V_E (5.3(2)).`);
       }
-      comment(`Zone ${sz.zone}, catégorie d'importance ${sz.categorie}, sol de classe ${sz.classeSol} (arrêté du 26 octobre 2011, NF EN 1998-1/NA et 1998-2/NA) ; masse ${F0(sup.seisme.M)} t ; tablier rigide, efforts répartis selon les raideurs (appareils et fûts), propriétés limites des élastomères, combinaison des directions 100/30/30, réactions verticales forfaitaires (guide Cerema « Ponts en zone sismique », 2015). Combinaison sismique G + ψ₂,₁ Q + A_Ed (ψ₂,₁ = 0), matériaux en situation accidentelle (γ_b = 1,15 BAEL / γ_c = 1,2 EC2, γ_s = 1,0), portance des fondations ELU accidentel. Non pris en compte : inertie propre des fûts, surpoussée dynamique des terres sur les culées (Mononobe-Okabe), dispositions de ductilité ; la note sismique complète (appareils, repos d'appui, joints) s'obtient dans Pont EC8 par l'export du projet.${sup.seisme.problemes.length ? ' Alertes de Pont EC8 : ' + sup.seisme.problemes.map(p => `${p.cible} : ${p.message}`).join(' ; ') : ''}`);
+      comment(`Zone ${sz.zone}, catégorie d'importance ${sz.categorie}, sol de classe ${sz.classeSol} (arrêté du 26 octobre 2011, NF EN 1998-1/NA et 1998-2/NA) ; masse ${F0(sup.seisme.M)} t ; ${modeleSismique(sup.seisme, isoS)}, propriétés limites des élastomères, combinaison des directions 100/30/30, réactions verticales forfaitaires (guide Cerema « Ponts en zone sismique », 2015). Combinaison sismique G + ψ₂,₁ Q + A_Ed (ψ₂,₁ = 0), matériaux en situation accidentelle (γ_b = 1,15 BAEL / γ_c = 1,2 EC2, γ_s = 1,0), portance des fondations ELU accidentel. Non pris en compte : inertie propre des fûts, surpoussée dynamique des terres sur les culées (Mononobe-Okabe), dispositions de ductilité ; la note sismique complète (appareils, repos d'appui, joints) s'obtient dans Pont EC8 par l'export du projet.${sup.seisme.problemes.length ? ' Alertes de Pont EC8 : ' + sup.seisme.problemes.map(p => `${p.cible} : ${p.message}`).join(' ; ') : ''}`);
     }
   }
   const ch = sup.sp.choc;

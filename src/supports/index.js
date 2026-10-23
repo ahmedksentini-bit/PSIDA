@@ -9,7 +9,7 @@ import { nivellement } from './nivellement.js';
 import { Axe } from '../geom/axe.js';
 import { forceCentrifuge, qvEC, forceCentrifugeF61 } from '../geom/centrifuge.js';
 import { BC } from '../loads_f61.js';
-import { neopreneFlexibility, cantileverFlexibility, horizontalDistribution, brakingF61Deck, headCombinationsBAEL, headCombinationsEC, repartitionPlan } from './actions.js';
+import { neopreneFlexibility, cantileverFlexibility, horizontalDistribution, horizontalDistributionIso, brakingF61Deck, headCombinationsBAEL, headCombinationsEC, repartitionPlan } from './actions.js';
 import { designShaft, pierCap, buckling, chevetreTorsion } from './pier.js';
 import { gardeGreve, murEnRetour, earthPressure, earthPressureUpper, videCombos, dalleTransition, Ka } from './abutment.js';
 import { shallowFooting, footingStrutTie, pileCapStrutTie, pileGroupForces, menardReaction, lateralPile, pileMinSteel, pileCapacity, minPileLength, PILE_TYPES, pileCapTwoRows, paroiFlechie, negativeFrictionPiles, pileGroupSettlement, footingRotationStiffness, footingSettlement, footingCantilever, sigmaSBAEL, pileConcrete, efficaciteCoherentF62, efficaciteEC7, isCohesive, soilProfile } from './foundation.js';
@@ -45,7 +45,17 @@ export function seismicActions(st, sp, hGG, spLigne = null) {
   const projet = EC8.lireProjet(JSON.parse(JSON.stringify(toPontEC8({ ...st, supports: { sp, hGG, spLigne } }, { site: sp.ec8, q: sp.seisme.q }))));
   const problemes = EC8.valider(projet);
   const a = EC8.actionSismique(projet), m = EC8.modele(projet), r = EC8.analyse(projet, a, m);
-  return { projet, problemes, efforts: EC8.exporterEfforts(projet, a, r), T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T }, F: { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 }, M: r.M, conditions: r.conditions };
+  // repos d'appui (EN 1998-2 6.6.4) : culées, et piles d'un tablier à travées indépendantes
+  let repos = null;
+  try { const v = EC8.verifierAppuis(projet, a, m, r); repos = v.repos.map(q => ({ ...q, etat: (v.criteres.find(c => c.id === `${q.id}_repos`) || {}).etat })); } catch { repos = null; }
+  // méthode demandée par le projet (caissons construits par encorbellements : multimodale)
+  if (projet.options.methodeEfforts === 'multimodale') {
+    const mm = EC8.multimodale(projet, a, m, r), efforts = EC8.exporterEfforts(projet, a, r, { multimodale: mm }, 'multimodale');
+    const T1 = d => (mm.comparaison.find(c => c.direction === d) || {}).T1 ?? 0;
+    const F = d => efforts.appuis.reduce((s, ap) => s + Math.abs(d === 'x' ? ap.cas[0].Fx : ap.cas[1].Fy), 0);
+    return { projet, problemes, efforts, repos, methode: 'multimodale', T: { x: T1('x'), y: T1('y') }, F: { x: F('x'), y: F('y') }, M: r.M, conditions: r.conditions };
+  }
+  return { projet, problemes, repos, efforts: EC8.exporterEfforts(projet, a, r), methode: projet.tablier.continuite === 'isostatique' ? 'travees_independantes' : 'mode_fondamental', T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T }, F: { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 }, M: r.M, conditions: r.conditions };
 }
 
 /**
@@ -221,14 +231,18 @@ export function computeSupports(st, input = {}) {
     return sp.pile.type === 'voile' ? Lv * sp.pile.b ** 3 / 12 : sp.pile.nCol * Math.PI * sp.pile.D ** 4 / 64;
   };
   const shaftH = i => (isEnd(i) ? S(i).culee.Hm : Hpile(i) + (sp.pile.type === 'colonnes' ? sp.pile.hc : 0));
+  // tablier à travées indépendantes (appuis seuls) : chaque travée sur ses propres appareils
+  const iso = deck.continuite === 'isostatique';
   const lineData = code => xs.map((x, i) => {
     const r = bearings.rows[i], sel = r.sel || { bd: { a: 300, b: 400 }, T: 0.04 };
     const a = sel.bd.a / 1000, b = sel.bd.b / 1000, Te = (sel.T || 0.04) + 2 * 0.0025;   // élastomère + enrobages 2,5 mm
     const I = shaftI(i), H = shaftH(i);
     const Ei = code === 'BAEL' ? EiB(fck) : Ecm(fck), Ev = code === 'BAEL' ? EvB(fck) : Ecm(fck) / 3;
     return {
-      x, bearing: { a, b, Te, n: r.nb },
-      sNeo: { inst: neopreneFlexibility({ n: r.nb, a, b, Te, G: 1.8 }), diff: neopreneFlexibility({ n: r.nb, a, b, Te, G: 0.9 }) },
+      x, bearing: { a, b, Te, n: r.nb }, liaison: r.liaison || 'elastomere', rangees: iso && i > 0 && i < xs.length - 1 ? 2 : 1,
+      // appareil fixe : liaison rigide ; appareil glissant (multidirectionnel) : aucun effort horizontal (frottement négligé)
+      sNeo: r.liaison === 'fixe' ? { inst: 0, diff: 0 } : r.liaison === 'glissant' ? { inst: Infinity, diff: Infinity }
+        : { inst: neopreneFlexibility({ n: r.nb, a, b, Te, G: 1.8 }), diff: neopreneFlexibility({ n: r.nb, a, b, Te, G: 0.9 }) },
       sApp: onPiles(i) ? { inst: headFlex(i, code, 'inst')[2][2], diff: headFlex(i, code, 'sus')[2][2] } : (() => {
         // semelle superficielle : rotation sur le sol (module de réaction de Ménard, F62 F.3 : k_i = 2 k_v) ramenée en tête
         const fr = footRot(i, code), hT = H + F0(i).hs;
@@ -238,7 +252,8 @@ export function computeSupports(st, input = {}) {
       })(),
     };
   });
-  const distB = horizontalDistribution(lineData('BAEL')), distE = horizontalDistribution(lineData('EC'));
+  const distH = iso ? horizontalDistributionIso : horizontalDistribution;
+  const distB = distH(lineData('BAEL')), distE = distH(lineData('EC'));
   // --- rigidités TRANSVERSALES (efforts H_y : force centrifuge) : mêmes appareils (élastomère isotrope en distorsion) ;
   //     pile voile fléchie dans son plan (I = b L_v³/12) ; colonnes liées en tête par le chevêtre : portique à traverse
   //     rigide (12 EI/H³ par colonne, soit un fût console d'inertie 4 Σ I) ; culée remblayée rigide en travers ;
@@ -287,7 +302,7 @@ export function computeSupports(st, input = {}) {
   };
   // appareils d'appui, référentiel EC (guide Sétra 2007 § 4.3.1 et 4.3.2.3.1) : appui (fût, fondation, sol) avec ses raideurs
   // instantanées, élastomère G = 0,9 MPa pour les déformations lentes — distribution distincte de celle des fondations (différée)
-  const distEb = horizontalDistribution(lineData('EC').map(l => ({ ...l, sApp: { inst: l.sApp.inst, diff: l.sApp.inst } })));
+  const distEb = distH(lineData('EC').map(l => ({ ...l, sApp: { inst: l.sApp.inst, diff: l.sApp.inst } })));
 
   // --- profil en long (plan de nivellement) : composante du poids parallèle à la pente, W_j·sin α_j par travée (abouts
   //     avec la travée de rive), action permanente répartie entre les lignes d'appui au prorata des raideurs différées ;
@@ -307,7 +322,7 @@ export function computeSupports(st, input = {}) {
 
   // --- actions en tête par ligne ---
   const chargeable = deck.g.roadway.y2 - deck.g.roadway.y1;
-  const brk = brakingF61Deck({ Ltot, Lc: chargeable });
+  const brk = brakingF61Deck({ Ltot: deck.continuite === 'isostatique' ? Math.max(...deck.spans) : Ltot, Lc: chargeable });
   // ouvrage courbe : force centrifuge EN 1991-2 § 4.4.2 au rayon minimal du tracé, groupe gr2, répartie entre les lignes
   // comme le freinage (raideurs instantanées des appareils et des appuis — approximation : raideurs transversales prises
   // égales aux raideurs longitudinales)
@@ -818,6 +833,8 @@ export function computeSupports(st, input = {}) {
     }
     out.BAEL = per.BAEL; out.EC = per.EC;
     out.warnings = geometryWarnings(sp, end, width, Lfoot(i));
+    for (const t of (bearings.notes || [])) if (t.startsWith(`ligne ${i + 1} :`)) out.warnings.push(t.replace(/^ligne \d+ : /, ''));
+    if (bearings.rows[i] && bearings.rows[i].liaison && bearings.rows[i].liaison !== 'elastomere') out.liaison = bearings.rows[i].liaison;
     if (jointAt(i)) out.warnings.push(`pile de joint : réactions du tablier adjacent prises égales à r_G = ${J.rG ?? 1}, r_Q = ${J.rQ ?? 1}, r_H = ${J.rH ?? 1} fois celles du tablier étudié (géométrie de pile commune aux autres piles)${sp.seisme.actif ? ' ; le calcul sismique (Pont EC8) traite encore cette ligne comme une culée' : ''}`);
     const hv = Math.max(0, ...(per.EC.found.rows || per.EC.found.checks || []).filter(r => r.ls === 'ELU' && !r.vide).map(r => Math.abs(r.H) / Math.max(1e-9, r.V)));
     if (sp.found.type !== 'superficielle' && hv > 0.20) out.warnings.push(`H/V = ${hv.toFixed(2)} > 0,20 à l'ELU : envisager des pieux inclinés (PP73 1.1.3 § 2.2.2.7)`);

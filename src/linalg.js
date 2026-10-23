@@ -73,3 +73,25 @@ export function gaussNodes(a, b, n = 4) {
   const c = (a + b) / 2, r = (b - a) / 2;
   return pts.map(([t, w]) => [c + r * t, w * r]);
 }
+
+/**
+ * Valeurs et vecteurs propres d'une matrice symétrique réelle (méthode de Jacobi cyclique).
+ * @param {number[][]} S matrice symétrique (non modifiée)
+ * @returns {{valeurs:number[], V:number[][]}} V[i][k] : composante i du vecteur propre k (normé à 1)
+ */
+export function jacobiSym(S, { tol = 1e-12, balayages = 100 } = {}) {
+  const n = S.length, A = S.map(r => r.slice()), V = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 1 : 0)));
+  let dmax = 0; for (let i = 0; i < n; i++) dmax = Math.max(dmax, Math.abs(A[i][i]));
+  for (let b = 0; b < balayages; b++) {
+    let off = 0; for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) off += A[i][j] * A[i][j];
+    if (Math.sqrt(off) <= tol * Math.max(dmax, 1e-300)) break;
+    for (let p = 0; p < n - 1; p++) for (let q = p + 1; q < n; q++) {
+      const apq = A[p][q]; if (Math.abs(apq) < 1e-300) continue;
+      const th = (A[q][q] - A[p][p]) / (2 * apq), t = Math.sign(th || 1) / (Math.abs(th) + Math.sqrt(th * th + 1)), c = 1 / Math.sqrt(t * t + 1), s = t * c;
+      for (let k = 0; k < n; k++) { const akp = A[k][p], akq = A[k][q]; A[k][p] = c * akp - s * akq; A[k][q] = s * akp + c * akq; }
+      for (let k = 0; k < n; k++) { const apk = A[p][k], aqk = A[q][k]; A[p][k] = c * apk - s * aqk; A[q][k] = s * apk + c * aqk; }
+      for (let k = 0; k < n; k++) { const vkp = V[k][p], vkq = V[k][q]; V[k][p] = c * vkp - s * vkq; V[k][q] = s * vkp + c * vkq; }
+    }
+  }
+  return { valeurs: A.map((r, i) => r[i]), V };
+}

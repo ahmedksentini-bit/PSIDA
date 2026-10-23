@@ -55,7 +55,13 @@ export interface ModeleDynamique {
   masse: number;
   tablier: { x: number[]; ddl: number[] };
   piles: { id: string; appui: number; z: number[]; ddl: number[]; elements: Element[]; masse: number }[];
-  appuis: { id: string; type: "pile" | "culee"; x: number; ressort: Ressort | null; ddlTablier: number; ddlTete: number; rigide: boolean; kSupport: number; kAppareils: number }[];
+  appuis: {
+    id: string; type: "pile" | "culee"; x: number; ressort: Ressort | null; ddlTablier: number; ddlTete: number; rigide: boolean; kSupport: number; kAppareils: number;
+    /** Travées indépendantes : une rangée d'appareils par about de travée (ddl du tablier et ressort de chaque rangée). */
+    rangees?: { ddlTablier: number; ressort: Ressort | null; rigide: boolean }[];
+  }[];
+  /** Tablier à travées indépendantes (joint sur chaque pile). */
+  isostatique?: boolean;
   /** Raideur retenue pour une liaison rigide (kN/m). */
   kRigide: number;
   inerties: { I: number; saisie: boolean } | null;
@@ -103,7 +109,45 @@ export function modeleDynamique(p: Projet, m: Modele, direction: DirectionMM, bo
   const ddlTablier: number[] = [];
   let inertiesTab: ModeleDynamique["inerties"] = null;
   let masseTablierX = 0;
-  if (direction === "x") {
+  const iso = p.tablier.continuite === "isostatique" && p.tablier.travees.length > 1;
+  /** Travées indépendantes : ddl du tablier aux abouts de chaque travée [début, fin]. */
+  const abouts: [number, number][] = [];
+  const massesTravees: { ddl: number; m: number }[] = [];
+  if (iso) {
+    // chaque travée a ses propres nœuds (nœuds doublés au droit des piles) ; en X, une translation par travée
+    xs.length = 0;
+    if (direction !== "x") {
+      const I = inertiesTablier(p);
+      inertiesTab = direction === "y" ? { I: I.transversale, saisie: I.saisie.transversale } : { I: I.verticale, saisie: I.saisie.verticale };
+    }
+    let x0 = 0;
+    for (const t of p.tablier.travees) {
+      if (direction === "x") {
+        const u = nouveau();
+        translation.push(u);
+        for (let k = 0; k <= net; k++) { xs.push(x0 + (t * k) / net); ddlTablier.push(u); }
+        abouts.push([u, u]);
+        massesTravees.push({ ddl: u, m: muTablier * t });
+      } else {
+        const w: number[] = [], rot: number[] = [];
+        for (let k = 0; k <= net; k++) {
+          xs.push(x0 + (t * k) / net);
+          const wi = nouveau();
+          translation.push(wi);
+          ddlTablier.push(wi);
+          w.push(wi);
+          rot.push(nouveau());
+        }
+        for (let k = 0; k < net; k++) {
+          const l = t / net;
+          const el = elementPoutre(E * inertiesTab!.I, muTablier, l);
+          elements.push({ e: { ddl: [w[k]!, rot[k]!, w[k + 1]!, rot[k + 1]!], k: el.k, longueur: l }, m: el.m });
+        }
+        abouts.push([w[0]!, w[net]!]);
+      }
+      x0 += t;
+    }
+  } else if (direction === "x") {
     const u = nouveau();
     translation.push(u);
     xs.forEach(() => ddlTablier.push(u));
@@ -131,19 +175,25 @@ export function modeleDynamique(p: Projet, m: Modele, direction: DirectionMM, bo
   const appuis: ModeleDynamique["appuis"] = [];
   const liaisonsRigides: { i: number; j: number }[] = [];
   const raideurs = direction === "z" ? null : m.directions[direction].appuis;
+  const nT = p.tablier.travees.length;
+  /** ddl du tablier portés par l'appui ia : un (tablier continu, culées) ou deux (pile d'un tablier à travées indépendantes). */
+  const ddlPortes = (ia: number): number[] =>
+    iso ? [...(ia > 0 ? [abouts[ia - 1]![1]] : []), ...(ia < nT ? [abouts[ia]![0]] : [])] : [ddlTablier[indicesAppuis[ia] ?? 0] ?? 0];
   p.appuis.forEach((ap, ia) => {
-    const dT = ddlTablier[indicesAppuis[ia] ?? 0] ?? 0;
+    const portes = ddlPortes(ia);
+    const dT = portes[0] ?? 0;
     const x = d.positions[ia] ?? 0;
     if (direction === "z") {
-      liaisonsRigides.push({ i: dT, j: -1 });
-      appuis.push({ id: ap.id, type: ap.type, x, ressort: null, ddlTablier: dT, ddlTete: -1, rigide: true, kSupport: Infinity, kAppareils: Infinity });
+      for (const q of portes) liaisonsRigides.push({ i: q, j: -1 });
+      appuis.push({ id: ap.id, type: ap.type, x, ressort: null, ddlTablier: dT, ddlTete: -1, rigide: true, kSupport: Infinity, kAppareils: Infinity,
+        ...(portes.length > 1 ? { rangees: portes.map((q) => ({ ddlTablier: q, ressort: null, rigide: true })) } : {}) });
       return;
     }
     const ra = raideurs![ia]!;
     const kApp = ra.kAppareils[borne] * 1000;
     if (ap.type === "culee") {
       const kTot = ra.kTotal[borne] * 1000;
-      const entree = { id: ap.id, type: ap.type, x, ressort: null as Ressort | null, ddlTablier: dT, ddlTete: -1, rigide: false, kSupport: ra.kSupport * 1000, kAppareils: kApp };
+      const entree = { id: ap.id, type: ap.type, x, ressort: null as Ressort | null, ddlTablier: dT, ddlTete: -1, rigide: false, kSupport: ra.kSupport * 1000, kAppareils: kApp } as ModeleDynamique["appuis"][number];
       if (kTot === Infinity) {
         entree.rigide = true;
         liaisonsRigides.push({ i: dT, j: -1 });
@@ -182,8 +232,18 @@ export function modeleDynamique(p: Projet, m: Modele, direction: DirectionMM, bo
     }
     const tete = ddlW[ELEMENTS_PILE]!;
     piles.push({ id: ap.id, appui: ia, z, ddl: ddlW, elements: els, masse: mu * h });
-    const entree = { id: ap.id, type: ap.type, x, ressort: null as Ressort | null, ddlTablier: dT, ddlTete: tete, rigide: false, kSupport: (nf * 3 * E * I) / h ** 3, kAppareils: kApp };
-    if (kApp === Infinity) {
+    const entree = { id: ap.id, type: ap.type, x, ressort: null as Ressort | null, ddlTablier: dT, ddlTete: tete, rigide: false, kSupport: (nf * 3 * E * I) / h ** 3, kAppareils: kApp } as ModeleDynamique["appuis"][number];
+    if (portes.length > 1) {
+      // travées indépendantes : deux rangées d'appareils, chacune avec la moitié des appareils de la ligne
+      entree.rangees = portes.map((q) => {
+        if (kApp === Infinity) { liaisonsRigides.push({ i: q, j: tete }); return { ddlTablier: q, ressort: null, rigide: true }; }
+        const rs: Ressort | null = kApp > 0 ? { i: q, j: tete, k: kApp / portes.length } : null;
+        if (rs) ressorts.push(rs);
+        return { ddlTablier: q, ressort: rs, rigide: false };
+      });
+      entree.rigide = kApp === Infinity;
+      entree.ressort = entree.rangees[0]!.ressort;
+    } else if (kApp === Infinity) {
       entree.rigide = true;
       liaisonsRigides.push({ i: dT, j: tete });
     } else if (kApp > 0) {
@@ -208,7 +268,8 @@ export function modeleDynamique(p: Projet, m: Modele, direction: DirectionMM, bo
       }
     }
   }
-  if (direction === "x") M[0]![0]! += masseTablierX;
+  if (iso && direction === "x") for (const t of massesTravees) M[t.ddl]![t.ddl]! += t.m;
+  else if (direction === "x") M[0]![0]! += masseTablierX;
   for (let i = 0; i < n; i++) r.push(translation.includes(i) ? 1 : 0);
   let masse = 0;
   for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) masse += r[i]! * M[i]![j]! * r[j]!;
@@ -216,9 +277,12 @@ export function modeleDynamique(p: Projet, m: Modele, direction: DirectionMM, bo
   for (const l of liaisonsRigides) {
     const s: Ressort = { i: l.i, j: l.j, k: kRigide };
     ressorts.push(s);
+    const rg = appuis.flatMap((a) => a.rangees ?? []).find((g) => g.rigide && g.ddlTablier === l.i && !g.ressort);
+    if (rg) { rg.ressort = s; continue; }
     const ap = appuis.find((a) => a.rigide && a.ddlTablier === l.i && (l.j === -1 ? a.ddlTete === -1 : a.ddlTete === l.j) && !a.ressort);
     if (ap) ap.ressort = s;
   }
+  for (const a of appuis) if (a.rangees && !a.ressort) a.ressort = a.rangees[0]?.ressort ?? null;
   for (const s of ressorts) {
     if (s.i >= 0) K[s.i]![s.i]! += s.k;
     if (s.j >= 0) K[s.j]![s.j]! += s.k;
@@ -228,7 +292,7 @@ export function modeleDynamique(p: Projet, m: Modele, direction: DirectionMM, bo
     }
   }
   // Rotations sans masse ni raideur (ne se produit pas : tout ddl de rotation appartient à un élément).
-  return { direction, borne, n, K, M, r, masse, tablier: { x: xs, ddl: ddlTablier }, piles, appuis, kRigide, inerties: inertiesTab };
+  return { direction, borne, n, K, M, r, masse, tablier: { x: xs, ddl: ddlTablier }, piles, appuis, kRigide, inerties: inertiesTab, ...(iso ? { isostatique: true } : {}) };
 }
 
 /** Coefficient de corrélation CQC (EN 1998-2 éq. 4.9), amortissements ξi, ξj, rapport ρ = ωj/ωi. */
@@ -290,6 +354,9 @@ export interface ReponseAppuiMM {
   Mpied?: number;
   /** Valeurs modales de F (MN) pour l'affichage pédagogique. */
   Fmodes: number[];
+  /** Travées indépendantes : déplacements de chaque rangée (η·μd inclus) et ouverture relative du joint sur pile (m). */
+  rangees?: { dTablier: number[]; dAppareils: number[] };
+  dJoint?: number;
 }
 
 export interface ReponseDirectionMM {
@@ -341,13 +408,34 @@ export interface GrandeursAppui {
   dAppareils: number;
   Vpied?: number;
   Mpied?: number;
+  /** Travées indépendantes : valeurs par rangée d'appareils et ouverture relative du joint sur pile (m). */
+  rangees?: { dTablier: number[]; dAppareils: number[] };
+  dJoint?: number;
 }
 
 /** Grandeurs par appui pour un champ de déplacements u (m) du modèle dynamique (signées). */
 export function grandeursAppuis(md: ModeleDynamique, u: number[]): GrandeursAppui[] {
   const val = (i: number) => (i < 0 ? 0 : u[i] ?? 0);
   return md.appuis.map((ap) => {
-    const F = ap.ressort ? (ap.ressort.k * (val(ap.ressort.i) - val(ap.ressort.j))) / 1000 : 0;
+    const effort = (rs: Ressort | null) => (rs ? (rs.k * (val(rs.i) - val(rs.j))) / 1000 : 0);
+    if (ap.rangees) {
+      // travées indépendantes : somme des deux rangées ; distorsion et déplacement du tablier de chaque rangée ; ouverture du joint
+      const F = ap.rangees.reduce((s, g) => s + effort(g.ressort), 0);
+      const dT = ap.rangees.map((g) => val(g.ddlTablier));
+      const dTete = md.direction === "z" ? 0 : val(ap.ddlTete);
+      const dApp = dT.map((v) => (md.direction === "z" ? 0 : v - dTete));
+      const g: GrandeursAppui = { F, dTablier: dT[0] ?? 0, dTete, dAppareils: dApp[0] ?? 0, rangees: { dTablier: dT, dAppareils: dApp }, dJoint: (dT[0] ?? 0) - (dT[1] ?? 0) };
+      const pile = md.piles.find((pl) => pl.id === ap.id);
+      if (pile) {
+        const base = pile.elements[0]!;
+        const ue = base.ddl.map((i) => val(i));
+        const f = base.k.map((l) => l.reduce((s, v, j) => s + v * ue[j]!, 0));
+        g.Vpied = (f[0] ?? 0) / 1000;
+        g.Mpied = (f[1] ?? 0) / 1000;
+      }
+      return g;
+    }
+    const F = effort(ap.ressort);
     const dTablier = val(ap.ddlTablier);
     let dTete: number, dAppareils: number;
     if (ap.type === "pile" && md.direction !== "z") {
@@ -479,6 +567,15 @@ export function reponseDirection(p: Projet, a: ActionSismique, m: Modele, direct
     if (g[0]?.Vpied !== undefined) {
       sortie.Vpied = comb(g.map((x) => x.Vpied ?? 0));
       sortie.Mpied = comb(g.map((x) => x.Mpied ?? 0));
+    }
+    if (g[0]?.rangees) {
+      // chaque rangée combinée séparément ; on retient la plus défavorable
+      const nr = g[0].rangees.dTablier.length;
+      const parRangee = (cle: "dTablier" | "dAppareils") => Array.from({ length: nr }, (_, k) => ampD * comb(g.map((x) => x.rangees![cle][k] ?? 0)));
+      sortie.rangees = { dTablier: parRangee("dTablier"), dAppareils: parRangee("dAppareils") };
+      sortie.dTablier = Math.max(...sortie.rangees.dTablier);
+      sortie.dAppareils = Math.max(...sortie.rangees.dAppareils);
+      if (nr > 1) sortie.dJoint = ampD * comb(g.map((x) => x.dJoint ?? 0));
     }
     return sortie;
   });

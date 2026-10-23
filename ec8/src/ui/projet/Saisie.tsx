@@ -132,6 +132,7 @@ function SaisiePile({ pile, maj, toutesPiles }: { pile: Pile; maj: (f: (a: Pile)
         {!rond && <ChampNombre libelle="Largeur (selon Y)" unite="m" valeur={futs.trans} min={0} onChange={(v) => maj((p) => void (p.futs.trans = v))} />}
         <ChampNombre libelle="Entraxe des fûts" unite="m" valeur={futs.entraxe} min={0} onChange={(v) => maj((p) => void (p.futs.entraxe = v))} />
         <ChampNombre libelle="Hauteur" unite="m" valeur={futs.hauteur} min={0} onChange={(v) => maj((p) => void (p.futs.hauteur = v))} />
+        <ChampNombre libelle="Repos disponible de chaque côté" unite="m" valeur={pile.reposDisponible ?? 0} min={0} aide="Travées indépendantes : de l'extrémité de la travée au bord de la tête de pile (0 = non saisi)" onChange={(v) => maj((p) => void (p.reposDisponible = v > 0 ? v : undefined))} />
       </Grille>
       <h4>Semelle</h4>
       <Grille>
@@ -365,6 +366,15 @@ export function Saisie({ projet, modifier, remplacer, problemes, appuiActif, set
                 onChange={(v) => modifier((p) => void (p.tablier.type = v))}
               />
               <ChampNombre libelle="Nombre de travées" valeur={tablier.travees.length} entier min={1} max={20} onChange={(v) => remplacer(changerNombreTravees(projet, v))} />
+              <ChampChoix<"continu" | "isostatique">
+                libelle="Continuité"
+                valeur={tablier.continuite ?? "continu"}
+                options={[
+                  { valeur: "continu", libelle: "Tablier continu" },
+                  { valeur: "isostatique", libelle: "Travées indépendantes (joint sur chaque pile)" },
+                ]}
+                onChange={(v) => modifier((p) => void (p.tablier.continuite = v))}
+              />
             </Grille>
             <Grille>
               {tablier.travees.map((t, i) => (

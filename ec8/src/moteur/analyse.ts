@@ -9,6 +9,7 @@ import type { ActionSismique } from "./action.ts";
 import type { Borne, Direction, Modele } from "./modele.ts";
 import { nombre, tex, type LigneNote, type SectionNote } from "./note.ts";
 import { valeur, type FormeSpectre } from "./spectres.ts";
+import { reponseDirection } from "./multimodal.ts";
 
 export interface EffortAppui {
   id: string;
@@ -22,6 +23,9 @@ export interface EffortAppui {
   dTete: number;
   /** Distorsion imposée aux appareils (déplacement relatif tablier/tête, m). */
   dAppareils: number;
+  /** Travées indépendantes : déplacement du tablier au droit de l'appui (plus grande des deux travées, m) et ouverture du joint sur pile (m). */
+  dTablier?: number;
+  dJoint?: number;
 }
 
 export interface ReponseDirection {
@@ -89,7 +93,16 @@ export function analyse(p: Projet, a: ActionSismique, m: Modele): Analyse {
   const massePiles = m.masses.piles.reduce((s, x) => s + x.masseFuts, 0);
   const rapportMasse = massePiles / M;
   const LsurB = L / p.tablier.largeur;
-  const conditions: Condition[] = [
+  const iso = p.tablier.continuite === "isostatique" && p.tablier.travees.length > 1;
+  const conditions: Condition[] = iso ? [
+    {
+      id: "tablier_continu",
+      libelle: "Travées indépendantes : modèle à travées indépendantes, analyse spectrale multimodale (EN 1998-2 4.2.1)",
+      valeur: `${p.tablier.travees.length} travées indépendantes, joint sur chaque pile`,
+      respectee: true,
+      references: ["conditions_monomodal"],
+    },
+  ] : [
     {
       id: "tablier_continu",
       libelle: "Tablier continu, droit et à peu près rectiligne",
@@ -128,8 +141,8 @@ export function analyse(p: Projet, a: ActionSismique, m: Modele): Analyse {
     ? infinis.reduce((s, x) => s + (positions[p.appuis.findIndex((ap) => ap.id === x.id)] ?? 0), 0) / infinis.length
     : appuisY.reduce((s, x, i) => s + (positions[i] ?? 0) * x.kTotal.lbdp, 0) / Math.max(m.directions.y.K.lbdp, 1e-12);
   const e0 = Math.abs(xK - L / 2);
-  const torsionAppliquee = e0 > 0.05 * L;
-  conditions.push({
+  const torsionAppliquee = !iso && e0 > 0.05 * L;
+  if (!iso) conditions.push({
     id: "excentricite",
     libelle: "Excentricité centre de raideur / centre de masse ≤ 5 % de L (sinon torsion)",
     valeur: `e0 = ${nombre(e0, 2)} m ; 5 % L = ${nombre(0.05 * L, 2)} m`,
@@ -167,6 +180,18 @@ export function analyse(p: Projet, a: ActionSismique, m: Modele): Analyse {
     const q = qDe(dir);
     directions[dir] = {} as Record<Borne, ReponseDirection>;
     for (const borne of BORNES) {
+      if (iso) {
+        // travées indépendantes : chaque travée oscille sur ses propres appareils — modèle dynamique à travées séparées
+        const mm = reponseDirection(p, a, m, dir, borne);
+        const ret = mm.modes.filter((x) => x.retenu);
+        const dom = ret.reduce((b, x) => (x.masseEffective > b.masseEffective ? x : b), ret[0] ?? mm.modes[0]!);
+        const Ftot = mm.Ftablier;
+        const appuis: EffortAppui[] = mm.appuis.map((ap) => ({ id: ap.id, x: ap.x, F: ap.F, part: Ftot > 0 ? ap.F / Ftot : 0, torsion: 0, dTete: ap.dTete, dAppareils: ap.dAppareils, dTablier: ap.dTablier, ...(ap.dJoint !== undefined ? { dJoint: ap.dJoint } : {}) }));
+        const dE = Math.max(0, ...mm.appuis.map((x) => x.dTablier));
+        const K = m.directions[dir].K[borne];
+        directions[dir][borne] = { K, T: dom?.T ?? 0, Sd: dom?.Sd ?? 0, F: Ftot, dEe: dE / Math.max(mm.eta * mm.muD, 1e-12), muD: mm.muD, dE, appuis };
+        continue;
+      }
       const K = m.directions[dir].K[borne];
       const T = K === Infinity ? 0 : 2 * Math.PI * Math.sqrt(M / (K * 1000));
       const Sd = valeur(spectreDe(dir), T);
@@ -208,6 +233,31 @@ export function analyse(p: Projet, a: ActionSismique, m: Modele): Analyse {
     for (const borne of m.elastomeres ? BORNES : (["lbdp"] as Borne[])) {
       const r = directions[dir][borne];
       const K = r.K;
+      if (iso) {
+        notes[dir].push(
+          {
+            id: `T_${dir}_${borne}`,
+            titre: `Période du mode dominant ${nomDir}${m.elastomeres ? ` (${borne.toUpperCase()})` : ""} — travées indépendantes`,
+            resultat: { symbole: `T${etiquette(borne)}`, valeur: r.T, unite: "s", decimales: 3 },
+            references: ["conditions_monomodal"],
+            commentaire: "Modèle dynamique : une translation par travée en X, une poutre par travée en Y, piles en console ; chaque travée liée à sa rangée d'appareils (la moitié des appareils de la ligne sur une pile). Modes jusqu'à 90 % de la masse, combinaison SRSS ou CQC (EN 1998-2 4.2.1.2, 4.2.1.3).",
+          },
+          {
+            id: `F_${dir}_${borne}`,
+            titre: "Effort transmis par le tablier à l'ensemble des appuis",
+            resultat: { symbole: `F${etiquette(borne)}`, valeur: r.F, unite: "MN", decimales: 3 },
+            references: ["conditions_monomodal"],
+          },
+          {
+            id: `d_${dir}_${borne}`,
+            titre: "Plus grand déplacement sismique du tablier",
+            resultat: { symbole: `d_E${etiquette(borne)}`, valeur: r.dE * 100, unite: "cm", decimales: 2 },
+            references: ["mu_d"],
+            commentaire: `η·μd inclus (μd = ${nombre(r.muD, 3)}).`,
+          },
+        );
+        continue;
+      }
       notes[dir].push(
         {
           id: `T_${dir}_${borne}`,
@@ -249,11 +299,13 @@ export function analyse(p: Projet, a: ActionSismique, m: Modele): Analyse {
       notes[dir].push({
         id: `F_${dir}_${ap.id}`,
         titre: `${ap.id} — effort ${dir === "x" ? "longitudinal" : "transversal"} transmis par le tablier`,
-        formule: "F_i = \\dfrac{k_i}{K}\\,F" + (ap.torsion > 0 ? " + \\dfrac{M_t\\,k_i\\,|x_i - x_K|}{\\sum k_j (x_j - x_K)^2}" : ""),
-        application: `${tex(ap.part, 4)} \\times ${tex(U.F, 3)}` + (ap.torsion > 0 ? ` + ${tex(ap.torsion, 3)}` : ""),
+        ...(iso ? {} : {
+          formule: "F_i = \\dfrac{k_i}{K}\\,F" + (ap.torsion > 0 ? " + \\dfrac{M_t\\,k_i\\,|x_i - x_K|}{\\sum k_j (x_j - x_K)^2}" : ""),
+          application: `${tex(ap.part, 4)} \\times ${tex(U.F, 3)}` + (ap.torsion > 0 ? ` + ${tex(ap.torsion, 3)}` : ""),
+        }),
         resultat: { symbole: `F_{${ap.id}}${etiquette("ubdp")}`, valeur: ap.F, unite: "MN", decimales: 3 },
         references: ap.torsion > 0 ? ["tablier_rigide", "torsion_excentricite"] : ["tablier_rigide"],
-        commentaire: `Déplacement de la tête d'appui${m.elastomeres ? " (LBDP)" : ""} : ${nombre((apL?.dTete ?? 0) * 100, 2)} cm ; distorsion des appareils : ${nombre((apL?.dAppareils ?? 0) * 100, 2)} cm.`,
+        commentaire: `Déplacement de la tête d'appui${m.elastomeres ? " (LBDP)" : ""} : ${nombre((apL?.dTete ?? 0) * 100, 2)} cm ; distorsion des appareils : ${nombre((apL?.dAppareils ?? 0) * 100, 2)} cm${apL?.dJoint !== undefined ? ` ; ouverture relative du joint sur pile : ${nombre(apL.dJoint * 100, 2)} cm` : ""}.`,
       });
     }
   }
@@ -269,7 +321,14 @@ export function analyse(p: Projet, a: ActionSismique, m: Modele): Analyse {
   const mu = m.masses.masseLineique;
   const reactions: ReactionVerticale[] = [];
   let motif = "";
-  if (!regulier) {
+  if (iso) {
+    // travées indépendantes : chaque travée est une poutre sur deux appuis (b = 0,41, tableau 22 du guide) ; une pile reçoit les deux travées
+    p.appuis.forEach((ap, i) => {
+      const R = [i - 1, i].filter((s) => s >= 0 && s < n).reduce((acc, s) => acc + (aV * 0.41 * mu * (t[s] ?? 0)) / 1000, 0);
+      reactions.push({ id: ap.id, b: 0.41, R });
+    });
+    motif = `${n} travées indépendantes : réaction de chaque travée sur deux appuis (b = 0,41), cumulée sur les piles.`;
+  } else if (!regulier) {
     motif = "Travées de rive inégales, travées intermédiaires différentes ou Ψ hors de [0,5 ; 1] : méthode forfaitaire non applicable.";
   } else {
     const tab = TABLEAU_B_VERTICAL.valeurs;
@@ -300,8 +359,8 @@ export function analyse(p: Projet, a: ActionSismique, m: Modele): Analyse {
     notes.vertical.push({
       id: `Rv_${r.id}`,
       titre: `${r.id} — réaction verticale sous séisme vertical`,
-      formule: "R_i = \\pm\\,a\\,b\\,\\mu\\,L",
-      application: `${tex(aV, 3)} \\times ${tex(r.b, 3)} \\times ${tex(mu, 3)}\\ \\text{t/m} \\times ${tex(Lp, 3)}`,
+      formule: iso ? "R_i = \\pm\\,a\\,b\\,\\mu\\,\\sum L_{travées\\ portées}" : "R_i = \\pm\\,a\\,b\\,\\mu\\,L",
+      application: `${tex(aV, 3)} \\times ${tex(r.b, 3)} \\times ${tex(mu, 3)}\\ \\text{t/m} \\times ${tex(iso ? (r.R * 1000) / (aV * r.b * mu) : Lp, 3)}`,
       resultat: { symbole: `R_{${r.id}}`, valeur: r.R, unite: "MN", decimales: 3 },
       references: ["reactions_verticales", "b_reactions_verticales"],
     });
@@ -350,7 +409,7 @@ export function analyse(p: Projet, a: ActionSismique, m: Modele): Analyse {
     M,
     directions,
     torsion: { e0, L, appliquee: torsionAppliquee },
-    vertical: { applicable: regulier, motif, a: aV, mu, L: Lp, psi, reactions },
+    vertical: { applicable: iso || regulier, motif, a: aV, mu, L: Lp, psi, reactions },
     conditions,
     combinaisons,
     note,

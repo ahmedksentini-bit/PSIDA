@@ -34,7 +34,41 @@ export function horizontalDistribution(lines) {
      */
     imposed: (eps, kind = 'diff') => {
       const H = K[kind].map((k, i) => k * eps * (x0[kind] - lines[i].x));
-      return { H, disp: H.map((h, i) => h * lines[i].sNeo[kind]) };
+      // appareil glissant : tout le déplacement du tablier se fait sur l'appareil
+      return { H, disp: H.map((h, i) => (Number.isFinite(lines[i].sNeo[kind]) ? h * lines[i].sNeo[kind] : eps * (x0[kind] - lines[i].x))) };
+    },
+  };
+}
+
+/**
+ * Même interface que horizontalDistribution, pour un tablier à travées indépendantes (joint sur chaque pile) : chaque
+ * travée est un corps rigide sur ses deux rangées d'appareils, chacune en série avec son appui (couplage par la pile
+ * commune négligé). Une pile porte deux rangées d'appareils (lines[i].rangees = 2) : la souplesse d'une rangée vaut
+ * 2 sNeo de la ligne. Freinage : sur une seule travée, part de chaque ligne = la plus grande des deux travées voisines.
+ * Retrait, fluage, température : chaque travée se raccourcit autour de son propre point fixe x₀,s ; l'effort net sur une
+ * pile est la somme (de signes contraires) des efforts des deux travées.
+ */
+export function horizontalDistributionIso(lines) {
+  const n = lines.length, kinds = ['inst', 'diff'];
+  const fRow = (i, k) => lines[i].sNeo[k] * (lines[i].rangees || 1);
+  const kS = (s, i, k) => 1 / (fRow(i, k) + lines[i].sApp[k]);     // travée s, ligne i ∈ {s, s+1}
+  const spans = Array.from({ length: n - 1 }, (_, s) => s);
+  const K = Object.fromEntries(kinds.map(k => [k, lines.map((_, i) => (i > 0 ? kS(i - 1, i, k) : 0) + (i < n - 1 ? kS(i, i, k) : 0))]));
+  const x0 = Object.fromEntries(kinds.map(k => [k, spans.map(s => { const a = kS(s, s, k), b = kS(s, s + 1, k); return a + b > 0 ? (a * lines[s].x + b * lines[s + 1].x) / (a + b) : (lines[s].x + lines[s + 1].x) / 2; })]));
+  return {
+    K, x0, lines, iso: true,
+    braking: H => lines.map((_, i) => Math.max(...[i - 1, i].filter(s => s >= 0 && s < n - 1).map(s => {
+      const a = kS(s, s, 'inst'), b = kS(s, s + 1, 'inst'); return a + b > 0 ? H * (s === i ? a : b) / (a + b) : 0;
+    }))),
+    imposed: (eps, kind = 'diff') => {
+      const H = new Array(n).fill(0), disp = new Array(n).fill(0);
+      for (const s of spans) for (const i of [s, s + 1]) {
+        const h = kS(s, i, kind) * eps * (x0[kind][s] - lines[i].x);
+        H[i] += h;
+        const f = fRow(i, kind), d = Number.isFinite(f) ? h * f : eps * (x0[kind][s] - lines[i].x);
+        if (Math.abs(d) > Math.abs(disp[i])) disp[i] = d;
+      }
+      return { H, disp };
     },
   };
 }
