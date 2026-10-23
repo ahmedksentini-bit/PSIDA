@@ -324,3 +324,19 @@ test('Contre-flèches des fléaux (élastique, sans câbles) = flèches de la co
   }
   assert.ok(cf[cf.length - 1].contrefleche > 0, 'contre-flèche positive (vers le haut) en bout de fléau');
 });
+
+test('Assistant de saisie du phasage : schémas dessinés avant calcul, éléments rattachés aux champs ; sections par dimensions', async () => {
+  const { schemasPhasage } = await import('../web/phasage_schema.js');
+  const { poutreI, caisson } = await import('../src/phasage/sections.js');
+  for (const d of [{}, { ph_type: 'fleau' }, { ph_geo: 'valeurs' }, { ph_type: 'fleau', fl_geo: 'valeurs' }]) {
+    const S = schemasPhasage(d);
+    for (const k of ['long', 'trans', 'chrono']) assert.match(S[k], /^<svg/);
+    assert.match(S.long, /data-k="/); assert.match(S.synthese, /OK/);
+  }
+  assert.match(schemasPhasage({ ph_t3: '20' }).synthese, /ATTENTION/);
+  // poutre en I : A et I par rectangles ; caisson : symétrie des formules
+  const P = poutreI({ H: 1.4, bt: 0.8, ht: 0.15, bw: 0.2, bb: 0.65, hb: 0.25 });
+  proche(P.A, 0.65 * 0.25 + 0.2 * 1.0 + 0.8 * 0.15, 1e-12, 'A poutre');
+  const C = caisson({ B: 12, ts: 0.25, Bi: 6.5, ti: 0.22, bw: 0.45 }, 2);
+  proche(C.A, 12 * 0.25 + 6.5 * 0.22 + 0.9 * 1.53, 1e-12, 'A caisson');
+});

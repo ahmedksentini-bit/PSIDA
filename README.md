@@ -492,3 +492,7 @@ v0.87 : phasage — contre-flèches de construction des fléaux par joint de vou
 voussoir précédent, part de la construction et part après clavage), recoupées en élastique avec la méthode des aires des
 moments ; flèches à mi-travée des poutres rendues continues à chaque phase ; âge minimal de chargement 0,5 j (B.9) ;
 manuel § 28.8.
+v0.88 : onglet « Phasage » — assistant de saisie (web/phasage_schema.js) : élévation longitudinale (travées, câbles,
+voussoirs, équipage, clavages), coupe transversale (poutre en I et hourdis, ou caisson sur pile et à la clé) et
+chronologie des phases dessinées en direct, éléments rattachés aux champs (clignotement bleu) ; sections définies par
+leurs dimensions (src/phasage/sections.js : A, I, c.d.g. calculés ; caisson exact à chaque hauteur) ou par leurs valeurs.

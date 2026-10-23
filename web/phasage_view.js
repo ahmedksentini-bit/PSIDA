@@ -166,7 +166,7 @@ export function fleauBlocks(out) {
   B.push({ t: 'svg', svg: elevationFleauSVG(p, R), caption: 'Élévation : trois travées a – 2a – a, deux fléaux construits symétriquement par encorbellements successifs (échelle verticale dilatée).' });
   table(['Donnée', 'Valeur'], [
     ['Hauteur sur pile / à la clé [m]', `${F(p.hp, 2)} / ${F(p.hc, 2)} (variation parabolique)`],
-    ['Aire sur pile / à la clé [m²] ; inertie à la clé [m⁴]', `${F(p.Ap, 2)} / ${F(p.Ac, 2)} ; ${F(p.Ic, 2)} (I ∝ h^{5/2})`],
+    ['Aire sur pile / à la clé [m²] ; inertie à la clé [m⁴]', `${F(p.Ap, 2)} / ${F(p.Ac, 2)} ; ${F(p.Ic, 2)} ${p.caisson ? '(caisson défini par ses dimensions)' : '(I ∝ h^{5/2})'}`],
     ['Voussoir sur pile ; voussoirs courants', `${F(p.l0, 2)} m ; ${p.nv} × ${F(R.lv, 2)} m de part et d'autre`],
     ['Béton f_ck ; ciment ; h₀ ; HR', `${p.fck} MPa ; ${p.ciment} ; ${p.h0} mm ; ${p.RH} %`],
     ['E_cm [MPa] ; φ(∞, 3 j) ; ε_cs(∞)', `${F(bt.Ecm)} ; ${F(bt.phi(p.dates.fin, p.dates.durc), 2)} ; ${F(bt.retrait(p.dates.fin) * 1e6)} µm/m`],

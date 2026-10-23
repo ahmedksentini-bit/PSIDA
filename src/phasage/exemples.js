@@ -11,6 +11,8 @@
  * décalées). Aux appuis intermédiaires, les extrémités des travées sont deux nœuds distincts superposés, réunis au clavage.
  */
 
+import { poutreEtHourdis, caisson } from './sections.js';
+
 const num = (v, d) => (Number.isFinite(+v) && String(v).trim() !== '' ? +v : d);
 
 export const DEFAUTS_POUTRES = {
@@ -24,8 +26,19 @@ export const DEFAUTS_POUTRES = {
 };
 
 /** Lecture des champs ph_* du formulaire (valeurs par défaut sinon). */
+export const FORME_POUTRE = { H: 1.40, bt: 0.80, ht: 0.15, bw: 0.20, bb: 0.65, hb: 0.25, bh: 2.50, hd: 0.25 };
+
 export function lirePhasage(d = {}) {
-  const D = DEFAUTS_POUTRES;
+  const D = DEFAUTS_POUTRES, G = FORME_POUTRE;
+  const parDim = d.ph_geo !== 'valeurs';
+  const forme = { H: num(d.ph_H, G.H), bt: num(d.ph_bt, G.bt), ht: num(d.ph_ht, G.ht), bw: num(d.ph_bw, G.bw), bb: num(d.ph_bb, G.bb), hb: num(d.ph_hb, G.hb), bh: num(d.ph_bh, G.bh), hd: num(d.ph_hd, G.hd) };
+  const S = parDim ? poutreEtHourdis(forme) : null;
+  const out = lireValeurs(d, D);
+  if (S) { Object.assign(out.poutre, { A: S.poutre.A, I: S.poutre.I }); Object.assign(out.hourdis, { A: S.hourdis.A, I: S.hourdis.I, e: S.hourdis.e }); out.forme = { ...forme, yG: S.poutre.yG }; }
+  return out;
+}
+
+function lireValeurs(d, D) {
   return {
     n: Math.max(1, Math.round(num(d.ph_n, D.n))), L: num(d.ph_L, D.L), nb: Math.max(4, Math.round(num(d.ph_nb, D.nb))),
     poutre: { A: num(d.ph_pA, D.poutre.A), I: num(d.ph_pI, D.poutre.I), fck: num(d.ph_pfck, D.poutre.fck), RH: num(d.ph_RH, D.poutre.RH), h0: num(d.ph_ph0, D.poutre.h0), ciment: d.ph_pcim || D.poutre.ciment },
@@ -121,7 +134,19 @@ export const DEFAUTS_FLEAU = {
   parDecade: 6,
 };
 
+export const FORME_CAISSON = { B: 12, ts: 0.25, Bi: 6.5, tip: 0.60, tic: 0.22, bw: 0.45 };
+
 export function lireFleau(d = {}) {
+  const out = lireFleauValeurs(d), G = FORME_CAISSON;
+  if (d.fl_geo !== 'valeurs') {
+    const c = { B: num(d.fl_B, G.B), ts: num(d.fl_ts, G.ts), Bi: num(d.fl_Bi, G.Bi), tip: num(d.fl_tip, G.tip), tic: num(d.fl_tic, G.tic), bw: num(d.fl_bw, G.bw) };
+    const sp = caisson({ ...c, ti: c.tip }, out.hp), sc = caisson({ ...c, ti: c.tic }, out.hc);
+    Object.assign(out, { caisson: c, Ap: sp.A, Ac: sc.A, Ic: sc.I, vh: sc.v / out.hc });
+  }
+  return out;
+}
+
+function lireFleauValeurs(d = {}) {
   const D = DEFAUTS_FLEAU;
   return {
     a: num(d.fl_a, D.a), nv: Math.max(1, Math.round(num(d.fl_nv, D.nv))), l0: num(d.fl_l0, D.l0),
@@ -142,8 +167,13 @@ export function fleaux(p = DEFAUTS_FLEAU) {
   const tFinFleau = nv * T.cycle + T.durc;
   if (!(T.cycle > T.durc)) throw new Error('le cycle de bétonnage doit dépasser l’âge au décoffrage');
   if (!(T.clavage >= tFinFleau && T.continuite >= T.clavage && T.superstructures >= T.continuite && T.fin >= T.superstructures)) throw new Error(`dates incohérentes : le dernier voussoir est activé à ${tFinFleau} j ; il faut clavage ≥ ${tFinFleau} j, puis continuité, superstructures et fin croissants`);
-  const h = xi => hc + (hp - hc) * (1 - xi) ** 2, Ax = xi => Ac + (Apile - Ac) * (1 - xi) ** 2, Ix = xi => Ic * (h(xi) / hc) ** 2.5;
-  const eHaut = xi => vh * h(xi) - C.enrob, eBas = xi => -((1 - vh) * h(xi) - C.enrob);
+  const h = xi => hc + (hp - hc) * (1 - xi) ** 2;
+  // caisson défini par ses dimensions : section exacte à chaque hauteur (hourdis inférieur d'épaisseur parabolique) ;
+  // sinon aire interpolée et I ∝ h^{5/2} (BT n° 7 § 2.222), c.d.g. à v/h constant
+  const K = p.caisson, sec = xi => caisson({ ...K, ti: K.tic + (K.tip - K.tic) * (1 - xi) ** 2 }, h(xi));
+  const Ax = xi => (K ? sec(xi).A : Ac + (Apile - Ac) * (1 - xi) ** 2), Ix = xi => (K ? sec(xi).I : Ic * (h(xi) / hc) ** 2.5);
+  const vx = xi => (K ? sec(xi).v : vh * h(xi));
+  const eHaut = xi => vx(xi) - C.enrob, eBas = xi => -(h(xi) - vx(xi) - C.enrob);
   const noeuds = [], barres = [], betons = {};
   // distances depuis l'axe de pile des nœuds d'un demi-fléau : l0/2, puis + lv
   const r = [0, l0 / 2]; for (let k = 1; k <= nv; k++) r.push(l0 / 2 + k * lv);

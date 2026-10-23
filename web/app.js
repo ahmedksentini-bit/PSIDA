@@ -1,4 +1,5 @@
 import { computePhasage, phasageBlocks, phasageNote } from './phasage_view.js';
+import { schemasPhasage } from './phasage_schema.js';
 import { initCadrePlans, renderCadrePlans } from './cadre_plans.js';
 import { SlabDeck } from '../src/analysis.js';
 import { EC_ALPHA, notionalLanes, lm1 } from '../src/loads_ec.js';
@@ -497,9 +498,9 @@ function renderScheme() {
 let hlKey = null;
 function highlightScheme(name) {
   if (name === hlKey) return; hlKey = name;
-  document.querySelectorAll('#scheme-card g.hl, #cadre-scheme g.hl').forEach(e => e.classList.remove('hl'));
+  document.querySelectorAll('#scheme-card g.hl, #cadre-scheme g.hl, #phasage-scheme g.hl').forEach(e => e.classList.remove('hl'));
   if (!name) return;
-  document.querySelectorAll('#scheme-card g[data-k], #cadre-scheme g[data-k]').forEach(e => { if (e.dataset.k.split(' ').includes(name)) e.classList.add('hl'); });
+  document.querySelectorAll('#scheme-card g[data-k], #cadre-scheme g[data-k], #phasage-scheme g[data-k]').forEach(e => { if (e.dataset.k.split(' ').includes(name)) e.classList.add('hl'); });
 }
 const fieldName = t => { const el = t && t.closest ? t.closest('label, .fld') : null; const inp = el ? el.querySelector('input, select, textarea') : (t && t.name ? t : null); return inp ? inp.name : null; };
 $('#f').addEventListener('mouseover', ev => { const n = fieldName(ev.target); if (n) highlightScheme(n); });
@@ -522,7 +523,7 @@ const FORM_UI = enhanceForm($('#f')); // saisie valeur par valeur des champs mul
 const NIV = initNivellement($('#f'), () => state);
 const TRACE = initTrace($('#f'), { setField });
 // manuel d'utilisation : PDF publié avec le site (docs/manuel), paramètre de version pour ne pas servir un ancien PDF en cache
-const MANUEL = { version: '0.87', url: 'docs/manuel/PSIDA_Manuel.pdf' };
+const MANUEL = { version: '0.88', url: 'docs/manuel/PSIDA_Manuel.pdf' };
 $('#btn-manuel').addEventListener('click', () => window.open(`${MANUEL.url}?v=${MANUEL.version}`, '_blank', 'noopener'));
 $('#f').addEventListener('change', ev => { if (ev.target.name === 'niv_actif') NIV.refresh(); });
 applyHelp($('#f'), $('#help-list'));
@@ -576,7 +577,7 @@ async function saveProject() {
   const form = $('#f');
   const spans = String(form.spans.value || '').split(/[,;\s]+/).filter(Boolean).join('-');
   const name = projName || `projet-psida-${spans || 'ouvrage'}.json`;
-  const file = { format: PROJ_FORMAT, version: '0.87', date: new Date().toISOString(), data: formSnapshot(form) };
+  const file = { format: PROJ_FORMAT, version: '0.88', date: new Date().toISOString(), data: formSnapshot(form) };
   if (ec8Data) file.ec8 = ec8Data;
   const txt = JSON.stringify(file, null, 1);
   if (window.showSaveFilePicker) { // Chrome, Edge : choix du nom et du dossier
@@ -597,7 +598,7 @@ function loadProject(text, name) {
   if (!d || typeof d !== 'object' || !('spans' in d)) throw new Error('ce fichier n\'est pas un projet PSIDA');
   applyData($('#f'), { ...DEFAULTS, ...d });
   ec8Data = j.ec8 || null; ec8Status();
-  setProjName(name); renderScheme(); $('#error').textContent = '';
+  setProjName(name); renderScheme(); if (typeof renderPhasageScheme === "function") { renderCadreScheme(); renderPhasageScheme(); } $('#error').textContent = '';
   $('#f').requestSubmit();
 }
 $('#btn-save').addEventListener('click', saveProject);
@@ -653,7 +654,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.87', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = await buildReport({ ...state, version: '0.88', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -690,7 +691,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.87', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.88', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -733,7 +734,7 @@ $('#btn-cadre').addEventListener('click', runCadre);
 initCadrePlans(() => cadre);
 $('#btn-cadre-note').addEventListener('click', () => {
   if (!cadre) runCadre(); if (!cadre) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.87' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.88' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-cadre.html'; aEl.click(); }
 });
@@ -741,7 +742,7 @@ $('#btn-cadre-docx').addEventListener('click', async () => {
   if (!cadre) runCadre(); if (!cadre) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.87' })), docx);
+    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.88' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = `note-cadre-${cadre.inp.geom.nom || 'ouvrage'}.docx`; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -755,9 +756,21 @@ const runPhasage = () => {
   } catch (e) { phasage = null; $('#error').textContent = e.stack || String(e); }
 };
 $('#btn-phasage').addEventListener('click', runPhasage);
+function renderPhasageScheme() {
+  try {
+    const S = schemasPhasage(Object.fromEntries(new FormData($('#f')).entries()));
+    $('#ph-long').innerHTML = S.long; $('#ph-trans').innerHTML = S.trans; $('#ph-chrono').innerHTML = S.chrono; $('#ph-synth').innerHTML = S.synthese;
+    { const k = hlKey; hlKey = null; highlightScheme(k); }
+  } catch (e) { $('#ph-synth').innerHTML = `<p class="small"><span class="badge warn">ATTENTION</span> ${e.message}</p>`; }
+}
+let phTimer = null;
+const schedulePh = ev => { if (ev && ev.target && ev.target.closest && !ev.target.closest('#tab-phasage')) return; clearTimeout(phTimer); phTimer = setTimeout(renderPhasageScheme, 120); };
+$('#f').addEventListener('input', schedulePh);
+$('#f').addEventListener('change', schedulePh);
+renderPhasageScheme();
 $('#btn-phasage-note').addEventListener('click', () => {
   if (!phasage) runPhasage(); if (!phasage) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.87' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.88' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-phasage.html'; aEl.click(); }
 });
@@ -765,7 +778,7 @@ $('#btn-phasage-docx').addEventListener('click', async () => {
   if (!phasage) runPhasage(); if (!phasage) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.87' })), docx);
+    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.88' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = 'note-phasage.docx'; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -812,7 +825,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.87', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.88', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));
