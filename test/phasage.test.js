@@ -8,7 +8,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculPhasage, instants } from '../src/phasage/phasage.js';
+import { calculPhasage, instants, relaxation } from '../src/phasage/phasage.js';
 import { betonEC2 } from '../src/phasage/fluage.js';
 
 const proche = (a, b, tol, lab) => assert.ok(Math.abs(a - b) <= tol * Math.abs(b), `${lab} : ${a} ≠ ${b} (tol ${tol})`);
@@ -136,4 +136,44 @@ test('Bulletin technique Sétra n° 7 (1972), annexe I § 2.2 : clavage de deux 
   proche(r.final.barres[0].Mi, -w * a * a / 2 + Mf, 2e-3, 'moment sur appui');
   const p = r.pas.find(q => q.t - t0 > 30);
   proche(p.barres[0].Mj, Mf * (1 - Math.exp(-(1 + k) * (p.t - t0) / T)), 5e-3, 'M_f(t)');
+});
+
+test('Précontrainte (élastique) : câble rectiligne excentré sur deux travées, moment hyperstatique 1,5 P·e sur appui', () => {
+  const P = 1000, e = -0.3;
+  const r = calculPhasage({ noeuds: [[0, 0], [L, 0], [2 * L, 0]], betons: { B: { loi: 'elastique', E: 30000 } },
+    barres: [{ i: 0, j: 1, A: 1, I: 0.1, beton: 'B' }, { i: 1, j: 2, A: 1, I: 0.1, beton: 'B' }],
+    phases: [{ t: 0, activer: [0, 1], appuis: [{ n: 0, ddl: ['ux', 'uy'] }, { n: 1, ddl: ['uy'] }, { n: 2, ddl: ['uy'] }] }],
+    cables: [{ Ap: 0.003, P, phase: 0, segments: [{ barre: 0, ei: e, ej: e }, { barre: 1, ei: e, ej: e }] }], tFin: 0 });
+  // moment isostatique P·e partout, hyperstatique −1,5 P·e sur l'appui central (réaction vers le bas 3 P|e|/L)
+  proche(r.final.barres[0].Mi, P * e, 1e-9, 'moment isostatique sur culée');
+  proche(r.final.barres[0].Mj, P * e - 1.5 * P * e, 1e-9, 'moment total sur appui central');
+  proche(r.final.reactions[4], 3 * P * e / L, 1e-9, 'réaction centrale');
+  proche(r.final.barres[0].N, -P, 1e-9, 'compression du béton');
+  r.final.cables.forEach(c => proche(c.N, P, 1e-9, 'force du câble (post-tension)'));
+});
+
+test('Pertes différées : moteur ≈ NF EN 1992-1-1 éq. (5.46) — câble centré, puis excentré sous poids propre avec relaxation', () => {
+  // 1) barre isostatique précontrainte au centre de gravité, C35/45, HR 70 %, h0 = 300 mm, tension à 28 j, 50 ans
+  const o = { fck: 35, RH: 70, h0: 300, ciment: 'N' }, b = betonEC2(o), Ac = 0.5, Ap = 0.002, sp = 0.75 * 1860 * 0.9, P = sp * 1000 * Ap, tf = 28 + 18250;
+  let r = calculPhasage({ noeuds: [[0, 0], [10, 0]], betons: { B: o }, barres: [{ i: 0, j: 1, A: Ac, I: 0.05, beton: 'B' }],
+    phases: [{ t: 28, activer: [0], appuis: [{ n: 0, ddl: ['ux', 'uy'] }, { n: 1, ddl: ['uy'] }] }], cables: [{ Ap, P, phase: 0, rho1000: 0, segments: [{ barre: 0, ei: 0, ej: 0 }] }], tFin: tf, parDecade: 16 });
+  const Ep = 195000, f546 = (bb, sc, z, Acc, Ic, App, dpr) => {
+    const phi = bb.phi(tf, 28), ecs = bb.retrait(tf) - bb.retrait(28);
+    return (-ecs * Ep + 0.8 * dpr + Ep / bb.Ecm * phi * sc) / (1 + Ep / bb.Ecm * App / Acc * (1 + Acc * z * z / Ic) * (1 + 0.8 * phi));
+  };
+  proche((P - r.final.cables[0].N) / Ap / 1000, f546(b, P / Ac / 1000, 0, Ac, 0.05, Ap, 0), 0.03, 'perte, câble centré');
+  // 2) poutre de 20 m (10 barres), câble à z = −0,45 m, poids propre, relaxation classe 2 réduite à 0,8 (§ 5.10.6)
+  const o2 = { fck: 40, RH: 70, h0: 400, ciment: 'N' }, b2 = betonEC2(o2), n = 10, Lb = 20, A2 = 0.8, I2 = 0.12, z = -0.45, w2 = A2 * 25, Ap2 = 0.004, P2 = sp * 1000 * Ap2;
+  const noeuds = Array.from({ length: n + 1 }, (_, k) => [k * Lb / n, 0]), barres = Array.from({ length: n }, (_, k) => ({ i: k, j: k + 1, A: A2, I: I2, beton: 'B' }));
+  r = calculPhasage({ noeuds, betons: { B: o2 }, barres, phases: [{ t: 28, activer: barres.map((_, k) => k), appuis: [{ n: 0, ddl: ['ux', 'uy'] }, { n, ddl: ['uy'] }], charges: barres.map((_, k) => ({ barre: k, w: w2 })) }],
+    cables: [{ Ap: Ap2, P: P2, phase: 0, relax: 0.8, segments: barres.map((_, k) => ({ barre: k, ei: z, ej: z })) }], tFin: tf, parDecade: 16 });
+  const k = n / 2, x0 = k * Lb / n, x1 = x0 + Lb / n, Mg = w2 / 2 * (Lb * (x1 * x1 - x0 * x0) / 2 - (x1 ** 3 - x0 ** 3) / 3) / (x1 - x0);
+  const sc = (P2 / A2 + P2 * z * z / I2 + Mg * z / I2) / 1000;   // compression au niveau du câble (MPa)
+  proche((P2 - r.final.cables[k].N) / Ap2 / 1000, f546(b2, sc, z, A2, I2, Ap2, relaxation({}, sp)(tf - 28)), 0.03, 'perte à mi-portée');
+});
+
+test('Relaxation des aciers : NF EN 1992-1-1 éq. (3.29), classe 2, μ = 0,675, 500 000 h ≈ 3,5 %', () => {
+  const s0 = 0.75 * 1860 * 0.9, d = relaxation({ classe: 2, rho1000: 2.5 }, s0)(500000 / 24) / s0;
+  proche(d, 0.66 * 2.5 * Math.exp(9.1 * 0.675) * 500 ** (0.75 * 0.325) * 1e-5, 1e-12, 'Δσ_pr/σ_pi');
+  assert.ok(d > 0.03 && d < 0.04);
 });

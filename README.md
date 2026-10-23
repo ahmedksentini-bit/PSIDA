@@ -473,4 +473,7 @@ v0.84 : calcul par phases avec fluage et retrait (src/phasage) — ossature plan
 l'EN 1992-1-1 (§ 3.1.2, § 3.1.4, annexe B, âge corrigé selon le ciment) ; barres activées par phase, appuis ajoutés ou
 retirés (réaction restituée), liaisons de clavage ; validé sur les solutions fermées de Dischinger (changement de schéma,
 retrait gêné), sur l'équation intégrale de Volterra résolue indépendamment et sur le coefficient de vieillissement χ ≈ 0,8.
-Moteur seul : l'interface et les sections composées (dalle coulée sur poutres, précontrainte) suivent.
+Précontrainte par post-tension : câbles par segments excentrés, injectés après mise en tension, pertes différées par
+retrait, fluage et relaxation (§ 3.3.2) calculées pas à pas — recoupées avec l'éq. (5.46) à 3 % près et avec le moment
+hyperstatique 1,5 P·e ; adaptation par fluage recoupée avec le Bulletin technique Sétra n° 7 (1972), annexe I, et φ avec
+le guide Sétra EC2 ponts-routes (2008). Moteur seul : l'interface et les sections composées suivent.

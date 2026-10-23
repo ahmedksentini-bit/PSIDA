@@ -24,6 +24,17 @@ import { loiBeton } from './fluage.js';
 
 const DDL = { ux: 0, uy: 1, rz: 2 };
 
+/**
+ * Perte par relaxation de l'acier (MPa) après d jours, NF EN 1992-1-1 § 3.3.2 (7), sous la contrainte initiale σ_pi :
+ * classe 1 (fils, torons ordinaires, 3.28), classe 2 (basse relaxation, 3.29), classe 3 (barres, 3.30) ; μ = σ_pi/f_pk,
+ * ρ1000 en %. Le multiplicateur `relax` (1 par défaut) permet de réduire la relaxation (0,8, § 5.10.6 (1) b).
+ */
+export function relaxation(c, sigmaPi) {
+  const fpk = c.fpk ?? 1860, rho = c.rho1000 ?? 2.5, cl = c.classe ?? 2, mu = sigmaPi / fpk, f = c.relax ?? 1;
+  const [a, b] = cl === 1 ? [5.39, 6.7] : cl === 3 ? [1.98, 8] : [0.66, 9.1];
+  return d => (d > 0 ? f * sigmaPi * a * rho * Math.exp(b * mu) * ((d * 24) / 1000) ** (0.75 * (1 - mu)) * 1e-5 : 0);
+}
+
 /** Instants de calcul entre deux phases : progression géométrique depuis l'instant de début (pas par décade). */
 export function instants(ta, tb, parDecade = 8, premier = 0.1) {
   const out = [], r = 10 ** (1 / parDecade);
@@ -43,9 +54,16 @@ export function instants(ta, tb, parDecade = 8, premier = 0.1) {
  *   phases : [{ t (j), nom?, activer?: [indices de barres], appuis?: [{ n, ddl: ['ux','uy','rz'] }],
  *               retirerAppuis?: [{ n, ddl }], liaisons?: [{ a, b, ddl: ['ux','uy','rz'], k? }],
  *               charges?: [{ barre, w }], nodales?: [{ n, F: [Fx, Fy, M] }] }],
+ *   cables?: [{ nom?, Ap (m²), Ep (MPa, 195 000), fpk (1 860), rho1000 (2,5 %), classe (2), relax (1),
+ *               phase (indice de la phase de mise en tension), P (kN, après pertes instantanées : nombre ou tableau par
+ *               segment), segments: [{ barre, ei, ej }] (excentrements par rapport à la ligne moyenne, m, + vers y local) }],
  *   tFin (j), parDecade?
  * }
- * Renvoie { pas: [{ t, phase, barres: [{ N, Vi, Mi, Vj, Mj, Mmi }], u, reactions }], phases: [indices de pas en fin de
+ * Câbles : post-tension, force P appliquée au béton seul puis câble injecté (adhérent) ; il suit ensuite les
+ * déformations différées du béton (pertes par retrait et fluage) et relaxe (§ 3.3.2). Segment rectiligne excentré relié
+ * aux nœuds de la barre par des bras rigides : allongement Δ_s = b·u, b = [−c, −s, c·eᵢ, c, s, −c·eⱼ] (c, s : cosinus
+ * et sinus de l'inclinaison du segment sur la barre).
+ * Renvoie { pas: [{ t, phase, barres: [{ N, Vi, Mi, Vj, Mj, Mmi }], cables: [{ cable, seg, N, P0, perte }], u, reactions }], phases: [indices de pas en fin de
  * phase (juste avant la suivante)], final, barre(k, t) }.
  */
 export function calculPhasage(modele) {
@@ -67,6 +85,20 @@ export function calculPhasage(modele) {
   const tmul = (A, x) => A[0].map((_, j) => A.reduce((s, r, i) => s + r[j] * x[i], 0));
   const ddl = b => [3 * b.i, 3 * b.i + 1, 3 * b.i + 2, 3 * b.j, 3 * b.j + 1, 3 * b.j + 2];
   for (const b of B) { b.Bm = Bm(b); b.T = T6(b); b.k1 = k1(b); b.dofs = ddl(b); }
+
+  // câbles de précontrainte : un segment rectiligne par barre, excentrements e_i, e_j (m, positifs vers y local)
+  const S = [];
+  (modele.cables || []).forEach((c, ic) => {
+    const Ep = (c.Ep ?? 195000) * 1000, segs = c.segments || [];
+    segs.forEach((g, is) => {
+      const b = B[g.barre], dL = (g.ej ?? g.ei ?? 0) - (g.ei ?? 0), Ls = Math.hypot(b.L, dL), ca = b.L / Ls, sa = dL / Ls;
+      const ei = g.ei ?? 0, ej = g.ej ?? ei;
+      const bl = [-ca, -sa, ca * ei, ca, sa, -ca * ej], bg = tmul(b.T, bl);
+      const P = Array.isArray(c.P) ? c.P[is] : c.P;
+      S.push({ cable: ic, seg: is, b, bg, Ls, k: Ep * c.Ap / Ls, Ep, Ap: c.Ap, P, N: 0, actif: false, t0: null,
+        relax: relaxation(c, P / c.Ap / 1000), phase: c.phase ?? 0, nom: c.nom || `câble ${ic + 1}` });
+    });
+  });
 
   const appuis = new Set(), reac = new Float64Array(nd), u = new Float64Array(nd), liaisons = [];
   const pas = [], finPhase = [];
@@ -96,6 +128,14 @@ export function calculPhasage(modele) {
       for (let a = 0; a < 6; a++) R[b.dofs[a]] += fg[a];
       etat.push({ En, dImp, kn, feq, w });
     }
+    const etatS = S.map(sg => {
+      if (!sg.actif) return null;
+      for (let a = 0; a < 6; a++) for (let e = 0; e < 6; e++) K[sg.b.dofs[a]][sg.b.dofs[e]] += sg.k * sg.bg[a] * sg.bg[e];
+      // relaxation de l'acier entre tPrev et t : allongement imposé Δσ_pr·L_s/E_p (la force baisse à longueur constante)
+      const dImp = tPrev < t ? (sg.relax(t - sg.t0) - sg.relax(tPrev - sg.t0)) / sg.Ep * 1000 * sg.Ls : 0;
+      if (dImp) for (let a = 0; a < 6; a++) R[sg.b.dofs[a]] += sg.k * dImp * sg.bg[a];
+      return { dImp };
+    });
     for (const l of liaisons) for (const d of l.ddl) {
       const a = 3 * l.a + DDL[d], c = 3 * l.b + DDL[d];
       K[a][a] += l.k; K[c][c] += l.k; K[a][c] -= l.k; K[c][a] -= l.k;
@@ -112,6 +152,7 @@ export function calculPhasage(modele) {
     // réactions : K du − R aux DDL bloqués
     for (const d of appuis) { let s = -R[d]; for (let e = 0; e < nd; e++) s += K[d][e] * du[e]; reac[d] += s; }
     for (let d = 0; d < nd; d++) u[d] += du[d];
+    S.forEach((sg, k) => { const e = etatS[k]; if (!e) return; let dd = 0; for (let a = 0; a < 6; a++) dd += sg.bg[a] * du[sg.b.dofs[a]]; sg.N += sg.k * (dd - e.dImp); });
     // incréments d'efforts naturels des barres : δₙ = Eₙ (B Δu_local − Δd_imp)
     B.forEach((b, k) => {
       const e = etat[k]; if (!e) return;
@@ -128,6 +169,7 @@ export function calculPhasage(modele) {
   function photographie(t, iPhase) {
     pas.push({
       t, phase: iPhase, u: Array.from(u), reactions: Array.from(reac),
+      cables: S.map(sg => (sg.actif ? { cable: sg.cable, seg: sg.seg, N: sg.N, P0: sg.P, perte: 1 - sg.N / sg.P } : null)),
       barres: B.map(b => {
         if (!b.actif) return null;
         // efforts aux extrémités (sur la barre, repère local) : f = Bᵀ q − f_eq
@@ -160,7 +202,12 @@ export function calculPhasage(modele) {
     }
     for (const nf of ph.nodales || []) nf.F.forEach((v, a) => { F[3 * nf.n + a] += v; });
     const ch = new Map(); for (const c of ph.charges || []) ch.set(c.barre, (ch.get(c.barre) || 0) + c.w);
+    // mise en tension (post-tension) : la force P (après pertes instantanées) agit sur le béton seul, puis le câble est
+    // injecté — il devient adhérent, avec sa force P, et suit ensuite les déformations du béton
+    const tendus = S.filter(sg => sg.phase === iPh && !sg.actif);
+    for (const sg of tendus) for (let a = 0; a < 6; a++) F[sg.b.dofs[a]] -= sg.bg[a] * sg.P;
     resoudre(ph.t, ph.t, F, ch);
+    for (const sg of tendus) { sg.actif = true; sg.N = sg.P; sg.t0 = ph.t; }
     photographie(ph.t, iPh);
   });
   // phase finale : jusqu'à tFin
