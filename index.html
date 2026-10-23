@@ -545,12 +545,12 @@
 <p class="small nores-p" id="poutres-empty">Saisir le tablier puis « Calculer le pont à poutres ».</p>
       <div class="card" id="card-poutres" hidden><h2>Pont à poutres</h2><div id="poutres-tables" style="overflow-x:auto"></div></div>
       <div class="card" id="pt-plans" hidden><h2>Plans de la poutre VIPP (DXF et PDF)</h2>
-        <p class="small">Coffrage (élévation, coupes courante et sur appui, quantités), câblage (élévation des câbles, ordonnées des gaines, forces au vérin et allongements théoriques, ordre et âge de mise en tension) et ferraillage de principe (étriers par zones, talon, peau) de la poutre la plus sollicitée. Le cartouche reprend les champs de la carte « Plans d'exécution » de l'onglet Ferraillage.</p>
+        <p class="small">Coffrage (élévation, coupes courante et sur appui, quantités), câblage (élévation des câbles, ordonnées des gaines, forces au vérin et allongements théoriques, ordre et âge de mise en tension), ferraillage de principe (étriers par zones, talon, peau) de la poutre la plus sollicitée et nomenclature des armatures de sa travée (poutres, hourdis, entretoises : bordereau ISO 4066). Le cartouche reprend les champs de la carte « Plans d'exécution » de l'onglet Ferraillage.</p>
         <div class="grid"><label>Plan <select id="pt-plan-type"></select></label></div>
         <button type="button" id="pt-plan-voir">Aperçu</button>
         <button type="button" class="secondary" id="pt-plan-dxf">DXF</button>
         <button type="button" class="secondary" id="pt-plan-pdf">PDF</button>
-        <button type="button" class="secondary" id="pt-plan-pdf-tous">PDF des trois plans</button>
+        <button type="button" class="secondary" id="pt-plan-pdf-tous">PDF de tous les plans</button>
         <div id="pt-plan-apercu" class="plan-apercu"></div>
       </div>
     </div>
@@ -840,6 +840,12 @@
       <div class="grp">Ouvrage terminé : trafic et vérifications</div>
       <label>Largeur de chaussée (centrée) [m]<input name="fl_Lr" value="10" type="number" step="any"></label>
       <label>Trottoir de chaque côté [m]<input name="fl_trott" value="0" type="number" step="any"></label>
+      <div class="grp">Caisson transversal et construction</div>
+      <label>Charges de bord (corniche, barrière) [kN/m par bord]<input name="fl_gbord" value="8" type="number" step="any"></label>
+      <label>Épaisseur du revêtement [m]<input name="fl_trev" value="0.08" type="number" step="any"></label>
+      <label>Hourdis à l'encastrement des encorbellements [m]<input name="fl_tenc" value="0.45" type="number" step="any"></label>
+      <label>Hourdis au nu intérieur des âmes (gousset) [m]<input name="fl_tgou" value="0.40" type="number" step="any"></label>
+      <label>Entraxe des cales de clouage sur pile [m]<input name="fl_dcal" value="3.0" type="number" step="any"></label>
       <label>Classe d'exposition (décompression)<select name="fl_expo"><option value="XC">XC2 à XC4 : quasi permanente</option><option value="XD">XD / XS : fréquente</option></select></label>
       </div>
       <div data-show="ph_type=mixte">
@@ -894,12 +900,15 @@
       <label>Goujons : hauteur [mm]<input name="mx_gh" value="200" type="number" step="any"></label>
       <label>Goujons par rangée<input name="mx_gn" value="3" type="number" step="1"></label>
       <label>Poids lourds par an sur la voie lente (fatigue)<input name="mx_Nobs" value="500000" type="number" step="any"></label>
+      <label>Charges de chantier sur le plot coulé [kN/m²]<input name="mx_qc" value="1.0" type="number" step="any" title="EN 1991-1-6 § 4.11.2 (Q_ca + Q_cb hors zone de travail)"></label>
       </div>
+<button type="button" class="secondary" id="btn-predim" title="Règles des guides du Sétra, puis renforcement des seules dimensions en défaut par le calcul complet">Prédimensionner</button>
 <button type="button" id="btn-phasage">Calculer les phases</button>
       <button type="button" class="secondary" id="btn-mixte-appuis">Transmettre les réactions aux appuis (appuis seuls)</button>
       <button type="button" class="secondary" id="btn-phasage-note">Note de calcul (HTML)</button>
       <button type="button" class="secondary" id="btn-phasage-docx">Note de calcul (Word)</button>
       <button type="button" class="secondary" id="btn-phasage-json">Exporter le modèle (JSON)</button>
+      <div id="predim-out" class="predim-out" hidden></div>
     </div>
     <div>
       <div class="card" id="phasage-scheme"><h2>Ce que vous saisissez</h2>
@@ -910,6 +919,15 @@
       </div>
       <p class="small nores-p" id="phasage-empty">Saisir l'ouvrage et ses dates, puis « Calculer les phases ».</p>
       <div class="card" id="card-phasage" hidden><h2>Calcul par phases</h2><div id="phasage-tables" style="overflow-x:auto"></div></div>
+      <div class="card" id="ph-plans" hidden><h2>Plans (DXF et PDF)</h2>
+        <p class="small" id="ph-plans-txt"></p>
+        <div class="grid"><label>Plan <select id="ph-plan-type"></select></label></div>
+        <button type="button" id="ph-plan-voir">Aperçu</button>
+        <button type="button" class="secondary" id="ph-plan-dxf">DXF</button>
+        <button type="button" class="secondary" id="ph-plan-pdf">PDF</button>
+        <button type="button" class="secondary" id="ph-plan-pdf-tous">PDF de tous les plans</button>
+        <div id="ph-plan-apercu" class="plan-apercu"></div>
+      </div>
     </div>
   </div>
 </section>

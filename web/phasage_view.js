@@ -69,6 +69,11 @@ export function computePhasage(d) {
       out.acheve = structureAchevee(out, { nPoutres: v('ph_nP', 4), chaussee: { y1: -Lr / 2, y2: Lr / 2 }, trottoirs: tr > 0 ? [{ y1: -Lr / 2 - tr, y2: -Lr / 2 }, { y1: Lr / 2, y2: Lr / 2 + tr }] : [],
         alpha: EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended, alphaKey: d.alpha || 'recommended', expo: (fl ? d.fl_expo : d.ph_expo) || 'XC' });
     } catch (e) { out.acheveErreur = e.message; }
+    if (fl) {
+      // caisson : flexion transversale (cadre par mètre) et fléaux en construction (déséquilibre, clouage provisoire)
+      try { if (out.p.caisson) out.transversal = flexionTransversale({ K: { ...out.p.caisson, ti: out.p.caisson.tic }, h: out.p.hc, Lr, gBord: v('fl_gbord', 8), tRev: v('fl_trev', 0.08), tEnc: v('fl_tenc', 0.45), tGou: v('fl_tgou', 0.40), fck: out.p.fck, alpha: EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended }); } catch (e) { out.transversalErreur = e.message; }
+      try { out.desequilibre = desequilibreFleau(out, { dc: v('fl_dcal', 3.0) }); } catch (e) { out.desequilibreErreur = e.message; }
+    }
   }
   return out;
 }
@@ -165,6 +170,8 @@ export function phasageBlocks(out) {
   para(`Pertes calculées pas à pas : raccourcissement du béton sous les charges successives, fluage et retrait (EN 1992-1-1 annexe B et § 3.1.4) et relaxation (§ 3.3.2), en interaction avec la structure. ${r.pertesInstantanees && r.pertesInstantanees[0] ? `Force au vérin P₀ = ${F(p.cable.P0)} kN, pertes instantanées calculées (frottement, recul d\'ancrage).` : 'La force après mise en tension est une donnée (pertes instantanées non calculées).'}`);
 
   B.push(...acheveBlocks(out));
+  B.push(...constructionFleauBlocks(out));
+  B.push(...transversalBlocks(out));
   h2('Méthode et limites');
   para('Méthode pas à pas (Bažant ; Ghali, Favre et Elbadry, Concrete Structures: Stresses and Deformations, ch. 5) sur une ossature plane : chaque incrément d\'effort est affecté de la fonction de fluage J(t, τ) de son béton et de son âge ; un changement de schéma (clavage, activation du hourdis) ne sollicite que par les incréments postérieurs. Moteur recoupé sur les solutions fermées de Dischinger, l\'équation intégrale de Volterra, le Bulletin technique Sétra n° 7 (1972, annexe I), le guide Sétra « Eurocode 2 — application aux ponts-routes en béton » (2008) et l\'éq. (5.46) de l\'EN 1992-1-1.');
   para('Limites : effort normal constant par barre (le maillage doit rester fin), sections non fissurées, armatures passives non prises en compte dans le fluage (coefficient k_s du guide Sétra non appliqué), une poutre et sa largeur de hourdis pour les actions permanentes ; trafic réparti par les coefficients de Guyon-Massonnet d\'une travée de même portée ; hourdis (flexion locale) : onglet Tablier à poutres ; gradient thermique linéaire seul (approche 1).');
@@ -256,9 +263,36 @@ export function fleauBlocks(out) {
     { titre: 'Contre-flèches à donner aux coffrages des voussoirs [mm] (+ vers le haut)', xlab: 'abscisse [m]', ylab: 'mm', h: 260 }), caption: 'Fléau 1 ; le fléau 2 est symétrique.' });
   para('Chaque coffrage est réglé sur le bout du voussoir précédent juste avant le bétonnage ; le joint suit ce bout rigidement jusqu\'au décoffrage, puis la structure. La contre-flèche compense tout le déplacement vertical postérieur au réglage : poids des voussoirs suivants, câbles, clavages, superstructures, fluage et retrait jusqu\'à la fin du calcul. Non compris : la déformation propre de l\'équipage mobile (à ajouter d\'après sa raideur, fournie par l\'entreprise), les tassements d\'appuis et le gradient thermique.');
   B.push(...acheveBlocks(out));
+  B.push(...constructionFleauBlocks(out));
+  B.push(...transversalBlocks(out));
   h2('Méthode et limites');
   para('Calcul par phases pas à pas (même moteur que pour les poutres rendues continues) : chaque voussoir est une barre avec son béton et sa date de coulage ; le béton frais est porté par l\'équipage au bout du fléau (force et moment) jusqu\'au décoffrage ; les câbles de fléau sont tendus des deux côtés après chaque paire de voussoirs, avec frottement et recul d\'ancrage (§ 5.10.5) ; les clavages réunissent les fléaux sans contrainte. Hauteur et inertie variables par barre (I ∝ h^{5/2}, BT n° 7 § 2.222).');
-  para('Limites : ligne moyenne supposée droite (la variation du c.d.g. avec la hauteur n\'est prise en compte que dans les excentrements), fléaux construits simultanément et symétriquement (pas de déséquilibre de bétonnage ni de vent en phase de construction) ; trafic sur le caisson entier (torsion et distorsion non calculées) ; flexion transversale du caisson à traiter à part ; gradient thermique linéaire seul (approche 1).');
+  para('Limites : ligne moyenne supposée droite (la variation du c.d.g. avec la hauteur n\'est prise en compte que dans les excentrements) ; le calcul par phases suppose des fléaux construits symétriquement, les déséquilibres de construction étant traités à part (moments de déséquilibre ajoutés sur pile) ; flexion longitudinale sous trafic sur le caisson entier, torsion et distorsion traitées dans le cadre transversal (sans diaphragme intermédiaire, du côté de la sécurité) ; gradient thermique linéaire seul (approche 1).');
+  return B;
+}
+
+/** Fléaux en construction : moments de déséquilibre sur pile, clouage provisoire, contraintes au VSP. */
+export function constructionFleauBlocks(out) {
+  const D = out.desequilibre, B = [];
+  if (!D) { if (out.desequilibreErreur) B.push({ t: 'p', text: `Déséquilibre en construction : calcul impossible (${out.desequilibreErreur}).` }); return B; }
+  const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
+  h2('Fléaux en construction : déséquilibres et clouage provisoire');
+  table(['Stade', 't [j]', 'Demi-fléau : poids [kN] / longueur [m]', 'DIFF / CLL / WUP / LAG / AI [kN·m]', 'M_d [kN·m] (cas)', 'N [kN]', 'Traction par file [kN]', 'Barres Ø36 par file', 'Cales [kN]', 'σ VSP min / max [MPa]'],
+    D.etapes.map(e => [e.k === 0 ? 'VSP' : `voussoir ${e.k}`, F(e.t, 0), `${F(e.W, 0)} / ${F(e.Lh, 1)}`, Object.values(e.M).map(x => F(x, 0)).join(' / '), `${F(e.Md, 0)} (${e.cas})`, F(e.Nv, 0), F(e.T, 0), String(e.nb), F(e.Rc, 0), e.sig ? `${F(e.sig.sMin, 1)} / ${F(e.sig.sMax, 2)}` : '—']));
+  table(['Vérification', 'Valeur', 'Limite', 'Résultat', 'Référence'], D.verifs.map(q => [q.nom, F(q.val, 2), F(q.lim, 2), q.ok ? 'OK' : 'NON', q.ref]));
+  para(`Cas de charge par stade (AASHTO, Guide Specifications for Segmental Concrete Bridges § 7.4) : DIFF = 2 % du poids d'un demi-fléau ; CLL = 0,48 kN/m² sur un demi-fléau et 0,24 kN/m² sur l'autre ; WUP = vent ascendant 0,24 kN/m² sur un demi-fléau ; LAG = décalage d'un demi-voussoir au bétonnage ; AI = chute d'un équipage (perte de Q_eq, effet dynamique 2). ELU C1 = 1,35 DIFF + 1,5 (CLL + WUP), C2 = 1,35 (DIFF + LAG) + 1,5 CLL ; accidentel CA = DIFF + CLL + AI. Clouage : deux files de cales à ${F(D.dc, 2)} m d'entraxe, traction T = M_d/d_c − 0,9 N/2 reprise par des barres Ø36 (F_d = ${F(BARRE_36.Fd, 0)} kN) ; contraintes au VSP : état du calcul par phases + DIFF + CLL + WUP (caractéristique).`);
+  return B;
+}
+
+/** Caisson : flexion transversale (cadre) et distortion. */
+export function transversalBlocks(out) {
+  const T = out.transversal, B = [];
+  if (!T) { if (out.transversalErreur) B.push({ t: 'p', text: `Flexion transversale : calcul impossible (${out.transversalErreur}).` }); return B; }
+  const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
+  h2('Caisson : flexion transversale et distortion (cadre par mètre, section de la clé)');
+  table(['Section', 'M_pp [kN·m/m]', 'M_superstr.', 'M_Q max / min', 'M_ELU max / min', 'Épaisseur de calcul [m]', 'A_s face tendue par M > 0 [cm²/m]', 'A_s face tendue par M < 0 [cm²/m]'],
+    T.sections.map(s => [s.nom, F(s.Gpp, 1), F(s.Gsup, 1), `${F(s.Qmax, 1)} / ${F(s.Qmin, 1)}`, `${F(s.ELUmax, 1)} / ${F(s.ELUmin, 1)}`, F(s.tCalc, 2), `${F(s.AsTendu.pos * 1e4, 1)} (${s.faces[0]})`, `${F(s.AsTendu.neg * 1e4, 1)} (${s.faces[1]})`]));
+  para(`Cadre fermé suivant les feuillets moyens, chaque cas équilibré par les flux de cisaillement de flexion (V/2 par âme) et de torsion de Bredt (q = T/2Ω) ; sans diaphragme intermédiaire, la distortion est entièrement reprise par la flexion du cadre (majorant). Charges : poids propre, bords ${F(T.gBord, 1)} kN/m, revêtement ${F(T.tRev * 100, 0)} cm ; LM1 sur ${F(T.Lr, 2)} m (${T.NL.n} voies), tandems répartis longitudinalement sur 1,20 + b₀ + 2d (b₀ = ${F(T.b0, 2)} m ; d : distance de la roue à la section) et, dans la travée du hourdis, selon les largeurs participantes du DAfStb Heft 240. Moments positifs : traction de la fibre inférieure des hourdis et de la face extérieure des âmes. Ferraillage : ELU, σ_s à l'ELS caractéristique, w_k ≤ 0,2 mm à l'ELS fréquent, minimums EC2. Diaphragmes à prévoir sur piles et culées (reprise de la torsion et de la distortion aux appuis).`);
   return B;
 }
 
@@ -309,6 +343,12 @@ export function mixteVerifsBlocks(out) {
   table(['Vérification', 'Valeur', 'Limite', 'x [m]', 'Résultat', 'Référence'], v.verifs.map(q => [q.nom, F(q.val, 2), F(q.lim, 2), F(q.x, 1), q.ok ? 'OK' : 'NON', q.ref]));
   const dv = v.sections.filter(q => q.deversement).reduce((a, b) => (!a || b.deversement.sigma / b.deversement.lim > a.deversement.sigma / a.deversement.lim ? b : a), null);
   if (dv) para(`Déversement : berceaux de raideur C_d = ${F(dv.deversement.Cd, 0)} kN/m tous les ${F(v.ac, 1)} m (montants I_v = ${F(v.Iv * 1e8, 0)} cm⁴, entretoises I_q = ${F(v.Iq * 1e8, 0)} cm⁴, EN 1993-2 annexe D.2.4), N_crit = ${F(dv.deversement.Ncr, 0)} kN, λ̄ = ${F(dv.deversement.lam, 2)}, χ = ${F(dv.deversement.chi, 2)} ; compression supposée uniforme (du côté de la sécurité).`);
+  if (v.betonnage) {
+    const b = v.betonnage;
+    h2('Charpente pendant le bétonnage');
+    table(['Phase', 't [j]', 'σ_Ed min [MPa]', 'σ_Ed max [MPa]', 'Déversement d\'ensemble : Σ M_u / 0,7 M_gs (travées non durcies)'], b.etapes.map(e => [e.nom, F(e.t, 0), F(e.sMin, 0), F(e.sMax, 0), e.globale.length ? e.globale.map(g => `T${g.s + 1} : ${F(g.Mu, 0)} / ${F(0.7 * g.Mgs, 0)}`).join(' ; ') : '—']));
+    para(`ELU de construction 1,35 G + 1,5 q_c, q_c = ${F(b.qc, 2)} kN/m² sur le plot coulé (charges de chantier, EN 1991-1-6 § 4.11.2). Déversement de la semelle comprimée là où la dalle n'a pas durci : même modèle de cadres que l'ouvrage en service (EN 1993-2 § 6.3.4.2). Déversement d'ensemble du couple de poutres entretoisées avant durcissement de la dalle : M_gs = π² s E √(I_eff I_x) / L² (Yura et al., ASCE J. Struct. Eng. 2008), critère d'alerte Σ M_u ≤ 0,7 M_gs (AASHTO LRFD § 6.10.3.4.2) ; au-delà, prévoir un contreventement horizontal provisoire ou un ordre de bétonnage différent.`);
+  }
   h2('Connexion (goujons)');
   const g = v.goujons, cx = v.connexion.filter((q, i) => i % pas === 0);
   table(['x [m]', 'v_L,Ed ELU [kN/m]', 'v_L ELS car.', 's ELU [m]', 's ELS [m]', 's fatigue [m]', 'Espacement retenu [m]'], cx.map(q => [F(q.x, 1), F(q.vElu, 0), F(q.vEls, 0), F(Math.min(q.sELU, 9.99), 2), F(Math.min(q.sELS, 9.99), 2), F(Math.min(q.sFat, 9.99), 2), F(q.s, 2)]));
@@ -323,6 +363,9 @@ import { bipoutre, lireBipoutre, sectionsRemarquables, contraintesMixtes, fleche
 import { proprietes, equivalence, momentPlastique, classeSection } from '../src/mixte/section.js';
 import { verifierMixte } from '../src/mixte/verifs.js';
 import { structureAchevee } from '../src/phasage/acheve.js';
+import { verifierBetonnage } from '../src/mixte/betonnage.js';
+import { flexionTransversale } from '../src/phasage/caisson_transversal.js';
+import { desequilibreFleau, BARRE_36 } from '../src/phasage/desequilibre.js';
 import { EC_ALPHA } from '../src/loads_ec.js';
 
 /** Options des vérifications de la structure achevée (champs mx_* du formulaire). */
@@ -331,11 +374,17 @@ export function optionsMixte(d, p) {
   const Lr = v('mx_Lr', p.largeur - 2), tr = v('mx_trott', 0);
   return { chaussee: { y1: -Lr / 2, y2: Lr / 2 }, trottoirs: tr > 0 ? [{ y1: -Lr / 2 - tr, y2: -Lr / 2 }, { y1: Lr / 2, y2: Lr / 2 + tr }] : [],
     alpha: EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended, dT: v('mx_dT', 10), ac: v('mx_ac', 6), a: v('mx_a', 6), Iv: v('mx_Iv', 40000) * 1e-8, Iq: v('mx_Iq', 180000) * 1e-8,
-    goujons: { d: v('mx_gd', 22) / 1000, h: v('mx_gh', 200) / 1000, n: Math.max(1, Math.round(v('mx_gn', 3))), fu: 450 }, Nobs: v('mx_Nobs', 5e5) };
+    goujons: { d: v('mx_gd', 22) / 1000, h: v('mx_gh', 200) / 1000, n: Math.max(1, Math.round(v('mx_gn', 3))), fu: 450 }, Nobs: v('mx_Nobs', 5e5), qc: v('mx_qc', 1.0) };
 }
 export function computeMixte(d) {
   const p = lireBipoutre(d), { modele, reperes } = bipoutre(p), out = { type: 'mixte', p, modele, reperes, r: calculPhasage(modele) };
-  try { out.v = verifierMixte(out, optionsMixte(d, p)); } catch (e) { out.vErreur = e.message; }
+  try {
+    const o = optionsMixte(d, p);
+    out.v = verifierMixte(out, o);
+    // charpente pendant le bétonnage : vérifications ajoutées à la synthèse de la structure (même liste, même affinage)
+    const b = verifierBetonnage(out, o);
+    out.v.betonnage = b; out.v.verifs.push(...b.verifs); out.v.ok = out.v.ok && b.ok;
+  } catch (e) { out.vErreur = e.message; }
   return out;
 }
 

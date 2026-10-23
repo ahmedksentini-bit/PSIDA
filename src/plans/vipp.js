@@ -6,7 +6,7 @@
  *  - câblage : élévation des câbles, tableau des ordonnées des gaines (depuis la sous-face) aux stations, tableau des câbles
  *    (unité, famille, force au vérin, allongement théorique, ordre et âge de mise en tension), coupes avec les gaines ;
  *  - ferraillage de principe : coupe courante avec étriers, armatures du talon et de peau, zones d'étriers le long de la
- *    poutre d'après l'effort tranchant. Plan de principe : le façonnage détaillé (bordereau) reste à établir.
+ *    poutre d'après l'effort tranchant ; le façonnage est donné par la nomenclature (nomenclature_vipp.js).
  * Les cotes sont en mètres ; l'about (distance de l'extrémité de la poutre à l'axe d'appui) vaut 0,50 m par défaut
  * (guide Sétra VIPP, § 3.2.5).
  */
@@ -31,7 +31,7 @@ function contour(S, b0) {
 }
 
 /** Coupe transversale de la poutre : contour, hachures, hourdis tireté, gaines, cotes. */
-function vueCoupe(v, S, tr, { titre, x = null, b0 = S.forme.b0, armatures = null }) {
+export function vueCoupe(v, S, tr, { titre, x = null, b0 = S.forme.b0, armatures = null }) {
   const V = new Vue(titre, { echelle: 20 }), f = S.forme, pts = contour(S, b0);
   V.poly('COFFRAGE', pts, true); V.hachure(pts);
   V.poly('VUES', [[-S.b1 / 2, f.hp], [S.b1 / 2, f.hp], [S.b1 / 2, f.hp + S.hd], [-S.b1 / 2, f.hp + S.hd]], true);
@@ -142,16 +142,23 @@ function etrier(AswS, d) {
   return { phi: 16, s: 0.10 };
 }
 
-export function planFerraillageVIPP(v, cartouche = {}, { nom = 'POUTRE VIPP', a = 0.5 } = {}) {
-  const S = v.S, f = S.forme, L = v.L, c = 0.03;
-  const AsMid = v.elu[v.elu.length - 1].As, nT = Math.max(4, Math.ceil(AsMid / 4.909e-4)), phiT = 25;
-  // zones d'étriers : regroupement des sections de même proposition, de l'appui vers la mi-travée
-  const zones = [];
+/** Zones d'étriers : regroupement des sections de même proposition, de l'appui vers la mi-travée (demi-poutre). */
+export function zonesEtriers(v) {
+  const zones = [], L = v.L;
   v.tranchant.forEach((t, k) => {
     const e = etrier(t.AswS, t.z / 0.9), x1 = k < v.tranchant.length - 1 ? (t.x + v.tranchant[k + 1].x) / 2 : L / 2;
     const last = zones[zones.length - 1];
     if (last && last.phi === e.phi && last.s === e.s) last.x1 = x1; else zones.push({ x0: last ? last.x1 : 0, x1, ...e, AswS: t.AswS });
   });
+  return zones;
+}
+/** Armatures du talon : nombre de HA25 (A_s ELU à mi-travée, 4 au moins). */
+export const talonVIPP = v => ({ phi: 25, n: Math.max(4, Math.ceil(v.elu[v.elu.length - 1].As / 4.909e-4)) });
+
+export function planFerraillageVIPP(v, cartouche = {}, { nom = 'POUTRE VIPP', a = 0.5 } = {}) {
+  const S = v.S, f = S.forme, L = v.L, c = 0.03;
+  const AsMid = v.elu[v.elu.length - 1].As, { n: nT, phi: phiT } = talonVIPP(v);
+  const zones = zonesEtriers(v);
   const cA = vueCoupe(v, S, v.trace, { titre: 'COUPE A-A : FERRAILLAGE COURANT (PRINCIPE)', x: L / 2, armatures: V => {
     const C = S.poutre.contour, yb = c + 0.006;
     // étrier fermé suivant le contour intérieur (âme, talon, table) et barres longitudinales
@@ -172,7 +179,7 @@ export function planFerraillageVIPP(v, cartouche = {}, { nom = 'POUTRE VIPP', a 
   const tot = Object.values(kg).reduce((s, x) => s + x, 0), vol = S.poutre.A * (L + 2 * a);
   const tq = { titre: 'ARMATURES PASSIVES (ESTIMATION, UNE POUTRE)', cols: [{ t: 'Poste', w: 60, a: 'g' }, { t: 'Masse [kg]', w: 26, a: 'd' }],
     lignes: [['Talon (A_s ELU / minimum)', milliers(kg.talon)], ['Étriers (zones)', milliers(kg.etriers)], ['Armatures de peau', milliers(kg.peau)], ['Table (transversales)', milliers(kg.table)], ['Total', milliers(tot)], [`Ratio (guide : 100 à 120 kg/m³)`, `${fr(tot / vol, 0)} kg/m³`]] };
-  const N = numeroter(['NOTES', `1. Plan de principe : sections d'acier du calcul (ELU de flexion : A_s = ${fr(AsMid * 1e4, 1)} cm² à mi-travée ; effort tranchant EN 1992-1-1 § 6.2.3). Façonnage et bordereau à établir.`,
+  const N = numeroter(['NOTES', `1. Plan de principe : sections d'acier du calcul (ELU de flexion : A_s = ${fr(AsMid * 1e4, 1)} cm² à mi-travée ; effort tranchant EN 1992-1-1 § 6.2.3). Façonnage : nomenclature VIPP-NOM-01.`,
     `2. Aciers HA f_yk = 500 MPa ; enrobage ${fr(c * 100, 0)} cm (gaines : 5 cm au moins).`,
     '3. Étriers fermés à 2 brins, espacement ≤ min(0,75 d ; 40 cm) ; densifier sous les plaques d\'ancrage (frettage selon l\'agrément du procédé).',
     '4. Armatures en attente dans la table pour la liaison avec le hourdis (couture à l\'interface, EN 1992-1-1 § 6.2.5) : à justifier.',

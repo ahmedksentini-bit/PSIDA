@@ -33,6 +33,7 @@ export const CALQUES = {
   TABLEAUX: { couleur: 7, ep: 0.18, type: 'CONTINUOUS' },
   CADRES: { couleur: 8, ep: 0.25, type: 'DASHED' },
   TERRAIN: { couleur: 8, ep: 0.35, type: 'CONTINUOUS' },        // cadre tireté autour de chaque vue
+  CHARPENTE: { couleur: 4, ep: 0.5, type: 'CONTINUOUS' },       // tôles de la charpente métallique (ponts mixtes)
 };
 
 export const FORMATS = { A0: [1189, 841], A1: [841, 594], A2: [594, 420], A3: [420, 297] };

@@ -43,6 +43,8 @@ import { toPontEC8 } from '../src/ec8export.js';
 import { parsePoutres, computePoutres, linesToStandaloneText } from '../src/beams/run.js';
 import { schemasPoutres } from './poutres_schema.js';
 import { initPoutresPlans, renderPoutresPlans } from './poutres_plans.js';
+import { initPredim } from './predim_view.js';
+import { initPhasagePlans, renderPhasagePlans } from './phasage_plans.js';
 import { enhanceForm } from './fields.js';
 import { beamsBlocks, poutresNote } from './beams_view.js';
 import { cadreBlocks, cadreNote } from './cadre_view.js';
@@ -767,9 +769,12 @@ const runPhasage = () => {
     phasage = computePhasage(Object.fromEntries(new FormData($('#f')).entries()));
     $('#phasage-tables').innerHTML = blocksToHTML(phasageBlocks(phasage));
     $('#card-phasage').hidden = false; $('#phasage-empty').hidden = true; $('#error').textContent = '';
-  } catch (e) { phasage = null; $('#error').textContent = e.stack || String(e); }
+    renderPhasagePlans(phasage);
+  } catch (e) { phasage = null; renderPhasagePlans(null); $('#error').textContent = e.stack || String(e); }
 };
 $('#btn-phasage').addEventListener('click', runPhasage);
+initPredim({ apres: runPhasage });
+initPhasagePlans(() => phasage);
 function renderPhasageScheme() {
   try {
     const S = schemasPhasage(Object.fromEntries(new FormData($('#f')).entries()));
