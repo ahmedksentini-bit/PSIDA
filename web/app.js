@@ -1,3 +1,4 @@
+import { initParcours, choisirOuvrage, ouvrage as ouvrageCourant } from './parcours.js';
 import { computePhasage, phasageBlocks, phasageNote } from './phasage_view.js';
 import { schemasPhasage } from './phasage_schema.js';
 import { initCadrePlans, renderCadrePlans } from './cadre_plans.js';
@@ -523,7 +524,7 @@ const FORM_UI = enhanceForm($('#f')); // saisie valeur par valeur des champs mul
 const NIV = initNivellement($('#f'), () => state);
 const TRACE = initTrace($('#f'), { setField });
 // manuel d'utilisation : PDF publié avec le site (docs/manuel), paramètre de version pour ne pas servir un ancien PDF en cache
-const MANUEL = { version: '0.90', url: 'docs/manuel/PSIDA_Manuel.pdf' };
+const MANUEL = { version: '0.91', url: 'docs/manuel/PSIDA_Manuel.pdf' };
 $('#btn-manuel').addEventListener('click', () => window.open(`${MANUEL.url}?v=${MANUEL.version}`, '_blank', 'noopener'));
 $('#f').addEventListener('change', ev => { if (ev.target.name === 'niv_actif') NIV.refresh(); });
 applyHelp($('#f'), $('#help-list'));
@@ -577,7 +578,7 @@ async function saveProject() {
   const form = $('#f');
   const spans = String(form.spans.value || '').split(/[,;\s]+/).filter(Boolean).join('-');
   const name = projName || `projet-psida-${spans || 'ouvrage'}.json`;
-  const file = { format: PROJ_FORMAT, version: '0.90', date: new Date().toISOString(), data: formSnapshot(form) };
+  const file = { format: PROJ_FORMAT, version: '0.91', date: new Date().toISOString(), data: formSnapshot(form) };
   if (ec8Data) file.ec8 = ec8Data;
   const txt = JSON.stringify(file, null, 1);
   if (window.showSaveFilePicker) { // Chrome, Edge : choix du nom et du dossier
@@ -599,7 +600,13 @@ function loadProject(text, name) {
   applyData($('#f'), { ...DEFAULTS, ...d });
   ec8Data = j.ec8 || null; ec8Status();
   setProjName(name); renderScheme(); if (typeof renderPhasageScheme === "function") { renderCadreScheme(); renderPhasageScheme(); } $('#error').textContent = '';
-  $('#f').requestSubmit();
+  choisirOuvrage(ouvrageCourant(), { aller: true });
+  lancerOuvrage();
+}
+/** Calcul de l'ouvrage courant (projet rouvert, lien partagé). */
+function lancerOuvrage() {
+  const o = ouvrageCourant(), b = { cadre: '#btn-cadre', poutres: '#btn-poutres', continues: '#btn-phasage', fleaux: '#btn-phasage', mixte: '#btn-phasage' }[o];
+  if (b) { const e = $(b); if (e) setTimeout(() => e.click(), 0); } else $('#f').requestSubmit();
 }
 $('#btn-save').addEventListener('click', saveProject);
 $('#btn-open').addEventListener('click', () => $('#file-open').click());
@@ -638,7 +645,7 @@ document.addEventListener('keydown', ev => { // Ctrl+S, Ctrl+O
     dlg.addEventListener('keydown', ev => { if (ev.key === 'ArrowLeft') show(cur - 1); else if (ev.key === 'ArrowRight') show(cur + 1); });
   }
 }
-if (hashToForm($('#f'))) $('#f').requestSubmit();
+if (hashToForm($('#f'))) { choisirOuvrage(ouvrageCourant(), { aller: false }); lancerOuvrage(); }
 $('#case-select').addEventListener('change', () => state && renderCase(state));
 $('#surface-which').addEventListener('change', () => state && renderCase(state));
 $('#section-select').addEventListener('change', () => state && renderSection(state));
@@ -654,7 +661,7 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.90', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = await buildReport({ ...state, version: '0.91', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -691,7 +698,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  return buildNote({ ...state, version: '0.90', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.91', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -734,7 +741,7 @@ $('#btn-cadre').addEventListener('click', runCadre);
 initCadrePlans(() => cadre);
 $('#btn-cadre-note').addEventListener('click', () => {
   if (!cadre) runCadre(); if (!cadre) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.90' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.91' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-cadre.html'; aEl.click(); }
 });
@@ -742,7 +749,7 @@ $('#btn-cadre-docx').addEventListener('click', async () => {
   if (!cadre) runCadre(); if (!cadre) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.90' })), docx);
+    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.91' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = `note-cadre-${cadre.inp.geom.nom || 'ouvrage'}.docx`; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -768,9 +775,10 @@ const schedulePh = ev => { if (ev && ev.target && ev.target.closest && !ev.targe
 $('#f').addEventListener('input', schedulePh);
 $('#f').addEventListener('change', schedulePh);
 renderPhasageScheme();
+initParcours();
 $('#btn-phasage-note').addEventListener('click', () => {
   if (!phasage) runPhasage(); if (!phasage) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.90' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.91' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-phasage.html'; aEl.click(); }
 });
@@ -778,7 +786,7 @@ $('#btn-phasage-docx').addEventListener('click', async () => {
   if (!phasage) runPhasage(); if (!phasage) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.90' })), docx);
+    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.91' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = 'note-phasage.docx'; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -825,7 +833,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.90', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.91', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));

@@ -168,6 +168,11 @@ L'application Pont EC8 (dépôt ouvpara) est intégrée en entier : sources dans
 
 ## Interface
 
+Depuis la v0.91, l'application s'ouvre sur un **accueil** : on choisit d'abord le type d'ouvrage, puis on suit les étapes
+numérotées de la barre d'onglets (Tablier → Conception → Calcul → Ferraillage… pour un pont-dalle ; un seul onglet pour un
+cadre ; Phasage pour les ponts construits par phases). Chaque carte de l'accueil indique honnêtement ce qui est calculé et
+ce qui reste à venir pour cet ouvrage.
+
 Formulaire à gauche (bouton « Charger l'exemple CHAMOA-PSIDA » pour le cas de référence ; chaque champ porte une infobulle
 et une liste d'aide détaille les données), résultats à droite. Depuis la v0.37, une donnée par ligne : libellé à gauche,
 champ dans une colonne alignée à droite, intertitres par thème ; les données à plusieurs valeurs se saisissent valeur par
@@ -506,3 +511,8 @@ EN 10025-2) ; pont bipoutre ou quadripoutre par phases dans l'onglet « Phasage 
 par plots (travées puis appuis), zones fissurées forfaitaires (§ 5.4.2.3), fluage et retrait pas à pas — retrait recoupé
 avec la méthode n_L (4 %) ; contraintes acier et dalle, flèches (contre-flèches de fabrication), diagrammes ; assistant
 de saisie (élévation avec plots, coupe transversale) ; manuel § 28.10.
+v0.91 : interface réorganisée par type d'ouvrage (web/parcours.js) — onglet « Accueil » : choix de l'ouvrage (pont-dalle,
+pont à poutres, cadre ou portique, poutres rendues continues, encorbellements, mixte acier-béton) avec, pour chacun, l'état
+réel des fonctions (conception, trafic, ELS / ELU, ferraillage ou câblage, appuis, séisme, plans, note : oui / partiel /
+à venir) ; la barre d'onglets ne montre plus que les étapes de l'ouvrage choisi, numérotées dans l'ordre du projet et cochées
+quand elles sont calculées ; le choix est enregistré avec le projet (champ « ouvrage »). Aucun calcul n'est modifié.
