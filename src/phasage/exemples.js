@@ -140,6 +140,7 @@ export function fleaux(p = DEFAUTS_FLEAU) {
   const lv = (a - l0 / 2) / nv;
   if (!(lv > 0)) throw new Error('voussoir sur pile plus long que le fléau');
   const tFinFleau = nv * T.cycle + T.durc;
+  if (!(T.cycle > T.durc)) throw new Error('le cycle de bétonnage doit dépasser l’âge au décoffrage');
   if (!(T.clavage >= tFinFleau && T.continuite >= T.clavage && T.superstructures >= T.continuite && T.fin >= T.superstructures)) throw new Error(`dates incohérentes : le dernier voussoir est activé à ${tFinFleau} j ; il faut clavage ≥ ${tFinFleau} j, puis continuité, superstructures et fin croissants`);
   const h = xi => hc + (hp - hc) * (1 - xi) ** 2, Ax = xi => Ac + (Apile - Ac) * (1 - xi) ** 2, Ix = xi => Ic * (h(xi) / hc) ** 2.5;
   const eHaut = xi => vh * h(xi) - C.enrob, eBas = xi => -((1 - vh) * h(xi) - C.enrob);
@@ -175,7 +176,7 @@ export function fleaux(p = DEFAUTS_FLEAU) {
   const tension = (k, iPh) => { for (let f = 0; f < 2; f++) cables.push({ nom: `fléau F${f + 1}-${k}`, Ap: C.Ap, P0: C.P0, mu: C.mu, k: C.k, g: C.g, tension: 'deux', classe: C.classe, rho1000: C.rho1000, phase: iPh, segments: segFleau(f, k) }); };
   const bout = (f, cote, k) => (k === 0 ? (cote === 'G' ? F[f].ids.G[0] : F[f].ids.D[0]) : (cote === 'G' ? F[f].ids.G[k] : F[f].ids.D[k]));
   // phase 0 : voussoirs sur pile, encastrement provisoire sur pile
-  phases.push({ t: 0, nom: 'Voussoirs sur pile (encastrement provisoire)', activer: [...F[0].bG.slice(0, 1), ...F[0].bD.slice(0, 1), ...F[1].bG.slice(0, 1), ...F[1].bD.slice(0, 1)],
+  phases.push({ t: T.durc, nom: 'Voussoirs sur pile (encastrement provisoire)', activer: [...F[0].bG.slice(0, 1), ...F[0].bD.slice(0, 1), ...F[1].bG.slice(0, 1), ...F[1].bD.slice(0, 1)],
     appuis: [{ n: F[0].ids.pile, ddl: ['ux', 'uy', 'rz'] }, { n: F[1].ids.pile, ddl: ['ux', 'uy', 'rz'] }],
     charges: [...F[0].bG.slice(0, 1), ...F[0].bD.slice(0, 1), ...F[1].bG.slice(0, 1), ...F[1].bD.slice(0, 1)].map(b => ({ barre: b, w: w(0) })),
     nodales: p.Qeq ? [0, 1].flatMap(f => [{ n: bout(f, 'G', 0), F: [0, -p.Qeq, 0] }, { n: bout(f, 'D', 0), F: [0, -p.Qeq, 0] }]) : [] });
@@ -228,4 +229,42 @@ export function diagrammeFleau(pasCalc, R, modele, m = 3) {
     for (let q = 0; q <= m; q++) pts.push([xi + (xj - xi) * q / m, r.M(L * q / m)]);
   });
   return pts.sort((u, v) => u[0] - v[0]);
+}
+
+/**
+ * Contre-flèches de construction des fléaux (fléau 1, joints de voussoirs côté gauche et côté droit).
+ * Le coffrage du voussoir k est réglé sur le bout du voussoir k − 1 juste avant son bétonnage (instant de réglage) ; le
+ * joint j qui le termine suit ensuite rigidement ce bout (équipage supposé indéformable) jusqu'au décoffrage, puis se
+ * déplace avec la structure. Son déplacement vertical total depuis le réglage vaut
+ *     δⱼ = [v_{k−1} + θ_{k−1}·dⱼ](décoffrage) − [v_{k−1} + θ_{k−1}·dⱼ](réglage) + vⱼ(t_fin)
+ * (vⱼ est nul avant l'activation dans le modèle : les nœuds d'un voussoir non bétonné n'ont pas de raideur). La
+ * contre-flèche à donner au coffrage est −δⱼ pour que le profil final soit le profil théorique. Les voussoirs sur pile
+ * (réglés à t = 0, pile encastrée) prennent −vⱼ(t_fin). Décomposition : construction jusqu'au clavage, puis après.
+ */
+export function contreflechesFleau(r, modele, R) {
+  const { F, nv } = R, f = F[0], N = modele.noeuds;
+  const v = (pas, n) => pas.u[3 * n + 1], th = (pas, n) => pas.u[3 * n + 2];
+  const iBet = k => modele.phases.findIndex(ph => ph.nom === `Bétonnage des voussoirs ${k}`);
+  const iCl = modele.phases.findIndex(ph => /Clavages/.test(ph.nom));
+  const kAvCl = r.finPhase[iCl - 1], fin = r.final;
+  const out = [];
+  for (const cote of ['G', 'D']) for (let k = 0; k <= nv; k++) {
+    const nj = f.ids[cote][k], x = N[nj][0];
+    let rig = 0, rigCl = 0;
+    if (k >= 1) {
+      const ni = f.ids[cote][k - 1], d = N[nj][0] - N[ni][0], ib = iBet(k);
+      const set = r.pas[r.finPhase[ib - 1]], act = r.pas[r.finPhase[ib]];   // avant bétonnage ; fin de la phase de bétonnage (avant décoffrage)
+      rig = (v(act, ni) + th(act, ni) * d) - (v(set, ni) + th(set, ni) * d);
+      rigCl = rig;
+    }
+    const dCons = rigCl + v(r.pas[kAvCl], nj), dTot = rig + v(fin, nj);
+    out.push({ cote, k, x, construction: dCons, apres: dTot - dCons, total: dTot, contrefleche: -dTot });
+  }
+  return out.sort((a, b) => a.x - b.x);
+}
+
+/** Flèches à mi-travée des poutres rendues continues (vers le bas positives) à un pas donné. */
+export function flechesPoutres(pasCalc, R) {
+  const { n, nb, debut } = R;
+  return Array.from({ length: n }, (_, s) => -pasCalc.u[3 * (debut[s] + nb / 2) + 1]);
 }

@@ -298,3 +298,29 @@ test('Fléaux par encorbellements (élastique, sans câbles ni équipage) : mome
   const kAv = r.finPhase[modele.phases.length - 2];
   assert.ok(Math.abs(momentsFleau(r.pas[kAv], reperes).cle) < 1e-6 * Math.abs(M));
 });
+
+test('Contre-flèches des fléaux (élastique, sans câbles) = flèches de la console complète sous les charges postérieures au réglage', async () => {
+  const { fleaux, DEFAUTS_FLEAU, contreflechesFleau } = await import('../src/phasage/exemples.js');
+  const p = { ...DEFAUTS_FLEAU, Qeq: 0, continuite: { ...DEFAUTS_FLEAU.continuite, n: 0 } };
+  const { modele, reperes: R } = fleaux(p);
+  modele.cables = [];
+  const E = 36000e3; for (const k of Object.keys(modele.betons)) modele.betons[k] = { loi: 'elastique', E: E / 1000, tCoulage: modele.betons[k].tCoulage };
+  const r = calculPhasage(modele), cf = contreflechesFleau(r, modele, R).filter(c => c.cote === 'D');
+  // console droite du fléau 1 : charges réparties w_k sur [r_k, r_{k+1}] (k = 0…nv), I constant par barre ;
+  // flèche du point a sous les voussoirs q ≥ k (posés après le réglage du joint k) : ∫ M(x)(a − x)/EI dx (aires des moments)
+  const bars = R.F[0].bD.map(b => { const bb = modele.barres[b]; return { x0: modele.noeuds[bb.i][0] - R.F[0].xp, x1: modele.noeuds[bb.j][0] - R.F[0].xp, w: bb.A * p.gBeton, I: bb.I }; });
+  const fleche = (a, qMin) => {
+    let s0 = 0; const nG = 400, L = bars[bars.length - 1].x1;
+    for (let i = 0; i < nG; i++) {
+      const x = (i + 0.5) * Math.min(a, L) / nG; if (x > a) break;
+      let M = 0; for (let q = qMin; q < bars.length; q++) { const b = bars[q], l0 = Math.max(b.x0, x); if (b.x1 > l0) M -= b.w * (b.x1 - l0) * ((b.x1 + l0) / 2 - x); }
+      const I = bars.find(b => x >= b.x0 && x <= b.x1).I; s0 += M * (a - x) / (E * I) * Math.min(a, L) / nG;
+    }
+    return s0;   // vers le haut positif (M négatif → flèche vers le bas, s0 < 0)
+  };
+  for (const c of cf) {
+    const attendu = c.k === 0 ? fleche(c.x - R.F[0].xp, 0) : fleche(c.x - R.F[0].xp, c.k);
+    proche(c.construction, attendu, 0.01, `joint ${c.k} : déplacement de construction`);
+  }
+  assert.ok(cf[cf.length - 1].contrefleche > 0, 'contre-flèche positive (vers le haut) en bout de fléau');
+});

@@ -488,3 +488,7 @@ d'ancrage § 5.10.5.3 avec zone d'influence λ, tension par une ou deux extrémi
 frottement exponentiel ; fléaux construits par encorbellements successifs (trois travées a – 2a – a, voussoirs d'âges
 différents, équipage mobile, câbles de fléau et de continuité, clavages, hauteur parabolique et I ∝ h^5/2 du BT n° 7) ;
 manuel § 28.6 et 28.7.
+v0.87 : phasage — contre-flèches de construction des fléaux par joint de voussoir (réglage du coffrage sur le bout du
+voussoir précédent, part de la construction et part après clavage), recoupées en élastique avec la méthode des aires des
+moments ; flèches à mi-travée des poutres rendues continues à chaque phase ; âge minimal de chargement 0,5 j (B.9) ;
+manuel § 28.8.

@@ -86,7 +86,8 @@ export function calculPhasage(modele) {
     return { ...b, k, L, c, s, loi, actif: false, hist: [], q: [0, 0, 0], feq: [0, 0, 0, 0, 0, 0], wTot: 0, dSh: 0 };
   });
   // âge du béton (j) et fonction de fluage en 1/kPa
-  const J = (b, t, tau) => b.loi.J(Math.max(t - b.loi.tC, 1e-3), Math.max(tau - b.loi.tC, 1e-3)) / 1000;
+  // âge minimal de chargement 0,5 j (EN 1992-1-1, B.9) : évite un module quasi nul pour un béton chargé le jour du coulage
+  const J = (b, t, tau) => b.loi.J(Math.max(t - b.loi.tC, 0.5), Math.max(tau - b.loi.tC, 0.5)) / 1000;
   const retrait = (b, t) => b.loi.retrait(Math.max(t - b.loi.tC, 0));
   const k1 = b => [[b.A / b.L, 0, 0], [0, 4 * b.I / b.L, 2 * b.I / b.L], [0, 2 * b.I / b.L, 4 * b.I / b.L]];
   // matrice B (local) : d = Bm · u_local, u_local = [ui, vi, θi, uj, vj, θj]

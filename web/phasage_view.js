@@ -4,7 +4,7 @@
  * blocksToHTML et aux notes HTML/Word), figures en SVG autonomes.
  */
 import { calculPhasage, resultante } from '../src/phasage/phasage.js';
-import { lirePhasage, poutresContinues, momentsRemarquables, diagramme, lireFleau, fleaux, momentsFleau, diagrammeFleau } from '../src/phasage/exemples.js';
+import { lirePhasage, poutresContinues, momentsRemarquables, diagramme, lireFleau, fleaux, momentsFleau, diagrammeFleau, contreflechesFleau, flechesPoutres } from '../src/phasage/exemples.js';
 import { betonEC2 } from '../src/phasage/fluage.js';
 
 const F = (x, d = 0) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',').replace(/^-0(,0+)?$/, '0$1') : '—');
@@ -99,6 +99,8 @@ export function phasageBlocks(out) {
   table(['Instant', ...Array.from({ length: p.n - 1 }, (_, i) => `M appui ${i + 1} [kN·m]`), ...Array.from({ length: p.n }, (_, i) => `M mi-travée ${i + 1} [kN·m]`)], lignes);
   para('Moments rapportés au centre de gravité de la poutre (ligne des nœuds), positifs quand ils tendent la fibre inférieure ; ils incluent l\'effet de la précontrainte sur le béton (moment isostatique P·e et moment hyperstatique). Le moment sur appui naît au clavage : il ne résulte, avant les superstructures, que de l\'adaptation par fluage et du retrait différentiel du hourdis.');
 
+  table(['Instant', ...Array.from({ length: p.n }, (_, i) => `flèche mi-travée ${i + 1} [mm]`)], cles.filter(c => c.k >= 0).map(c => [c.nom, ...flechesPoutres(r.pas[c.k], R).map(v => F(v * 1000, 1))]));
+  para('Flèches à mi-travée, vers le bas positives, comptées depuis la pose (poutre précontrainte : la valeur initiale négative est la contre-flèche de précontrainte). La flèche finale indique la contre-flèche de fabrication à donner aux poutres pour obtenir le profil voulu en service.');
   // évolution dans le temps
   const kC = debutPh(modele.phases.findIndex(ph => ph.liaisons));
   const serie = (f, k0 = 0) => r.pas.slice(k0).map(q => [q.t, f(momentsRemarquables(q, R, resultante))]);
@@ -174,7 +176,7 @@ export function fleauBlocks(out) {
   ]);
   const dateClav = p.dates.clavage, tFinFleau = p.nv * p.dates.cycle + p.dates.durc;
   table(['Étape', 'Dates [j]'], [
-    ['Voussoirs sur pile, encastrement provisoire, câbles de fléau 0', '0'],
+    ['Voussoirs sur pile (coulés à 0 j), encastrement provisoire, câbles de fléau 0', F(p.dates.durc)],
     [`Bétonnage des voussoirs 1 à ${p.nv}, câbles de fléau 1 à ${p.nv} (cycle ${F(p.dates.cycle)} j, décoffrage et tension à ${F(p.dates.durc)} j)`, `${F(p.dates.cycle)} à ${F(tFinFleau)}`],
     ['Clavages central et sur culées, pose sur appareils d’appui', F(dateClav)],
     ['Câbles de continuité', F(p.dates.continuite)], ['Superstructures', F(p.dates.superstructures)], ['Fin du calcul', F(p.dates.fin)],
@@ -203,6 +205,13 @@ export function fleauBlocks(out) {
   table(['Câble (milieu)', 'P₀ vérin [kN]', 'après pertes instantanées [kN]', 'avant clavage [kN]', 'P(∞) [kN]', 'pertes totales [%]'], rows);
   const iLong = modele.cables.findIndex((c, i) => i === 2 * p.nv);
   blocsPertesInst(B, r.pertesInstantanees[iLong], modele.cables[iLong].nom, p.cable);
+  h2('Contre-flèches de construction (fléau 1)');
+  const cf = contreflechesFleau(r, modele, R), mm = v => F(v * 1000, 1);
+  table(['Joint', 'x [m]', 'construction jusqu’au clavage [mm]', 'après clavage jusqu’à la fin [mm]', 'déplacement total [mm]', 'contre-flèche du coffrage [mm]'],
+    cf.map(c => [`${c.cote === 'G' ? 'gauche' : 'droite'} ${c.k === 0 ? 'VSP' : c.k}`, F(c.x, 2), mm(c.construction), mm(c.apres), mm(c.total), mm(c.contrefleche)]));
+  B.push({ t: 'svg', svg: courbesSVG([{ nom: 'contre-flèche totale', pts: cf.map(c => [c.x, c.contrefleche * 1000]) }, { nom: 'part de la construction', pts: cf.map(c => [c.x, -c.construction * 1000]), tirets: true }],
+    { titre: 'Contre-flèches à donner aux coffrages des voussoirs [mm] (+ vers le haut)', xlab: 'abscisse [m]', ylab: 'mm', h: 260 }), caption: 'Fléau 1 ; le fléau 2 est symétrique.' });
+  para('Chaque coffrage est réglé sur le bout du voussoir précédent juste avant le bétonnage ; le joint suit ce bout rigidement jusqu\'au décoffrage, puis la structure. La contre-flèche compense tout le déplacement vertical postérieur au réglage : poids des voussoirs suivants, câbles, clavages, superstructures, fluage et retrait jusqu\'à la fin du calcul. Non compris : la déformation propre de l\'équipage mobile (à ajouter d\'après sa raideur, fournie par l\'entreprise), les tassements d\'appuis et le gradient thermique.');
   h2('Méthode et limites');
   para('Calcul par phases pas à pas (même moteur que pour les poutres rendues continues) : chaque voussoir est une barre avec son béton et sa date de coulage ; le béton frais est porté par l\'équipage au bout du fléau (force et moment) jusqu\'au décoffrage ; les câbles de fléau sont tendus des deux côtés après chaque paire de voussoirs, avec frottement et recul d\'ancrage (§ 5.10.5) ; les clavages réunissent les fléaux sans contrainte. Hauteur et inertie variables par barre (I ∝ h^{5/2}, BT n° 7 § 2.222).');
   para('Limites : ligne moyenne supposée droite (la variation du c.d.g. avec la hauteur n\'est prise en compte que dans les excentrements), fléaux construits simultanément et symétriquement (pas de déséquilibre de bétonnage ni de vent en phase de construction), pas de gradient thermique ni de charges d\'exploitation, flexion transversale du caisson et effort tranchant hors de ce module, contre-flèches non calculées.');
