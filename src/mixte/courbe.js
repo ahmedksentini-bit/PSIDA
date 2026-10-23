@@ -159,14 +159,17 @@ export function verifierCourbure(M, o) {
   const proche = (x, appui) => { const c = A.sections.filter(q => q.appui === appui); return c.length ? c.reduce((a, b) => (Math.abs(b.s - x) < Math.abs(a.s - x) ? b : a)) : { kG: 1, kQ: 1 }; };
   const lignes = v.sections.map(s => {
     const c = proche(s.x, s.zoneAppui), k = Math.max(c.kG, c.kQ, 1), g = s.zoneAppui ? p.appui : p.travee;
-    const fl = flexionLaterale(s.MEd * k, g, { R, l }), fyS = s.fy, sig = s.sEluMax * k;
-    return { x: s.x, appui: s.zoneAppui, k, sig, flS: fl.flS, flI: fl.flI, tot: sig + Math.max(fl.flS, fl.flI), fy: fyS, H: fl.H, Mlat: fl.Mlat };
+    // structure achevée : la semelle supérieure, connectée à la dalle, est tenue latéralement de façon continue (f_l = 0,
+    // AASHTO LRFD § 6.10.1.6) ; la flexion latérale ne s'ajoute qu'à la semelle inférieure, fibre par fibre
+    const fl = flexionLaterale(s.MEd * k, g, { R, l }), fyS = s.fy, sf = s.sEluFib || { inf: s.sEluMax, sup: s.sEluMax };
+    const totI = sf.inf * k + fl.flI, totS = sf.sup * k, sig = Math.max(sf.inf, sf.sup) * k;
+    return { x: s.x, appui: s.zoneAppui, k, sig, flS: fl.flS, flI: fl.flI, tot: Math.max(totI, totS), fib: totI >= totS ? 'semelle inf.' : 'semelle sup.', fy: fyS, H: fl.H, Mlat: fl.Mlat };
   });
   const verifs = [], add = (nom, val, lim, ok, ref, x) => verifs.push({ nom, val, lim, ok, ref, x });
   const w = lignes.reduce((a, b) => (b.tot / b.fy > a.tot / a.fy ? b : a));
-  add(`Courbure (R = ${Math.round(R)} m) : σ_ELU amplifié (× ${w.k.toFixed(2)}) + flexion latérale des semelles`, w.tot, w.fy, w.tot <= w.fy, 'grillage ; AASHTO LRFD § 4.6.1.2.4b (M_lat = M l²/10 R D) ; EN 1993-1-1 § 6.2.1', w.x);
-  const wl = lignes.reduce((a, b) => (Math.max(b.flS, b.flI) / b.fy > Math.max(a.flS, a.flI) / a.fy ? b : a)), fl = Math.max(wl.flS, wl.flI);
-  add('Courbure : contrainte de flexion latérale f_l ≤ 0,6 f_y', fl, 0.6 * wl.fy, fl <= 0.6 * wl.fy, 'AASHTO LRFD § 6.10.1.6', wl.x);
+  add(`Courbure (R = ${Math.round(R)} m) : σ_ELU amplifié (× ${w.k.toFixed(2)}), flexion latérale ajoutée à la semelle inférieure seule — ${w.fib}`, w.tot, w.fy, w.tot <= w.fy, 'grillage ; AASHTO LRFD § 4.6.1.2.4b (M_lat = M l²/10 R D) ; semelle supérieure connectée : f_l = 0 (§ 6.10.1.6) ; EN 1993-1-1 § 6.2.1', w.x);
+  const wl = lignes.reduce((a, b) => (b.flI / b.fy > a.flI / a.fy ? b : a)), fl = wl.flI;
+  add('Courbure : contrainte de flexion latérale de la semelle inférieure f_l ≤ 0,6 f_y', fl, 0.6 * wl.fy, fl <= 0.6 * wl.fy, 'AASHTO LRFD § 6.10.1.6', wl.x);
   const u = A.uplift.reduce((a, b) => (b.EQU < a.EQU ? b : a));
   add(`Courbure : soulèvement de l'appareil intérieur, ligne ${u.appui} (EQU) [kN]`, u.EQU, 0, u.EQU >= 0, 'EN 1990 A2 tableau A2.4(A) : 0,95 R_G + 1,35 R_Q,min', p.L.slice(0, u.appui).reduce((s0, q) => s0 + q, 0));
   // semelle supérieure au bétonnage : σ + f_l / 3 ≤ χ f_y / γ_M1 (forme AASHTO 6.10.3.2.1), M déduit de σ (section d'acier)

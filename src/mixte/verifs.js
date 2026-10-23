@@ -135,12 +135,14 @@ export function verifierMixte(M, o = {}) {
     const eff = cl.classe >= 4 ? sectionEfficace(G, signe, S.fiss ? 'fissuree' : 'mixte', n0) : null;
     const kEff = (y) => (eff && eff.classe4 ? (eff.brut.I / Math.abs(y - eff.brut.yG)) / (eff.I / Math.abs(y - eff.yG)) : 1);
     let sEluMax = 0, sElsMax = 0, fibEl = '';
+    const sEluFib = { inf: 0, sup: 0 };   // contrainte ELU maximale par semelle (tablier courbe : flexion latérale par semelle)
     for (const [nom, y, k] of fibresAcier) {
       for (const [sg, eQ] of [[1, eM.max], [-1, eM.min]]) {
         const sGv = sigG.map(sg2 => sg2.acier ? sg2.acier[k] : 0), sQv = sQ(eQ, y), sTv = Math.max(Math.abs(sT(1, y, 'acier')), Math.abs(sT(-1, y, 'acier')));
         const sElu = (Math.max(...sGv.map(Math.abs)) * 1.35 + Math.abs(1.35 * sQv)) * kEff(y) + 0.9 * sTv;
         const sEls = Math.max(...sGv.map(v => Math.abs(v + sQv))) + 0.6 * sTv;
         if (sElu > sEluMax) { sEluMax = sElu; fibEl = nom; }
+        sEluFib[k] = Math.max(sEluFib[k], sElu);
         sElsMax = Math.max(sElsMax, sEls);
       }
     }
@@ -185,7 +187,7 @@ export function verifierMixte(M, o = {}) {
     const dVF = Math.max(...['d', 'g'].map(cote => { const ev = enveloppe(xs, PC.ligneV(x, cote), { essieux: fl }); return ev.max - ev.min; }));
     const fatigue = { lam: lamF, dSig: dSigF, dSigE: lamF * dSigF, dvL: dVF * Sc / Pn.I, ok: lamF * dSigF <= 80 / 1.35 };
     sections.push({ x, i, zoneAppui: S.zoneAppui, fiss: S.fiss, MGS, MGF, MQmax: eM.max, MQmin: eM.min, MT, MEdMax, MEdMin, MEd, signe, classe: cl.classe, Mpl,
-      eff, sEluMax, fibEl, sElsMax, fy: fy(S), sDal, sReb, VGF, VQ, VEd, Vr, interaction, deversement, vElu, vEls, dVsup, fatigue });
+      eff, sEluMax, sEluFib, fibEl, sElsMax, fy: fy(S), sDal, sReb, VGF, VQ, VEd, Vr, interaction, deversement, vElu, vEls, dVsup, fatigue });
   }
   // ---- goujons
   const fckP = p.fck, Ecm = betonEcm(fckP), d = gj.d, alpha = gj.h / d >= 4 ? 1 : 0.2 * (gj.h / d + 1);

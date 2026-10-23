@@ -21,6 +21,7 @@
  * Unités : m, kN, MPa ; épaisseurs d'acier rendues en mm comme dans le formulaire.
  */
 import { poutreEtHourdis, caisson } from './sections.js';
+import { contraintesPhases } from './contraintes.js';
 
 const r = (x, p = 0.05) => Math.round(x / p) * p, up = (x, p = 0.05) => Math.ceil(x / p - 1e-9) * p;
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
@@ -31,9 +32,11 @@ const net = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof
 /** Poutres rendues continues : portée L, entraxe bh, superstructures gSup (kN/m par poutre). */
 export function predimContinues({ L = 25, bh = 2.5, gSup = 8, fck = 40, gb = 25 } = {}) {
   const lignes = [], ligne = (g, v, regle, ref) => lignes.push({ grandeur: g, valeur: v, regle, ref });
-  const hd = L > 30 ? 0.25 : 0.22, Ht = up(L / 18), H = r(Ht - hd);
+  // hauteur visée L/18 ; la poutre est arrondie aux 5 cm supérieurs sous un hourdis fixé : la hauteur totale affichée est celle qui est
+  // réellement écrite dans le formulaire (poutre + hourdis), pas la cible
+  const hd = L > 30 ? 0.25 : 0.22, Hvise = L / 18, H = up(Hvise - hd), Ht = H + hd;
   const bt = r(clamp(0.6 * Ht, 0.60, Math.max(0.60, bh - 0.60))), ht = 0.15, bw = 0.20, bb = r(clamp(0.60 + 0.012 * (L - 25), 0.60, 0.90)), hb = 0.25;
-  ligne('Hauteur totale h (poutre + hourdis)', `${Ht.toFixed(2)} m = L/${(L / Ht).toFixed(1)}`, 'L/18 (1/16 à 1/18 isostatique, continuité : bas de plage)', 'Sétra VIPP 1996 § 3.2.1');
+  ligne('Hauteur totale h (poutre + hourdis)', `${Ht.toFixed(2)} m = L/${(L / Ht).toFixed(1)} (poutre ${H.toFixed(2)} m)`, 'L/18 visé (1/16 à 1/18 isostatique, continuité : bas de plage), poutre arrondie aux 5 cm supérieurs', 'Sétra VIPP 1996 § 3.2.1');
   ligne('Hourdis', `${hd.toFixed(2)} m`, '0,22 à 0,25 m (flexion locale, enrobages)', 'Sétra VIPP § 2.2.3');
   ligne('Table de compression', `${bt.toFixed(2)} × ${ht.toFixed(2)} m`, 'b_t ≥ 0,6 h, ≤ entraxe − 0,60 m (coffrage du hourdis)', 'Sétra VIPP § 3.2.3');
   ligne('Âme', `${bw.toFixed(2)} m`, '20 à 22 cm en coffrage métallique', 'Sétra VIPP § 3.2.2');
@@ -50,7 +53,7 @@ export function predimContinues({ L = 25, bh = 2.5, gSup = 8, fck = 40, gb = 25 
   ligne('Précontrainte (après pertes instantanées)', `${PmR} kN, ${nT} T15S (A_p = ${Ap.toFixed(1)} cm²)`, `σ_inf ≥ +${sigRes} MPa à t∞ sous permanentes (pertes différées 20 %), câble à e = ${eP.toFixed(2)} m`, 'EN 1992-1-1 § 5.10 ; Sétra VIPP § 3.1.3');
   const ratio = Ap * 1e-4 * 7850 / (P.A + Hh.A);
   ligne('Ratio de précontrainte', `${ratio.toFixed(0)} kg/m³`, 'courant ≈ 40 kg/m³ en travées indépendantes ; moins en continuité', 'Sétra VIPP § 3.1.3');
-  return { champs: net({ ph_H: f2(H), ph_bt: f2(bt), ph_ht: ht, ph_bw: bw, ph_bb: f2(bb), ph_hb: hb, ph_hd: hd, ph_P: PmR, ph_Ap: +Ap.toFixed(1), ph_eMi: f2(eP), ph_geo: 'dims' }), lignes };
+  return { champs: net({ ph_H: f2(H), ph_bt: f2(bt), ph_ht: ht, ph_bw: bw, ph_bb: f2(bb), ph_hb: hb, ph_hd: hd, ph_P: PmR, ph_Ap: +Ap.toFixed(1), ph_eMi: f2(eP), ph_geo: 'dimensions' }), lignes };
 }
 
 /** Fléaux : demi-travée centrale a (travées a – 2a – a), largeur B, superstructures gSup (kN/m). */
@@ -77,7 +80,7 @@ export function predimFleau({ a = 40, B = 12, gSup = 40, gb = 25, P0 = 3000, Lr 
   const ec = sc.yG - 0.15, Pc = Mcle * sc.yG / sc.I / (1 / sc.A + ec * sc.yG / sc.I);
   const ccn = Math.max(2, Math.ceil(Pc / 0.80 / P0 / 2) * 2), crn = Math.max(2, Math.floor(0.45 * ccn / 2) * 2);
   ligne('Câbles de continuité', `${ccn} au centre, ${crn} par travée de rive`, `intrados comprimé à la clé : M ≈ ${Math.round(Mcle)} kN·m (superstructures, fluage, trafic fréquent)`, 'Sétra encorbellements 2003');
-  return { champs: net({ fl_hp: hp, fl_hc: hc, fl_bw: bw, fl_ts: ts, fl_Bi: Bi, fl_tip: tip, fl_tic: tic, fl_l0: l0, fl_nv: nv, fl_cn: cn, fl_Qeq: Qeq, fl_ccn: ccn, fl_ccv: Math.max(2, nv - 1), fl_crn: crn, fl_crv: Math.max(2, nv - 2), fl_geo: 'dims', fl_tcl: tcl, fl_tcc: tcl + 5, fl_tsup: tcl + 30 }), lignes };
+  return { champs: net({ fl_hp: hp, fl_hc: hc, fl_bw: bw, fl_ts: ts, fl_Bi: Bi, fl_tip: tip, fl_tic: tic, fl_l0: l0, fl_nv: nv, fl_cn: cn, fl_Qeq: Qeq, fl_ccn: ccn, fl_ccv: Math.max(2, nv - 1), fl_crn: crn, fl_crv: Math.max(2, nv - 2), fl_geo: 'dimensions', fl_tcl: tcl, fl_tcc: tcl + 5, fl_tsup: tcl + 30 }), lignes };
 }
 
 /** Bipoutre mixte : portées, largeur B, superstructures gSup (kN/m de tablier), largeur roulable Lr. */
@@ -116,7 +119,8 @@ export function predimMixte({ L = [45, 60, 45], B = 10.5, gSup = 13.5, Lr = 8.5,
  *    sur appui → taux d'armatures (+0,1 %) ; au-delà de 150 mm d'épaisseur, la semelle est élargie ; bétonnage :
  *    déversement de la semelle → largeur (+5 cm), déversement d'ensemble → largeurs des deux semelles en travée ;
  *    courbure : épaisseurs et largeurs des semelles de la zone (flexion latérale ∝ 1/b²) ;
- *  - poutres continues : décompression, traction → précontrainte (+5 %, section des torons ajustée) ;
+ *  - poutres continues : décompression, traction → précontrainte (+5 %, section des torons ajustée) ; compression
+ *    excessive au jeune âge pendant la construction (0,6 f_ck(t), contrôlée elle aussi) → mise en tension retardée de 7 j ;
  *  - fléaux : traction ou décompression en partie haute → câbles de fléau (+1 par paire) ; en partie basse →
  *    câbles de continuité (+2 au centre, +2 en rive) selon la position.
  * Les critères sans levier géométrique (goujons, compression excessive) sont laissés au projeteur et listés.
@@ -129,11 +133,17 @@ export async function affiner(type, champs, base, compute, { maxIt = 25, onPas =
     out = compute({ ...base, ...str(c) });
     const V = type === 'mixte' ? out.v : out.acheve;
     restants = V.verifs.filter(q => !q.ok);
+    // béton précontraint : les contraintes des phases de construction (compression ≤ 0,6 f_ck(t) au jeune âge, traction)
+    // comptent aussi ; sans elles, le prédimensionnement pourrait se déclarer satisfait avec une mise en tension trop précoce
+    if (type !== 'mixte' && out.reperes && out.reperes.fibres) {
+      const C = contraintesPhases(out.r, out.modele, out.reperes.fibres, out.p.dates.superstructures);
+      for (const q of C.verifs) if (!q.ok) restants.push({ nom: `Construction : ${q.partie}, ${q.critere}`, val: q.valeur, lim: q.limite, ok: false, phase: true, age: q.ou.age, t: q.ou.t, fibre: q.ou.fibre, ref: 'EN 1992-1-1 § 5.10.2.2 (5)' });
+    }
     if (onPas) onPas(it, restants);
     if (!restants.length || it === maxIt) break;
     const avant = JSON.stringify(c);
     if (type === 'mixte') ajusterMixte(c, restants, V);
-    else if (type === 'poutres') ajusterContinues(c, restants);
+    else if (type === 'poutres') ajusterContinues(c, restants, base);
     else ajusterFleau(c, restants, out);
     const delta = Object.keys(c).filter(k => JSON.stringify(c[k]) !== JSON.stringify(JSON.parse(avant)[k]));
     if (!delta.length) break;   // plus de levier : critères restants laissés au projeteur
@@ -153,7 +163,7 @@ function ajusterMixte(c, defauts, V) {
   for (const q of defauts) {
     const z = zone(q.x);
     if (/^Courbure \(R/.test(q.nom)) { semelle(z, 'fi'); semelle(z, 'fs'); pas(`mx_${z}bfi`, 0.05, 1.6); pas(`mx_${z}bfs`, 0.05, 1.2); }
-    else if (/^Courbure : contrainte de flexion latérale/.test(q.nom)) { pas(`mx_${z}bfi`, 0.05, 1.6); pas(`mx_${z}bfs`, 0.05, 1.2); }
+    else if (/^Courbure : contrainte de flexion latérale/.test(q.nom)) pas(`mx_${z}bfi`, 0.05, 1.6);   // semelle inférieure seule (la supérieure est tenue par la dalle)
     else if (/^Courbure, bétonnage/.test(q.nom)) pas('mx_tbfs', 0.05, 1.2);
     else if (/^Bétonnage : déversement d'ensemble/.test(q.nom)) { pas('mx_tbfs', 0.05, 1.2); pas('mx_tbfi', 0.05, 1.6); }
     else if (/^Bétonnage : déversement de la semelle supérieure/.test(q.nom)) pas(`mx_${z}bfs`, 0.05, 1.2);
@@ -170,8 +180,15 @@ function ajusterMixte(c, defauts, V) {
   }
 }
 
-function ajusterContinues(c, defauts) {
-  if (defauts.some(q => /Décompression|traction|Traction/.test(q.nom))) {
+function ajusterContinues(c, defauts, base = {}) {
+  // compression excessive au jeune âge pendant la construction : mise en tension retardée d'une semaine (béton plus résistant),
+  // sans dépasser la date de coulage du hourdis ni 28 jours
+  const jeune = defauts.find(q => q.phase && /compression/.test(q.nom) && q.age < 28);
+  if (jeune) {
+    const t1 = +(c.ph_t1 ?? base.ph_t1 ?? 7), t2 = +(c.ph_t2 ?? base.ph_t2 ?? 60), t = Math.min(t1 + 7, 28, t2);
+    if (t > t1) c.ph_t1 = t;
+  }
+  if (defauts.some(q => !q.phase && /Décompression|traction|Traction/.test(q.nom))) {
     c.ph_P = Math.round(c.ph_P * 1.05 / 50) * 50;
     c.ph_Ap = +(Math.ceil(c.ph_P / 1200 * 10 / 1.5) * 1.5).toFixed(1);   // A_p (cm²) : σ ≈ 1 200 MPa, multiple d'un T15S
   }
@@ -180,7 +197,7 @@ function ajusterContinues(c, defauts) {
 function ajusterFleau(c, defauts, out) {
   const a = out.p.a;
   for (const q of defauts) {
-    if (!/Décompression|traction|Traction/.test(q.nom)) continue;
+    if (q.phase || !/Décompression|traction|Traction/.test(q.nom)) continue;   // phases de construction : laissées au projeteur
     const haut = /sup/.test(q.nom), x = q.x ?? 2 * a, rive = x < a || x > 3 * a;
     if (haut) c.fl_cn = (c.fl_cn || 1) + 1;
     else if (rive) c.fl_crn = (c.fl_crn || 0) + 2;

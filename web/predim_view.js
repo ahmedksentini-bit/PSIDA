@@ -21,15 +21,18 @@ export function proposer(d) {
 }
 
 function ecrire(champs) {
-  for (const [k, v] of Object.entries(champs)) { const e = document.querySelector(`[name="${k}"]`); if (e) e.value = String(v); }
-  $('#f').dispatchEvent(new Event('change', { bubbles: true }));
+  let dernier = null;
+  for (const [k, v] of Object.entries(champs)) { const e = document.querySelector(`[name="${k}"]`); if (e) { e.value = String(v); dernier = e; } }
+  // l'événement part d'un champ de l'onglet (et remonte au formulaire) : le schéma « Ce que vous saisissez » ne se redessine
+  // que pour un changement venu de son onglet
+  (dernier || $('#f')).dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 function tableau(P, r) {
   const virg = t => String(t).replace(/(\d)\.(\d)/g, '$1,$2');   // décimales à la française
   const lignes = P.lignes.map(l => `<tr><td>${esc(l.grandeur)}</td><td>${esc(virg(l.valeur))}</td><td class="small">${esc(l.regle)}</td><td class="small">${esc(l.ref)}</td></tr>`).join('');
   const j = r && r.journal.length ? `<p class="small"><b>Affinage par le calcul</b> (${r.journal.length} essai${r.journal.length > 1 ? 's' : ''}) :</p><ul class="small">${r.journal.map(q => `<li>essai ${q.essai} — en défaut : ${esc(q.defauts.join(' ; '))} → ${esc(q.modifie.join(', '))}</li>`).join('')}</ul>` : '';
-  const fin = !r ? '' : r.ok ? '<p class="small"><span class="badge ok">OK</span> toutes les vérifications de l\'ouvrage terminé sont satisfaites avec les valeurs écrites dans le formulaire.</p>'
+  const fin = !r ? '' : r.ok ? '<p class="small"><span class="badge ok">OK</span> toutes les vérifications de l\'ouvrage terminé et des phases de construction sont satisfaites avec les valeurs écrites dans le formulaire.</p>'
     : `<p class="small"><span class="badge warn">ATTENTION</span> critères restant en défaut (sans levier géométrique automatique, à traiter par le projeteur) : ${esc(r.restants.map(q => q.nom).join(' ; '))}.</p>`;
   return `<table><thead><tr><th>Grandeur</th><th>Proposition</th><th>Règle</th><th>Référence</th></tr></thead><tbody>${lignes}</tbody></table>${j}${fin}`;
 }

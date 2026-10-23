@@ -11,11 +11,12 @@
  *  - combinaisons EN 1990 A2 (ψ : TS 0,75 / 0,75 / 0, UDL 0,4 / 0,4 / 0, trottoirs 0,4 / 0,4 / 0, T 0,6 / 0,6 / 0,5) ;
  *  - ELS (EN 1992-1-1 § 7.2, EN 1992-2 tableau 7.101N) : compression 0,6 f_ck (caractéristique) et 0,45 f_ck (quasi
  *    permanente), décompression des parties précontraintes (quasi permanente en XC, fréquente en XD), traction ≤ f_ctm sous
- *    fréquente (section non fissurée) ; poutres rendues continues : armatures de continuité du hourdis sur appuis ;
+ *    fréquente (section non fissurée) ; poutres rendues continues : armatures de continuité du hourdis sur appuis, vérifiées
+ *    aussi dans le joint de clavage où aucun câble ne passe ;
  *  - ELU de flexion : M_Ed = 1,35 M_charges + M_hyperstatique de la précontrainte (γ_P = 1,0) + 1,35 Q + 0,9 T, résistance
  *    par bloc rectangulaire sur les rectangles de la section, câbles avec allongement préalable et palier f_pd, armatures
  *    passives de complément et effort tranchant (§ 6.2.3 : V_pd des câbles inclinés, effet Résal de la membrure inclinée des
- *    caissons de hauteur variable, § 6.2.1 (1)) ;
+ *    caissons de hauteur variable, § 6.2.1 (1), avec le moment concomitant minimal : permanentes à γ = 1,0, sans trafic) ;
  *  - réactions d'appui du tablier entier, transmises à l'onglet Appuis ;
  *  - séisme vertical sur le tablier précontraint (EN 1998-2 § 4.1.7(2)P, option o.spectreV) : analyse spectrale
  *    multimodale de la poutre continue (§ 4.2.1 ; rigidité condensée sur les translations, masses W/g recalées sur les
@@ -251,14 +252,30 @@ export function structureAchevee(out, o = {}) {
       sis = { MEdEP, MEdEN, AsInfE, AsContE, gouverne: AsInfE > AsInf + 1e-7 || AsContE > AsCont + 1e-7 };
       AsInf = Math.max(AsInf, AsInfE); AsCont = Math.max(AsCont, AsContE);
     }
+    // poutres rendues continues, appui intermédiaire : joint de clavage. Le câble de chaque poutre s'arrête à son about ; dans le
+    // joint coulé en place (béton du hourdis), aucun câble ne traverse : le moment négatif y est repris par les seules
+    // armatures de continuité du hourdis, la compression par le béton de clavage sur le profil de la poutre. Les armatures
+    // retenues sur appui sont le maximum de l'about (câble compris) et du joint.
+    let AsJoint = null, jointOk = true;
+    if (!fleau && p.n > 1 && Array.from({ length: p.n - 1 }, (_, k) => (k + 1) * p.L).some(xa => Math.abs(xa - s.x) < 1e-6)) {
+      const cJ = couches.map(c => ({ ...c, fcd: fcdOf(fckH) })), MJ = Math.max(-MEdN, sis ? -sis.MEdEN : 0);
+      const rJ = resistanceCouches(cJ, [], [], -1, { fpd, Ep });
+      if (MJ > rJ.M) { let lo = 0, hi = 0.08; for (let it = 0; it < 60; it++) { const m = (lo + hi) / 2; if (resistanceCouches(cJ, [], [{ A: m, y: yArm }], -1, { fpd, Ep }).M >= MJ) hi = m; else lo = m; } AsJoint = hi; jointOk = hi < 0.0799; }
+      else AsJoint = 0;
+      AsCont = Math.max(AsCont, AsJoint);
+    }
     // effort tranchant
     const VEd0 = 1.35 * s.VG + 1.35 * s.VQ, cs2 = cablesAt(pF, el, s.xi), Vpd = Math.abs(cs2.reduce((a, c) => a + c.N * Math.sin(Math.atan(c.pente)), 0));
     const Pn = cs2.reduce((a, c) => a + c.N, 0), z = 0.9 * (H - Math.min(...cab.map(c => Math.min(c.y, H - c.y)), 0.1));
     let VRes = 0;
-    if (fleau) { const dh = Math.abs((R.h(Math.min(1, Math.abs(el.x1 - nearestPile(el.x1, p)) / p.a)) - R.h(Math.min(1, Math.abs(el.x0 - nearestPile(el.x0, p)) / p.a))) / (el.x1 - el.x0)); VRes = Math.abs(Math.min(MEdN, 0)) / Math.max(z, 0.5) * dh; }
+    // effet Résal : V_ccd = |M| tan α / z. V_Ed0 est l'effort tranchant maximal (trafic placé pour V) : le moment qui lui est
+    // concomitant n'est pas l'enveloppe M_Ed−. On retient la borne basse de |M−| : permanentes avec γ_G,inf = 1,0 et effets
+    // hyperstatiques de la précontrainte, sans trafic ni gradient (soulagement minimal, du côté de la sécurité)
+    const MResal = Math.min(Math.max(...[0, 1].map(k => s.MGch[k] + s.Mhyp[k])), 0);
+    if (fleau) { const dh = Math.abs((R.h(Math.min(1, Math.abs(el.x1 - nearestPile(el.x1, p)) / p.a)) - R.h(Math.min(1, Math.abs(el.x0 - nearestPile(el.x0, p)) / p.a))) / (el.x1 - el.x0)); VRes = Math.abs(MResal) / Math.max(z, 0.5) * dh; }
     const VEd = Math.max(VEd0 - Vpd - VRes, 0), bw = fleau ? 2 * (p.caisson ? p.caisson.bw : 0.4) : (p.forme ? p.forme.bw : 0.2);
     const V = etriersEC2({ VEd, bw, bwNom: bw - 0.5 * 0.08 * (fleau ? 2 : 1), z: Math.max(z, 0.3), fck, fyk, scp: Pn / el.A / 1000 });
-    return { x: s.x, MEdP, MEdN, MRdP: rP.M, MRdN: rN.M, AsCont, AsInf, VEd0, Vpd, VRes, VEd, V, sis };
+    return { x: s.x, MEdP, MEdN, MRdP: rP.M, MRdN: rN.M, AsCont, AsInf, AsJoint, jointOk, VEd0, Vpd, VRes, VEd, V, sis };
   });
 
   // ---- synthèse des vérifications ELS / ELU
@@ -274,6 +291,8 @@ export function structureAchevee(out, o = {}) {
   const aI = elu.reduce((a, b) => (b.AsInf > a.AsInf ? b : a)), aS = elu.reduce((a, b) => (b.AsCont > a.AsCont ? b : a));
   add(`Armatures passives inférieures nécessaires à l'ELU [cm²${fleau ? '' : ' par poutre'}]`, aI.AsInf * 1e4, aI.AsInf * 1e4, true, 'complément des câbles en moment positif', aI.x);
   add(`Armatures passives supérieures nécessaires à l'ELU [cm²${fleau ? '' : ' par poutre, continuité du hourdis'}]`, aS.AsCont * 1e4, aS.AsCont * 1e4, true, 'complément des câbles en moment négatif', aS.x);
+  const jt = elu.filter(e => e.AsJoint != null);
+  if (jt.length) { const j = jt.reduce((a, b) => (b.AsJoint > a.AsJoint ? b : a)); add('Joint de clavage sur appui (sans câble) : armatures de continuité nécessaires [cm² par poutre]', j.AsJoint * 1e4, j.AsJoint * 1e4, jt.every(e => e.jointOk), 'EN 1992-1-1 § 6.1 : armatures du hourdis seules, béton de clavage comprimé', j.x); }
   const eV = elu.reduce((a, b) => (b.VEd / b.V.VRdmax > a.VEd / a.V.VRdmax ? b : a)); add(`ELU effort tranchant : V_Ed / V_Rd,max (cot θ = ${eV.V.cot.toFixed(2)})`, eV.VEd, eV.V.VRdmax, eV.V.ok, 'EN 1992-1-1 § 6.2.3', eV.x);
   // ---- séisme vertical (EN 1998-2 § 4.1.7(2)P) : composante ascendante à vide et descendante
   let seismeV = null;
@@ -281,7 +300,7 @@ export function structureAchevee(out, o = {}) {
     const fS = sections.flatMap(s2 => s2.sis.fib.map(f => ({ ...f, x: s2.x })));
     const pr = fS.filter(f => f.prec && (fleau || f.nom === 'poutre inf.' || f.nom === 'poutre sup.'));
     const wT = pr.reduce((a, b) => (b.max > a.max ? b : a)), wCm = fS.reduce((a, b) => (b.min < a.min ? b : a));
-    add(`Séisme vertical, G + P ± E_z : traction (${wT.nom || 'caisson'})`, wT.max, fctm, wT.max <= fctm, 'EN 1998-2 § 4.1.7(2)P ; σ ≤ f_ctm : section non fissurée', wT.x);
+    add(`Séisme vertical, G + P ± E_z : contrainte la plus haute, traction positive (${wT.nom || 'caisson'})`, wT.max, fctm, wT.max <= fctm, `EN 1998-2 § 4.1.7(2)P ; σ ≤ f_ctm : section non fissurée${wT.max < 0 ? ' (ici toute la section reste comprimée)' : ''}`, wT.x);
     add(`Séisme vertical, G + P ± E_z : compression (${wCm.nom || 'caisson'})`, wCm.min, -0.6 * fck, wCm.min >= -0.6 * fck, 'EN 1992-1-1 § 7.2 (2)', wCm.x);
     const gv = elu.filter(e => e.sis && e.sis.gouverne);
     add('Séisme vertical, ELU de flexion G + P ± E_z : sections où il gouverne les armatures passives', gv.length, 0, true, gv.length ? `armatures passives augmentées en ${gv.length} section(s)` : 'couvert par l\'ELU fondamental', gv.length ? gv[0].x : null);
@@ -291,7 +310,11 @@ export function structureAchevee(out, o = {}) {
   // ---- réactions d'appui du tablier entier
   const reacG = appX.map(xa => { let s = 0; nd.forEach((n0, i) => { if (Math.abs(n0[0] - xa) < 1e-6) s += pF.reactions[3 * i + 1] || 0; }); return Math.abs(s) * nP; });
   const reactions = appX.map((xa, j) => { const eR = enveloppe(xs, PC.ligneR(j), { q: 1, essieux: [{ d: 0, P: 1 }, { d: 1.2, P: 1 }] }); const infTS = eR.max - eR.pos; return { j, G: reacG[j], TS: QT * infTS, UDL: qT * eR.pos, trott: qFw * eR.pos, infTS, infUDL: eR.pos }; });
-  return { type, nP, eta, guyon, Qb, qb, QT, qT, dTh, sections, elu, verifs, reactions, expo, fck, seismeV, ok: verifs.every(v => v.ok) && elu.every(e => e.V.ok) };
+  const res = { type, nP, eta, guyon, Qb, qb, QT, qT, dTh, sections, elu, verifs, reactions, expo, fck, seismeV, ok: verifs.every(v => v.ok) && elu.every(e => e.V.ok) };
+  // calcul par phases sans câbles (charges seules) : sert aussi à l'affichage de l'adaptation par fluage ; non énumérable
+  // pour ne pas alourdir les exports
+  Object.defineProperty(res, 'r0', { value: r0, enumerable: false });
+  return res;
 }
 
 function nearestPile(x, p) { return Math.abs(x - p.a) < Math.abs(x - 3 * p.a) ? p.a : 3 * p.a; }

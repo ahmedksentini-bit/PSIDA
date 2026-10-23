@@ -69,6 +69,7 @@
   #concept-bearings td:last-child { white-space:normal; text-align:left; min-width:150px; }
   #concept-bearings td .badge { display:block; width:max-content; max-width:100%; white-space:normal; margin:3px 0 0; text-align:left; }
   #supports-tables { overflow-x:auto; } #supports-tables th, #supports-tables td { white-space:normal; } #supports-tables td:first-child { white-space:nowrap; }
+  .predim-out { overflow-x:auto; max-width:100%; } .predim-out th, .predim-out td { white-space:normal; text-align:left; vertical-align:top; }
   #bp-out { overflow-x:auto; } #bp-out td, #bp-out th { white-space:normal; } #bp-out table:first-of-type td:last-child { text-align:left; }
   .neg { color: var(--warn); } .small { font-size:12px; color:var(--muted); }
   details { margin: 6px 0; } summary { cursor:pointer; font-weight:600; }
@@ -753,7 +754,7 @@
 </section>
 <section class="tab" id="tab-phasage">
   <div class="cols">
-    <div class="card form-card"><h2>Calcul par phases : fluage, retrait, précontrainte</h2>
+    <div class="card form-card"><h2>Calcul par phases : fluage, retrait et, le cas échéant, précontrainte</h2>
       <p class="small">Effets différés d'un tablier construit par phases. Fluage, retrait et relaxation selon la NF EN 1992-1-1 (annexe B, § 3.1.4, § 3.3.2), pertes instantanées (§ 5.10.5), méthode pas à pas.</p>
       <label>Type d'ouvrage<select name="ph_type"><option value="poutres">poutres préfabriquées précontraintes rendues continues</option><option value="fleau">pont construit par encorbellements successifs (fléaux)</option><option value="mixte">pont mixte acier-béton (bipoutre, quadripoutre)</option></select></label>
       <div data-show="ph_type=poutres">

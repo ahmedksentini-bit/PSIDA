@@ -64,7 +64,10 @@ export function nomenclatureContinues(out, { c = 0.03 } = {}) {
   // inférieure et supérieure transversales, répartition longitudinale ≥ 20 % (§ 9.3.1.1 (2))
   const AsMinH = Math.max(0.26 * 0.3 * fckH ** (2 / 3) / 500, 0.0013) * (f.hd - c - 0.01), W = nP * f.bh, Hl = v && v.hourdis;
   const AsI = Math.max(AsMinH, Hl ? Hl.inf.As : 0), AsS = Math.max(AsMinH, Hl ? Hl.sup.As : 0);
-  const bI = chooseBars(AsI, { phiMin: 10, phiMax: 16, sMax: 0.20 }), bS = chooseBars(AsS, { phiMin: 10, phiMax: 16, sMax: 0.20 });
+  // même règle que la proposition du tableau « Hourdis — flexion locale » (web/beams_view.js, nappe) : plus petit diamètre dont
+  // l'espacement, arrondi à 2,5 cm inférieurs et plafonné à 25 cm (EN 1992-1-1 § 9.3.1.1 (3)), reste ≥ 10 cm
+  const nappeH = As => { for (const phi of [10, 12, 14, 16, 20, 25]) { const a = areaOf(phi), sp = Math.min(Math.floor(a / Math.max(As, 1e-9) / 0.025 + 1e-9) * 0.025, 0.25); if (sp >= 0.10 - 1e-9) return { phi, s: sp, As: a / sp }; } return chooseBars(As, { phiMin: 16, phiMax: 25, sMax: 0.20 }); };
+  const bI = nappeH(AsI), bS = nappeH(AsS);
   const orig = As => (Hl ? `${fr(As * 1e4, 1)} cm²/m${As <= AsMinH + 1e-9 ? ', minimum' : ', flexion locale'}` : 'minimum');
   F.droite('hourdis', `transversales inférieures HA${bI.phi} / ${sTxt(bI.s)} (${orig(AsI)})`, bI.phi, W - 2 * c, (Math.floor(L / bI.s) + 1) * p.n, fckH);
   F.droite('hourdis', `transversales supérieures HA${bS.phi} / ${sTxt(bS.s)} (${orig(AsS)})`, bS.phi, W - 2 * c, (Math.floor(L / bS.s) + 1) * p.n, fckH);

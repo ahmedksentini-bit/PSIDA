@@ -44,6 +44,8 @@ export function contraintesPhases(out, modele, fibres, tService, { xs = [0, 0.5,
           // taux de travail en compression (σ / limite) et en traction
           // béton de moins d'un jour (partie qui vient d'être activée, sans contrainte) : pas de taux
           if (age >= 1 && Math.abs(v) > 1e-3) { if (v < 0) note(f.partie, 'tauxC', -v / lim.comp, { ...info, s: v }); else note(f.partie, 'tauxT', v / lim.trac, { ...info, s: v }); }
+          // rapport k_σ = |σ_c| / f_ck(t) : au-delà de 0,45, le fluage n'est plus linéaire (EN 1992-1-1 § 3.1.4 (4))
+          if (age >= 1 && v < -1e-3) note(f.partie, 'kSig', -v / loi.b.fckT(age), { ...info, s: v });
           if (service && f.precontraint) note(f.partie, 'tService', v, info);
         }
       }
@@ -56,7 +58,11 @@ export function contraintesPhases(out, modele, fibres, tService, { xs = [0, 0.5,
     if (e.tauxT) verifs.push({ partie, critere: 'traction ≤ f_ctm(t) (non-fissuration)', valeur: e.tauxT.s, limite: e.tauxT.lim.trac, taux: e.tauxT.v, ok: e.tauxT.v <= 1 + 1e-9, ou: e.tauxT });
     if (e.tService) verifs.push({ partie, critere: 'décompression en service (quasi permanente)', valeur: e.tService.v, limite: 0, taux: null, ok: e.tService.v <= 1e-3, ou: e.tService });
   }
-  return { enveloppe: env, verifs };
+  // fluage non linéaire : le calcul par phases emploie une loi de fluage linéaire (superposition de Boltzmann) ; quand la
+  // compression dépasse 0,45 f_ck(t), on signale le coefficient de l'EN 1992-1-1 § 3.1.4 (4), éq. 3.7 : φ_nl = φ exp(1,5 (k_σ − 0,45))
+  let nonLineaire = null;
+  for (const [partie, e] of Object.entries(env)) if (e.kSig && e.kSig.v > 0.45 && (!nonLineaire || e.kSig.v > nonLineaire.k)) nonLineaire = { partie, k: e.kSig.v, facteur: Math.exp(1.5 * (e.kSig.v - 0.45)), ou: e.kSig };
+  return { enveloppe: env, verifs, nonLineaire };
 }
 
 /** Contraintes aux fibres d'une barre au pas p (section à l'abscisse relative xi). */
