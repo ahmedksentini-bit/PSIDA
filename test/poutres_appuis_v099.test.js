@@ -75,7 +75,7 @@ test('appuis du VIPP par défaut : semelles et bossages dimensionnés, tête de 
 });
 
 test('semelle imposée trop étroite : motif affiché (résultante hors de la semelle), pas de valeurs indéfinies', () => {
-  const st = appuis({ ap_B: '3' }), f = st.supports.lines[0].EC.found;
+  const st = appuis({ ap_B: '2' }), f = st.supports.lines[0].EC.found;
   assert.ok(!f.Bauto && f.checks.some(k => k.motif));
   const txt = JSON.stringify(supportsBlocks(st.supports, 'EC'));
   assert.ok(/résultante hors de la semelle/.test(txt));

@@ -669,7 +669,7 @@ function calculAppuis(st, input = {}) {
           const wt = cb.wat;   // crue : courant + embâcles appliqués au fût (sens du courant, transversal), Archimède sur le fût
           // séisme : inertie propre du fût ajoutée au pied (effort fu.Fx, moment fu.Mx ; idem en transversal)
           const fu = cb.fut || { Fx: 0, Mx: 0, Fy: 0, My: 0 };
-          return { ...cb, Nb: cb.N + g * (Wchev + Wfut) - (wt ? wt.U : 0), Mb: cb.H * arm + Mimp + fu.Mx, Mimp, Myb: (cb.Hy || 0) * arm + (wt ? wt.M : 0) + fu.My, Hb: cb.H + (cb.imp ? cb.imp.F : 0) + fu.Fx, Hyb: (cb.Hy || 0) + (wt ? wt.F : 0) + fu.Fy };
+          return { ...cb, Wst: Wchev + Wfut, Uw: wt ? wt.U : 0, Nb: cb.N + g * (Wchev + Wfut) - (wt ? wt.U : 0), Mb: cb.H * arm + Mimp + fu.Mx, Mimp, Myb: (cb.Hy || 0) * arm + (wt ? wt.M : 0) + fu.My, Hb: cb.H + (cb.imp ? cb.imp.F : 0) + fu.Fx, Hyb: (cb.Hy || 0) + (wt ? wt.F : 0) + fu.Fy };
         });
         const shape = col ? { D: P.D, c: c + 0.01, nBars: 12 } : { b: Lv, h: bBot, c: c + 0.01, ...(bTop !== bBot ? { hBuck: bMin } : {}) };
         shaftRes = designShaft({ shape, code, fck, fyk, Hf, combos: base.filter(b => b.ls !== 'ELS' && !b.fond).map(b => ({ label: b.label, N: b.Nb, M: b.Mb - b.Mimp, Mloc: b.Mimp, My: b.Myb, acc: !!b.acc, sis: !!b.sis })), n: col ? P.nCol : 1 });
@@ -702,11 +702,11 @@ function calculAppuis(st, input = {}) {
         base = combos.map(cb => {
           const elu = cb.ls === 'ELU', g = elu ? gU : 1, gq = cb.ls === 'ACC' ? 0 : code === 'BAEL' ? (elu ? 1.605 : 1.2) : (elu ? 1.35 : 1);
           const kS = cb.sis && sisC ? (cb.cx ?? 1) : 0, dH = kS ? kS * sisC.H : 0, dM = kS ? kS * sisC.M : 0;
-          return { ...cb, Nb: cb.N + g * (Wtop + Wwall + Wret + dt.Rg * width) + gq * dt.Rq * width / 3, Mb: cb.H * (Hm + (rem ? 0 : C.hc)) + g * ep.Mg + gq * ep.Mq + dM, Hb: cb.H + g * ep.Pg + gq * ep.Pq + dH,
+          return { ...cb, Wst: Wtop + Wwall + Wret + dt.Rg * width, Nb: cb.N + g * (Wtop + Wwall + Wret + dt.Rg * width) + gq * dt.Rq * width / 3, Mb: cb.H * (Hm + (rem ? 0 : C.hc)) + g * ep.Mg + gq * ep.Mq + dM, Hb: cb.H + g * ep.Pg + gq * ep.Pq + dH,
             ...(kS ? { culeeSis: kS, sisInst: { H: dH, M: dM } } : {}) };
         });
         // culée sans tablier (remblai mis en place avant la pose du tablier, PP73 1.3.2 § 3.1.4.6)
-        base.push(...videCombos({ W: Wtop + Wwall + Wret, ep, code }));
+        base.push(...videCombos({ W: Wtop + Wwall + Wret, ep, code }).map(v => ({ ...v, Wst: Wtop + Wwall + Wret, Nsus: 0 })));
         extra.earth = { ...ep, K: app ? ep.i : KA, Htot: Hm + hGG, mode: app ? 'partie haute (PP73 § 3.1.3.1)' : rem ? 'mur de front' : 'colonnes, largeur fictive min(3D ; entraxe)' };
         const shape = rem ? { b: 1, h: C.em, c: c + 0.01 } : { D: C.D, c: c + 0.01, nBars: 12 };
         shaftRes = designShaft({ shape, code, fck, fyk, Hf: Hm, combos: base.filter(b => b.ls !== 'ELS' && !b.fond).map(b => ({ label: b.label, N: b.Nb, M: b.Mb, My: (b.Hy || 0) * Hm, acc: !!b.acc, sis: !!b.sis })), n: rem ? width : C.nCol, pileCulee: !rem, strip: rem });
@@ -740,17 +740,38 @@ function calculAppuis(st, input = {}) {
       const wl = water[i], dAff = wl ? wl.dAff : 0;
       // crue : Archimède sur la semelle (ρ g V), effort transversal combiné (glissement, effort par pieu), moment transversal
       const armHead = end ? sp.culee.Hm + (sp.culee.type === 'remblayee' ? 0 : sp.culee.hc) : Hpile(i) + (sp.pile.type === 'colonnes' ? sp.pile.hc : 0);
-      const fdDe = Wsem => base.map(b => {
-        const g = b.ls === 'ELU' && !b.vide ? gU : 1, Hy = b.Hyb || 0, wt = !!b.wat;
+      // remblai sur le talon arrière d'une culée remblayée (semelle centrée sous le mur, débord (B − e_m)/2 de chaque côté) :
+      // poids W_r = γ (H_m + h_gg) d L_r, bras x_r = e_m/2 + d/2 vers l'arrière ; il soulage le moment de la poussée. Le terrain
+      // sur le talon avant n'est pas compté (il peut être déblayé ou affouillé : hypothèse du côté de la sécurité).
+      const talon = B => {
+        if (!end || sp.culee.type !== 'remblayee') return { W: 0, x: 0, d: 0 };
+        const d = Math.max(0, (B - bWall) / 2);
+        return { W: soil.gamma * (sp.culee.Hm + hGG) * d * width, x: bWall / 2 + d / 2, d };
+      };
+      // Charges verticales permanentes défavorables (γ_G,sup = 1,35) ou favorables (γ_G,inf = 1,0) : EN 1990 A2.4(B) et (C),
+      // NF P 94-261 (approche 2) ; Fascicule 62 titre V et BAEL (G_min = 1,0). Pour chaque combinaison ELU, une variante
+      // « G favorables » prend toutes les charges permanentes verticales (tablier, appui, semelle, remblai sur le talon) à 1,0
+      // et les charges variables verticales à 0 (favorables), les efforts horizontaux et la poussée gardant leurs coefficients :
+      // elle gouverne le glissement et l'excentrement. Part permanente du tablier = N_sus/1,35 (la réaction hyperstatique de
+      // précontrainte, comprise dans N_sus, est ainsi divisée par 1,35 : approximation).
+      const fdDe = (Wsem, B) => base.flatMap(b => {
+        const g = b.ls === 'ELU' && !b.vide ? gU : 1, Hy = b.Hyb || 0, wt = !!b.wat, tl = talon(B);
         // part instantanée (trafic, freinage, TCD, séisme, chocs) des efforts au niveau des têtes de pieux (modèle PSH)
         // efforts instantanés ajoutés au pied : inertie des fûts (piles), efforts sismiques propres de la culée
         const fu = !end && b.fut ? { H: b.fut.Fx, M: b.fut.Mx } : b.sisInst || { H: 0, M: 0 };
         const Hi = (b.Hinst || 0) + (b.imp ? b.imp.F : 0) + fu.H, Vi = b.Nsus !== undefined && b.N !== undefined ? b.N - b.Nsus : 0;
         const Mi = (b.Hinst || 0) * (armHead + F.hs) + (b.imp ? b.imp.F * (b.imp.h + F.hs) : 0) + fu.M + fu.H * F.hs;
         // culée en séisme : inertie du remblai sur le débord arrière de la semelle F2 = M_R a_g S (EN 1998-2 6.7.2)
-        const F2 = end && b.culeeSis && extra.seisme ? b.culeeSis * inertieRemblaiTalon({ kh: extra.seisme.kh, gamma: soil.gamma, debord: (F.B - bWall) / 2, hauteur: sp.culee.Hm + hGG, L: Lf }) : null;
+        const F2 = end && b.culeeSis && extra.seisme ? b.culeeSis * inertieRemblaiTalon({ kh: extra.seisme.kh, gamma: soil.gamma, debord: (B - bWall) / 2, hauteur: sp.culee.Hm + hGG, L: Lf }) : null;
         const Hx = b.Hb + (F2 ? F2.F2 : 0), Mx = b.Mb + b.Hb * F.hs + (F2 ? F2.F2 * (F.hs + F2.z) : 0);
-        return { label: b.label, ls: b.ls, V: b.Nb + g * Wsem - (wt ? 10 * Wsem / 25 : 0), H: Math.hypot(Hx, wt ? Hy : 0), Hx, Hy, M: Mx, My: (b.Myb || 0) + Hy * F.hs, crue: wt, vide: !!b.vide, acc: !!b.acc, sis: !!b.sis, inst: { V: Vi, H: Hi + (F2 ? F2.F2 : 0), M: Mi + (F2 ? F2.F2 * (F.hs + F2.z) : 0) } };
+        const inst = { V: Vi, H: Hi + (F2 ? F2.F2 : 0), M: Mi + (F2 ? F2.F2 * (F.hs + F2.z) : 0) };
+        const flags = { ls: b.ls, H: Math.hypot(Hx, wt ? Hy : 0), Hx, Hy, My: (b.Myb || 0) + Hy * F.hs, crue: wt, vide: !!b.vide, acc: !!b.acc, sis: !!b.sis, inst };
+        const rows = [{ label: b.label, ...flags, V: b.Nb + g * (Wsem + tl.W) - (wt ? 10 * Wsem / 25 : 0), M: Mx - g * tl.W * tl.x }];
+        if (b.ls === 'ELU' && !b.vide && b.Wst !== undefined) {
+          const Ng = (b.Nsus ?? b.N) / gU;
+          rows.push({ label: `${b.label} — G favorables (γ = 1,0), Q vertical = 0`, ...flags, gFav: true, V: Ng + b.Wst - (b.Uw || 0) + Wsem + tl.W - (wt ? 10 * Wsem / 25 : 0), M: Mx - tl.W * tl.x, inst: { ...inst, V: 0 } });
+        }
+        return rows;
       });
       const checksDe = (B, fd) => fd.map(f => {
         const r = { ...f, ...shallowFooting({ code, B, L: Lf, D: F.De, De: F.De, V: f.V, H: f.H, M: f.M, ls: f.ls, profile, phi: soil.phi, gamma: soil.gamma, dAff: f.crue ? dAff : 0 }) };
@@ -761,12 +782,12 @@ function calculAppuis(st, input = {}) {
       // largeur de semelle : donnée, ou dimensionnée (1er calcul, B vide) — plus petite largeur vérifiant toutes les combinaisons
       let F = Fl, Bdim = false;
       if (Fl.type === 'superficielle' && sp.found.Bauto && !sp.found.Bligne && !(niv.parLigne[i] && niv.parLigne[i].found && niv.parLigne[i].found.B > 0)) {
-        const vaut = B => checksDe(B, fdDe(25 * B * Lf * Fl.hs)).every(k => Number.isFinite(k.ratioV) && k.ratioV <= 1 + 1e-9 && (k.ratioH ?? 0) <= 1 + 1e-9 && k.excOk);
+        const vaut = B => checksDe(B, fdDe(25 * B * Lf * Fl.hs, B)).every(k => Number.isFinite(k.ratioV) && k.ratioV <= 1 + 1e-9 && (k.ratioH ?? 0) <= 1 + 1e-9 && k.excOk);
         let B = Math.max(1.5, Math.ceil((bWall + 0.5) / 0.25 - 1e-9) * 0.25);
         while (B < 12 - 1e-9 && !vaut(B)) B += 0.25;
         F = { ...Fl, B: Math.round(B * 100) / 100 }; Bdim = true;
       } else if (sp.found.Bauto && BligneDe(i) != null) Bdim = true;
-      const Wsem = 25 * F.B * Lf * F.hs, fd = fdDe(Wsem);
+      const Wsem = 25 * F.B * Lf * F.hs, fd = fdDe(Wsem, F.B);
       let found;
       if (F.type === 'superficielle') {
         const checks = checksDe(F.B, fd);
@@ -986,6 +1007,7 @@ function calculAppuis(st, input = {}) {
       try { brg = bearing1337(i, code); } catch (e) { brg = { error: e.message }; }
       let headChk = null;
       try { headChk = pierHead(i, code, brg); } catch (e) { headChk = { error: e.message }; }
+      if (found) found.talon = talon(F.B);
       per[code] = { base, shaft: shaftRes, ...extra, found, brg, headChk };
     }
     out.BAEL = per.BAEL; out.EC = per.EC;
