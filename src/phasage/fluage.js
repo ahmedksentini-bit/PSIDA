@@ -68,11 +68,22 @@ export function betonDischinger({ E = 30000, phiInf = 2, T = 100, epsInf = 0 } =
   };
 }
 
+/**
+ * Loi non vieillissante (validation) : J(t, τ) = [1 + φ∞ (1 − e^{−(t − τ)/T})] / E — hypothèse du Bulletin technique
+ * Sétra n° 7 (1972), annexe I § 2.2 (« module élastique indépendant de l'âge »). Solide de Kelvin : relaxation
+ * R(t)/E = [1 + φ∞ e^{−(1 + φ∞) t/T}] / (1 + φ∞).
+ */
+export function betonNonVieillissant({ E = 30000, phiInf = 2, T = 100 } = {}) {
+  const ph = d => phiInf * (1 - Math.exp(-Math.max(d, 0) / T));
+  return { type: 'nonVieillissant', E: () => E, J: (t, tau) => (1 + ph(t - tau)) / E, phi: (t, tau) => ph(t - tau), retrait: () => 0 };
+}
+
 /** Loi élastique (sans fluage ni retrait) : contrôle des calculs par phases instantanés. */
 export function betonElastique({ E = 30000 } = {}) { return { type: 'elastique', E: () => E, J: () => 1 / E, phi: () => 0, retrait: () => 0 }; }
 
 export function loiBeton(o = {}) {
   if (o.loi === 'dischinger') return betonDischinger(o);
   if (o.loi === 'elastique') return betonElastique(o);
+  if (o.loi === 'nonVieillissant') return betonNonVieillissant(o);
   return betonEC2(o);
 }

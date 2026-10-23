@@ -121,3 +121,19 @@ test('Guide Sétra « Eurocode 2 — application aux ponts-routes en béton » (
   assert.equal(b.phi(50 * an + m4, 50 * an).toFixed(2), '0.25');
   assert.equal(b.phi(2 * an + m4, 2 * an).toFixed(2), '0.47');
 });
+
+test('Bulletin technique Sétra n° 7 (1972), annexe I § 2.2 : clavage de deux consoles, M_f(∞) = k/(1 + k) · ∫M dx/I / ∫dx/I', () => {
+  // poutre bi-encastrée de portée 2a réalisée par clavage de deux consoles chargées (w) juste avant le clavage ;
+  // béton non vieillissant (hypothèse du bulletin) de coefficient différé k = φ∞. Consoles de moment M_g = −w x²/2 :
+  // moyenne −w a²/6, d'où M_f(∞) = k/(1 + k) · w a²/6 à la clé (positif), et M_f(t) = M_f(∞) (1 − e^{−(1+k) t/T}).
+  const a = 15, k = 2, T = 100, t0 = 20;
+  const r = calculPhasage({ noeuds: [[0, 0], [a, 0], [a, 0], [2 * a, 0]], betons: { B: { loi: 'nonVieillissant', E: 30000, phiInf: k, T } },
+    barres: [{ i: 0, j: 1, A: 5, I: 3, beton: 'B' }, { i: 3, j: 2, A: 5, I: 3, beton: 'B' }],
+    phases: [{ t: t0, nom: 'fléaux', activer: [0, 1], appuis: [{ n: 0, ddl: ['ux', 'uy', 'rz'] }, { n: 3, ddl: ['ux', 'uy', 'rz'] }], charges: [{ barre: 0, w }, { barre: 1, w }] },
+      { t: t0, nom: 'clavage', liaisons: [{ a: 1, b: 2, ddl: ['ux', 'uy', 'rz'] }] }], tFin: t0 + 20000, parDecade: 32 });
+  const Mf = k / (1 + k) * w * a * a / 6;
+  proche(r.final.barres[0].Mj, Mf, 2e-3, 'M_f(∞) à la clé');
+  proche(r.final.barres[0].Mi, -w * a * a / 2 + Mf, 2e-3, 'moment sur appui');
+  const p = r.pas.find(q => q.t - t0 > 30);
+  proche(p.barres[0].Mj, Mf * (1 - Math.exp(-(1 + k) * (p.t - t0) / T)), 5e-3, 'M_f(t)');
+});
