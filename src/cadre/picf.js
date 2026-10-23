@@ -258,7 +258,13 @@ export function calculPicf(geomIn, hypIn = {}, opts = {}) {
   let aireB = geom.et * largeur + geom.er * largeur;
   for (let j = 0; j <= n; j++) aireB += C.epVoile(g, j) * geom.H;
   const longueur = geom.L > 0 ? geom.L : 1, poids = longueur * (h.rhoB * aireB + h.rhoR * geom.Hr * largeur);
-  const dB = F61.coefDynamique(largeur, poids, 76.8, h.classe), dMc = F61.coefDynamique(largeur, poids, 110.0, h.classe);
+  // Coefficient dynamique (Fascicule 61 titre II, art. 5.5) : G = couverture + remblai sur toute la longueur de l'ouvrage, S = plus
+  // fort poids d'essieux B plaçable sur cette couverture (largeur chargeable L_c de la voie portée, par défaut la longueur de
+  // l'ouvrage) ; Mc120 : S = 110 t (le char entier). `compat` : S_B = 76,8 t fixe (portage BVTrace, recoupement seulement).
+  const compat = h.compat === 'bvtrace', Lc = h.largeurChargeable > 0 ? h.largeurChargeable : longueur, nV = F61.nombreVoies(Lc);
+  const SB = compat ? { S: 76.8, systeme: 'forfait', files: 0 } : F61.poidsSystemeB(largeur + geom.ep, nV, h.classe);
+  const dB = F61.coefDynamique(largeur, poids, SB.S, h.classe), dMc = F61.coefDynamique(largeur, poids, 110.0, h.classe);
+  if (!compat && portee === 'route') notes.push(`Coefficient de majoration dynamique (Fascicule 61 titre II, art. 5.5) : G = ${fr(poids, 1)} t (traverse, radier, voiles et remblai sur ${fr(longueur)} m d'ouvrage) ; S_B = ${fr(SB.S, 1)} t = ${SB.systeme === 'Bc' ? `${SB.files} file(s) de camions Bc` : `${SB.files} tandem(s) Bt`} sur ${fr(largeur + geom.ep)} m dans le sens de circulation, ${nV} voie(s) pour une largeur chargeable de ${fr(Lc)} m${h.largeurChargeable > 0 ? '' : ' (longueur de l\'ouvrage, faute de largeur chargeable saisie)'}, coefficients b_c/b_t de l'art. 5.2.2 ; δ_B = ${fr(dB, 3)} ; δ_Mc = ${fr(dMc, 3)} (S = 110 t).`);
 
   const qTrav = h.rhoB * geom.et, qRemNu = h.rhoR * geom.Hr;
   const Dext = n * geom.B + (n - 1) * geom.ei + 2 * geom.ep, Hext = geom.H + geom.et + geom.er;
@@ -372,8 +378,12 @@ export function calculPicf(geomIn, hypIn = {}, opts = {}) {
   if (!ouvert) cas.push({ nom: `Construction (${fr(pv, 3)} t/ml par voile)`, nature: 'construction', frame: resoudre(C.poidsVoile(n, pv)) });
 
   const hydrau = franchie === 'eau' && !ouvert, eauI = hydrau && h.hEau > 0, nappe = hydrau && h.hNappe > 0;
-  for (const sit of [eauI && 'interieure', nappe && 'videNappe', eauI && nappe && 'pleineNappe'].filter(Boolean))
-    cas.push({ nom: `Eau — ${Hy.SITUATIONS[sit]}`, nature: 'permanent', groupe: 'eau', frame: resoudre(Hy.chargesEau(g, sit, h.hEau, h.hNappe, geom.gaucheExt, geom.droiteExt)) });
+  const sits = [eauI && 'interieure', nappe && 'videNappe', eauI && nappe && 'pleineNappe'].filter(Boolean);
+  for (const sit of sits)
+    cas.push({ nom: `Eau — ${Hy.SITUATIONS[sit]}`, nature: 'permanent', groupe: 'eau', frame: resoudre(Hy.chargesEau(g, sit, h.hEau, h.hNappe, geom.gaucheExt, geom.droiteExt, compat)) });
+  // les situations hydrauliques sont des ALTERNATIVES (groupe « eau ») : l'ouvrage à sec, nappe basse, en est une aussi ;
+  // sans elle, une situation unique qui soulage une section y serait comptée d'office (non conservatif)
+  if (sits.length && !compat) cas.push({ nom: 'Eau — à sec, nappe basse', nature: 'permanent', groupe: 'eau', frame: resoudre(C.jeuZero(n)) });
 
   const frames = combos.map(c => resoudre(c.jeu));
   const effets = effetsCalcul(n, cas, h, !!ouvert);
@@ -422,7 +432,7 @@ export function calculPicf(geomIn, hypIn = {}, opts = {}) {
   if (geom.Hr < 0.50) res.alertes.push(`Couverture de ${fr(geom.Hr)} m seulement : la diffusion ne suffit plus à étaler les charges de roue, et il faudrait une répartition transversale (Guyon-Massonnet, annexe 6 du guide) que ce calcul ne fait pas. Les moments de la traverse sont sous-estimés.`);
 
   if (nappe) {
-    res.flottaison = Hy.flottaison(g, geom.H, geom.Hr, h.hNappe, h.rhoB, h.rhoR);
+    res.flottaison = Hy.flottaison(g, geom.H, geom.Hr, h.hNappe, h.rhoB, h.rhoR, compat);
     (res.flottaison.ok ? res.alertes : res.reserves).push(res.flottaison.message);
   }
   for (const b of balayages) res.alertes.push(b.message);
@@ -478,8 +488,11 @@ export function calculPicf(geomIn, hypIn = {}, opts = {}) {
           const sAbs = bar.L * st[1], [M, V] = interpoler(dg, sAbs), sec = secs.find(x => x.ou === st[0]);
           if (!sec) continue;
           const elu = h.code === 'EC2' ? S.eluEc2(M, sec.d, h.fc28, h.fe, 1.2, 1.0) : S.eluBael(M, sec.d, h.fc28, h.fe, 1.15, 1.0);
-          const four = M >= 0 ? sec.barresMax.fournie : sec.barresMin.fournie, tau = Math.abs(V) / 100 / sec.d, tauLim = 0.07 * h.fc28 / gbA;
-          verifs.push({ barre: cb.nom, ou: st[0], z, M, V, asReq: elu.as, asFournie: four, surarme: elu.surarme, okFlexion: !elu.surarme && elu.as <= four + 1e-9, tau, tauLim, okTranchant: tau <= tauLim });
+          // aciers de la face tendue par le choc : la disposition retenue ; si le catalogue n'en offre aucune (section déjà
+          // en échec à l'ELS/ELU, signalée par ailleurs), on compare à la section requise par le calcul courant, et non à 0
+          const bar0 = M >= 0 ? sec.barresMax : sec.barresMin, asCour = (M >= 0 ? sec.asMax : sec.asMin).as;
+          const sansDisp = !bar0.option, four = sansDisp ? asCour : bar0.fournie, tau = Math.abs(V) / 100 / sec.d, tauLim = 0.07 * h.fc28 / gbA;
+          verifs.push({ barre: cb.nom, ou: st[0], z, M, V, asReq: elu.as, asFournie: four, sansDisposition: sansDisp, surarme: elu.surarme, okFlexion: !elu.surarme && elu.as <= four + 1e-9, tau, tauLim, okTranchant: tau <= tauLim });
         }
       }
       const ko = verifs.filter(v => !v.okFlexion || !v.okTranchant);
@@ -489,6 +502,8 @@ export function calculPicf(geomIn, hypIn = {}, opts = {}) {
         const w = ko.slice().sort((a, b) => (b.asReq - b.asFournie) - (a.asReq - a.asFournie))[0];
         res.reserves.push(`${hyp} NON VÉRIFIÉ en ${ko.length} point(s), le plus sollicité ${w.barre} — ${w.ou} : M = ${fr(w.M)} t·m/ml, ${w.surarme ? 'section surarmée' : `As requis ${fr(w.asReq)} cm²/ml pour ${fr(w.asFournie)} fournis`}${w.okTranchant ? '' : `, τ = ${fr(w.tau, 3)} > ${fr(w.tauLim, 3)} MPa`}. REMÈDE : épaissir ou armer davantage le piédroit, l'éloigner de la voie, ou le protéger par un dispositif de retenue ; une analyse en plaque peut justifier une largeur de diffusion supérieure.`);
       } else res.alertes.push(hyp + ' Vérifié avec les armatures retenues.');
+      const sd = verifs.filter(v => v.sansDisposition);
+      if (sd.length) res.alertes.push(`Choc : en ${[...new Set(sd.map(v => `${v.barre} — ${v.ou}`))].join(', ')}, le catalogue n'offre aucune disposition d'armatures pour le calcul courant (section en échec, voir le tableau des sections) ; le choc y est comparé à la section d'acier requise par ce calcul, qu'il faudra de toute façon loger en épaississant la pièce.`);
     } else if (franchie === 'rail') res.reserves.push('Voie ferrée franchie : les actions de déraillement (EN 1991-1-7, 4.5, classe de l\'ouvrage et distance à la voie) ne sont pas renseignées. REMÈDE : saisir la force de calcul exigée par le gestionnaire du réseau.');
   }
 

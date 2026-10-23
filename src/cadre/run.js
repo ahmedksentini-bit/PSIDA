@@ -26,7 +26,7 @@ export function parseCadre(d) {
     classe: Math.round(num(d.cf_classe, 1)), bc: num(d.cf_bc, 1.10), bt: num(d.cf_bt, 1.00), a1: num(d.cf_a1, 1.0), a2: num(d.cf_a2, 1.0),
     systemes: { Al: true, Bc: true, Bt: true, Mc120: d.cf_mc120 !== 'non' },
     sol: d.cf_sol === 'rigide' ? 'rigide' : 'winkler', esol: num(d.cf_esol, 0), nature: d.cf_nature || 'argile', etat: d.cf_etat || 'normal',
-    hEau: num(d.cf_hEau, 0), hNappe: num(d.cf_hNappe, 0),
+    hEau: num(d.cf_hEau, 0), hNappe: num(d.cf_hNappe, 0), largeurChargeable: num(d.cf_lch, 0),
   };
   const opts = {
     ouvert, usage: { franchie: d.cf_franchie || 'eau', portee: d.cf_portee || 'route' },

@@ -124,7 +124,7 @@ export function cadreBlocks(out) {
     if (r.choc) {
       h3('Choc sur les piédroits (situation accidentelle)');
       table(['Barre', 'Section', 'z choc [m]', 'M [t·m/ml]', 'A_s requis', 'A_s fourni [cm²/ml]', 'τ / τ_lim [MPa]', 'Verdict'],
-        r.choc.verifs.map(v => [v.barre, v.ou, F(v.z), F(v.M), v.surarme ? 'surarmé' : F(v.asReq), F(v.asFournie), `${F3(v.tau)} / ${F3(v.tauLim)}`, v.okFlexion && v.okTranchant ? 'OK' : 'NON']), { small: true });
+        r.choc.verifs.map(v => [v.barre, v.ou, F(v.z), F(v.M), v.surarme ? 'surarmé' : F(v.asReq), v.sansDisposition ? `${F(v.asFournie)} (requis, aucune disposition)` : F(v.asFournie), `${F3(v.tau)} / ${F3(v.tauLim)}`, v.okFlexion && v.okTranchant ? 'OK' : 'NON']), { small: true });
     }
     if (r.sisme) {
       const z = r.sisme;

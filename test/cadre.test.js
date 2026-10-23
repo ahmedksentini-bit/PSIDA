@@ -12,11 +12,13 @@ import { parseCadre, computeCadre } from '../src/cadre/run.js';
 import { cadreBlocks, cadreNote } from '../web/cadre_view.js';
 
 const REF = JSON.parse(fs.readFileSync(new URL('./data/picf_bvtrace_ref.json', import.meta.url)));
+// Recoupement BVTrace : `compat: 'bvtrace'` reproduit les conventions du portage d'origine (S_B = 76,8 t fixe, nappe et
+// sous-pression au feuillet moyen, pas d'alternative « à sec ») ; les corrections ultérieures sont testées à part.
 const CAS = {
-  oh309: [{ n: 1, B: 7, H: 5, L: 20, e: 0.5, Hr: 3 }, {}],
-  bi_winkler: [{ n: 2, B: 3, H: 2.5, L: 15, et: 0.3, er: 0.35, ep: 0.3, ei: 0.25, Hr: 1.2 }, { sol: 'winkler', nature: 'argile', etat: 'normal', hEau: 1.0, hNappe: 1.5 }],
-  tri_ec2_biais: [{ n: 3, B: 2, H: 2, L: 12, biais: 75, et: 0.25, er: 0.25, ep: 0.25, ei: 0.2, Hr: 0.3 }, { code: 'EC2', hNappe: 2.8, qsupMin: 0.18, qsupMax: 0.34 }],
-  mono_faible: [{ n: 1, B: 4, H: 3, L: 10, e: 0.4, Hr: 0.6, gaucheExt: true, droiteExt: false }, { sol: 'winkler', esol: 40, hEau: 0.8, marston: false, incompressible: false }],
+  oh309: [{ n: 1, B: 7, H: 5, L: 20, e: 0.5, Hr: 3 }, { compat: 'bvtrace' }],
+  bi_winkler: [{ n: 2, B: 3, H: 2.5, L: 15, et: 0.3, er: 0.35, ep: 0.3, ei: 0.25, Hr: 1.2 }, { sol: 'winkler', nature: 'argile', etat: 'normal', hEau: 1.0, hNappe: 1.5, compat: 'bvtrace' }],
+  tri_ec2_biais: [{ n: 3, B: 2, H: 2, L: 12, biais: 75, et: 0.25, er: 0.25, ep: 0.25, ei: 0.2, Hr: 0.3 }, { code: 'EC2', hNappe: 2.8, qsupMin: 0.18, qsupMax: 0.34, compat: 'bvtrace' }],
+  mono_faible: [{ n: 1, B: 4, H: 3, L: 10, e: 0.4, Hr: 0.6, gaucheExt: true, droiteExt: false }, { sol: 'winkler', esol: 40, hEau: 0.8, marston: false, incompressible: false, compat: 'bvtrace' }],
 };
 const proche = (a, b, tol = 1e-9, lab = '') => assert.ok(Math.abs(a - b) <= tol * Math.max(1, Math.abs(b)), `${lab} : ${a} ≠ ${b}`);
 
@@ -24,7 +26,7 @@ test('PICF : identique au moteur C# de BVTrace (cas, combinaisons, effets, secti
   let n = 0;
   for (const r of REF) {
     if (r.id === 'blocs5') {
-      const o = calculPicfBlocs({ n: 5, B: 3, H: 2.5, L: 12, e: 0.3, Hr: 2 }, { hNappe: 1 });
+      const o = calculPicfBlocs({ n: 5, B: 3, H: 2.5, L: 12, e: 0.3, Hr: 2 }, { hNappe: 1, compat: 'bvtrace' });
       assert.equal(o.blocs.length, r.nb); o.blocs.forEach((b, i) => proche(b.gouvernante.asGouv, r.g[i], 1e-9, 'bloc')); n++;
       continue;
     }

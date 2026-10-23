@@ -628,8 +628,9 @@
       <label data-show="cf_solSrc=table">État<select name="cf_etat"><option value="normal">normalement consolidé / serré</option><option value="surconsolide">surconsolidé / très serré</option><option value="lache">lâche / altéré</option><option value="tresAltere">très altéré (roche)</option></select></label>
       <div data-show="cf_franchie=eau"><div class="grp">Situations hydrauliques (cadre fermé)</div>
       <label>Hauteur d'eau intérieure [m]<input name="cf_hEau" value="1.50" type="number" step="any"></label>
-      <label>Nappe au-dessus du radier [m]<input name="cf_hNappe" value="0" type="number" step="any"></label></div>
+      <label>Nappe au-dessus de la face supérieure du radier [m]<input name="cf_hNappe" value="0" type="number" step="any"></label></div>
       <div data-show="cf_portee=route"><div class="grp">Charges routières (Fascicule 61)</div>
+      <label>Largeur chargeable de la voie portée [m] (vide : longueur de l'ouvrage)<input name="cf_lch" value="" type="number" step="any"></label>
       <label>Classe du pont<select name="cf_classe"><option value="1">1ʳᵉ</option><option value="2">2ᵉ</option><option value="3">3ᵉ</option></select></label>
       <label>b_c<input name="cf_bc" value="1.10" type="number" step="any"></label>
       <label>b_t<input name="cf_bt" value="1.00" type="number" step="any"></label>

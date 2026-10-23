@@ -81,14 +81,18 @@ export function calculSismique(ctx, sIn) {
   // ── Charges permanentes de la situation sismique : G nominal (remblai ×1,00) et poussée K₀ max ou min ─────────
   const gVert = C.vertical(n, qTrav + qRem);
   // ── A : inertie + poussée dynamique ─────────────────────────────────────────────────────────────────────
-  const Htot = geom.Hr + geom.et + geom.H + (ouvert ? 0 : geom.er);                       // hauteur de terre retenue
+  // Hauteur H de l'annexe E.9 : terre retenue de la surface du remblai à la base de l'ouvrage (H_r + e_t + h + e_r). Pour une
+  // structure rigide, E.9 donne une pression UNIFORME α·S·γ·H sur toute cette hauteur ; seule la part qui s'exerce sur le
+  // piédroit est appliquée au modèle, sur la hauteur de calcul h_c entre feuillets moyens. La part située dans le remblai
+  // au-dessus de la traverse ne charge pas le piédroit ; les bandes d'about des dalles (e_t/2 + e_r/2) ne sont pas appliquées.
+  const Htot = geom.Hr + geom.et + geom.H + (ouvert ? 0 : geom.er);
   const dP = (A.agS / G_ACC) * h.rhoR * Htot;                                             // ΔP_d/H (t/m²), E.9
   const Fi = kh * (qTrav + qRem) * L;                                                      // inertie traverse + remblai (t/ml)
   const voiles = j => ({ voile: j, z0: 0, l: hc, q: kh * h.rhoB * C.epVoile(g, j) });     // inertie des voiles
   const casA = sg => C.plus(C.plus(C.forceTete(n, sg * Fi), C.bandesVoile(n, Array.from({ length: n + 1 }, (_, j) => ({ ...voiles(j), q: sg * voiles(j).q })))),
     C.bandesVoile(n, [{ voile: sg > 0 ? 0 : n, z0: 0, l: hc, q: sg * dP }]));
   const vert = sv => C.vertical(n, sv * kv * (qTrav + qRem));
-  const notesA = `Approche A (NF EN 1998-2, 6.7.3 : ouvrage enterré, q = 1, inertie sous a_g·S sans amplification spectrale) : inertie de la traverse et du remblai k_h·(${fr(qTrav + qRem, 3)} t/m²)·${fr(L)} m = ${fr(Fi)} t/ml en tête, inertie des voiles k_h·ρ_b·e ; incrément de poussée d'un ouvrage rigide ΔP_d = α·S·γ·H² (NF EN 1998-5, annexe E.9) avec H = ${fr(Htot)} m, soit ${fr(dP, 3)} t/m² uniforme sur un piédroit.`;
+  const notesA = `Approche A (NF EN 1998-2, 6.7.3 : ouvrage enterré, q = 1, inertie sous a_g·S sans amplification spectrale) : inertie de la traverse et du remblai k_h·(${fr(qTrav + qRem, 3)} t/m²)·${fr(L)} m = ${fr(Fi)} t/ml en tête, inertie des voiles k_h·ρ_b·e ; incrément de poussée d'un ouvrage rigide ΔP_d = α·S·γ·H² (NF EN 1998-5, annexe E.9) avec H = ${fr(Htot)} m (de la surface du remblai à la base de l'ouvrage), soit une pression uniforme α·S·γ·H = ${fr(dP, 3)} t/m² appliquée sur la hauteur de calcul du piédroit h_c = ${fr(hc)} m, d'un seul côté (résultante ${fr(dP * hc)} t/ml ; la part de ΔP_d située dans le remblai au-dessus de la traverse ne charge pas le piédroit, et les abouts des dalles, e_t/2 + e_r/2, ne sont pas chargés).`;
 
   // ── B : distorsion imposée ─────────────────────────────────────────────────────────────────────────────
   const Ei = 11000 * Math.cbrt(h.fc28) * T_PAR_MPA;                                       // module instantané (t/m²)
