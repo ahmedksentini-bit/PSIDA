@@ -521,6 +521,75 @@ export class ContinuousBeam {
     return { max: dp.max.v, min: dp.min.v, partsMax: partsOf(dp.max.pos), partsMin: partsOf(dp.min.pos), posMax: dp.max.pos.map(i => x0 + i * step), posMin: dp.min.pos.map(i => x0 + i * step) };
   }
 
+  /**
+   * Primitive cumulée de la partie positive (sign = +1) ou négative (sign = −1) de la ligne d'influence :
+   * x → ∫_{xMin}^{x} min/max(il, 0) (exacte pour la ligne linéaire par morceaux ; constante hors de l'ouvrage).
+   */
+  _primitiveSigned(il, sign) {
+    const xs = this.xs, n = xs.length, J = il.jump, C = new Float64Array(n);
+    const left = p => (J && p === J.p ? J.right : il[p]), right = p => (J && p === J.p ? J.left : il[p]);
+    // intégrale de la partie de signe `sign` d'une fonction linéaire v1 → v2 sur une longueur h
+    const seg = (v1, v2, h) => {
+      if (h <= 0) return 0;
+      const s1 = sign * v1, s2 = sign * v2;
+      if (s1 >= 0 && s2 >= 0) return 0.5 * (v1 + v2) * h;
+      if (s1 <= 0 && s2 <= 0) return 0;
+      const t = v1 / (v1 - v2);
+      return s1 > 0 ? 0.5 * v1 * t * h : 0.5 * v2 * (1 - t) * h;
+    };
+    for (let p = 0; p < n - 1; p++) C[p + 1] = C[p] + seg(left(p), right(p + 1), xs[p + 1] - xs[p]);
+    return x => {
+      if (x <= xs[0]) return 0;
+      if (x >= xs[n - 1]) return C[n - 1];
+      let lo = 0, hi = n - 1;
+      while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (xs[mid] <= x) lo = mid; else hi = mid; }
+      const a1 = left(lo), a2 = right(hi), t = (x - xs[lo]) / (xs[hi] - xs[lo]);
+      return C[lo] + seg(a1, a1 + t * (a2 - a1), x - xs[lo]);
+    };
+  }
+
+  /**
+   * Enveloppe du modèle de charge 71 (EN 1991-2 § 6.3.2, figure 6.1) : n essieux P espacés de a, groupés sur n·a
+   * (6,40 m), et une charge répartie q « illimitée » de part et d'autre du groupe, appliquée sur les seules parties
+   * défavorables de la ligne d'influence (hors de la longueur du groupe). Le groupe glisse sur l'ouvrage (abouts compris) ;
+   * le motif étant symétrique, un seul sens de marche suffit.
+   * @param {{P:number, n:number, a:number, q:number}} m charges déjà multipliées par α
+   * @returns {{max, min, xmax, xmin}} xmax/xmin = début de la zone du groupe d'essieux
+   */
+  lm71Envelope(il, { P, n, a, q }, { step = 0.05 } = {}) {
+    const Lg = n * a, CP = this._primitiveSigned(il, 1), CN = this._primitiveSigned(il, -1);
+    const TP = CP(this.xMax), TN = CN(this.xMax);
+    const x0 = this.xMin - Lg, nPos = Math.floor((this.xMax - x0 + 1e-9) / step) + 1;
+    // essieux à a/2 + k·a du début de la zone : échantillons de la ligne si ces distances sont des multiples du pas
+    const kA = Math.round(a / step), exact = Math.abs(kA * step - a) < 1e-9 && Math.abs(Math.round(a / 2 / step) * step - a / 2) < 1e-9;
+    const g = exact ? this._samples(il, x0 + a / 2, nPos + (n - 1) * kA, step) : null;
+    let max = -Infinity, min = Infinity, xmax = 0, xmin = 0;
+    for (let i = 0; i < nPos; i++) {
+      const s = x0 + i * step;
+      let ax = 0;
+      for (let k = 0; k < n; k++) ax += P * (exact ? g[i + k * kA] : this.ilAt(il, s + a / 2 + k * a));
+      const vM = ax + q * (TP - (CP(s + Lg) - CP(s))), vm = ax + q * (TN - (CN(s + Lg) - CN(s)));
+      if (vM > max) { max = vM; xmax = s; }
+      if (vm < min) { min = vm; xmin = s; }
+    }
+    return { max, min, xmax, xmin };
+  }
+
+  /**
+   * Enveloppe des modèles SW/0 et SW/2 (EN 1991-2 § 6.3.3, figure 6.2, tableau 6.1) : deux charges réparties q de
+   * longueur a séparées de c, motif rigide glissant sur l'ouvrage (chaque partie peut sortir de l'ouvrage).
+   */
+  swEnvelope(il, { q, a, c }, { step = 0.05 } = {}) {
+    const C = this._primitive(il), Lm = 2 * a + c;
+    let max = -Infinity, min = Infinity, xmax = 0, xmin = 0;
+    for (let s = this.xMin - Lm; s <= this.xMax + 1e-9; s += step) {
+      const v = q * (C(s + a) - C(s) + C(s + Lm) - C(s + a + c));
+      if (v > max) { max = v; xmax = s; }
+      if (v < min) { min = v; xmin = s; }
+    }
+    return { max, min, xmax, xmin };
+  }
+
   /** Enveloppe d'une charge répartie q sur les zones défavorables, ventilée par travée porteuse. */
   udlEnvelopeParts(il, q) {
     return { partsMax: this.integrateByspan(il, this.xMin, this.xMax, +1).map(v => q * v), partsMin: this.integrateByspan(il, this.xMin, this.xMax, -1).map(v => q * v) };

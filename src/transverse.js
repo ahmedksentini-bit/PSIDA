@@ -220,10 +220,45 @@ export class TransverseModel {
   }
 
   /**
+   * Charges ferroviaires par travée (pont-dalle sous rail) : mêmes groupes que le calcul longitudinal (SlabDeck.ferroviaire),
+   * charges centrées sur x = L_eq/2 et réparties sur la bande b_w de chaque voie au feuillet moyen. LM71 : les essieux
+   * sont remplacés par la charge uniforme équivalente α·250/1,60 kN/m sur 6,40 m (EN 1991-2 § 6.3.6.2(1)) et α·80 kN/m
+   * sur le reste de la portée ; SW/0 et SW/2 : premier tronçon centré, second tronçon au-delà de l'intervalle c s'il reste
+   * dans la portée. Φ inclus.
+   * @param {number} j travée
+   * @param {object} rail résultat de SlabDeck.ferroviaire()
+   */
+  ferroviaire(j, rail) {
+    const L = this.deck.Leq[j], b = this.deck.b, bw = rail.diffusion.bw, a = rail.params.alpha;
+    const bande = e => ({ e1: Math.max(-b, e - bw / 2), e2: Math.min(b, e + bw / 2) });
+    const q71 = a * 250 / 1.6, qv = a * 80;
+    const motifs = {
+      LM71: [[L / 2 - 3.2, L / 2 + 3.2, q71], [0, L / 2 - 3.2, qv], [L / 2 + 3.2, L, qv]],
+      'SW/0': [[L / 2 - 7.5, L / 2 + 7.5, a * 133], [L / 2 + 7.5 + 5.3, L / 2 + 7.5 + 5.3 + 15, a * 133]],
+      'SW/2': [[L / 2 - 12.5, L / 2 + 12.5, 150], [L / 2 + 12.5 + 7, L / 2 + 12.5 + 7 + 25, 150]],
+    };
+    const charge = (m, e) => {
+      const bd = bande(e), w = bd.e2 - bd.e1;
+      return { key: `rail|${m}|${a}|${bd.e1.toFixed(3)}|${bd.e2.toFixed(3)}`, coef: rail.phi,
+        patches: motifs[m].map(([x1, x2, q]) => ({ x1: Math.max(0, x1), x2: Math.min(L, x2), e1: bd.e1, e2: bd.e2, q: q / w })).filter(p => p.x2 - p.x1 > 1e-6) };
+    };
+    const { voies, vert, ecc } = rail, sg = [-ecc, ecc];
+    const arr = { rail1: [], rail2: [], sw2: [], sw2b: [] };
+    for (const y of voies) for (const m of vert) for (const s of sg) arr.rail1.push([charge(m, y + s)]);
+    if (voies.length === 2) for (const m1 of vert) for (const m2 of vert) for (const s1 of sg) for (const s2 of sg) arr.rail2.push([charge(m1, voies[0] + s1), charge(m2, voies[1] + s2)]);
+    if (rail.params.sw2) {
+      for (const y of voies) for (const s of sg) arr.sw2.push([charge('SW/2', y + s)]);
+      if (voies.length === 2) for (const [t1, t2] of [[0, 1], [1, 0]]) for (const m of vert) for (const s1 of sg) for (const s2 of sg) arr.sw2b.push([charge('SW/2', voies[t1] + s1), charge(m, voies[t2] + s2)]);
+    }
+    return { groupes: rail.groupes.map(g => ({ id: g.id, env: this.envelope(j, arr[g.id]) })) };
+  }
+
+  /**
    * Calcul complet : par travée, permanent + cas EC + cas F61 (+ thermique et tassements : ν·m_x).
+   * Mode ferroviaire (`rail` : résultat de SlabDeck.ferroviaire) : charges ferroviaires à la place des cas EC et F61.
    * @returns {{spans:{j, L, perm, ec, f61, thermal, settle}[]}}
    */
-  run({ alpha, f61opt = {}, thermal = null, settle = null } = {}) {
+  run({ alpha, f61opt = {}, thermal = null, settle = null, rail = null } = {}) {
     const deck = this.deck, spans = [];
     // G de δ : ½(G_min + G_max) (comme le calcul longitudinal)
     const gT = deck.permanentFiles().reduce((a, f) => a + f.q * ((f.kmin ?? 1) + (f.kmax ?? 1)) / 2, 0);
@@ -236,7 +271,8 @@ export class TransverseModel {
       const nuT = (res, key) => (res ? this.ys.map((_, i) => this.nu * res[key][sec] / (2 * deck.b) * shape[i]) : this.ys.map(() => 0));
       spans.push({
         j, L: deck.Leq[j], x: deck.Leq[j] / 2,
-        perm: this.permanent(j), ec: this.eurocode(j, alpha), f61: this.fascicule61(j, { ...f61opt, G: gT }),
+        perm: this.permanent(j),
+        ...(rail ? { ec: null, f61: null, rail: this.ferroviaire(j, rail) } : { ec: this.eurocode(j, alpha), f61: this.fascicule61(j, { ...f61opt, G: gT }) }),
         thermal: { myMax: nuT(thermal, 'Mmax'), myMin: nuT(thermal, 'Mmin') }, settle: { myMax: nuT(settle, 'Mmax'), myMin: nuT(settle, 'Mmin') },
       });
     }

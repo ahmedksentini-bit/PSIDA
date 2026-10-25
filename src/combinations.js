@@ -138,3 +138,55 @@ export function combineBeamBAEL(perm, f61, { thermal = null, settle = null, k = 
   const Vg = perm.Vm.map((v, i) => (Math.abs(v) > Math.abs(perm.Vp[i]) ? v : perm.Vp[i]));
   return { M: mk('M', perm.Mmax || perm.M, perm.Mmin || perm.M), V: mk('V', Vg, Vg), R: mk('R', perm.Rmax || perm.R, perm.Rmin || perm.R) };
 }
+
+/**
+ * Combinaisons des ponts-rails (EN 1990 A2, tableaux A2.3 et A2.4(B) ; groupes de l'EN 1991-2 tableau 6.11), par section
+ * et fibre. Chaque groupe est une action variable unique : { res (enveloppe caractéristique, Φ inclus), gamma, psi0, psi1 }.
+ *    ELU fondamental     : γG·G + γ_gr·Q_gr                    (1,45 ; 1,20 pour les groupes avec SW/2 ; T et Ta : ζ = 0)
+ *    ELS caractéristique : G + Ta + max( T + ψ0·Q_gr ; ψ0T·T + Q_gr )                ψ0T = 0,6 (tableau A2.3, T_k)
+ *    ELS fréquent        : G + max( ψ1T·T ; ψ2T·T + ψ1·Q_gr )                         ψ1T = 0,6, ψ2T = 0,5
+ *    ELS quasi-permanent : G + Ta + ψ2T·T                                            (ψ2 du trafic ferroviaire = 0)
+ * Mêmes conventions que combineEC (Ta : ρ = 1 à l'ELS caractéristique et quasi permanent, 0 au fréquent).
+ */
+export function combineRail(perm, groupes, { thermal = null, settle = null, k = EC_COMBI } = {}) {
+  const Gmax = perm.mxMax || perm.mx, Gmin = perm.mxMin || perm.mx;
+  const nS = Gmax.length, nY = Gmax[0].length;
+  const T = thermal ? thermal : { mxMax: zeros2(nS, nY), mxMin: zeros2(nS, nY) };
+  const Ta = settle ? settle : { mxMax: zeros2(nS, nY), mxMin: zeros2(nS, nY) };
+  const out = { ELU: { max: [], min: [] }, CAR: { max: [], min: [] }, FREQ: { max: [], min: [] }, QP: { max: [], min: [] } };
+  for (let s = 0; s < nS; s++) {
+    const r = { ELU: [[], []], CAR: [[], []], FREQ: [[], []], QP: [[], []] };
+    for (let iy = 0; iy < nY; iy++) {
+      for (const which of ['max', 'min']) {
+        const sel = which === 'max' ? Math.max : Math.min, i = which === 'max' ? 0 : 1, g = which === 'max' ? Gmax[s][iy] : Gmin[s][iy];
+        const v = res => (which === 'max' ? res.mxMax[s][iy] : res.mxMin[s][iy]);
+        const t = v(T), ta = v(Ta), q = groupes.map(G => v(G.res));
+        r.ELU[i].push((which === 'max' ? gPlus(g, k.gammaG, k.gammaGfav) : gMinus(g, k.gammaG, k.gammaGfav)) + sel(0, ...groupes.map((G, j) => G.gamma * q[j])));
+        r.CAR[i].push(g + k.rho0 * ta + sel(0, ...groupes.flatMap((G, j) => [t + G.psi0 * q[j], k.psi0T * t + q[j]])));
+        r.FREQ[i].push(g + k.rho1 * ta + sel(0, k.psi1T * t, ...groupes.map((G, j) => k.psi2T * t + G.psi1 * q[j])));
+        r.QP[i].push(g + k.rhoQP * ta + k.psi2T * t);
+      }
+    }
+    for (const key of Object.keys(out)) { out[key].max.push(r[key][0]); out[key].min.push(r[key][1]); }
+  }
+  return out;
+}
+
+/** Combinaisons des ponts-rails sur les efforts de poutre entière (M, V, R) — mêmes règles que combineRail. */
+export function combineBeamRail(perm, groupes, { thermal = null, settle = null, k = EC_COMBI } = {}) {
+  const mk = (key, perMax, perMin) => {
+    const out = { ELUmax: [], ELUmin: [], CARmax: [], CARmin: [], FREQmax: [], FREQmin: [] };
+    for (let i = 0; i < perMax.length; i++) {
+      for (const which of ['max', 'min']) {
+        const sel = which === 'max' ? Math.max : Math.min, g = which === 'max' ? perMax[i] : perMin[i];
+        const q = groupes.map(G => G.res[key + which][i]), t = thermal ? thermal[key + which][i] : 0, ta = settle ? settle[key + which][i] : 0;
+        out['ELU' + which].push((which === 'max' ? gPlus(g, k.gammaG, k.gammaGfav) : gMinus(g, k.gammaG, k.gammaGfav)) + sel(0, ...groupes.map((G, j) => G.gamma * q[j])));
+        out['CAR' + which].push(g + k.rho0 * ta + sel(0, ...groupes.flatMap((G, j) => [t + G.psi0 * q[j], k.psi0T * t + q[j]])));
+        out['FREQ' + which].push(g + sel(0, k.psi1T * t, ...groupes.map((G, j) => k.psi2T * t + G.psi1 * q[j])));
+      }
+    }
+    return out;
+  };
+  const Vg = perm.Vm.map((v, i) => (Math.abs(v) > Math.abs(perm.Vp[i]) ? v : perm.Vp[i]));
+  return { M: mk('M', perm.Mmax || perm.M, perm.Mmin || perm.M), V: mk('V', Vg, Vg), R: mk('R', perm.Rmax || perm.R, perm.Rmin || perm.R) };
+}

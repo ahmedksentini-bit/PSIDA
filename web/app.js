@@ -12,6 +12,7 @@ import { designEC, designBAEL, designTransverseEC, designTransverseBAEL } from '
 import { TransverseModel } from '../src/transverse.js';
 import { buildReport } from './report.js';
 import { buildNote, noteToHTML, noteToDocx } from './note.js';
+import { railCardHTML, buildNoteRail, RAIL_COURT } from './note_rail.js';
 import { aideConception, rechercheEpaisseur } from '../src/conception.js';
 import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations } from '../src/bearings.js';
 import { chevetresEC } from '../src/chevetre.js';
@@ -115,7 +116,8 @@ function renderConception(st) {
 
 function bearingsTable(st) {
   const b = st.bearings;
-  let h = `<p class="small">Règles du § 3.6.1 (bulletin technique n° 4 du SETRA) : σ = P/(ab) ≤ min(15 MPa ; G·ab/(t(a+b))) avec G = ${b.G1} MPa ; u_g/T ≤ 0,5 ; u_g/T + H/(G₂ab) ≤ 0,7 (G₂ = ${b.G2} MPa) ; T ≤ min(a, b)/5 ; t·T ≥ α·a²/3. Réactions ELS caractéristiques (G + trafic + T + Ta) ; réaction de l'appareil le plus chargé = [k_CP·R_G + k_Q·(R − R_G)]/${b.nb} avec les coefficients d'inégalité de répartition de PSI-DA 68 § 2.4.2 (entraxe × sin ψ = ${b.ineq ? b.ineq.e.toFixed(2) + ' m' : '—'} ; k_CP = ${b.ineq ? b.ineq.CP.toFixed(3) : '1'}, k_A (UDL) = ${b.ineq ? b.ineq.A.toFixed(3) : '1'}, k_B (TS) = ${b.ineq ? b.ineq.B.toFixed(3) : '1'}, k_Q pondéré par les réactions UDL/TS) ; u_g = (ε + α_T·ΔT)·distance au point fixe (ε = ${b.epsSlow}, ΔT = ${b.dT} °C, point fixe à x = ${b.xf.toFixed(1)} m) ; H = freinage EN 1991-2 § 4.4.1 = ${b.H.toFixed(0)} kN réparti sur ${b.nb * b.nLines} appareils ; α = ${(b.alpha0 * 1000).toFixed(0)} mrad de défaut de pose + rotation sous charges permanentes (module différé) + rotation sous gr1a (ligne d'influence de rotation). Sélection : plus petit appareil entièrement enrobé de la gamme standard du guide (NF T 47.815), ou appareil imposé dans le formulaire (culées, piles).</p>
+  let h = st.rail ? `<p class="small"><span class="badge warn">LOT 5</span> Pont-dalle sous rail : réactions verticales des groupes ferroviaires (γ 1,45 / 1,20) ; le freinage et les coefficients d'inégalité ci-dessous restent ceux du calcul routier — vérification ferroviaire des appareils au lot 5 du chantier ponts-rails.</p>` : '';
+  h += `<p class="small">Règles du § 3.6.1 (bulletin technique n° 4 du SETRA) : σ = P/(ab) ≤ min(15 MPa ; G·ab/(t(a+b))) avec G = ${b.G1} MPa ; u_g/T ≤ 0,5 ; u_g/T + H/(G₂ab) ≤ 0,7 (G₂ = ${b.G2} MPa) ; T ≤ min(a, b)/5 ; t·T ≥ α·a²/3. Réactions ELS caractéristiques (G + trafic + T + Ta) ; réaction de l'appareil le plus chargé = [k_CP·R_G + k_Q·(R − R_G)]/${b.nb} avec les coefficients d'inégalité de répartition de PSI-DA 68 § 2.4.2 (entraxe × sin ψ = ${b.ineq ? b.ineq.e.toFixed(2) + ' m' : '—'} ; k_CP = ${b.ineq ? b.ineq.CP.toFixed(3) : '1'}, k_A (UDL) = ${b.ineq ? b.ineq.A.toFixed(3) : '1'}, k_B (TS) = ${b.ineq ? b.ineq.B.toFixed(3) : '1'}, k_Q pondéré par les réactions UDL/TS) ; u_g = (ε + α_T·ΔT)·distance au point fixe (ε = ${b.epsSlow}, ΔT = ${b.dT} °C, point fixe à x = ${b.xf.toFixed(1)} m) ; H = freinage EN 1991-2 § 4.4.1 = ${b.H.toFixed(0)} kN réparti sur ${b.nb * b.nLines} appareils ; α = ${(b.alpha0 * 1000).toFixed(0)} mrad de défaut de pose + rotation sous charges permanentes (module différé) + rotation sous gr1a (ligne d'influence de rotation). Sélection : plus petit appareil entièrement enrobé de la gamme standard du guide (NF T 47.815), ou appareil imposé dans le formulaire (culées, piles).</p>
   <table class="brg"><thead><tr><th>Ligne d'appui</th><th>Réactions [kN]</th><th>Déplacement, effort, rotation</th><th>Appareil retenu</th><th>Vérifications (valeur ≤ limite)</th><th>Observations</th></tr></thead><tbody>`;
   const f1 = v => v.toFixed(1), f2 = v => v.toFixed(2);
   for (const r of b.rows) {
@@ -140,7 +142,7 @@ function bearingsTable(st) {
 
 function chevetresTable(st) {
   const cm = v => (v * 1e4).toFixed(1), f0 = v => v.toFixed(0), f2 = v => v.toFixed(2);
-  let h = `<h3>Chevêtres incorporés et réaction par appareil (annexe 4 du guide PSIDP-EL)</h3><p class="small">ELU fondamental 1,35 G + 1,35 LM1. Ligne d'appui de longueur B = 2b/sin ψ, ${st.chevetres[0].n} appareils à a = ${f2(st.chevetres[0].a)} m (le long de la ligne), consoles c = ${f2(st.chevetres[0].c)} m. Charges de type 1 (permanentes et trafic éloigné) réparties comme une charge uniforme, de type 2 (trafic à moins de d de la ligne) comme sur une poutre sur appuis : d = max[a + c ; (a + e)/2 ; min(B/2 ; L)], ζ_UDL = (d/L)(2 − d/L), ζ_TS = (1 − d/2L)·P_d/S_q. Moments du chevêtre par poutre continue sur les appareils (consoles c), moments locaux m_c⁻ = M_c⁻/(1,5 c), m_e = 1,5 M_e/e ; ferraillage par bandes (§ 6.2), section minimale en enveloppe avec le ferraillage courant de la dalle, d = ${f2(st.chevetres[0].dEff)} m. Culées : adaptation de la règle (L = about + demi-travée de rive).</p>
+  let h = `<h3>Chevêtres incorporés et réaction par appareil (annexe 4 du guide PSIDP-EL)</h3><p class="small">${st.rail ? 'Pont-dalle sous rail : ELU 1,35 G + ' + Math.max(...st.rail.groupes.map(G => G.gamma)).toFixed(2).replace('.', ',') + ' Q, Q = enveloppe verticale des groupes ferroviaires (règles d\'annexe 4 conçues pour les charges routières — à confirmer au lot 5).' : 'ELU fondamental 1,35 G + 1,35 LM1.'} Ligne d'appui de longueur B = 2b/sin ψ, ${st.chevetres[0].n} appareils à a = ${f2(st.chevetres[0].a)} m (le long de la ligne), consoles c = ${f2(st.chevetres[0].c)} m. Charges de type 1 (permanentes et trafic éloigné) réparties comme une charge uniforme, de type 2 (trafic à moins de d de la ligne) comme sur une poutre sur appuis : d = max[a + c ; (a + e)/2 ; min(B/2 ; L)], ζ_UDL = (d/L)(2 − d/L), ζ_TS = (1 − d/2L)·P_d/S_q. Moments du chevêtre par poutre continue sur les appareils (consoles c), moments locaux m_c⁻ = M_c⁻/(1,5 c), m_e = 1,5 M_e/e ; ferraillage par bandes (§ 6.2), section minimale en enveloppe avec le ferraillage courant de la dalle, d = ${f2(st.chevetres[0].dEff)} m. Culées : adaptation de la règle (L = about + demi-travée de rive).</p>
   <table><thead><tr><th>Ligne</th><th>L [m]</th><th>d [m]</th><th>ζ TS / UDL</th><th>R rive / centre ELU [kN]</th><th>R moyen [kN]</th><th>M_c⁻ / M_e⁻ / M_e⁺ [kN·m]</th><th>m_c⁻ / m_e⁻ / m_e⁺ [kN·m/m]</th><th>Face sup. ① / ② / ③ [cm²/m]</th><th>Face inf. ①' / ②' [cm²/m]</th></tr></thead><tbody>`;
   if (st.chevetres[0].plaque) h += `<p class="small"><span class="badge ok">PLAQUE</span> Tablier calculé en plaque : réactions R et moments des bandes lus sur la plaque (moyenne de m_y de Wood-Armer sur chaque bande, ① pleine, ② et ③ en anneaux, ELU 1,35 G + 1,35 gr1a) ; d et ζ restent ceux du guide, pour mémoire (valeurs du guide dans l'onglet Tablier, comparaison).</p>`;
   for (const r of st.chevetres) {
@@ -150,6 +152,7 @@ function chevetresTable(st) {
 }
 
 async function runThicknessSearch() {
+  if (state && state.rail) { $('#hsearch').innerHTML = '<p class="small"><span class="badge warn">ROUTIER</span> La recherche d\'épaisseur utilise les charges routières (LM1) : elle n\'est pas disponible en mode ferroviaire. Faire varier h et relancer le calcul complet.</p>'; return; }
   if (!state) return;
   const btn = $('#btn-hsearch'); btn.disabled = true; btn.textContent = 'Recherche…';
   const out = $('#hsearch');
@@ -177,6 +180,12 @@ function caseLoads(st, id) {
   const { deck, ec, f61 } = st;
   const { y1, y2 } = deck.g.roadway;
   const out = [];
+  if (st.rail && st.rail.groupes.some(G => G.id === id)) {
+    const r = st.rail, bw = r.diffusion.bw;
+    const voies = id === 'rail1' || id === 'sw2' ? r.voies.slice(0, 1) : r.voies;
+    voies.forEach((y, i) => { out.push({ kind: 'band', e1: y - bw / 2, e2: y + bw / 2, label: `${(id === 'sw2' || id === 'sw2b') && i === 0 ? 'SW/2' : r.vert.join('/')} — b_w ${bw.toFixed(2)} m`, opacity: 0.18 }); out.push({ kind: 'wheel', e: y - 0.75, w: 0.15 }); out.push({ kind: 'wheel', e: y + 0.75, w: 0.15 }); });
+    return out;
+  }
   if (['TS', 'UDL', 'LM1', 'gr1a', 'gr3'].includes(id)) {
     const nl = ec.lanes, m1 = ec.lm1;
     m1.lanes.forEach((ln, i) => {
@@ -218,20 +227,25 @@ function tableEnv(st, res, title, withFactor = true) {
 
 function renderStatic(st) {
   const { deck, keys, perm, ec, f61, p } = st;
-  $('#model-info').innerHTML = `Portées équivalentes L_eq = ${deck.Leq.map(v => v.toFixed(3)).join(' / ')} m — θ = b/L_eq = ${deck.Leq.map(L => (deck.b / L).toFixed(3)).join(' / ')} — ν = ${deck.nu}.<br>
+  const R = st.rail;
+  const railCard = $('#card-rail');
+  if (railCard) { railCard.hidden = !R; $('#rail-info').innerHTML = R ? railCardHTML(st) : ''; }
+  if (R) $('#model-info').innerHTML = `Portées équivalentes L_eq = ${deck.Leq.map(v => v.toFixed(3)).join(' / ')} m — θ = b/L_eq = ${deck.Leq.map(L => (deck.b / L).toFixed(3)).join(' / ')} — ν = ${deck.nu}.<br>
+    <b>Trafic ferroviaire</b> (EN 1991-2 section 6) : ${R.nV} voie(s), α = ${R.params.alpha}, ${R.dyn.nom} = ${R.phi.toFixed(3)} (L_Φ = ${R.LPhi.LPhi.toFixed(2)} m), bande b_w = ${R.diffusion.bw.toFixed(2)} m, ${R.groupes.length} groupe(s) de charges. Fascicule 61 sans objet. Charges permanentes g = ${perm.gTotal.toFixed(1)} kN/m. Calcul en ${st.dt.toFixed(1)} s.`;
+  else $('#model-info').innerHTML = `Portées équivalentes L_eq = ${deck.Leq.map(v => v.toFixed(3)).join(' / ')} m — θ = b/L_eq = ${deck.Leq.map(L => (deck.b / L).toFixed(3)).join(' / ')} — ν = ${deck.nu}.<br>
     Eurocode : ${ec.lanes.n} voie(s) de ${ec.lanes.wl.toFixed(2)} m, aire résiduelle ${ec.lanes.wr.toFixed(2)} m, ${ec.alpha.label}, ${ec.nArrangements} arrangements transversaux.
     Fascicule 61 : classe ${f61.classe}, Lc = ${f61.Lc.toFixed(2)} m, ${f61.nv} voie(s) de ${f61.v.toFixed(2)} m. Charges permanentes g = ${perm.gTotal.toFixed(1)} kN/m. Calcul en ${st.dt.toFixed(1)} s.`;
   $('#elevation').innerHTML = elevationSVG(deck, keys);
   // sélecteurs
   const sel = $('#case-select');
-  sel.innerHTML = st.cases.map(c => `<option value="${c.id}">${c.ref === 'EC' ? 'EC — ' : 'F61 — '}${c.label}</option>`).join('');
-  sel.value = 'LM1';
+  sel.innerHTML = st.cases.map(c => `<option value="${c.id}">${c.rail ? 'Rail — ' : c.ref === 'EC' ? 'EC — ' : 'F61 — '}${c.label}</option>`).join('');
+  sel.value = R ? st.cases[0].id : 'LM1';
   const selSec = $('#section-select');
   selSec.innerHTML = keys.map((k, i) => `<option value="${i}">${k.label}</option>`).join('');
   const selSpan = $('#span-select');
   selSpan.innerHTML = deck.spans.map((L, j) => `<option value="${j}">Travée ${j + 1} (${L} m, L_eq ${deck.Leq[j].toFixed(2)} m)</option>`).join('');
   // enveloppes longitudinales : permanent + cas principaux
-  const main = st.cases.filter(c => ['LM1', 'gr1b', 'A', 'Bc', 'Mc120', 'D240'].includes(c.id));
+  const main = R ? st.cases.filter(c => c.rail).map(c => ({ ...c, label: RAIL_COURT[c.id] || c.label })) : st.cases.filter(c => ['LM1', 'gr1b', 'A', 'Bc', 'Mc120', 'D240'].includes(c.id));
   envelopePlot($('#plot-M'), deck, perm, main, { invert: p.chamoaSign });
   shearPlot($('#plot-V'), deck, perm, main);
   reactionPlot($('#plot-R'), deck, perm, main);
@@ -240,8 +254,11 @@ function renderStatic(st) {
   let h = `<details open><summary>Charges permanentes (g = ${perm.gTotal.toFixed(1)} kN/m)</summary><table><thead><tr><th>Section</th><th>M [kN·m]</th>${deck.ys.map(y => `<th>y=${y}</th>`).join('')}</tr></thead><tbody>`;
   for (const k of keys) h += `<tr><td>${k.label}</td>${cell(perm.M[k.idx])}${perm.mx[k.idx].map(cell).join('')}</tr>`;
   h += `</tbody></table><p class="small">Réactions : ${perm.R.map(v => v.toFixed(0)).join(' / ')} kN</p></details>`;
+  if (R) h += `<h3>Charges ferroviaires — EN 1991-2 section 6 (valeurs caractéristiques, Φ inclus)</h3>` + st.cases.map(c => tableEnv(st, c.res, c.label)).join('');
+  else {
   h += `<h3>Eurocodes — EN 1991-2 (valeurs caractéristiques)</h3>` + st.cases.filter(c => c.ref === 'EC').map(c => tableEnv(st, c.res, c.label)).join('');
   h += `<h3>Fascicule 61 titre II (valeurs caractéristiques, δ inclus pour B et Mc)</h3>` + st.cases.filter(c => c.ref === 'F61').map(c => tableEnv(st, c.res, c.label)).join('');
+  }
   $('#tables').innerHTML = h;
   $('#trans-span').innerHTML = deck.spans.map((L, j) => `<option value="${j}">Travée ${j + 1} (${L} m)</option>`).join('');
   renderConception(st); renderCase(st); renderSection(st); renderDesign(st); renderTransverse(st); renderExtra(st); renderRebar(st); renderPlans(st); renderSupports(st); renderPrecontrainte(st);
@@ -381,6 +398,7 @@ function renderCase(st) {
 function renderDesign(st) {
   const ref = $('#design-ref').value, dz = st.design[ref];
   const { deck, keys } = st;
+  if (!dz) { Plotly.purge($('#plot-As')); $('#design-tables').innerHTML = `<p class="small"><span class="badge warn">SANS OBJET</span> Pont-dalle sous rail : le Fascicule 61 et le BAEL ne s'appliquent pas ; choisir « Eurocodes ».</p>`; return; }
   asPlot($('#plot-As'), deck, dz, ref === 'EC' ? 'Eurocodes (EC2)' : 'Fascicule 61 + BAEL 91');
   const cm = v => (v * 1e4).toFixed(1);
   let h = '';
@@ -393,7 +411,7 @@ function renderDesign(st) {
         h += `<tr><td>${k.label}</td><td>${face === 'bot' ? 'inf' : 'sup'} (y = ${deck.ys[iy]})</td><td>${f.Mu.toFixed(0)}</td><td>${f.Mcar.toFixed(0)}</td><td>${f.Mfre.toFixed(0)}</td><td>${f.Mqp.toFixed(0)}</td><td>${cm(f.AsULS)}</td><td>${cm(f.AsSLS)}</td><td>${cm(f.AsWk)}</td><td>${cm(Math.max(f.as921, f.as732, f.perFace))}</td><td><b>${cm(f.As)}</b></td><td>${f.sigS.toFixed(0)}</td><td>${f.sigC.toFixed(1)}</td><td>${f.xOverD.toFixed(2)}</td></tr>`;
       }
     }
-    h += `</tbody></table><p class="small">Moments en kN·m/m (fibre la plus sollicitée), aciers en cm²/m. Effort tranchant par mètre (V_Ed avec facteur K du cas LM1) / V_Rd,c : ` + keys.map(k => `${k.label} : ${dz.shear[k.idx].ratio.toFixed(2)}${dz.shear[k.idx].AswS > 0 ? ' → étriers A_sw/s = ' + (dz.shear[k.idx].AswS * 1e4).toFixed(1) + ' cm²/m par m' : ''}`).join(' ; ') + `. Poinçonnement : LM1 vEd = ${dz.punch.LM1.vEd.toFixed(3)} / vRd,c = ${dz.punch.LM1.vRdc.toFixed(3)} MPa (${dz.punch.LM1.ok ? 'OK' : 'NON'}) ; LM2 vEd = ${dz.punch.LM2.vEd.toFixed(3)} MPa (${dz.punch.LM2.ok ? 'OK' : 'NON'}). Aciers transversaux minimaux (EC2 9.3.1.1 : 20 % des longitudinaux) : inf ${cm(dz.transverseMin.bot)}, sup ${cm(dz.transverseMin.top)} cm²/m — à compléter par les moments transversaux m_y.</p>`;
+    h += `</tbody></table><p class="small">Moments en kN·m/m (fibre la plus sollicitée), aciers en cm²/m. Effort tranchant par mètre (V_Ed avec facteur K du cas ${dz.rail ? 'le plus défavorable des groupes ferroviaires, γ = 1,45 / 1,20' : 'LM1'}) / V_Rd,c : ` + keys.map(k => `${k.label} : ${dz.shear[k.idx].ratio.toFixed(2)}${dz.shear[k.idx].AswS > 0 ? ' → étriers A_sw/s = ' + (dz.shear[k.idx].AswS * 1e4).toFixed(1) + ' cm²/m par m' : ''}`).join(' ; ') + (dz.punch.sansObjet ? '. Poinçonnement : sans objet (charges ferroviaires réparties par les traverses et le ballast).' : `. Poinçonnement : LM1 vEd = ${dz.punch.LM1.vEd.toFixed(3)} / vRd,c = ${dz.punch.LM1.vRdc.toFixed(3)} MPa (${dz.punch.LM1.ok ? 'OK' : 'NON'}) ; LM2 vEd = ${dz.punch.LM2.vEd.toFixed(3)} MPa (${dz.punch.LM2.ok ? 'OK' : 'NON'}).`) + ` Aciers transversaux minimaux (EC2 9.3.1.1 : 20 % des longitudinaux) : inf ${cm(dz.transverseMin.bot)}, sup ${cm(dz.transverseMin.top)} cm²/m — à compléter par les moments transversaux m_y.</p>`;
   } else {
     h += `<p class="small">fc28 = ${dz.mat.fc28} MPa, fe = ${dz.mat.fe} MPa : fbu = ${dz.mat.fbu.toFixed(2)} MPa, fsu = ${dz.mat.fsu.toFixed(0)} MPa, μ_lim = ${dz.mat.muL.toFixed(3)} ; ELS fissuration ${dz.mat.fissuration} : σ̄s = ${isFinite(dz.mat.sigSbar) ? dz.mat.sigSbar.toFixed(0) + ' MPa' : '—'}, σ̄bc = ${dz.mat.sigBbar.toFixed(1)} MPa, n = 15 ; d = ${dz.d.toFixed(3)} m ; non-fragilité ${cm(dz.mins.nonFrag)}, dalle ${cm(dz.mins.dalle)} cm²/m.</p>`;
     h += `<table><thead><tr><th>Section</th><th>Face</th><th>M ELU</th><th>M ELS</th><th>ELU</th><th>ELS</th><th>min</th><th><b>A_s</b></th><th>σs</th><th>σb</th><th>α</th></tr></thead><tbody>`;
@@ -410,12 +428,15 @@ function renderDesign(st) {
 
 function renderTransverse(st) {
   const j = +$('#trans-span').value, ref = $('#trans-ref').value;
-  const dz = st.transDesign[ref], sp = dz.spans[j];
+  const dz = st.transDesign[ref];
+  if (!dz) { Plotly.purge($('#plot-my')); $('#trans-tables').innerHTML = `<p class="small"><span class="badge warn">SANS OBJET</span> Pont-dalle sous rail : le Fascicule 61 et le BAEL ne s'appliquent pas ; choisir « Eurocodes ».</p>`; return; }
+  const sp = dz.spans[j];
   const extra = ref === 'EC' ? [{ name: 'ELS caractéristique max', y: sp.comb.CARmax }, { name: 'ELS caractéristique min', y: sp.comb.CARmin }] : [{ name: 'ELS max', y: sp.comb.ELSmax }, { name: 'ELS min', y: sp.comb.ELSmin }];
   myPlot($('#plot-my'), st.deck, ref === 'EC' ? st.trans : (st.transF || st.trans), j, extra);
   const cm = v => (v * 1e4).toFixed(1);
   const setra = ref !== 'EC' ? ` Fascicule 61 (pratique SETRA) : ${(st.p.concept.psi || 100) < 100 ? 'dalle droite équivalente au biais mécanique (largeur 2b/sin φ, portée L_eq·sin φ, PSI-DA 68 § 2.5.2.1.2) ; ' : ''}trottoirs à la charge locale 4,5 kN/m² (un ou deux trottoirs)${st.transELU ? ' ; ELU calculé avec ν = 0 (fissuration peu nuisible, béton fissuré)' : ''}.` : '';
-  let h = `<p class="small">Dalle isostatique équivalente (L_eq, bords libres, ν = ${st.deck.nu}), charges diffusées à 45° jusqu'au feuillet moyen (contact + 2·${st.p.mat.tRev} + h), séries de Fourier (15 harmoniques), charges roulantes centrées sur x = L_eq/2, enveloppe sur les positions transversales ; thermique et tassements : m_y = ν·m_x. Hauteur utile transversale d = h − c − φ_long = ${dz.d.toFixed(3)} m.${setra}</p>`;
+  let h = st.rail ? `<p class="small">Charges ferroviaires : LM71 (essieux remplacés par ${(250 * st.rail.params.alpha / 1.6).toFixed(1)} kN/m sur 6,40 m, EN 1991-2 § 6.3.6.2(1)), SW/0 et SW/2 centrés sur x = L_eq/2, sur la bande b_w = ${st.rail.diffusion.bw.toFixed(2)} m de chaque voie (± e = r/18), Φ = ${st.rail.phi.toFixed(3)} ; groupes et combinaisons ferroviaires (γ 1,45 / 1,20, ψ du tableau A2.3).</p>` : '';
+  h += `<p class="small">Dalle isostatique équivalente (L_eq, bords libres, ν = ${st.deck.nu}), charges diffusées à 45° jusqu'au feuillet moyen (contact + 2·${st.p.mat.tRev} + h), séries de Fourier (15 harmoniques), charges roulantes centrées sur x = L_eq/2, enveloppe sur les positions transversales ; thermique et tassements : m_y = ν·m_x. Hauteur utile transversale d = h − c − φ_long = ${dz.d.toFixed(3)} m.${setra}</p>`;
   if (dz.skew) {
     h += `<p class="small"><b>Ouvrage biais (ψ = ${dz.skew.psi} gr)</b> : les aciers transversaux sont ${dz.skew.psi2 < 100 ? 'parallèles aux lignes d\'appui' : 'perpendiculaires aux bords libres'} et dimensionnés avec le moment dans leur direction M_APF (annexe 12A du BPEL, pratique CHAMOA § 3.4, reproduite exactement sur la note) : moments principaux MX (longitudinal maximal de la travée) et MY (transversal maximal, non concomitants) tournés du biais mécanique φ, béton comprimé sur la bissectrice des deux familles ; nappe supérieure avec MX = 0. Be = ${dz.skew.Be.toFixed(2)} m. Les aciers sont donnés par mètre perpendiculaire aux aciers${dz.skew.psi2 < 100 ? ` ; par mètre d'axe de l'ouvrage, multiplier par sin ψ = ${dz.skew.sinPsi.toFixed(3)}` : ''}.</p>
     <table><thead><tr><th>Travée</th><th>φ_mec [gr]</th><th>MX car. [kN·m/m]</th><th>MY car.</th><th><b>M_APF car.</b></th><th>MX ELU</th><th>MY ELU</th><th><b>M_APF ELU</b></th><th>MY min car.</th><th>M_APF min car.</th></tr></thead><tbody>`;
@@ -671,7 +692,8 @@ $('#btn-report').addEventListener('click', async () => {
   if (!ensureFull()) return;
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
-    const html = await buildReport({ ...state, version: '0.98', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    // pont-dalle sous rail : la note imprimable est la note ferroviaire (le rapport routier suppose LM1 et le Fascicule 61)
+    const html = state.rail ? noteToHTML(await makeNote()) : await buildReport({ ...state, version: '0.98', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -708,6 +730,7 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
+  if (state.rail) return buildNoteRail({ ...state, version: '0.98' }, { figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
   return buildNote({ ...state, version: '0.98', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {

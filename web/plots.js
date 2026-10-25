@@ -151,7 +151,9 @@ export function asPlot(div, deck, design, label) {
 export function myPlot(div, deck, trans, j, extra = []) {
   const sp = trans.spans[j], ys = trans.ys;
   const data = [{ x: ys, y: sp.perm.my, name: 'Permanent (nominal)', mode: 'lines+markers', line: { color: '#6b6b6b', width: 2 } }];
-  const items = [['TS', sp.ec.TS], ['UDL', sp.ec.UDL], ['LM2', sp.ec.gr1b], ['A(l)', sp.f61.A], ['Bc', sp.f61.Bc], ['Mc120', sp.f61.Mc120], ['D240', sp.f61.D240]];
+  const COURT = { rail1: 'Rail 1 voie', rail2: 'Rail 2 voies', sw2: 'SW/2', sw2b: 'SW/2 + LM71' };
+  const items = sp.rail ? sp.rail.groupes.map(G => [COURT[G.id] || G.id, G.env])
+    : [['TS', sp.ec.TS], ['UDL', sp.ec.UDL], ['LM2', sp.ec.gr1b], ['A(l)', sp.f61.A], ['Bc', sp.f61.Bc], ['Mc120', sp.f61.Mc120], ['D240', sp.f61.D240]];
   items.filter(([, r]) => r).forEach(([lab, r], i) => {
     data.push({ x: ys, y: r.myMax, name: lab + ' max', mode: 'lines+markers', line: { color: PALETTE[i % PALETTE.length], width: 1.5 }, marker: { size: 4 }, legendgroup: lab });
     data.push({ x: ys, y: r.myMin, name: lab + ' min', mode: 'lines', line: { color: PALETTE[i % PALETTE.length], width: 1, dash: 'dot' }, legendgroup: lab, showlegend: false });

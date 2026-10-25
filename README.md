@@ -595,3 +595,12 @@ SW/0 (avec α), SW/2 (sans α), train à vide 10 kN/m, excentrement r/18, répar
 A2.3). Valeurs recommandées de l'EN 1991-2 — à confirmer par le référentiel du gestionnaire du réseau ; les valeurs non
 recoupées sur un texte accessible sont listées dans `A_CONFIRMER`. Le cadre sous rail s'appuie désormais sur ce socle ;
 correction : α ne s'applique plus à SW/2 (EN 1991-2 § 6.3.2(4)), ni au modèle ni à la surcharge sur remblai.
+En cours — ponts-rails, lot 2 : pont-dalle sous rail (champ « Trafic porté » = ferroviaire ; src/pipeline.js computeRail,
+SlabDeck.ferroviaire, web/note_rail.js) — LM71 (essieux + charge répartie sur les parties défavorables hors du groupe) et
+SW/0 (dalles continues) en enveloppe par voie, SW/2 en option, sur les lignes d'influence de la poutre continue ; Φ2/Φ3
+avec LΦ du tableau 6.2 et réduction de couverture ; bande de répartition ℓt + 2 e_b/4 + h au feuillet moyen, excentricité
+±r/18, Guyon-Massonnet ; 1 ou 2 voies, groupes gr11-14, gr21-24, gr16-17, gr26-27 (γ 1,45 / 1,20, ψ du tableau A2.3) en
+flexion longitudinale, effort tranchant et flexion transversale ; actions horizontales (freinage, démarrage, lacet,
+force centrifuge) reportées pour mémoire. Hors périmètre, signalé : déformations et vibrations (lot 4), appuis et
+transmission des efforts horizontaux (lot 5), fatigue ferroviaire, éléments locaux ; Fascicule 61, précontrainte et
+plaque sans objet en mode ferroviaire. Mode routier strictement inchangé.

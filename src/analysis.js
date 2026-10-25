@@ -25,6 +25,7 @@ import { InfluencePlaque, GRANDEURS } from './plate/influence.js';
 import { permanentPlaque } from './plate/deck.js';
 import { EC_ALPHA, notionalLanes, lm1, lm2, TS_GEOM, FOOTWAY } from './loads_ec.js';
 import { classePont, voiesF61, chargeA, BC, BT, MC120, D240, TROTTOIR, deltaDyn, maxAxleLoadOnLength, maxStripTrainLoad } from './loads_f61.js';
+import { LM71, lm71, sw, longueurDeterminante, coefficientDynamique, diffusionBallast, excentrement, demarrageFreinage, casCentrifuge, forceCentrifuge, effortLacet, gammaGroupe, psi as psiRail, MENTION } from './loads_rail.js';
 
 /** Champs à deux indices des résultats (section × fibre ; ligne × appareil pour Rapp). */
 const CLES_2D = ['mxMax', 'mxMin', 'myMax', 'myMin', 'mxyMax', 'mxyMin', 'RappMax', 'RappMin', 'BmyMax', 'BmyMin', 'BmxyMax', 'BmxyMin'];
@@ -238,7 +239,11 @@ export class SlabDeck {
 
   /** Enveloppes de poutre (M, V, R) d'une file, mises en cache par signature longitudinale. */
   /** Signature longitudinale d'une file (contenu de charge, sans la position transversale). */
-  _sig(f) { return f.kind + '|' + (f.kind === 'axles' ? JSON.stringify(f.axles) : f.kind === 'train' ? JSON.stringify([f.axles, f.nVeh, f.pitch]) : f.kind === 'strip' || f.kind === 'stripTrain' ? `${f.q}|${f.len}|${f.pitch || ''}` : f.kind === 'spanwise' ? f.sigL : f.q); }
+  _sig(f) {
+    if (f.kind === 'lm71') return `lm71|${f.P}|${f.n}|${f.a}|${f.q}`;
+    if (f.kind === 'sw') return `sw|${f.q}|${f.a}|${f.c}`;
+    return f.kind + '|' + (f.kind === 'axles' ? JSON.stringify(f.axles) : f.kind === 'train' ? JSON.stringify([f.axles, f.nVeh, f.pitch]) : f.kind === 'strip' || f.kind === 'stripTrain' ? `${f.q}|${f.len}|${f.pitch || ''}` : f.kind === 'spanwise' ? f.sigL : f.q);
+  }
 
   /** Enveloppe longitudinale d'une file sur une ligne d'influence (positions de charge de la poutre). */
   _envOf(f, il) {
@@ -249,11 +254,13 @@ export class SlabDeck {
     if (f.kind === 'train') return bm.trainEnvelope(il, f.axles, { nVeh: f.nVeh, pitch: f.pitch, step });
     if (f.kind === 'strip') return bm.stripEnvelope(il, f.q, f.len, { step });
     if (f.kind === 'spanwise') return bm.spanwiseEnvelope(il, f.qOfL);
+    if (f.kind === 'lm71') return bm.lm71Envelope(il, f, { step });
+    if (f.kind === 'sw') return bm.swEnvelope(il, f, { step });
     throw new Error('kind inconnu ' + f.kind);
   }
 
   _beamEnvelopes(f) {
-    const sig = f.kind + '|' + (f.kind === 'axles' ? JSON.stringify(f.axles) : f.kind === 'train' ? JSON.stringify([f.axles, f.nVeh, f.pitch]) : f.kind === 'strip' || f.kind === 'stripTrain' ? `${f.q}|${f.len}|${f.pitch || ''}` : f.kind === 'spanwise' ? f.sigL : f.q);
+    const sig = this._sig(f);
     if (this._envCache.has(sig)) return this._envCache.get(sig);
     const bm = this.beam;
     const envOf = il => this._envOf(f, il);
@@ -599,6 +606,84 @@ export class SlabDeck {
     }))], optsQ);
 
     return { classe: cl, Lr, Lc, nv, v, G, A, Bc, deltaBc, Bt, deltaBt, Mc120, deltaMc, D240: D, trottoir: trott, mil };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Charges ferroviaires (EN 1991-2 section 6) : pont-dalle sous rail
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Charges verticales ferroviaires et groupes de charges (EN 1991-2 § 6.3, 6.4.5, 6.8.2 ; EN 1990 A2) — valeurs
+   * caractéristiques, coefficient dynamique Φ inclus.
+   *  - Modèles : LM71 × α (essieux + 80α kN/m sur les parties défavorables), SW/0 × α pour les dalles continues
+   *    (note 2 du tableau 6.11), SW/2 sans α si la ligne l'exige ; pour chaque voie, la charge verticale est l'enveloppe
+   *    « LM71 ou SW/0 » (6.8.2, tableau 6.11, colonne « LM71 / SW/0 »).
+   *  - Φ2 ou Φ3 (6.4.5.2) pour la longueur déterminante LΦ du tableau 6.2 (cas 5.1 : portée ; cas 5.2 : k·L_m ≥ max L_i),
+   *    réduit pour une couverture h > 1,00 m (6.4.5.4, éq. 6.8 ; h = ballast sous traverse + hauteur de traverse) ;
+   *    appliqué uniformément à tout le tablier (une seule LΦ), aux moments, aux tranchants et aux réactions.
+   *  - Répartition transversale : sous la traverse de longueur ℓt, diffusion 4:1 dans le ballast jusqu'au dessus de la dalle
+   *    (6.3.6.3, figure 6.6), puis à 45° dans la dalle jusqu'au feuillet moyen (même pente que les charges routières du
+   *    modèle transversal, transverse.js) : bande b_w = ℓt + 2·e_b/4 + h, centrée sur l'axe de la voie décalé de
+   *    l'excentrement e = r/18 (6.3.5) dans les deux sens (enveloppe) ; puis K̄ de Guyon-Massonnet comme pour une bande
+   *    routière. Longitudinalement, le modèle est appliqué tel quel (la répartition 6.3.6.1-2 est sans effet sur les
+   *    sollicitations globales de la dalle).
+   *  - Groupes (tableau 6.11) pour la flexion de la dalle : seules les composantes verticales y interviennent (coefficient 1
+   *    dans gr11-gr14, gr16-gr17, gr21-gr24, gr26-gr27) ; les composantes horizontales (freinage, force centrifuge,
+   *    lacet) sont calculées pour la note et pour les appuis (lot 5), sans être ajoutées à la flexion de la dalle.
+   * @param {object} r { voies:[y], alpha, entretien:'normal'|'soigne', sw2, ballast, longueurTraverse, hTraverse,
+   *   V [km/h], rayon [m], ecartement [m] }
+   */
+  ferroviaire(r) {
+    const R = { alpha: 1, entretien: 'normal', sw2: false, ballast: 0.30, longueurTraverse: 2.60, hTraverse: 0.22, V: 0, rayon: 0, ecartement: 1.50, ...r };
+    const voies = R.voies.slice(0, 2), nV = voies.length;
+    if (!nV) throw new Error('mode ferroviaire : au moins une voie (ordonnée de l\'axe) est requise');
+    const continu = this.spans.length > 1;
+    const LP = longueurDeterminante(continu ? 'continue' : 'simple', continu ? { portees: this.spans } : { portee: this.spans[0] });
+    const couverture = R.ballast + R.hTraverse;
+    const dyn = coefficientDynamique({ LPhi: LP.LPhi, entretien: R.entretien, h: couverture });
+    const phi = dyn.phi;
+    const dif = diffusionBallast({ longueurTraverse: R.longueurTraverse, ballast: R.ballast });
+    const bw = dif.largeur + this.h, ecc = excentrement(R.ecartement);
+    const avert = [];
+    for (const y of voies) if (Math.abs(y) - bw / 2 < -this.b - 1e-9 || Math.abs(y) + bw / 2 > this.b + 1e-9) avert.push(`la bande de répartition de la voie d'axe y = ${y} m (${bw.toFixed(2)} m de large) déborde de la dalle : bande tronquée au bord libre`);
+    const band = e => ({ e1: Math.max(-this.b, e - bw / 2), e2: Math.min(this.b, e + bw / 2) });
+    const L71 = lm71(R.alpha), S0 = sw('SW/0', R.alpha), S2 = sw('SW/2');
+    const mod = {
+      LM71: e => ({ label: 'LM71', kind: 'lm71', P: L71.essieux[0].Q, n: LM71.n, a: LM71.a, q: L71.qv, tracks: [{ ...band(e), share: 1 }] }),
+      'SW/0': e => ({ label: 'SW/0', kind: 'sw', q: S0.q, a: S0.a, c: S0.c, tracks: [{ ...band(e), share: 1 }] }),
+      'SW/2': e => ({ label: 'SW/2', kind: 'sw', q: S2.q, a: S2.a, c: S2.c, tracks: [{ ...band(e), share: 1 }] }),
+    };
+    const vert = continu ? ['LM71', 'SW/0'] : ['LM71'];
+    const sgn = [-ecc, ecc];
+    const opt = { delta: this.spans.map(() => phi) };
+    // une voie chargée (gr11-gr14), deux voies (gr21-gr24), SW/2 seul (gr16-gr17), SW/2 + LM71 (gr26-gr27)
+    const arrA = [], arrB = [], arrC = [], arrD = [];
+    for (const y of voies) for (const m of vert) for (const s of sgn) arrA.push([mod[m](y + s)]);
+    if (nV === 2) for (const m1 of vert) for (const m2 of vert) for (const s1 of sgn) for (const s2 of sgn) arrB.push([mod[m1](voies[0] + s1), mod[m2](voies[1] + s2)]);
+    if (R.sw2) {
+      for (const y of voies) for (const s of sgn) arrC.push([mod['SW/2'](y + s)]);
+      if (nV === 2) for (const [t1, t2] of [[0, 1], [1, 0]]) for (const m of vert) for (const s1 of sgn) for (const s2 of sgn) arrD.push([mod['SW/2'](voies[t1] + s1), mod[m](voies[t2] + s2)]);
+    }
+    const groupes = [];
+    const ajoute = (id, ref, label, arr) => { if (arr.length) groupes.push({ id, ref, label, gamma: gammaGroupe(ref), ...psiRail(ref), nArr: arr.length, res: this.evaluateArrangements(arr, opt) }); };
+    ajoute('rail1', 'gr11', `1 voie chargée — ${vert.join(' ou ')} (gr11 à gr14)`, arrA);
+    ajoute('rail2', 'gr21', `2 voies chargées — ${vert.join(' ou ')} sur chaque voie (gr21 à gr24)`, arrB);
+    ajoute('sw2', 'gr16', '1 voie chargée — SW/2 (gr16, gr17)', arrC);
+    ajoute('sw2b', 'gr26', `SW/2 sur une voie, ${vert.join(' ou ')} sur l'autre (gr26, gr27)`, arrD);
+    // actions horizontales (6.5) : pour la note et les appuis (lot 5) — non ajoutées à la flexion de la dalle
+    const ov = this.g.overhangs || [0, 0], Ltot = this.spans.reduce((a, x) => a + x, 0) + ov[0] + ov[1];
+    const lf = demarrageFreinage(Ltot, { modele: 'LM71', alpha: R.alpha });
+    const lf2 = R.sw2 ? demarrageFreinage(Ltot, { modele: 'SW/2' }) : null;
+    const centrifuge = R.V > 0 && R.rayon > 0
+      ? casCentrifuge(R.V, R.alpha, Ltot).filter(c => !c.sansCentrifuge).map(c => ({ ...c, ...forceCentrifuge({ V: c.V, r: R.rayon, f: c.f, Qv: c.alpha * LM71.P, qv: c.alpha * LM71.qv }) }))
+      : [];
+    if (R.V > 200) avert.push(`vitesse de ligne ${R.V} km/h > 200 km/h : l'analyse dynamique du § 6.4.4 (figure 6.9) est requise et sort du périmètre de PSIDA`);
+    else if (R.V > 0) avert.push('le besoin d\'une analyse dynamique (§ 6.4.4, figure 6.9 : fréquence propre n₀ dans les limites de la figure 6.10) n\'est pas vérifié ici (lot 4 du chantier ponts-rails)');
+    return {
+      params: R, voies, nV, continu, LPhi: LP, couverture, dyn, phi, diffusion: { ...dif, h: this.h, bw }, ecc, vert, groupes,
+      horizontal: { Ltot, demarrageFreinage: lf, demarrageFreinageSW2: lf2, lacet: effortLacet(R.alpha), centrifuge },
+      avert, mention: MENTION,
+    };
   }
 
   /** Applique un coefficient de majoration dynamique par travée (sur appui : max des deux). */

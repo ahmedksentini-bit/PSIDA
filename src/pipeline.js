@@ -6,7 +6,8 @@
 import { designPSIDP, psidpDeflections, transversePrestress } from './psidp/index.js';
 import { SlabDeck } from './analysis.js';
 import { EC_ALPHA } from './loads_ec.js';
-import { designEC, designBAEL, designTransverseEC, designTransverseBAEL, designSingleActionEC } from './design.js';
+import { designEC, designBAEL, designTransverseEC, designTransverseBAEL, designSingleActionEC, designRailEC } from './design.js';
+import { ALPHAS } from './loads_rail.js';
 import { TransverseModel } from './transverse.js';
 import { aideConception } from './conception.js';
 import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations, parseDesignation } from './bearings.js';
@@ -52,7 +53,31 @@ function lireTrace(t) {
   return { segments: o.segments, s0: +o.s0 || 0, source: o.source || '', ...(psiLignes ? { psiLignes } : {}) };
 }
 
+/**
+ * Trafic ferroviaire (pont-dalle sous rail, EN 1991-2 section 6) : champs rail_* lus seulement si « trafic » vaut
+ * « ferroviaire » (sinon null : le calcul routier est inchangé). Voies : une voie d'axe y, ou deux voies d'entraxe e
+ * centrées sur y. Défauts cohérents avec RAIL_DEFAUT du module cadres.
+ */
+export function parseRail(d) {
+  if (d.trafic !== 'ferroviaire') return null;
+  const v = (k, def) => (String(d[k] ?? '').trim() === '' ? def : +String(d[k]).replace(',', '.'));
+  const n = v('rail_n', 1) >= 2 ? 2 : 1, y = v('rail_y', 0), e = v('rail_entraxe', 4.0);
+  const alpha = v('rail_alpha', 1);
+  return {
+    voies: n === 2 ? [y - e / 2, y + e / 2] : [y], n, y, entraxe: e,
+    alpha, alphaNormalise: ALPHAS.some(a => Math.abs(a - alpha) < 1e-9),
+    entretien: d.rail_entretien === 'soigne' ? 'soigne' : 'normal', sw2: d.rail_sw2 === 'on' || d.rail_sw2 === true,
+    ballast: v('rail_ballast', 0.30), longueurTraverse: v('rail_traverse', 2.60), hTraverse: v('rail_hTrav', 0.22),
+    V: v('rail_V', 0), rayon: v('rail_r', 0), ecartement: 1.50,
+  };
+}
+
 function parseData0(d) {
+  const rail = parseRail(d);
+  return { ...parseData00(d), ...(rail ? { rail } : {}) };
+}
+
+function parseData00(d) {
   const [y1, y2] = nums(d.roadway);
   const overhangs = nums(d.overhangs || '0,0');
   const EIv = d.EI.split(',').map(t => t.trim());
@@ -249,6 +274,7 @@ export function conceptInput(p) {
 }
 
 export function compute(p) {
+  if (p.rail) return computeRail(p);
   // méthode « plaque » : un premier calcul (Guyon-Massonnet) choisit les appareils d'appui, dont la raideur verticale
   // sert d'appui élastique à la plaque ; le calcul est ensuite repris en entier avec la plaque
   if (p.methodeTablier === 'plaque' && !p.deckInput.plaque) {
@@ -363,6 +389,82 @@ export function compute(p) {
   let supports = null, supportsError = null;
   try { supports = computeSupports({ p, deck, perm, f61, ec, bearings, psidp, thermal }, p.supports); } catch (e) { supportsError = e.message; }
   return { psidp, psidpError, supports, supportsError, rebar, rebarError, p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transG, transF, transELU, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
+}
+
+/**
+ * Adaptateur « résultat Eurocode » d'un pont-dalle sous rail pour les modules qui lisent `ec` (appareils d'appui, chevêtres,
+ * rotations) : la charge verticale ferroviaire caractéristique (enveloppe des groupes, Φ inclus) occupe la place de TS / LM1 /
+ * gr1a, les autres cas routiers sont nuls. Les coefficients et les actions horizontales de ces modules restent ceux du
+ * calcul routier : leur adaptation aux ponts-rails relève du lot 5.
+ */
+export function railCommeEC(deck, rail) {
+  const zero = SlabDeck.scale(rail.groupes[0].res, 0);
+  const Q = SlabDeck.envelopeOf(rail.groupes.map(G => JSON.parse(JSON.stringify(G.res))));
+  return {
+    rail: true, alpha: { ...EC_ALPHA.recommended, label: `trafic ferroviaire (α = ${rail.params.alpha})` },
+    lanes: { n: rail.nV, wl: rail.diffusion.bw, wr: 0 }, lm1: { lanes: [], qr: 0 }, nArrangements: rail.groupes.reduce((a, G) => a + G.nArr, 0),
+    TS: Q, UDL: zero, LM1: Q, footway: zero, gr1a: Q, gr1b: zero, gr3: zero,
+  };
+}
+
+/**
+ * Pont-dalle sous rail (mode « trafic ferroviaire ») : charges de l'EN 1991-2 section 6 à la place du trafic routier.
+ * Tablier en Guyon-Massonnet ; flexion longitudinale, effort tranchant et flexion transversale sous les groupes
+ * ferroviaires ; Fascicule 61 / BAEL sans objet. Appareils d'appui et chevêtres : réactions ferroviaires dans le cadre
+ * routier (à reprendre au lot 5) ; appuis et fondations, précontrainte, compléments routiers (LM3, fatigue FLM3,
+ * encorbellement, profil de chantier) non calculés.
+ */
+export function computeRail(p) {
+  const t0 = performance.now();
+  const avert = [];
+  if (p.methodeTablier === 'plaque') avert.push(p.deckInput.trace ? 'ouvrage courbe : la méthode en plaque n\'est pas encore disponible sous charges ferroviaires — calcul en Guyon-Massonnet (tablier supposé droit)' : 'méthode en plaque non disponible sous charges ferroviaires : calcul en Guyon-Massonnet');
+  const deck = new SlabDeck(p.deckInput);
+  const keys = deck.keySections();
+  const perm = deck.permanent();
+  const rail = deck.ferroviaire(p.rail);
+  rail.avert = [...avert, ...rail.avert];
+  if (!p.rail.alphaNormalise) rail.avert.push(`α = ${p.rail.alpha} ne fait pas partie de la liste du § 6.3.2(3)P`);
+  const ec = railCommeEC(deck, rail);
+  const thermal = p.withTherm ? deck.thermal({ dTheat: p.dT[0], dTcool: p.dT[1], E: p.E, I: p.I }) : null;
+  const settle = p.withTherm ? deck.settlements({ delta: p.delta, E: p.E, I: p.I, phi: p.phiFluage }) : null;
+  const design = { EC: designRailEC(deck, perm, rail, { ...p.mat, thermal, settle }), F61: null };
+  const tm = new TransverseModel(deck, { tRev: p.mat.tRev, nHarm: 15, I: p.I });
+  const trans = tm.run({ thermal, settle, rail });
+  const skewOpt = { psi: p.concept.psi, I: p.I, transversePerpendicular: p.concept.transversePerpendicular, plaque: false };
+  const transDesign = { EC: designTransverseEC(deck, trans, design.EC, { ...p.mat, phi: p.mat.phiT, phiLong: p.mat.phi, ...skewOpt, rail }), F61: null };
+  const EI = thermal ? thermal.EI : (p.E || 34000) * 1000 * (p.I || p.deckInput.width * Math.pow(p.deckInput.h, 3) / 12);
+  const nbL = p.concept.nBearings || Math.max(2, Math.round(2 * deck.b / 3));
+  const kc = inequalityCoefficients({ width: 2 * deck.b, chargeable: deck.g.roadway.y2 - deck.g.roadway.y1, n: nbL, psi: p.concept.psi, nLanes: rail.nV, h: deck.h, hRev: p.mat.tRev });
+  const ineq = { coef: { ...kc, B: 1 }, Rperm: perm.Rmax, RA: ec.UDL.Rmax, RB: ec.TS.Rmax };
+  const rotPerm = deck.beam.x0.map((_, i) => {
+    let th = 0;
+    for (const j of [i - 1, i]) {
+      if (j < 0 || j >= deck.spans.length) continue;
+      const idx = deck.beam.sections.map((sc, k) => (sc.span === j ? k : -1)).filter(k => k >= 0);
+      const r = endRotations(idx.map(k => deck.beam.sections[k].xi), idx.map(k => perm.M[k]), deck.spans[j], EI / (1 + (p.phiFluage || 2)));
+      th = Math.max(th, Math.abs(j === i ? r.thetaA : r.thetaB));
+    }
+    return th;
+  });
+  const rotQ = ec.gr1a.Tmax.map((v, i) => Math.max(Math.abs(v), Math.abs(ec.gr1a.Tmin[i])) / EI);
+  const bearings = designBearings({ deck, beamComb: design.EC.beam, EI, nPerLine: p.concept.nBearings, xFixed: p.concept.xFixed, epsSlow: p.concept.epsSlow, dT: p.concept.dTu, alphaQ1: 1, alphaq1: 1, ineq, rot: { perm: rotPerm, traffic: rotQ },
+    impose: p.concept.bearingEnd || p.concept.bearingPier ? { end: p.concept.bearingEnd, pier: p.concept.bearingPier } : null });
+  bearings.rotPerm = rotPerm; bearings.EI = EI; bearings.rail = true;
+  const cases = rail.groupes.map(G => ({ id: G.id, label: G.label, res: G.res, ref: 'EC', rail: true }));
+  if (thermal) cases.push({ id: 'therm', label: 'Gradient thermique (±)', res: { ...thermal, Vmax: thermal.Vmax, Vmin: thermal.Vmin }, ref: 'EC' }, { id: 'settle', label: 'Tassements aléatoires (±)', res: settle, ref: 'EC' });
+  const chevetres = chevetresEC({ deck, perm, ec, n: bearings.nb, psi: p.concept.psi, cover: p.mat.c, phi: p.mat.phiT, fck: p.mat.fck, fyk: p.mat.fyk, gQ: Math.max(...rail.groupes.map(G => G.gamma)) });
+  const concept = aideConception(conceptInput(p), { deck, perm, design: design.EC, transDesign: transDesign.EC });
+  // compléments : seul le zonage (géométrique) s'applique ; LM3, fatigue FLM3, encorbellement et chantier sont routiers
+  const pitch = p.extra.bearingPitch || bearingSpacing({ width: 2 * deck.b, psi: p.concept.psi, n: bearings.nb });
+  const zz = zonage({ spans: deck.spans, overhangs: deck.g.overhangs, width: 2 * deck.b, h: deck.h, psi: p.concept.psi, bearingPitch: pitch, optionFers: p.concept.transversePerpendicular ? 2 : 1, cantilever: 0 });
+  zz.pitch = pitch;
+  const extra = { zonage: zz, rail: true };
+  let rebar = null, rebarError = null;
+  try { rebar = rebarPlan({ deck, design: design.EC, trans: transDesign.EC, opt: { fck: p.mat.fck, fyk: p.mat.fyk, phiLong: Math.round(p.mat.phi * 1000), phiTrans: Math.round(p.mat.phiT * 1000), chevetres } }); rebar.governing = ['définitif']; }
+  catch (e) { rebarError = `plan de ferraillage BA impossible (${e.message}) : sections d'acier hors des dispositions courantes — dalle à précontraindre ou à épaissir`; }
+  const psidpError = p.bp && p.bp.actif ? 'mode ferroviaire : la dalle précontrainte (PSI-DP, charges du Fascicule 61) n\'est pas traitée sous charges ferroviaires' : null;
+  const supportsError = 'mode ferroviaire : appuis et fondations sous charges ferroviaires (freinage, démarrage, force centrifuge, lacet, interaction voie-ouvrage) — lot 5 du chantier ponts-rails, non calculés';
+  return { psidp: null, psidpError, supports: null, supportsError, rebar, rebarError, p, deck, keys, perm, ec, f61: null, rail, cases, thermal, settle, design, trans, transG: trans, transF: trans, transELU: null, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
 }
 
 /** Aide à la conception seule : géométrie, charges permanentes et règles du guide (quelques dixièmes de seconde). */

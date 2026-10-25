@@ -10,7 +10,7 @@
  * Convention CHAMOA : d = h − c. Les moments par mètre m_x(y) sont ceux de la répartition transversale ;
  * l'enveloppe sur y donne le ferraillage uniforme « à la CHAMOA » (KTRANS·M/2b).
  */
-import { combineEC, combineBAEL, combineBeamEC, combineBeamBAEL } from './combinations.js';
+import { combineEC, combineBAEL, combineBeamEC, combineBeamBAEL, combineRail, combineBeamRail } from './combinations.js';
 import { materialsEC2, flexureULS, flexureSLS, asForCrackWidth, minimumSteel, shearVRdc, punching, chamferWidthFn } from './section_ec2.js';
 import { materialsBAEL, flexureELU, flexureELS, minimumSteelBAEL, shearBAEL, punchingBAEL } from './section_bael.js';
 import { mechanicalSkew, equivalentWidth, annexe12A } from './skew.js';
@@ -86,6 +86,40 @@ export function designEC(deck, perm, ec, opt = {}) {
     LM2: punching({ Q: Q2, a: 0.6, bb: 0.35, tRev, h, d, As: AsP }, mat),
   };
   return { ref: 'EC', mat, d, h, c, phi, comb, beam, perFibre, bot, top, envBot, envTop, mins, shear, punch,
+    transverseMin: { bot: Math.max(...envBot) * 0.2, top: Math.max(Math.max(...envTop) * 0.2, Math.max(...envBot) * 0.2 * 0.5) } };
+}
+
+/**
+ * Pont-dalle sous rail : ferraillage longitudinal sur les groupes de charges ferroviaires (combineRail : γ 1,45 / 1,20,
+ * ψ du tableau A2.3), mêmes vérifications de section que designEC (ELU, ELS caractéristique, wk, minimums).
+ * Effort tranchant : V_Ed = (1,35 V_G + max_gr γ_gr·K_gr·V_Q,gr)/2b, K_gr facteur de répartition du groupe.
+ * Poinçonnement : sans objet (charges réparties par les traverses et le ballast).
+ * @param {object} rail résultat de SlabDeck.ferroviaire()
+ */
+export function designRailEC(deck, perm, rail, opt = {}) {
+  const { c = 0.03, phi = 0.020, wkMax = 0.3, thermal = null, settle = null } = opt;
+  const mat = materialsEC2(opt);
+  const h = deck.h, d = h - c, sec = { b: 1, h, d };
+  const wTop = deck.g.chamfer ? chamferWidthFn({ width: 2 * deck.b, h, hEdge: deck.g.chamfer.hEdge, joue: deck.g.chamfer.joue }) : null;
+  const secTop = { ...sec, widthFn: wTop };
+  const groupes = rail.groupes;
+  const comb = combineRail(perm, groupes, { thermal, settle });
+  const mins = minimumSteel(sec, mat, { kSlab: opt.kSlab ?? 1.2 });
+  const { perFibre, bot, top, envBot, envTop } = facesEC(deck, comb, mat, sec, secTop, mins, { wkMax, phi, c });
+  const beam = combineBeamRail(perm, groupes, { thermal, settle });
+  const Ks = groupes.map(G => deck.transverseFactors(G.res).K);
+  const shear = deck.beam.sections.map((_, s) => {
+    const vG = Math.max(Math.abs(perm.Vm[s]), Math.abs(perm.Vp[s]));
+    const vQ = Math.max(...groupes.map((G, j) => G.gamma * (Ks[j][s] || 1) * Math.max(Math.abs(G.res.Vmax[s]), Math.abs(G.res.Vmin[s]))));
+    const VEd = (1.35 * vG + vQ) / (2 * deck.b) * kNm2MNm;
+    const As = Math.max(envBot[s], envTop[s]);
+    const r = shearVRdc({ d, As }, mat);
+    const z = 0.9 * d, cotT = 1, fywd = mat.fyd, nu1 = 0.6 * (1 - mat.fck / 250);
+    const VRdmax = 1 * z * nu1 * mat.fcd / (cotT + 1 / cotT);
+    const AswS = VEd > r.VRdc ? VEd / (z * fywd * cotT) : 0;
+    return { VEd, VRdc: r.VRdc, ratio: VEd / r.VRdc, rho: r.rho, AswS, VRdmax, okMax: VEd <= VRdmax };
+  });
+  return { ref: 'EC', rail: true, mat, d, h, c, phi, comb, beam, perFibre, bot, top, envBot, envTop, mins, shear, punch: { sansObjet: true },
     transverseMin: { bot: Math.max(...envBot) * 0.2, top: Math.max(Math.max(...envTop) * 0.2, Math.max(...envBot) * 0.2 * 0.5) } };
 }
 
@@ -212,9 +246,16 @@ export function designTransverseEC(deck, trans, longEC, opt = {}) {
   const h = deck.h, d = h - c - phiLong, sec = { b: 1, h, d };
   const spans = trans.spans;
   const perm = { mxMax: spans.map(sp => sp.perm.myMax), mxMin: spans.map(sp => sp.perm.myMin) };
-  const ec = { TS: asCase(spans, sp => sp.ec.TS), UDL: asCase(spans, sp => sp.ec.UDL), footway: asCase(spans, sp => sp.ec.footway), gr1b: asCase(spans, sp => sp.ec.gr1b), gr3: asCase(spans, sp => sp.ec.gr3) };
   const thermal = asCase(spans, sp => sp.thermal), settle = asCase(spans, sp => sp.settle);
-  const comb = combineEC(perm, ec, { thermal, settle });
+  let comb;
+  if (spans[0].rail) {
+    // pont-dalle sous rail : groupes ferroviaires (mêmes γ et ψ que le calcul longitudinal)
+    const groupes = opt.rail.groupes.map((G, k) => ({ gamma: G.gamma, psi0: G.psi0, psi1: G.psi1, res: asCase(spans, sp => sp.rail.groupes[k].env) }));
+    comb = combineRail(perm, groupes, { thermal, settle });
+  } else {
+    const ec = { TS: asCase(spans, sp => sp.ec.TS), UDL: asCase(spans, sp => sp.ec.UDL), footway: asCase(spans, sp => sp.ec.footway), gr1b: asCase(spans, sp => sp.ec.gr1b), gr3: asCase(spans, sp => sp.ec.gr3) };
+    comb = combineEC(perm, ec, { thermal, settle });
+  }
   const mins = minimumSteel(sec, mat, { kSlab: opt.kSlab ?? 1.2 });
   const out = [];
   spans.forEach((sp, j) => {

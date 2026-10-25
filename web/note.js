@@ -347,6 +347,7 @@ export function noteToHTML(note, { base = (typeof location !== 'undefined' && /^
  h3{font:bold 12.5px system-ui,sans-serif;margin:14px 0 6px}
  table{border-collapse:collapse;margin:4px 0 10px;width:100%;page-break-inside:auto} th,td{border:1px solid #999;padding:2px 5px;text-align:right;white-space:nowrap}
  th{background:#f3f4f6;font-family:system-ui,sans-serif;font-size:11px} td:first-child,th:first-child{text-align:left} table.small td,table.small th{font-size:10.5px}
+ table.texte td{white-space:normal;text-align:left}
  tr.pair2 td{border-top:0} tr.pair1 td{border-bottom:0}
  .comment{font:italic 11.5px/1.45 Georgia,serif;border:1px solid #888;border-left:4px solid #888;background:#fbfbf8;padding:6px 10px;margin:6px 0 12px}
  .comment:before{content:"Commentaire — ";font-weight:bold;font-style:normal}
@@ -366,7 +367,7 @@ export function noteToHTML(note, { base = (typeof location !== 'undefined' && /^
     else if (b.t === 'img') h += `<figure><img src="${b.dataUrl}" alt=""><figcaption>${esc(b.caption || '')}</figcaption></figure>`;
     else if (b.t === 'svg') h += `<figure style="max-width:760px">${b.svg}<figcaption>${esc(b.caption || '')}</figcaption></figure>`;
     else if (b.t === 'table') {
-      h += `<table class="${b.small ? 'small' : ''}"><thead><tr>${b.head.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>`;
+      h += `<table class="${[b.small ? 'small' : '', b.texte ? 'texte' : ''].filter(Boolean).join(' ')}"><thead><tr>${b.head.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>`;
       b.rows.forEach((r, i) => { h += `<tr class="${b.pairs ? (i % 2 ? 'pair2' : 'pair1') : ''}">${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`; });
       h += '</tbody></table>';
     }
