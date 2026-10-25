@@ -9,8 +9,8 @@
  *  - [EN]   valeur vérifiée sur la NF EN 1991-2 (relue tableau par tableau pour la section 6) / l'EN 1990 A2, ou sur un texte
  *           qui la reproduit (UIC 776-1, 5ᵉ éd. 2006, dont la section 6 de l'EN 1991-2 est issue ; corrigendum
  *           EN 1990/A1/AC) ;
- *  - [À CONFIRMER] valeur reprise de la norme sans qu'un texte accessible ait permis de la recouper ici : à relire sur
- *           l'exemplaire de la norme avant toute production (signalée dans `A_CONFIRMER`).
+ *  - [À CONFIRMER] valeur non recoupée sur la norme (liste `A_CONFIRMER`, vide depuis la relecture du 25/10/2026 sur la
+ *           NF EN 1991-2 et le tableau A2.3 de l'EN 1990/A1).
  */
 
 export const MENTION = 'Valeurs recommandées de l\'EN 1991-2 — à confirmer par le référentiel du gestionnaire du réseau.';
@@ -289,31 +289,47 @@ export const GAMMA = { LM71: 1.45, 'SW/0': 1.45, HSLM: 1.45, 'SW/2': 1.20, group
 export const gammaGroupe = id => (['gr16', 'gr17', 'gr26', 'gr27'].includes(id) ? GAMMA.groupeSW2 : GAMMA.groupe);
 
 /**
- * Coefficients ψ des ponts ferroviaires (EN 1990, tableau A2.3) [À CONFIRMER, sauf ψ1 selon le nombre de voies : EN] :
- * groupes gr11-gr17 : ψ0 0,80, ψ1 0,80, ψ2 0 ; gr21-gr27 : ψ1 0,70 ; gr31 : ψ1 0,60.
- * Composantes isolées : LM71 et SW/0 ψ0 0,80, ψ1 0,80/0,70/0,60 (1/2/≥3 voies), ψ2 0 ; SW/2 0 / 1,00 / 0 ;
- * train à vide ψ0 1,00 ; lacet 1,00 / 0,80 / 0 ; démarrage-freinage et centrifuge : ceux de la charge verticale associée ;
- * poussée due à la surcharge de trafic 0,80 / 0,50 / 0. Pour les déformations en combinaison quasi permanente,
- * ψ2 = 1,00 pour le trafic ferroviaire (note 4 du tableau). Valeur minimale de la charge verticale favorable concomitante
- * à la force centrifuge, au démarrage ou au freinage : 0,5·LM71 (note 5).
+ * Coefficients ψ des ponts ferroviaires (EN 1990/A1:2005, tableau A2.3, valeurs recommandées) [EN, relu sur la norme].
+ * Note 1 : ψ1 = 0,8 / 0,7 / 0,6 pour 1 / 2 / ≥ 3 voies simultanément chargées (LM71, SW/0, poussée des terres due au
+ * trafic). Groupes : gr11-gr17 0,80 / 0,80 / 0 ; gr21-gr27 0,80 / 0,70 / 0 ; gr31 0,80 / 0,60 / 0 — une seule valeur
+ * par groupe, celle de la composante dominante (A2.2.4(2)). Dans l'impression française, le filet du tableau place gr17
+ * avec gr21-gr27 ; gr17 étant un groupe à une voie chargée, on retient 0,80 comme pour gr11-gr16.
+ * Démarrage-freinage, force centrifuge, interaction voie-ouvrage : ψ de la charge verticale associée (`associee`).
+ * Note 4 : ψ2 = 1,00 pour le trafic ferroviaire quand on examine la déformation (situations durables et transitoires).
+ * Note 5 : charge verticale favorable minimale concomitante aux composantes horizontales : 0,5 · LM71.
+ * Note 6 : pas de valeur non fréquente pour les ponts ferroviaires.
  */
-export function psi(action, nbVoies = 1) {
+export function psi(action, nbVoies = 1, { associee = 'LM71' } = {}) {
   const p1 = nbVoies <= 1 ? 0.80 : nbVoies === 2 ? 0.70 : 0.60;
   if (/^gr/.test(action)) return { psi0: 0.80, psi1: action === 'gr31' ? 0.60 : /^gr2/.test(action) ? 0.70 : 0.80, psi2: 0 };
   switch (action) {
     case 'LM71': case 'SW/0': return { psi0: 0.80, psi1: p1, psi2: 0 };
     case 'SW/2': return { psi0: 0, psi1: 1.00, psi2: 0 };
     case 'train_vide': return { psi0: 1.00, psi1: null, psi2: null };
+    case 'HSLM': case 'train_reel': return { psi0: 1.00, psi1: 1.00, psi2: 0 };
+    case 'freinage': case 'demarrage': case 'centrifuge': case 'interaction':
+      if (/^(freinage|demarrage|centrifuge|interaction)$/.test(associee)) throw new Error('ψ : charge verticale associée requise');
+      return psi(associee, nbVoies);
     case 'lacet': return { psi0: 1.00, psi1: 0.80, psi2: 0 };
-    case 'poussee_trafic': return { psi0: 0.80, psi1: 0.50, psi2: 0 };
+    case 'pietons': case 'entretien': case 'aerodynamique': return { psi0: 0.80, psi1: 0.50, psi2: 0 };
+    case 'poussee_trafic': return { psi0: 0.80, psi1: p1, psi2: 0 };
+    case 'vent': return { psi0: 0.75, psi1: 0.50, psi2: 0 };
+    case 'vent_trafic': return { psi0: 1.00, psi1: 0, psi2: 0 };          // F**W, vent concomitant au trafic (note 2)
+    case 'temperature': return { psi0: 0.60, psi1: 0.60, psi2: 0.50 };
+    case 'neige_construction': return { psi0: 0.80, psi1: null, psi2: 0 };
+    case 'construction': return { psi0: 1.00, psi1: null, psi2: 1.00 };
     default: throw new Error(`ψ inconnu pour ${action}`);
   }
 }
 
-/** Valeurs reprises sans recoupement d'un texte accessible : à relire sur l'exemplaire de la norme. */
-export const A_CONFIRMER = [
-  'EN 1990, tableau A2.3 : coefficients ψ0 et ψ2 des groupes et des composantes isolées.',
-  'Hauteur d\'application de la force centrifuge (1,80 m) et α : paramètres d\'annexe nationale.',
+/** Valeurs reprises sans recoupement sur la norme : toutes relues (NF EN 1991-2 et EN 1990/A1 tableau A2.3) au 25/10/2026. */
+export const A_CONFIRMER = [];
+
+/** Paramètres que le référentiel du gestionnaire du réseau (annexe nationale, spécification de ligne) peut fixer. */
+export const PARAMETRES_REFERENTIEL = [
+  'α (6.3.2(3)) ; Φ2 ou Φ3 (6.4.5.2(3)) ; hauteur ht de la force centrifuge, 1,80 m recommandé (6.5.1(2)) ;',
+  'vitesse maximale de ligne au point considéré (6.5.1(5)) ; lignes où SW/2 est requis (6.3.3(4)) ;',
+  'coefficients des groupes (tableau 6.11) et coefficients γ, ψ (EN 1990, tableaux A2.3 et A2.4).',
 ];
 
 /** Notes standard à reporter dans les notes de calcul. */

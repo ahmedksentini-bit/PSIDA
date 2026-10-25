@@ -133,7 +133,12 @@ test('Groupes de charges, γ et ψ', () => {
   assert.deepEqual(R.psi('gr11'), { psi0: 0.8, psi1: 0.8, psi2: 0 });
   assert.equal(R.psi('gr24').psi1, 0.7); assert.equal(R.psi('gr31').psi1, 0.6);
   assert.equal(R.psi('LM71', 3).psi1, 0.6); assert.equal(R.psi('SW/2').psi0, 0);
-  assert.ok(R.A_CONFIRMER.some(x => /A2\.3/.test(x)));
+  assert.deepEqual(R.A_CONFIRMER, []);
+  // tableau A2.3 : poussée des terres due au trafic, ψ1 selon le nombre de voies (note 1) ; composantes horizontales = verticale associée
+  assert.deepEqual(R.psi('poussee_trafic', 2), { psi0: 0.8, psi1: 0.7, psi2: 0 });
+  assert.deepEqual(R.psi('freinage', 3), R.psi('LM71', 3)); assert.deepEqual(R.psi('centrifuge', 1, { associee: 'SW/2' }), R.psi('SW/2'));
+  assert.equal(R.psi('gr17').psi1, 0.8); assert.deepEqual(R.psi('temperature'), { psi0: 0.6, psi1: 0.6, psi2: 0.5 });
+  assert.deepEqual(R.psi('HSLM'), { psi0: 1, psi1: 1, psi2: 0 });
   assert.match(R.notesReferentiel({ alpha: 1 })[0], /gestionnaire du réseau/);
 });
 
