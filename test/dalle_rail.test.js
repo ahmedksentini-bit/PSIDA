@@ -165,3 +165,16 @@ test('Chaîne complète en mode ferroviaire : tablier, transversal, note ; mode 
   const st2 = compute(parseData({ ...d, methodeTablier: 'plaque' }));
   assert.ok(st2.rail.avert.some(t => /plaque/.test(t)));
 });
+
+test('Coupe transversale en mode ferroviaire : voies, ballast, traverses, bande b_w, sans mention routière', async () => {
+  const { guideCrossSectionSVG } = await import('../web/guide_schema.js');
+  const { parseRail } = await import('../src/pipeline.js');
+  const base = { spans: [12, 16, 12], width: 9, h: 1, overhangs: [0.5, 0.5], roadway: { y1: -4.5, y2: 4.5 }, footways: [], lines: [], bands: [{ q: 17, y1: -4, y2: 4, kmin: 1, kmax: 1 }], ys: [-4.5, 0, 4.5] };
+  const routier = guideCrossSectionSVG({ ...base, rail: null });
+  assert.match(routier, /chaussée/); assert.match(routier, /classe/);
+  const R = parseRail({ trafic: 'ferroviaire', rail_n: '2', rail_y: '0', rail_entraxe: '4.2', rail_alpha: '1.21', rail_entretien: 'normal', rail_ballast: '0.30', rail_traverse: '2.60', rail_hTrav: '0.22' });
+  const svg = guideCrossSectionSVG({ ...base, rail: R });
+  assert.doesNotMatch(svg, /chaussée|classe|voies? EN 1991-2 de|profil en toit/);
+  for (const t of ['2 voies ferrées', 'α = 1,21', 'Φ3', 'ballast', 'traverse ℓt = 2,6 m', 'e_b = 0,3 m', 'entraxe 4,2 m', 'b_w = 3,75 m', '4:1', '45°', 'q = 17 kN/m²']) assert.ok(svg.includes(t), t);
+  assert.equal((svg.match(/<g[\s>]/g) || []).length, (svg.match(/<\/g>/g) || []).length);
+});

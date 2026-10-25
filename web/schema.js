@@ -4,6 +4,7 @@
  */
 import { notionalLanes } from '../src/loads_ec.js';
 import { classePont } from '../src/loads_f61.js';
+import { parseRail } from '../src/pipeline.js';
 
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const fr = (v, d = 2) => Number(v).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: d });
@@ -118,7 +119,8 @@ export function readGeometry(form) {
     psi: +d.psi > 0 ? +d.psi : 100, tirantAir: String(d.tirantAir || '').trim() ? +d.tirantAir : null, typeDalle: d.typeDalle || 'auto',
     Dabout: +d.Dabout || 25, transDir: d.transDir || 'appuis', nBearings: String(d.nBearings || '').trim() ? +d.nBearings : null, xFixed: String(d.xFixed || '').trim() ? +d.xFixed : null,
     fck: +d.fck, fyk: +d.fyk, cover: +d.cover, phi: +d.phi, phiT: +d.phiT, wk: +d.wk, fiss: d.fiss, tRev: +d.tRev, alpha: d.alpha, nu: +d.nu, nRetenue: +d.nRetenue, classe: String(d.classe || '').trim() ? +d.classe : null,
-    withTherm: !!d.withTherm, dT: nums(d.dT), E: +EIv[0] || null, I: EIv[1] ? +EIv[1] : null, delta: +d.delta, phiFluage: +d.phiFluage, epsSlow: +d.epsSlow, dTu: +d.dTu };
+    withTherm: !!d.withTherm, dT: nums(d.dT), E: +EIv[0] || null, I: EIv[1] ? +EIv[1] : null, delta: +d.delta, phiFluage: +d.phiFluage, epsSlow: +d.epsSlow, dTu: +d.dTu,
+    rail: parseRail(d) };
 }
 
 /** Cote horizontale avec texte. */
@@ -283,8 +285,14 @@ export function planSVG(g) {
   // contour (parallélogramme : abouts parallèles aux lignes d'appui)
   const pts = [[lineAt(-aL, b), b], [lineAt(L + aR, b), b], [lineAt(L + aR, -b), -b], [lineAt(-aL, -b), -b]];
   s += `<polygon points="${pts.map(([x, y]) => `${sx(x)},${sy(y)}`).join(' ')}" fill="var(--slab, #9aa5b8)" fill-opacity="0.5" stroke="currentColor" stroke-width="1.2"/>`;
-  // chaussée
-  if (g.roadway) {
+  // voies ferrées (pont-dalle sous rail) ou chaussée
+  if (g.rail) {
+    g.rail.voies.forEach((yv, i) => {
+      s += `<line x1="${sx(lineAt(-aL, yv))}" y1="${sy(yv)}" x2="${sx(lineAt(L + aR, yv))}" y2="${sy(yv)}" stroke="var(--acc, #0b5fa5)" stroke-width="1.4" stroke-dasharray="12 4 2 4"/>`;
+      for (const d of [-0.75, 0.75]) s += `<line x1="${sx(lineAt(-aL, yv + d))}" y1="${sy(yv + d)}" x2="${sx(lineAt(L + aR, yv + d))}" y2="${sy(yv + d)}" stroke="currentColor" stroke-width="0.9"/>`;
+      s += `<text x="${sx(lineAt(-aL, yv)) + 6}" y="${sy(yv) - 4}" font-size="11" fill="var(--acc, #0b5fa5)">voie ${i + 1}</text>`;
+    });
+  } else if (g.roadway) {
     const r = g.roadway, p2 = [[lineAt(-aL, r.y2), r.y2], [lineAt(L + aR, r.y2), r.y2], [lineAt(L + aR, r.y1), r.y1], [lineAt(-aL, r.y1), r.y1]];
     s += `<polygon points="${p2.map(([x, y]) => `${sx(x)},${sy(y)}`).join(' ')}" fill="var(--road, #4d5566)" fill-opacity="0.25" stroke="none"/>`;
   }
@@ -325,7 +333,10 @@ export function summaryHTML(g) {
     items.push(`<b>Travure</b> : ${g.spans.length} travée${g.spans.length > 1 ? 's' : ''} de ${g.spans.map(v => fr(v)).join(' / ')} m (${fr(L)} m entre appuis extrêmes)${g.overhangs.some(v => v > 0) ? `, abouts ${fr(g.overhangs[0])} et ${fr(g.overhangs[1])} m` : ', sans abouts'} ; ${g.spans.length + 1} lignes d'appui.`);
   }
   if (g.width && g.h) items.push(`<b>Dalle</b> : largeur 2b = ${fr(g.width)} m (b = ${fr(g.width / 2)}), épaisseur h = ${fr(g.h, 3)} m, aire ${fr(g.area || g.width * g.h, 3)} m²${g.chamfer ? `, chanfreins de ${fr(g.chamfer.hEdge)} m au bord sur ${fr(g.chamfer.joue)} m` : ''} ; poids propre ${fr(25 * (g.area || g.width * g.h), 1)} kN/m.`);
-  if (g.roadway) {
+  if (g.rail) {
+    const R = g.rail, n = R.voies.length;
+    items.push(`<b>Voies ferrées</b> (pont-dalle sous rail, EN 1991-2 section 6) : ${n} voie${n > 1 ? 's' : ''} d'axe${n > 1 ? 's' : ''} y = ${R.voies.map(v => fr(v)).join(' et ')} m${n > 1 ? ` (entraxe ${fr(R.entraxe)} m)` : ''} ; α = ${fr(R.alpha)}, ${R.entretien === 'soigne' ? 'Φ2' : 'Φ3'}${R.sw2 ? ', SW/2' : ''} ; ballast ${fr(R.ballast)} m sous traverses de ${fr(R.longueurTraverse)} × ${fr(R.hTraverse)} m${R.V > 0 ? ` ; V = ${fr(R.V)} km/h` : ''}${R.rayon > 0 ? `, R = ${fr(R.rayon)} m` : ''}. Pas de charges routières.`);
+  } else if (g.roadway) {
     const w = g.roadway.y2 - g.roadway.y1, ln = notionalLanes(w);
     let cl = ''; try { cl = `, classe ${g.classe || classePont(w)} (Fascicule 61, largeur roulable ${fr(w)} m${g.nRetenue ? `, ${g.nRetenue} dispositif(s) de retenue → Lc = ${fr(w - 0.5 * g.nRetenue)} m` : ''})`; } catch (e) { /* ignore */ }
     items.push(`<b>Chaussée</b> : de y = ${fr(g.roadway.y1)} à ${fr(g.roadway.y2)} m (${fr(w)} m) → ${ln.n} voie${ln.n > 1 ? 's' : ''} conventionnelle${ln.n > 1 ? 's' : ''} de ${fr(ln.wl)} m${ln.wr > 0.01 ? ` et ${fr(ln.wr)} m d'aire résiduelle` : ''} (EN 1991-2, ${g.alpha === 'FR2' ? 'α classe 2' : g.alpha === 'FR1' ? 'α classe 1' : 'α = 1'})${cl}.`);
@@ -333,7 +344,8 @@ export function summaryHTML(g) {
   if (g.footways.length) items.push(`<b>Trottoirs</b> : ${g.footways.map(f => `[${fr(f.y1)} ; ${fr(f.y2)}] (${fr(f.y2 - f.y1)} m)`).join(', ')}.`);
   if (g.lines.length || g.bands.length) items.push(`<b>Charges permanentes</b> : ${[...g.lines.map(l => `${fr(l.g)} kN/m en y = ${fr(l.e)}${l.kmin !== 1 || l.kmax !== 1 ? ` (k ${l.kmin}/${l.kmax})` : ''}`), ...g.bands.map(b => `${fr(b.q)} kN/m² sur [${fr(b.y1)} ; ${fr(b.y2)}] = ${fr(b.q * (b.y2 - b.y1), 1)} kN/m${b.kmin !== 1 || b.kmax !== 1 ? ` (k ${b.kmin}/${b.kmax})` : ''}`)].join(' ; ')} ; total ${fr(g.lines.reduce((a, l) => a + l.g, 0) + g.bands.reduce((a, b) => a + b.q * (b.y2 - b.y1), 0), 1)} kN/m en plus du poids propre.`);
   items.push(`<b>Biais</b> : ψ = ${fr(g.psi)} gr${g.psi >= 100 ? ' (droit)' : ` ; aciers transversaux ${g.transDir === 'perp' ? 'perpendiculaires aux bords libres' : 'parallèles aux lignes d\'appui'}`}${g.tirantAir ? ` ; hauteur libre ${fr(g.tirantAir)} m` : ''}.`);
-  if (g.fck) items.push(`<b>Matériaux</b> : C${g.fck}/${g.fck + 10} (fc28 = ${g.fck} MPa), aciers ${g.fyk} MPa, enrobage à l'axe ${fr(g.cover * 100)} cm, φ ${g.phi} / ${g.phiT} mm, wk ≤ ${g.wk} mm, fissuration BAEL ${g.fiss} ; revêtement ${fr(g.tRev)} m.`);
+  if (g.fck) items.push(g.rail ? `<b>Matériaux</b> : C${g.fck}/${g.fck + 10}, aciers ${g.fyk} MPa, enrobage à l'axe ${fr(g.cover * 100)} cm, φ ${g.phi} / ${g.phiT} mm, wk ≤ ${g.wk} mm (Eurocodes).`
+    : `<b>Matériaux</b> : C${g.fck}/${g.fck + 10} (fc28 = ${g.fck} MPa), aciers ${g.fyk} MPa, enrobage à l'axe ${fr(g.cover * 100)} cm, φ ${g.phi} / ${g.phiT} mm, wk ≤ ${g.wk} mm, fissuration BAEL ${g.fiss} ; revêtement ${fr(g.tRev)} m.`);
   items.push(`<b>Modèle</b> : ν = ${g.nu}, ordonnées y = ${g.ys.map(v => fr(v)).join(', ')} ; ${g.withTherm ? `gradient ${g.dT[0] ?? 12} / ${g.dT[1] ?? -6} °C et tassements ${fr((g.delta || 0) * 100)} cm (E = ${g.E || 34000} MPa${g.I ? `, I = ${g.I} m⁴` : ''})` : 'sans gradient thermique ni tassements'}.`);
   items.push(`<b>Appareils d'appui</b> : ${g.nBearings || Math.max(2, Math.round((g.width || 0) / 3))} par ligne, point fixe ${g.xFixed === null ? 'au milieu' : `à x = ${fr(g.xFixed)} m`}, ε = ${g.epsSlow}, ΔT = ${g.dTu} °C.`);
   return `<ul class="checks">${items.map(t => `<li>${t}</li>`).join('')}</ul>`;

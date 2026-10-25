@@ -136,6 +136,47 @@ export function guideElevationSVG(g, sp = null) {
 }
 
 /**
+ * Voies ferrées d'un pont-dalle sous rail : ballast (épaisseur e_b sous traverse), traverses (longueur ℓt, hauteur), rails,
+ * axes et entraxe des voies, diffusion 4:1 dans le ballast (EN 1991-2 § 6.3.6.3, figure 6.6) puis à 45° dans la dalle
+ * jusqu'au feuillet moyen, bande chargée b_w = ℓt + 2 e_b/4 + h.
+ */
+function voiesFerrees(R, { Y, Zs, h, b }) {
+  const lt = R.longueurTraverse, eb = R.ballast, hT = R.hTraverse, hR = 0.17, ACC = '#0b5fa5';
+  const v = R.voies, yMin = Math.min(...v), yMax = Math.max(...v);
+  const zSup = -(eb + hT), zRail = zSup - hR;
+  let s = '<g data-k="rail_n rail_y rail_entraxe rail_ballast rail_traverse rail_hTrav">';
+  // ballast : prisme continu sous les voies, épaulements de 0,40 m et talus 3/2
+  const ya = Math.max(-b, yMin - lt / 2 - 0.4), yb = Math.min(b, yMax + lt / 2 + 0.4), tal = 1.5 * (eb + hT);
+  s += `<polygon points="${Y(Math.max(-b, ya - tal)).toFixed(1)},${Zs(0).toFixed(1)} ${Y(ya).toFixed(1)},${Zs(zSup).toFixed(1)} ${Y(yb).toFixed(1)},${Zs(zSup).toFixed(1)} ${Y(Math.min(b, yb + tal)).toFixed(1)},${Zs(0).toFixed(1)}" fill="url(#g89enc)" stroke="${INK}" stroke-width="${THIN}"/>`;
+  s += T_(Y(ya) + 4, Zs(zSup) + 12, 'ballast', 'start', 'font-size="10"');
+  const bw = lt + 2 * eb / 4 + h;
+  v.forEach((yc, i) => {
+    // traverse et rails
+    s += `<rect x="${Y(yc - lt / 2).toFixed(1)}" y="${Zs(zSup).toFixed(1)}" width="${(Y(yc + lt / 2) - Y(yc - lt / 2)).toFixed(1)}" height="${(Zs(-eb) - Zs(zSup)).toFixed(1)}" fill="#6b6b6b" stroke="${INK}" stroke-width="${THIN}"/>`;
+    for (const d of [-0.75, 0.75]) s += `<rect x="${(Y(yc + d) - 3).toFixed(1)}" y="${Zs(zRail).toFixed(1)}" width="6" height="${(Zs(zSup) - Zs(zRail)).toFixed(1)}" fill="${INK}"/>`;
+    // axe de la voie
+    s += L_(Y(yc), Zs(zRail) - 62, Y(yc), Zs(h) + 10, 0.6, `stroke="${ACC}" stroke-dasharray="12 4 2 4"`);
+    s += `<text x="${(Y(yc) + 4).toFixed(1)}" y="${(Zs(zRail) - 56).toFixed(1)}" text-anchor="start" font-size="10" fill="${ACC}">voie ${i + 1} (y = ${fr(yc)})</text>`;
+    // diffusion : 4:1 dans le ballast sous la traverse, puis 45° dans la dalle jusqu'au feuillet moyen
+    for (const sg of [-1, 1]) {
+      const y0 = yc + sg * lt / 2, y1 = y0 + sg * eb / 4, y2 = y1 + sg * h / 2;
+      s += L_(Y(y0), Zs(-eb), Y(y1), Zs(0), 0.9, `stroke="${ACC}" stroke-dasharray="4 2"`);
+      s += L_(Y(y1), Zs(0), Y(y2), Zs(h / 2), 0.9, `stroke="${ACC}" stroke-dasharray="4 2"`);
+    }
+    s += `<line x1="${Y(yc - bw / 2).toFixed(1)}" y1="${Zs(h / 2).toFixed(1)}" x2="${Y(yc + bw / 2).toFixed(1)}" y2="${Zs(h / 2).toFixed(1)}" stroke="${ACC}" stroke-width="3"/>`;
+    s += `<text x="${Y(yc).toFixed(1)}" y="${(Zs(h / 2) - 5).toFixed(1)}" text-anchor="middle" font-size="10" fill="${ACC}">b_w = ${fr(bw)} m au feuillet moyen</text>`;
+    if (i === 0) {
+      s += `<text x="${(Y(yc - lt / 2 - eb / 8) - 4).toFixed(1)}" y="${(Zs(-eb / 2) + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="${ACC}">4:1</text>`;
+      s += `<text x="${(Y(yc - lt / 2 - eb / 4 - h / 4) - 4).toFixed(1)}" y="${(Zs(h / 4) + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="${ACC}">45°</text>`;
+      s += coteH(Y(yc - lt / 2), Y(yc + lt / 2), Zs(zRail) - 6, `traverse ℓt = ${fr(lt)} m`, true);
+      s += coteV(Y(Math.max(-b, ya - tal)) - 8, Zs(-eb), Zs(0), `e_b = ${fr(eb)} m`, true);
+    }
+  });
+  if (v.length > 1) s += coteH(Y(v[0]), Y(v[v.length - 1]), Zs(zRail) - 38, `entraxe ${fr(v[v.length - 1] - v[0])} m`, true);
+  return s + '</g>';
+}
+
+/**
  * Coupe transversale droite, guide 1989 § 2.3 : dalle rectangulaire ou à chanfreins (encorbellements tramés), corniches,
  * trottoirs et bordures, chaussée avec dévers, appareils d'appui, cotes.
  */
@@ -156,7 +197,9 @@ export function guideCrossSectionSVG(g, opt = {}) {
   L0.forEach((lb, k) => { lb.level = L0.length - 1 - k; }); R0.forEach((lb, k) => { lb.level = R0.length - 1 - k; });
   const lv = Array.from({ length: Math.max(L0.length, R0.length) });
   const loadH = (bands.length ? 16 * bands.length + 8 : 0) + (labs.length ? 16 * lv.length + 14 : 0);
-  const yTop = 125 + loadH, Zs = z => yTop + z * vz;     // z vers le bas depuis l'extrados
+  // pont-dalle sous rail (g.rail, lu par parseRail) : ballast, traverses et rails au-dessus de l'extrados
+  const R = g.rail || null, up = R ? (R.ballast + R.hTraverse + 0.17) * vz + 70 : 0;
+  const yTop = 125 + loadH + up, Zs = z => yTop + z * vz;     // z vers le bas depuis l'extrados
   const chk = g.chamfer && g.chamfer.hEdge > 0 && g.chamfer.hEdge < h && g.chamfer.joue > 0 && g.chamfer.joue < b;
   const ys = loads ? (g.ys && g.ys.length ? g.ys : [-b, 0, b]).filter(y => Math.abs(y) <= b + 1e-9) : [];
   const yAxis = Zs(h) + (chk ? 74 : 52) + 26;
@@ -168,16 +211,17 @@ export function guideCrossSectionSVG(g, opt = {}) {
   try { lanes = rw0 ? notionalLanes(rw0.y2 - rw0.y1) : null; } catch { lanes = null; }
   try { classe = rw0 ? (g.classe || classePont(rw0.y2 - rw0.y1)) : null; } catch { classe = null; }
   s += T_(m.l, 38, `2b = ${fr(g.width)} m ; h = ${fr(h, 3)} m ; aire ${fr(g.area || g.width * h, 3)} m² ; ${ch ? `encorbellements de ${fr(ch.joue)} m (épaisseur en rive ${fr(ch.hEdge)} m)` : 'dalle rectangulaire'}`, 'start', 'font-size="11"');
-  if (lanes) s += T_(m.l, 54, `chaussée ${fr(rw0.y2 - rw0.y1)} m → ${lanes.n} voie${lanes.n > 1 ? 's' : ''} EN 1991-2 de ${fr(lanes.wl)} m${lanes.wr > 0.01 ? ` + ${fr(lanes.wr)} m résiduel` : ''}${classe ? ` ; pont de classe ${classe} (Fasc. 61)` : ''} — échelle verticale amplifiée`, 'start', 'font-size="11"');
+  if (R) s += T_(m.l, 54, `${R.voies.length} voie${R.voies.length > 1 ? 's' : ''} ferrée${R.voies.length > 1 ? 's' : ''} (EN 1991-2 section 6) : α = ${fr(R.alpha)}, ${R.entretien === 'soigne' ? 'Φ2 (voie soigneusement entretenue)' : 'Φ3 (entretien normal)'}${R.sw2 ? ', SW/2 requis' : ''} — échelle verticale amplifiée`, 'start', 'font-size="11"');
+  else if (lanes) s += T_(m.l, 54, `chaussée ${fr(rw0.y2 - rw0.y1)} m → ${lanes.n} voie${lanes.n > 1 ? 's' : ''} EN 1991-2 de ${fr(lanes.wl)} m${lanes.wr > 0.01 ? ` + ${fr(lanes.wr)} m résiduel` : ''}${classe ? ` ; pont de classe ${classe} (Fasc. 61)` : ''} — échelle verticale amplifiée`, 'start', 'font-size="11"');
   // charges : bandes tramées au-dessus de la chaussée, flèches des charges linéiques
   s += '<g data-k="bands">';
   bands.forEach((bd, i) => {
-    const X1 = Y(bd.y1), X2 = Y(bd.y2), yb = Zs(0) - 62 - 16 * i;
+    const X1 = Y(bd.y1), X2 = Y(bd.y2), yb = Zs(0) - 62 - up - 16 * i;
     s += `<rect x="${X1.toFixed(1)}" y="${yb.toFixed(1)}" width="${(X2 - X1).toFixed(1)}" height="8" fill="url(#g89sol)" stroke="${INK}" stroke-width="${THIN}"/>`;
     s += T_((X1 + X2) / 2, yb - 3, `q = ${fr(bd.q)} kN/m² sur [${fr(bd.y1)} ; ${fr(bd.y2)}]${bd.kmin !== 1 || bd.kmax !== 1 ? ` (k ${bd.kmin}/${bd.kmax})` : ''}`, 'middle', 'font-size="10"');
   });
   s += '</g>';
-  const yL0 = Zs(0) - 62 - 16 * bands.length - 10;
+  const yL0 = Zs(0) - 62 - up - 16 * bands.length - 10;
   s += '<g data-k="lines">';
   for (const lb of labs) {
     const yl = yL0 - lb.level * 16;
@@ -193,7 +237,7 @@ export function guideCrossSectionSVG(g, opt = {}) {
   s += '</g>';
   }
   s += '<g data-k="roadway">';
-  if (lanes && rw0) for (let i = 1; i <= lanes.n; i++) { if (i === lanes.n && lanes.wr <= 0.01) break; const X = Y(rw0.y1 + i * lanes.wl); s += L_(X, Zs(0) - 10, X, Zs(0) - 2, THIN, 'stroke-dasharray="2 2"'); }
+  if (lanes && rw0 && !R) for (let i = 1; i <= lanes.n; i++) { if (i === lanes.n && lanes.wr <= 0.01) break; const X = Y(rw0.y1 + i * lanes.wl); s += L_(X, Zs(0) - 10, X, Zs(0) - 2, THIN, 'stroke-dasharray="2 2"'); }
   s += '</g>';
   s += '<g data-k="width h area">';
   // dalle et encorbellements tramés
@@ -231,7 +275,7 @@ export function guideCrossSectionSVG(g, opt = {}) {
   }
   s += '<g data-k="roadway tRev">';
   // chaussée : revêtement et dévers (flèches du guide)
-  const rw = g.roadway;
+  const rw = R ? null : g.roadway;
   if (rw) {
     const x1 = Y(rw.y1), x2 = Y(rw.y2), yr = Zs(0) - 4;
     s += L_(x1, yr, (x1 + x2) / 2, yr - 3, MED); s += L_((x1 + x2) / 2, yr - 3, x2, yr, MED);
@@ -241,6 +285,7 @@ export function guideCrossSectionSVG(g, opt = {}) {
     s += coteH(x1, x2, Zs(h) + (ch ? 48 : 26), `chaussée ${fr(rw.y2 - rw.y1)} m`);
   s += '</g>';
   }
+  if (R) s += '</g>' + voiesFerrees(R, { Y, Zs, h, b });
   // appareils d'appui
   const nb = g.nBearings || Math.max(2, Math.round(g.width / 3)), e0 = Math.min(1, b / 3), pitch = nb > 1 ? (2 * b - 2 * e0) / (nb - 1) : 0;
   s += '<g data-k="nBearings">';
@@ -253,5 +298,7 @@ export function guideCrossSectionSVG(g, opt = {}) {
   s += K('h', coteV(Y(b) + 26, Zs(0), Zs(h), `${fr(h, 2)} m`));
   s += K('width', coteH(Y(-b), Y(b), Zs(h) + (ch ? 74 : 52), `2b = ${fr(g.width)} m`));
   if (opt.caption) s += T_(W / 2, H - 6, opt.caption, 'middle', 'font-style="italic" font-size="11"');
+  // pont-rail : groupes restés ouverts (charges linéiques ou trottoirs absents) refermés, pour un SVG bien formé (note Word)
+  if (R) { const n = (s.match(/<g[\s>]/g) || []).length - (s.match(/<\/g>/g) || []).length; s += '</g>'.repeat(Math.max(0, n)); }
   return s + '</svg>';
 }

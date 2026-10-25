@@ -56,7 +56,7 @@ export function elevationSVG(deck, keys) {
  * sélectionné (roues TS, files Bc/Bt, chenilles Mc120, bande D240), ordonnées de calcul.
  * @param {object} opt { deck, loads:[{kind:'wheel'|'band', e1,e2, label, color}], title, lanesLabel }
  */
-export function crossSectionSVG({ deck, loads = [], title = 'Coupe transversale', note = '' }) {
+export function crossSectionSVG({ deck, loads = [], title = 'Coupe transversale', note = '', rail = null }) {
   const b = deck.b, h = deck.h;
   const W = 1000, H = 300, m = { l: 50, r: 50 };
   const sy = y => m.l + (y + b) / (2 * b) * (W - m.l - m.r);
@@ -71,8 +71,8 @@ export function crossSectionSVG({ deck, loads = [], title = 'Coupe transversale'
   for (const fw of deck.g.footways || []) {
     s += `<rect x="${sy(fw.y1)}" y="${yTop - 10}" width="${sy(fw.y2) - sy(fw.y1)}" height="10" fill="var(--footway, #c7ccd6)" stroke="currentColor" stroke-width="0.8"/>`;
   }
-  // chaussée
-  s += `<rect x="${sy(y1)}" y="${yTop - 4}" width="${sy(y2) - sy(y1)}" height="4" fill="var(--road, #4d5566)"/>`;
+  // chaussée (pont-route) ; pont-dalle sous rail : pas de chaussée
+  if (!rail) s += `<rect x="${sy(y1)}" y="${yTop - 4}" width="${sy(y2) - sy(y1)}" height="4" fill="var(--road, #4d5566)"/>`;
   // dalle
   s += `<rect x="${sy(-b)}" y="${yTop}" width="${sy(b) - sy(-b)}" height="${hPx}" fill="var(--slab, #9aa5b8)" stroke="currentColor" stroke-width="1.2"/>`;
   // charges permanentes linéiques (flèches)
@@ -107,7 +107,7 @@ export function crossSectionSVG({ deck, loads = [], title = 'Coupe transversale'
     s += `<line x1="${X}" y1="${yAx - 4}" x2="${X}" y2="${yAx + 4}" stroke="currentColor" stroke-width="0.8"/>`;
     s += `<text x="${X}" y="${yAx + 18}" text-anchor="middle">${f2(y)}</text>`;
   }
-  s += `<text x="${sy(0)}" y="${yAx + 36}" text-anchor="middle" opacity="0.75">y [m] — largeur 2b = ${f2(2 * b)} m, chaussée ${f2(y2 - y1)} m</text>`;
+  s += `<text x="${sy(0)}" y="${yAx + 36}" text-anchor="middle" opacity="0.75">y [m] — largeur 2b = ${f2(2 * b)} m, ${rail ? `${rail.nV} voie${rail.nV > 1 ? 's' : ''} ferrée${rail.nV > 1 ? 's' : ''} (axes y = ${rail.voies.map(f2).join(' et ')} m)` : `chaussée ${f2(y2 - y1)} m`}</text>`;
   s += `<defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>`;
   s += `</svg>`;
   return s;

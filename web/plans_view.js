@@ -71,6 +71,7 @@ export function renderPlans(st) {
   if (dispo.includes(prev)) sel.value = prev;
   const msg = [];
   if (!dispo.includes('ferraillage')) msg.push('Dalle précontrainte ou ferraillage indisponible : seul le plan de coffrage du tablier est proposé (le câblage et les aciers passifs sont dans l\'onglet Précontrainte).');
+  if (st.rail) msg.push('<span class="badge warn">PONT-RAIL</span> Les plans de coffrage, d\'ensemble et d\'équipements sont établis pour un tablier routier (chaussée, trottoirs, joints de chaussée, dispositifs de retenue, gargouilles) : à adapter à la voie ferrée (ballast, garde-ballast, caniveaux, pistes) ; le plan de ferraillage du tablier reste valable.');
   if (!dispo.some(k => k.startsWith('appui-'))) msg.push('Plans des appuis : calcul des appuis indisponible (voir l\'onglet Appuis et fondations).');
   $('#plans-info').innerHTML = msg.join(' ');
   infoEquipements(st);

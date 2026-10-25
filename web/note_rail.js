@@ -5,6 +5,7 @@
  * norme n'est reproduit.
  */
 import { MENTION, PARAMETRES_REFERENTIEL } from '../src/loads_rail.js';
+import { guideCrossSectionSVG } from './guide_schema.js';
 
 const F = (v, n = 1) => (v === null || v === undefined || !isFinite(v) ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: n, maximumFractionDigits: n }));
 const F0 = v => F(v, 0), F1 = v => F(v, 1), F2 = v => F(v, 2), F3 = v => F(v, 3);
@@ -120,6 +121,10 @@ export function buildNoteRail(st, { figures = {}, project = {} } = {}) {
     ['Béton ; acier', `C${dz.mat.fck} (f_cd = ${F2(dz.mat.fcd)} MPa) ; B${dz.mat.fyk} (f_yd = ${F0(dz.mat.fyd)} MPa)`],
     ['Enrobage à l\'axe ; w_k max', `${F3(p.mat.c)} m ; ${F2(p.mat.wkMax)} mm`],
   ], { texte: true });
+  try {
+    const gg = { ...g, spans: deck.spans, h: deck.h, width: 2 * deck.b, lines: g.lines || [], bands: g.bands || [], ys: g.ys || [], footways: g.footways || [], rail: p.rail };
+    B.push({ t: 'svg', svg: guideCrossSectionSVG(gg), caption: 'Coupe transversale : dalle, voies ferrées (rails, traverses, ballast), diffusion 4:1 puis 45° et bande chargée au feuillet moyen, charges permanentes' });
+  } catch (e) { /* schéma non disponible */ }
   comment('Dalle remplacée par un rectangle équivalent de largeur 2b (Guyon-Massonnet, dalle isotrope), poutre continue à inertie constante pour la flexion longitudinale.');
   h2('Charges permanentes');
   table(['Charge permanente', 'q nominale [kN/m]', 'k min', 'k max'], deck.permanentFiles().map(f => [f.label, F2(f.q), F2(f.kmin), F2(f.kmax)]));
