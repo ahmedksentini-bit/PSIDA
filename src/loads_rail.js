@@ -6,8 +6,9 @@
  * Toutes les valeurs sont les VALEURS RECOMMANDÉES de l'EN 1991-2 et de l'EN 1990 annexe A2 ; elles sont modifiables
  * (paramètres de chaque fonction) et doivent être confirmées par le référentiel du gestionnaire du réseau (annexe
  * nationale, spécification de ligne). Chaque constante porte sa source :
- *  - [EN]   valeur vérifiée sur l'EN 1991-2 / l'EN 1990 A2, ou sur un texte qui la reproduit (UIC 776-1, 5ᵉ éd. 2006,
- *           dont la section 6 de l'EN 1991-2 est issue ; corrigendum EN 1990/A1/AC) ;
+ *  - [EN]   valeur vérifiée sur la NF EN 1991-2 (relue tableau par tableau pour la section 6) / l'EN 1990 A2, ou sur un texte
+ *           qui la reproduit (UIC 776-1, 5ᵉ éd. 2006, dont la section 6 de l'EN 1991-2 est issue ; corrigendum
+ *           EN 1990/A1/AC) ;
  *  - [À CONFIRMER] valeur reprise de la norme sans qu'un texte accessible ait permis de la recouper ici : à relire sur
  *           l'exemplaire de la norme avant toute production (signalée dans `A_CONFIRMER`).
  */
@@ -168,17 +169,31 @@ export function forceCentrifuge({ V, r, f = 1, Qv = 0, qv = 0 }) {
 }
 
 /**
- * Cas de charge de la force centrifuge selon α et la vitesse de ligne (6.5.1(5)-(10), tableau 6.7) [À CONFIRMER] :
- *  - V ≤ 120 km/h : V, α, f = 1 ;
- *  - V > 120 km/h et α > 1 : (a) V, α = 1, f ; (b) 120 km/h, α, f = 1 ;
- *  - V > 120 km/h et α ≤ 1 : V, α, f.
- * Chaque cas porte le multiplicateur de la charge verticale associée (α·f) ; Φ s'applique à la verticale seulement.
+ * Cas de charge de la force centrifuge selon α et la vitesse maximale de ligne (6.5.1(6)-(7), tableau 6.8) [EN, relu sur
+ * la NF EN 1991-2] — LM71 et SW/0 :
+ *  - V > 120 km/h, quel que soit α :
+ *      (7)b  force centrifuge à V, α = 1 (note c : la réduction de masse est déjà dans f), f = f(V, Lf) ;
+ *            charge verticale associée Φ · min(α, 1) · LM71 ;
+ *      (7)a  force centrifuge à 120 km/h, α, f = 1 ; charge verticale associée Φ · α · LM71 ;
+ *  - V ≤ 120 km/h : force centrifuge à V, α, f = 1 ; verticale Φ · α · LM71 ;
+ *  - et toujours (6) : la charge verticale seule, sans force centrifuge (V = 0).
+ * Champs : `V`, `alpha` et `f` de la force centrifuge (Qtk = V²/(127 r) · f · alpha · Qvk) ; `verticale` = α de la charge
+ * verticale associée (Φ en plus). Note a du tableau : 0,5 · (LM71 + SW/0) au lieu de (LM71 + SW/0) quand la charge
+ * verticale est favorable — `verticaleFavorable`. Pour α > 1 et V > 120 km/h, le tableau vise un trafic marchandises
+ * lourd limité à 120 km/h (note b) : au-delà, exigences complémentaires (6.5.1(10)), signalées par `horsDomaine`.
+ * SW/2 : f = 1, sans α ; vitesse maximale alternative admise, 80 km/h recommandé (6.5.1(5) note 2).
  */
-export function casCentrifuge(Vmax, alpha = 1, Lf = Infinity) {
-  if (Vmax <= 120) return [{ V: Vmax, alpha, f: 1, verticale: alpha }];
-  const f = facteurF(Vmax, Lf);
-  if (alpha > 1) return [{ V: Vmax, alpha: 1, f, verticale: f }, { V: 120, alpha, f: 1, verticale: alpha }];
-  return [{ V: Vmax, alpha, f, verticale: alpha * f }];
+export function casCentrifuge(Vmax, alpha = 1, Lf = Infinity, { modele = 'LM71', VSW2 = 80 } = {}) {
+  const sans = { V: 0, alpha: 0, f: 0, sansCentrifuge: true, ref: '6.5.1(6)' };
+  if (modele === 'SW/2') return [{ V: VSW2, alpha: 1, f: 1, verticale: 1, verticaleFavorable: 0.5, ref: '6.5.1(5) note 2' }, { ...sans, verticale: 1, verticaleFavorable: 0.5 }];
+  const fav = a => 0.5 * a;
+  if (Vmax <= 120) return [{ V: Vmax, alpha, f: 1, verticale: alpha, verticaleFavorable: fav(alpha), ref: 'tableau 6.8, V ≤ 120' }, { ...sans, verticale: alpha, verticaleFavorable: fav(alpha) }];
+  const f = facteurF(Vmax, Lf), av = Math.min(alpha, 1);
+  return [
+    { V: Vmax, alpha: 1, f, verticale: av, verticaleFavorable: fav(av), ref: '6.5.1(7)b', horsDomaine: alpha > 1 },
+    { V: 120, alpha, f: 1, verticale: alpha, verticaleFavorable: fav(alpha), ref: '6.5.1(7)a' },
+    { ...sans, verticale: alpha, verticaleFavorable: fav(alpha) },
+  ];
 }
 
 /**
@@ -202,38 +217,46 @@ export function demarrageFreinage(Lab, { modele = 'LM71', alpha = 1 } = {}) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Groupes de charges (EN 1991-2, tableau 6.11) [À CONFIRMER] et coefficients de l'EN 1990, annexe A2
+// Groupes de charges (EN 1991-2, tableau 6.11) et coefficients de l'EN 1990, annexe A2
 // ---------------------------------------------------------------------------------------------------------------------
 
 /**
- * Groupes de charges pour une voie chargée (gr11-gr17) ; pour deux voies, gr21-gr27 appliquent les mêmes coefficients
- * sur chacune des deux voies ; pour trois voies et plus, gr31 applique 0,75 à toutes les composantes de toutes les voies.
- * `vert` : modèle vertical et coefficient ; `lf` démarrage/freinage ; `cf` centrifuge ; `lac` lacet.
- * Notes du tableau : (4) le coefficient vertical de gr13/gr14 peut descendre à 0,5 s'il est favorable, jamais à 0 ;
- * (5) les composantes non dominantes (≠ 1) sont prises nulles quand elles sont favorables.
+ * Groupes de charges (EN 1991-2, tableau 6.11) [EN, relu sur la NF EN 1991-2]. Une voie chargée : gr11-gr17 ; deux voies
+ * chargées : gr21-gr27, mêmes coefficients sur chacune des deux voies T1 et T2 (gr26/gr27 : SW/2 sur T1, LM71 sur T2) ;
+ * trois voies et plus : gr31 = 0,75 sur toutes les composantes de toutes les voies, cas complémentaire.
+ * `vert` : modèle vertical et coefficient ; `lf` démarrage/freinage ; `cf` centrifuge ; `lac` lacet ; `dom` : composantes
+ * dominantes (cases grisées du tableau).
+ * Notes du tableau : (4) le coefficient vertical de gr13, gr14, gr23, gr24 peut être réduit à 0,5 si l'effet est
+ * favorable, jamais à 0 ; (5) dans les cas favorables, les composantes NON DOMINANTES peuvent être prises nulles — y
+ * compris celles qui valent 1 (par exemple le freinage de gr11 ou le lacet de gr12).
  */
 export const GROUPES_1V = {
-  gr11: { vert: { modele: 'LM71', k: 1 }, lf: 1, cf: 0.5, lac: 0.5, libelle: 'Vertical max 1 avec longitudinal max' },
-  gr12: { vert: { modele: 'LM71', k: 1 }, lf: 0.5, cf: 1, lac: 1, libelle: 'Vertical max 2 avec transversal max' },
-  gr13: { vert: { modele: 'LM71', k: 1, kFavorable: 0.5 }, lf: 1, cf: 0.5, lac: 0.5, libelle: 'Longitudinal max' },
-  gr14: { vert: { modele: 'LM71', k: 1, kFavorable: 0.5 }, lf: 0.5, cf: 1, lac: 1, libelle: 'Transversal max' },
-  gr15: { vert: { modele: 'train_vide', k: 1 }, lf: 0, cf: 1, lac: 1, libelle: 'Stabilité transversale avec train à vide' },
-  gr16: { vert: { modele: 'SW/2', k: 1 }, lf: 1, cf: 0.5, lac: 0.5, libelle: 'SW/2 avec longitudinal max' },
-  gr17: { vert: { modele: 'SW/2', k: 1 }, lf: 0.5, cf: 1, lac: 1, libelle: 'SW/2 avec transversal max' },
+  gr11: { vert: { modele: 'LM71', k: 1 }, lf: 1, cf: 0.5, lac: 0.5, dom: ['vertical'], libelle: 'Vertical max 1 avec longitudinal max' },
+  gr12: { vert: { modele: 'LM71', k: 1 }, lf: 0.5, cf: 1, lac: 1, dom: ['vertical'], libelle: 'Vertical max 2 avec transversal max' },
+  gr13: { vert: { modele: 'LM71', k: 1, kFavorable: 0.5 }, lf: 1, cf: 0.5, lac: 0.5, dom: ['longitudinal'], libelle: 'Longitudinal max' },
+  gr14: { vert: { modele: 'LM71', k: 1, kFavorable: 0.5 }, lf: 0.5, cf: 1, lac: 1, dom: ['centrifuge', 'lacet'], libelle: 'Transversal max' },
+  gr15: { vert: { modele: 'train_vide', k: 1 }, lf: 0, cf: 1, lac: 1, dom: ['vertical'], libelle: 'Stabilité transversale avec train à vide' },
+  gr16: { vert: { modele: 'SW/2', k: 1 }, lf: 1, cf: 0.5, lac: 0.5, dom: ['vertical'], libelle: 'SW/2 avec longitudinal max' },
+  gr17: { vert: { modele: 'SW/2', k: 1 }, lf: 0.5, cf: 1, lac: 1, dom: ['vertical'], libelle: 'SW/2 avec transversal max' },
 };
 
-/** Liste des groupes applicables : nbVoies (1, 2 ou ≥ 3), SW/2 requis, train à vide (tabliers à une voie seulement). */
-export function groupesApplicables({ nbVoies = 1, sw2 = false, trainVide = nbVoies === 1 } = {}) {
-  const base = Object.entries(GROUPES_1V).filter(([id]) => (sw2 || !['gr16', 'gr17'].includes(id)) && (trainVide || id !== 'gr15'));
-  const out = [];
-  if (nbVoies <= 1) for (const [id, g] of base) out.push({ id, voies: 1, ...g });
-  else {
-    // deux voies chargées : gr21-gr24 = LM71 sur les deux voies ; gr26/gr27 = SW/2 sur une voie, LM71 sur l'autre
-    for (const [id, g] of base) if (id !== 'gr15') {
+/**
+ * Groupes à considérer selon le nombre de voies portées par l'ouvrage (légende du tableau 6.11) :
+ *  - une voie : gr11 à gr17 ;
+ *  - deux voies : gr11 à gr27 sauf gr15 — chacune des deux voies tour à tour T1 (une voie chargée) ou T2 ;
+ *  - trois voies et plus : gr11 à gr31 sauf gr15 — chaque voie tour à tour T1, une autre T2, les autres non chargées ;
+ *    gr31 en cas complémentaire, toutes les longueurs défavorables de chaque voie chargées.
+ * Le train à vide (gr15) ne concerne que les ouvrages à une voie ; gr16, gr17, gr26, gr27 seulement si SW/2 est requis.
+ */
+export function groupesApplicables({ nbVoies = 1, sw2 = false, trainVide = true } = {}) {
+  const base = Object.entries(GROUPES_1V).filter(([id]) => (sw2 || !['gr16', 'gr17'].includes(id)) && (id !== 'gr15' || (trainVide && nbVoies <= 1)));
+  const out = base.map(([id, g]) => ({ id, voies: 1, ...g }));
+  if (nbVoies >= 2) {
+    for (const [id, g] of base) {
       const v = g.vert.modele === 'SW/2' ? { ...g.vert, autreVoie: 'LM71' } : g.vert;
       out.push({ id: id.replace('gr1', 'gr2'), voies: 2, ...g, vert: v });
     }
-    if (nbVoies >= 3) out.push({ id: 'gr31', voies: nbVoies, vert: { modele: 'LM71', k: 0.75 }, lf: 0.75, cf: 0.75, lac: 0.75, libelle: 'Cas complémentaires (≥ 3 voies)' });
+    if (nbVoies >= 3) out.push({ id: 'gr31', voies: nbVoies, vert: { modele: 'LM71', k: 0.75 }, lf: 0.75, cf: 0.75, lac: 0.75, dom: ['vertical'], libelle: 'Cas complémentaire (≥ 3 voies)' });
   }
   return out;
 }
@@ -245,7 +268,8 @@ export function groupesApplicables({ nbVoies = 1, sw2 = false, trainVide = nbVoi
  */
 export function valeurGroupe(groupe, effets, favorable = {}) {
   const kv = favorable.vertical ? (groupe.vert.kFavorable ?? groupe.vert.k) : groupe.vert.k;
-  const k = (c, x) => (favorable[c] && x !== 1 ? 0 : x);
+  const dom = groupe.dom || [];
+  const k = (c, x) => (favorable[c] && !dom.includes(c) ? 0 : x);
   const detail = {
     vertical: kv * (effets.vertical || 0),
     longitudinal: k('longitudinal', groupe.lf) * (effets.longitudinal || 0),
@@ -288,8 +312,6 @@ export function psi(action, nbVoies = 1) {
 
 /** Valeurs reprises sans recoupement d'un texte accessible : à relire sur l'exemplaire de la norme. */
 export const A_CONFIRMER = [
-  'EN 1991-2, tableau 6.11 : coefficients des groupes gr11 à gr31 et leurs notes (4) et (5).',
-  'EN 1991-2, 6.5.1 et tableau 6.7 : cas de charge de la force centrifuge selon α et la vitesse (α > 1 et V > 120 km/h).',
   'EN 1990, tableau A2.3 : coefficients ψ0 et ψ2 des groupes et des composantes isolées.',
   'Hauteur d\'application de la force centrifuge (1,80 m) et α : paramètres d\'annexe nationale.',
 ];

@@ -77,11 +77,22 @@ test('Force centrifuge et coefficient f', () => {
   const c = R.forceCentrifuge({ V: 100, r: 600, Qv: 250, qv: 80 });
   proche(c.Qt, 32.808); proche(c.qt, 10.499); assert.equal(c.hauteur, 1.8);
   assert.equal(R.forceCentrifuge({ V: 100, r: 0, Qv: 250 }).Qt, 0);
-  // cas de charge : α > 1 et V > 120 → deux cas
-  const k = R.casCentrifuge(160, 1.33, 150);
-  assert.equal(k.length, 2); assert.equal(k[0].alpha, 1); proche(k[0].f, 0.7644, 1e-4); assert.deepEqual([k[1].V, k[1].f], [120, 1]);
-  assert.equal(R.casCentrifuge(100, 1.33).length, 1);
-  proche(R.casCentrifuge(160, 0.91, 150)[0].verticale, 0.91 * 0.7644, 1e-4);
+  // tableau 6.7 (NF EN 1991-2) : f lu dans le tableau, au centième
+  for (const [V, Lf, t] of [[160, 10, 0.87], [200, 10, 0.78], [250, 20, 0.60], [300, 6, 0.75], [200, 100, 0.61], [300, 50, 0.39], [250, 150, 0.44]])
+    proche(R.facteurF(V, Lf), t, 0.006);
+  // tableau 6.8 : V > 120 km/h → (7)b à V avec α = 1 et f, (7)a à 120 km/h avec α et f = 1, et le cas sans centrifuge
+  let k = R.casCentrifuge(160, 1.33, 150);
+  assert.equal(k.length, 3);
+  assert.deepEqual([k[0].V, k[0].alpha, k[0].verticale], [160, 1, 1]); proche(k[0].f, 0.7644, 1e-4); assert.ok(k[0].horsDomaine);
+  assert.deepEqual([k[1].V, k[1].alpha, k[1].f, k[1].verticale], [120, 1.33, 1, 1.33]);
+  assert.ok(k[2].sansCentrifuge); assert.equal(k[2].verticale, 1.33);
+  k = R.casCentrifuge(160, 0.91, 150);   // α < 1 : centrifuge à V avec α = 1 (note c), verticale associée α
+  assert.deepEqual([k[0].alpha, k[0].verticale, k[0].verticaleFavorable], [1, 0.91, 0.455]); assert.ok(!k[0].horsDomaine);
+  assert.deepEqual([k[1].V, k[1].alpha], [120, 0.91]);
+  k = R.casCentrifuge(100, 1.33);
+  assert.equal(k.length, 2); assert.deepEqual([k[0].V, k[0].alpha, k[0].f], [100, 1.33, 1]);
+  k = R.casCentrifuge(160, 1.33, 150, { modele: 'SW/2' });
+  assert.deepEqual([k[0].V, k[0].alpha, k[0].f], [80, 1, 1]);
 });
 
 test('Lacet, démarrage et freinage', () => {
@@ -101,21 +112,28 @@ test('Groupes de charges, γ et ψ', () => {
   assert.deepEqual(g1.map(g => g.id), ['gr11', 'gr12', 'gr13', 'gr14', 'gr15']);
   assert.ok(R.groupesApplicables({ nbVoies: 1, sw2: true }).some(g => g.id === 'gr17'));
   const g2 = R.groupesApplicables({ nbVoies: 2, sw2: true });
-  assert.deepEqual(g2.map(g => g.id), ['gr21', 'gr22', 'gr23', 'gr24', 'gr26', 'gr27']);
+  // deux voies : gr11 à gr27 sauf gr15 (légende du tableau 6.11)
+  assert.deepEqual(g2.map(g => g.id), ['gr11', 'gr12', 'gr13', 'gr14', 'gr16', 'gr17', 'gr21', 'gr22', 'gr23', 'gr24', 'gr26', 'gr27']);
   assert.equal(g2.find(g => g.id === 'gr26').vert.autreVoie, 'LM71');
-  assert.equal(R.groupesApplicables({ nbVoies: 3 }).at(-1).id, 'gr31');
+  const g3 = R.groupesApplicables({ nbVoies: 3 });
+  assert.equal(g3.at(-1).id, 'gr31'); assert.ok(!g3.some(g => g.id === 'gr15')); assert.ok(g3.some(g => g.id === 'gr11'));
   const eff = { vertical: 1000, longitudinal: 200, centrifuge: 80, lacet: 30 };
   const gr11 = g1[0], gr13 = g1[2];
   proche(R.valeurGroupe(gr11, eff).total, 1000 + 200 + 40 + 15);
   // vertical favorable : gr13 → 0,5 ; composantes non dominantes favorables → 0
   proche(R.valeurGroupe(gr13, eff, { vertical: true, centrifuge: true }).total, 500 + 200 + 0 + 15);
   proche(R.valeurGroupe(gr11, eff, { vertical: true }).total, 1255);  // gr11 : pas de réduction du vertical
+  // note (5) : le freinage de gr11 vaut 1 mais n'est pas dominant → nul s'il est favorable ; celui de gr13 est dominant
+  proche(R.valeurGroupe(gr11, eff, { longitudinal: true }).total, 1000 + 0 + 40 + 15);
+  proche(R.valeurGroupe(gr13, eff, { longitudinal: true }).total, 1000 + 200 + 40 + 15);
+  const gr14 = g1[3];
+  proche(R.valeurGroupe(gr14, eff, { centrifuge: true, lacet: true, longitudinal: true }).total, 1000 + 0 + 80 + 30);
   assert.equal(R.gammaGroupe('gr11'), 1.45); assert.equal(R.gammaGroupe('gr27'), 1.20);
   assert.equal(R.GAMMA['SW/2'], 1.20); assert.equal(R.GAMMA.autres, 1.50);
   assert.deepEqual(R.psi('gr11'), { psi0: 0.8, psi1: 0.8, psi2: 0 });
   assert.equal(R.psi('gr24').psi1, 0.7); assert.equal(R.psi('gr31').psi1, 0.6);
   assert.equal(R.psi('LM71', 3).psi1, 0.6); assert.equal(R.psi('SW/2').psi0, 0);
-  assert.ok(R.A_CONFIRMER.length >= 3);
+  assert.ok(R.A_CONFIRMER.some(x => /A2\.3/.test(x)));
   assert.match(R.notesReferentiel({ alpha: 1 })[0], /gestionnaire du réseau/);
 });
 
