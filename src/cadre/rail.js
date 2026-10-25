@@ -15,26 +15,20 @@
  *    1,00 à l'ELS (combinaison caractéristique).
  * Diffusion (HYPOTHÈSES, à adapter au référentiel du gestionnaire du réseau) : traverse de voie de longueur ℓt (2,60 m),
  * 4:1 dans le ballast sous traverse, 2:1 dans le remblai, 1:1 dans la traverse de l'ouvrage jusqu'à son feuillet moyen.
- * Unités du module cadre : m, t, t/m² (1 t = 10 kN).
+ * Unités du module cadre : m, t, t/m² (1 t = 10 kN). Constantes et Φ : socle commun src/loads_rail.js.
  */
 import * as C from './cadre.js';
 
-export const ALPHAS = [0.75, 0.83, 0.91, 1.00, 1.10, 1.21, 1.33, 1.46];
-export const LM71 = { P: 250, n: 4, a: 1.6, qv: 80 };             // kN, m, kN/m
-export const SW = { 'SW/0': { q: 133, a: 15, c: 5.3 }, 'SW/2': { q: 150, a: 25, c: 7.0 } };
-export const GAMMA_RAIL = { LM71: 1.45, 'SW/0': 1.45, 'SW/2': 1.20 };
+import { ALPHAS, LM71, SW, phi2, phi3, reductionCouverture, kContinu, GAMMA, sw as modeleSW } from '../loads_rail.js';
+
+export { ALPHAS, LM71, SW, phi2, phi3, reductionCouverture };
+export const GAMMA_RAIL = { LM71: GAMMA.LM71, 'SW/0': GAMMA['SW/0'], 'SW/2': GAMMA['SW/2'] };
 export const KN_PAR_T = 10;
 
 export const RAIL_DEFAUT = {
   alpha: 1.00, entretien: 'normal', longueurTraverse: 2.60, ballast: 0.30, hTraverseVoie: 0.22,
   sw0: true, sw2: false, LPhi: 0, pente: { ballast: 4, remblai: 2 },
 };
-
-/** Φ2 (entretien soigné) et Φ3 (entretien normal), EN 1991-2 (6.4) et (6.5). */
-export const phi2 = L => Math.min(Math.max(1.44 / (Math.sqrt(L) - 0.2) + 0.82, 1.00), 1.67);
-export const phi3 = L => Math.min(Math.max(2.16 / (Math.sqrt(L) - 0.2) + 0.73, 1.00), 2.00);
-export const reductionCouverture = (phi, h) => h > 1.0 ? Math.max(phi - (h - 1.0) / 10, 1.0) : phi;
-const kContinu = m => m <= 1 ? 1.0 : m === 2 ? 1.2 : m === 3 ? 1.3 : m === 4 ? 1.4 : 1.5;
 
 /** Longueur déterminante LΦ d'un cadre (tableau 6.2 : cadre fermé = poutre continue sur ses barres ; portique = 3 travées). */
 export function longueurDeterminante(g, ouvert = false) {
@@ -98,16 +92,17 @@ export function chargesFerroviaires(geom, g, rIn = {}, ouvert = false) {
   const { sL, bt } = diffusionRail(r, geom.Hr, geom.et), Ltot = C.largeurCalc(g), a = r.alpha;
   const lBloc = LM71.n * LM71.a + sL;
   const q4 = a * LM71.n * LM71.P / lBloc / bt / KN_PAR_T * phi, qv = a * LM71.qv / bt / KN_PAR_T * phi;
-  const sw = Object.fromEntries(Object.entries(SW).map(([k, s]) => [k, { ...s, qt: a * s.q / bt / KN_PAR_T * phi, l: s.a + sL }]));
+  // α s'applique à SW/0, pas à SW/2 (EN 1991-2, 6.3.2(4))
+  const sw = Object.fromEntries(Object.entries(SW).map(([k, s]) => [k, { ...s, qt: modeleSW(k, a).q / bt / KN_PAR_T * phi, l: s.a + sL }]));
   // Surcharge sur remblai (6.3.6.4) : LM71 ou SW/2 répartis sur 3,00 m, sans Φ. LM71 : 4 × 250 kN sur 6,40 m.
-  const qRemblaiLM = a * LM71.n * LM71.P / (LM71.n * LM71.a) / 3.0 / KN_PAR_T, qRemblaiSW2 = a * SW['SW/2'].q / 3.0 / KN_PAR_T;
+  const qRemblaiLM = a * LM71.n * LM71.P / (LM71.n * LM71.a) / 3.0 / KN_PAR_T, qRemblaiSW2 = SW['SW/2'].q / 3.0 / KN_PAR_T;
   const psrem = r.sw2 ? Math.max(qRemblaiLM, qRemblaiSW2) : qRemblaiLM;
 
   const fr = (x, d = 2) => x.toFixed(d).replace('.', ',');
   const derivations = [
     { sys: 'LM71', empreinte: `4 essieux de ${fr(a * LM71.P, 0)} kN (α = ${fr(a)}) espacés de 1,60 m → ${fr(a * LM71.P / LM71.a, 1)} kN/m sur 6,40 m, et ${fr(a * LM71.qv, 1)} kN/m au-delà`, H: geom.Hr, e: geom.et, pente: r.pente.remblai, s: sL, U: bt, V: lBloc, qBrute: q4 / phi, delta: phi, coef: 1, q: q4, portee: C.portee(g, 0), couverture: lBloc / C.portee(g, 0) },
     ...(r.sw0 && geom.n >= 1 ? [{ sys: 'SW/0', empreinte: `${fr(a * 133, 1)} kN/m sur 2 × 15 m séparés de 5,30 m`, H: geom.Hr, e: geom.et, pente: r.pente.remblai, s: sL, U: bt, V: sw['SW/0'].l, qBrute: sw['SW/0'].qt / phi, delta: phi, coef: 1, q: sw['SW/0'].qt, portee: C.portee(g, 0), couverture: Infinity }] : []),
-    ...(r.sw2 ? [{ sys: 'SW/2', empreinte: `${fr(a * 150, 1)} kN/m sur 2 × 25 m séparés de 7,00 m`, H: geom.Hr, e: geom.et, pente: r.pente.remblai, s: sL, U: bt, V: sw['SW/2'].l, qBrute: sw['SW/2'].qt / phi, delta: phi, coef: 1, q: sw['SW/2'].qt, portee: C.portee(g, 0), couverture: Infinity }] : []),
+    ...(r.sw2 ? [{ sys: 'SW/2', empreinte: '150 kN/m (sans α) sur 2 × 25 m séparés de 7,00 m', H: geom.Hr, e: geom.et, pente: r.pente.remblai, s: sL, U: bt, V: sw['SW/2'].l, qBrute: sw['SW/2'].qt / phi, delta: phi, coef: 1, q: sw['SW/2'].qt, portee: C.portee(g, 0), couverture: Infinity }] : []),
   ];
 
   /** Systèmes pour un schéma de travées chargées (la part uniforme qv de LM71 suit le schéma, le groupe d'essieux se déplace). */

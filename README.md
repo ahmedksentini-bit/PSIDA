@@ -587,3 +587,11 @@ de reprise en reprise (α L au-delà des piles), décintrement et mise en tensio
 couplées aux reprises ; calcul par phases (fluage, retrait, relaxation, frottement, recul) comparé à l'ouvrage coulé d'une
 traite ; béton armé : décintrement par phase ou unique ; reprises et coupleurs (EN 1992-2 § 8.10.4 (105) : 3 MPa de
 compression sous combinaison caractéristique ou ferraillage minimal (7.1)). Manuel § 28.21.
+En cours — ponts-rails, lot 1 : socle commun des charges ferroviaires (src/loads_rail.js, unités kN, m, km/h) — LM71 et α,
+SW/0 (avec α), SW/2 (sans α), train à vide 10 kN/m, excentrement r/18, répartition 1/4-1/2-1/4 sous traverses et diffusion
+4:1 dans le ballast, surcharge sur remblai (3,00 m à 0,70 m), Φ2/Φ3 et réduction de couverture, longueur déterminante LΦ
+(tableau 6.2 : isostatique, continue k·Lm, arcs, dalles, consoles, abouts, appuis), force centrifuge et coefficient f
+(plancher 0,35), effort de lacet, démarrage et freinage, groupes gr11 à gr31, γ (EN 1990 tableau A2.4(B)) et ψ (tableau
+A2.3). Valeurs recommandées de l'EN 1991-2 — à confirmer par le référentiel du gestionnaire du réseau ; les valeurs non
+recoupées sur un texte accessible sont listées dans `A_CONFIRMER`. Le cadre sous rail s'appuie désormais sur ce socle ;
+correction : α ne s'applique plus à SW/2 (EN 1991-2 § 6.3.2(4)), ni au modèle ni à la surcharge sur remblai.
