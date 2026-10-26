@@ -135,7 +135,8 @@ test('Actions horizontales : freinage, démarrage, lacet, force centrifuge (tabl
   const h = r.horizontal;
   proche(h.Ltot, 30);
   proche(h.demarrageFreinage.freinage, 1.21 * 20 * 30); proche(h.demarrageFreinage.demarrage, 1.21 * 33 * 30);   // 990 kN < 1 000 kN : pas de plafond
-  proche(h.demarrageFreinageSW2.freinage, 35 * 30);
+  // SW/2 (25 m + 7 m + 25 m) sur 30 m : au plus 25 m chargés (note 1 du § 6.5.3(2)) → 35 × 25 = 875 kN
+  proche(h.demarrageFreinageSW2.freinage, 35 * 25);
   proche(h.lacet, 121);
   // V = 160 km/h > 120 : cas (7)b à V avec α = 1 et f ; cas (7)a à 120 km/h avec α et f = 1
   const b = h.centrifuge.find(c => c.V === 160), a = h.centrifuge.find(c => c.V === 120);

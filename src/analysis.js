@@ -25,7 +25,7 @@ import { InfluencePlaque, GRANDEURS } from './plate/influence.js';
 import { permanentPlaque } from './plate/deck.js';
 import { EC_ALPHA, notionalLanes, lm1, lm2, TS_GEOM, FOOTWAY } from './loads_ec.js';
 import { classePont, voiesF61, chargeA, BC, BT, MC120, D240, TROTTOIR, deltaDyn, maxAxleLoadOnLength, maxStripTrainLoad } from './loads_f61.js';
-import { LM71, lm71, sw, longueurDeterminante, coefficientDynamique, diffusionBallast, excentrement, demarrageFreinage, casCentrifuge, forceCentrifuge, effortLacet, gammaGroupe, psi as psiRail, MENTION } from './loads_rail.js';
+import { LM71, lm71, sw, longueurDeterminante, coefficientDynamique, diffusionBallast, excentrement, demarrageFreinage, longueurChargee, casCentrifuge, forceCentrifuge, effortLacet, gammaGroupe, psi as psiRail, MENTION } from './loads_rail.js';
 
 /** Champs à deux indices des résultats (section × fibre ; ligne × appareil pour Rapp). */
 const CLES_2D = ['mxMax', 'mxMin', 'myMax', 'myMin', 'mxyMax', 'mxyMin', 'RappMax', 'RappMin', 'BmyMax', 'BmyMin', 'BmxyMax', 'BmxyMin'];
@@ -676,7 +676,8 @@ export class SlabDeck {
     // actions horizontales (6.5) : pour la note et les appuis (lot 5) — non ajoutées à la flexion de la dalle
     const ov = this.g.overhangs || [0, 0], Ltot = this.spans.reduce((a, x) => a + x, 0) + ov[0] + ov[1];
     const lf = demarrageFreinage(Ltot, { modele: 'LM71', alpha: R.alpha });
-    const lf2 = R.sw2 ? demarrageFreinage(Ltot, { modele: 'SW/2' }) : null;
+    // SW/2 : démarrage et freinage sur les seules parties chargées (note 1 du § 6.5.3(2)), comme pour les appuis (lot 5)
+    const lf2 = R.sw2 ? { ...demarrageFreinage(longueurChargee('SW/2', Ltot), { modele: 'SW/2' }), Lab: longueurChargee('SW/2', Ltot) } : null;
     const centrifuge = R.V > 0 && R.rayon > 0
       ? casCentrifuge(R.V, R.alpha, Ltot).filter(c => !c.sansCentrifuge).map(c => ({ ...c, ...forceCentrifuge({ V: c.V, r: R.rayon, f: c.f, Qv: c.alpha * LM71.P, qv: c.alpha * LM71.qv }) }))
       : [];

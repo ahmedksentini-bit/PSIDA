@@ -57,7 +57,7 @@ function lignesHorizontales(st) {
   const h = st.rail.horizontal, R = st.rail.params, out = [];
   out.push(['Démarrage (LM71' + (R.alpha !== 1 ? ' × α' : '') + ')', `${F0(h.demarrageFreinage.demarrage)} kN (33 kN/m × ${F1(h.Ltot)} m, au plus 1 000 kN × α)`, '§ 6.5.3(2), (4)']);
   out.push(['Freinage (LM71' + (R.alpha !== 1 ? ' × α' : '') + ')', `${F0(h.demarrageFreinage.freinage)} kN (20 kN/m × ${F1(h.Ltot)} m, au plus 6 000 kN × α)`, '§ 6.5.3(2), (4)']);
-  if (h.demarrageFreinageSW2) out.push(['Freinage (SW/2)', `${F0(h.demarrageFreinageSW2.freinage)} kN (35 kN/m, sans α)`, '§ 6.5.3(2)']);
+  if (h.demarrageFreinageSW2) out.push(['Freinage (SW/2)', `${F0(h.demarrageFreinageSW2.freinage)} kN (35 kN/m × ${F1(h.demarrageFreinageSW2.Lab ?? h.Ltot)} m chargés, sans α)`, '§ 6.5.3(2) et note 1']);
   out.push(['Effet de lacet', `${F0(h.lacet)} kN au sommet du rail, ni Φ ni f`, '§ 6.5.2']);
   for (const c of h.centrifuge) out.push([`Force centrifuge, cas ${c.ref.replace('6.5.1', '§ 6.5.1')}`, `V = ${F0(c.V)} km/h, α = ${F2(c.alpha)}, f = ${F3(c.f)} : Q_tk = ${F1(c.Qt)} kN par essieu, q_tk = ${F2(c.qt)} kN/m, à ${F2(c.hauteur)} m au-dessus du plan de roulement`, '§ 6.5.1(4), tableau 6.8']);
   if (!h.centrifuge.length) out.push(['Force centrifuge', 'sans objet (vitesse ou rayon non renseignés)', '§ 6.5.1']);

@@ -19,7 +19,7 @@
  * Toutes les valeurs sont les valeurs recommandées : MENTION de loads_rail.js.
  * Unités : kN, m, km/h ; déplacements en mm.
  */
-import { LM71, SW, demarrageFreinage, casCentrifuge, effortLacet, groupesApplicables, gammaGroupe, psi as psiRail, surchargeRemblai, MENTION } from './loads_rail.js';
+import { LM71, SW, longueurChargee, demarrageFreinage, casCentrifuge, effortLacet, groupesApplicables, gammaGroupe, psi as psiRail, surchargeRemblai, MENTION } from './loads_rail.js';
 
 export { MENTION };
 
@@ -39,21 +39,7 @@ export const PSI21_FERROVIAIRE = 0.3;
 
 const MODELES_VOIE = continu => (continu ? ['LM71', 'SW/0'] : ['LM71']);
 
-/**
- * Longueur chargée d'un modèle sur une longueur d'influence L (note 1 du § 6.5.3(2) : pour SW/0 et SW/2, le démarrage et
- * le freinage ne s'appliquent qu'aux parties chargées) : LM71 charge toute la longueur ; SW (deux blocs de longueur a
- * séparés de c) : L si L ≤ a ; a si a < L ≤ a + c ; L − c si a + c < L ≤ 2a + c ; 2a au-delà.
- */
-export function longueurChargee(modele, L) {
-  if (!(L > 0)) return 0;
-  if (modele === 'LM71') return L;
-  const s = SW[modele];
-  if (!s) throw new Error(`modèle ${modele} inconnu`);
-  if (L <= s.a) return L;
-  if (L <= s.a + s.c) return s.a;
-  if (L <= 2 * s.a + s.c) return L - s.c;
-  return 2 * s.a;
-}
+export { longueurChargee };
 
 /** Démarrage et freinage d'une voie chargée par un modèle, sur la longueur d'influence L (§ 6.5.3(2), (4)). */
 export function longitudinalVoie(modele, L, alpha = 1) {

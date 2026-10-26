@@ -587,61 +587,33 @@ de reprise en reprise (α L au-delà des piles), décintrement et mise en tensio
 couplées aux reprises ; calcul par phases (fluage, retrait, relaxation, frottement, recul) comparé à l'ouvrage coulé d'une
 traite ; béton armé : décintrement par phase ou unique ; reprises et coupleurs (EN 1992-2 § 8.10.4 (105) : 3 MPa de
 compression sous combinaison caractéristique ou ferraillage minimal (7.1)). Manuel § 28.21.
-En cours — ponts-rails, lot 1 : socle commun des charges ferroviaires (src/loads_rail.js, unités kN, m, km/h) — LM71 et α,
-SW/0 (avec α), SW/2 (sans α), train à vide 10 kN/m, excentrement r/18, répartition 1/4-1/2-1/4 sous traverses et diffusion
-4:1 dans le ballast, surcharge sur remblai (3,00 m à 0,70 m), Φ2/Φ3 et réduction de couverture, longueur déterminante LΦ
-(tableau 6.2 : isostatique, continue k·Lm, arcs, dalles, consoles, abouts, appuis), force centrifuge et coefficient f
-(plancher 0,35), effort de lacet, démarrage et freinage, groupes gr11 à gr31, γ (EN 1990 tableau A2.4(B)) et ψ (tableau
-A2.3). Valeurs recommandées de l'EN 1991-2 — à confirmer par le référentiel du gestionnaire du réseau ; les valeurs non
-recoupées sur un texte accessible sont listées dans `A_CONFIRMER`. Le cadre sous rail s'appuie désormais sur ce socle ;
-correction : α ne s'applique plus à SW/2 (EN 1991-2 § 6.3.2(4)), ni au modèle ni à la surcharge sur remblai.
-En cours — ponts-rails, lot 2 : pont-dalle sous rail (champ « Trafic porté » = ferroviaire ; src/pipeline.js computeRail,
-SlabDeck.ferroviaire, web/note_rail.js) — LM71 (essieux + charge répartie sur les parties défavorables hors du groupe) et
-SW/0 (dalles continues) en enveloppe par voie, SW/2 en option, sur les lignes d'influence de la poutre continue ; Φ2/Φ3
-avec LΦ du tableau 6.2 et réduction de couverture ; bande de répartition ℓt + 2 e_b/4 + h au feuillet moyen, excentricité
-±r/18, Guyon-Massonnet ; 1 ou 2 voies, groupes gr11-14, gr21-24, gr16-17, gr26-27 (γ 1,45 / 1,20, ψ du tableau A2.3) en
-flexion longitudinale, effort tranchant et flexion transversale ; actions horizontales (freinage, démarrage, lacet,
-force centrifuge) reportées pour mémoire. Hors périmètre, signalé : déformations et vibrations (lot 4), appuis et
-transmission des efforts horizontaux (lot 5), fatigue ferroviaire, éléments locaux ; Fascicule 61, précontrainte et
-plaque sans objet en mode ferroviaire. Mode routier strictement inchangé.
-Ponts-rails : poids de la superstructure de voie proposé depuis le ballast (src/loads_rail.js superstructureVoie,
-EN 1991-1-1 annexe A tableau A.6 : ballast 20 ou 26 kN/m³, rails UIC 60 1,2 kN/m, traverses béton 4,8 ou bois 1,9 kN/m ;
-épaisseur de ballast ± 30 %, § 5.2.3(2)) — bouton du pont-dalle et du pont à poutres en mode ferroviaire.
-En cours — ponts-rails, lot 3 : pont à poutres sous rail (champ « Trafic porté » de l'onglet poutres ; src/beams/index.js
-beamDeck + beamCombinationsRail, src/beams/run.js traveeRail, src/beams/hourdis.js hourdisRail, src/beams/design.js
-lineReactionsRail, web/beams_view.js) — groupes ferroviaires sur le grillage de Guyon-Massonnet (bande diffusée dans le
-ballast puis dans le hourdis jusqu'à son feuillet moyen, excentricité ±r/18), Φ avec LΦ = portée (travées
-indépendantes) ; combinaisons EN 1990 A2 par groupe (ELU 1,35 G + γ Q, caractéristique, fréquente avec ψ₁, quasi
-permanente) dans les chaînes VIPP / PRAD, BA et section par valeurs (Fascicule 61 / BAEL / BPEL sans objet) ; hourdis
-sous traverses (Q/4-Q/2-Q/4, diffusion 4:1 puis 45°, Φ du cas 4.1 du tableau 6.2 plafonné à LΦ des poutres) ; réactions
-par ligne d'appui pour mémoire. Transfert vers l'onglet Appuis désactivé (lot 5) ; déformations, fatigue, passages de
-service, train à vide hors périmètre, signalés. Mode routier strictement inchangé.
-En cours — ponts-rails, lot 4 : déformations, vibrations et décision d'analyse dynamique (src/rail_deformations.js ;
-pont-dalle : src/pipeline.js deformationsDalleRail ; poutres : src/beams/run.js deformationsPoutresRail ;
-web/rail_deformations_view.js) — organigramme de la figure 6.9 de l'EN 1991-2 (n₀ par l'éq. 6.3 sous permanentes,
-limites de la figure 6.10, fourchette k min / k max du ballast, amortissement du tableau 6.6, tableaux F.1 / F.2 de
-l'annexe F, n_T facultative) ; EN 1990 A2.4.4 : flèche L/600, gauche sur 3 m (t₁ t₂ t₃, entrée et sortie comprises,
-excentrement centrifuge), flèche L/600 sous charges classifiées sans Φ (option « majorée par Φ »), confort des
-voyageurs (figure A2.3 numérisée sur la NF EN 1990/A1, ± 2 %, forçage possible ; max(k × (L/δ)_fig / b_v ; 600), k = 0,7 /
-0,9 / 1,0, plancher 600 non multiplié ; au-delà de 120 m ou 350 km/h : analyse spéciale), rotation
-horizontale et rayon (tableau A2.8), fréquence latérale ≥ 1,2 Hz ; EN 1991-2 § 6.5.4.5.2 : δH ≤ 10 mm et δV ≤ 3 / 2 mm
-aux extrémités. Flèches de la poutre continue en forme fermée (EI du tablier non fissuré, E_cm limité à C50/60) ×
-K̄(y) de Guyon-Massonnet au droit des rails. EN 1990/A1 A2.4.4 relue sur la norme (A_CONFIRMER_DEFORMATIONS vide). Analyse
-dynamique elle-même (HSLM, trains réels, accélération) hors périmètre. Mode routier strictement inchangé.
-
-En cours — ponts-rails, lot 5 : appuis sous charges ferroviaires (src/rail_appuis.js ; branchement dans
-src/supports/index.js, pont-dalle src/pipeline.js donneesAppuisDalle, poutres → « Appuis seuls » par
-web/transfert_appuis.js railPoutres et src/supports/standalone.js railAppuisSeuls ; web/rail_appuis_view.js) —
-démarrage-freinage (§ 6.5.3 : SW/0 et SW/2 sur leurs parties chargées, deux voies selon 6.5.3(9), sens opposés ou même
-sens), force centrifuge (tableau 6.8, enveloppe des cas ; SW/2 à 80 km/h) et lacet ; groupes du tableau 6.11 aux appuis
-(γ 1,45 / 1,20, ψ du tableau A2.3) ; réactions sans Φ pour les culées, fondations et fûts d'élancement < 30, avec Φ pour
-les appareils d'appui, chevêtres et fûts d'élancement ≥ 30 (§ 6.4.5.4(2), tableau 6.2 cas 6) ; répartition des efforts
-horizontaux selon les raideurs instantanées (longitudinal et transversal) ; réponse combinée voie-ouvrage par la méthode
-simplifiée du § 6.5.4.6.1 (conditions (1) et (2) contrôlées : tablier unique, L_T ≤ 40 m, δ_B ≤ 5 mm, δ_H ≤ 5 mm, voie
-conforme au 6.5.4.5.1(2), α, ΔT) — ξ du tableau 6.9, F_Tk (6.26 à 6.29, k = 40 kN/m par défaut), F_Qk (6.30, 6.31) ;
-hors domaine : ξ = 1 et analyse d'interaction (annexe G) signalée ; critères δ_B, δ_H, δ_V (§ 6.5.4.5.2) ; surcharge de
-remblai des culées (§ 6.3.6.4, sans Φ) ; séisme ψ2,1 = 0,3 et 80 α kN/m par voie (EN 1998-2 § 4.1.2(4)P) ; liaisons
-par ligne (fixe, glissant) pour le pont-dalle sous rail. Eurocodes seuls (Fascicule 61 / BAEL sans objet). Hors périmètre :
-analyse d'interaction complète, contraintes dans les rails hors méthode simplifiée, déraillement (§ 6.7), train à vide
-(gr15), chocs sur les piles, fatigue, garde-grève et garde-ballast sous charges locales ferroviaires. Mode routier
-strictement inchangé (empreintes des appuis, des appareils, de la note et de l'export Pont EC8 identiques).
+v0.99 : ponts-rails (EN 1991-2 section 6) et corrections parasismiques.
+Ponts-rails — valeurs recommandées de l'EN 1991-2 et de l'EN 1990/A1 annexe A2, relues sur la norme, à confirmer par le
+référentiel du gestionnaire du réseau. Socle commun src/loads_rail.js (kN, m, km/h) : LM71 et α, SW/0 (avec α), SW/2 (sans
+α), train à vide, excentrement r/18, répartition sous traverses et diffusion 4:1, surcharge sur remblai, Φ2/Φ3 et LΦ
+(tableau 6.2), force centrifuge (tableau 6.8, coefficient f), lacet, démarrage et freinage (SW/0 et SW/2 sur leurs
+parties chargées), groupes gr11 à gr31 (tableau 6.11), γ (A2.4(B)) et ψ (A2.3) ; le cadre sous rail s'y appuie (α ne
+s'applique plus à SW/2). Champ « Trafic porté » = ferroviaire, exclusif du trafic routier : pont-dalle (SlabDeck.ferroviaire,
+src/pipeline.js computeRail) et pont à poutres VIPP / PRAD / BA / section par valeurs (src/beams) — enveloppes LM71 / SW/0 /
+SW/2 sur les lignes d'influence, bande diffusée au feuillet moyen et Guyon-Massonnet, hourdis sous traverses,
+combinaisons par groupes ; poids de la superstructure de voie proposé depuis le ballast (EN 1991-1-1 tableau A.6,
+± 30 %). Déformations et vibrations (src/rail_deformations.js) : organigramme de la figure 6.9 (n₀, figure 6.10, annexe F),
+EN 1990 A2.4.4 (L/600 sans Φ, gauche, confort par la figure A2.3 numérisée, déformations transversales, f_h0), δH et δV
+aux extrémités. Appuis (src/rail_appuis.js) : efforts horizontaux répartis par raideurs, Φ selon § 6.4.5.4(2), méthode
+simplifiée d'interaction voie-ouvrage § 6.5.4.6.1 (ξ, F_Tk, F_Qk) ou annexe G signalée, surcharge des culées, séisme
+ψ2,1 = 0,3. Validation (test/rail_reference.test.js) : moments LM71 isostatiques du mémoire Paulse (UCT, 2018, tableau 4.1
+— écart ≤ 0,01 % au maillage fin, ≤ 0,25 % au maillage par défaut) et cas de référence 12 + 16 + 12 m, deux voies,
+α = 1,21, SW/2, 160 km/h, r = 1 500 m, recalculé indépendamment (écarts ≤ 0,02 %). Hors périmètre, signalé : analyse
+dynamique (HSLM, trains réels), interaction voie-ouvrage complète (annexe G), déraillement, train à vide (gr15), chocs,
+fatigue ferroviaire, éléments locaux (garde-ballast). Mode routier strictement inchangé.
+Séisme (Capra et Godreau, « Ouvrages d'art en zone sismique », 2015, pour référence) : γc = 1,3 et γs = 1,0 en situation
+sismique ; culées (inertie du corps et du remblai, Mononobe-Okabe ou ΔPd de l'annexe E de l'EN 1998-5,
+src/supports/culee_seisme.js) ; inertie propre des fûts ; non-glissement des élastomères μ = 0,1 + 1,5 Kf/σm (NF EN 1337-3) ;
+appareils fixes max(1,3 ; q)·F_Ed ou dimensionnement en capacité ; méthode automatique (mode fondamental dans son domaine,
+critère Δd/da ≤ 0,20, sinon multimodale) ; appareils conformes à la NF EN 1337-3 retenus d'office, glissants guidés si aucun
+élastomère ne convient. Appuis : semelles des culées avec le remblai sur le talon et une variante « G favorables » à 1,0
+pour le glissement et l'excentrement ; tête de voile élargie pour la diffusion ; semelle, bossages et tête dimensionnés par
+défaut. Cadres : sous-pression à la sous-face du radier, cas à sec, S du coefficient dynamique (Fascicule 61 art. 5.5),
+choc PIPO. Poutres : σ_pm0 (EN 1992-1-1 § 5.10.3 (2)), pertes PRAD depuis le banc, tranchant de rive. Phasage et mixte :
+légende des moments du fléau, Résal, joint de clavage, fluage non linéaire, flexion latérale du mixte courbe, n_L à 96 j.
+Fenêtre Recommandations. Manuel : chapitre « Ponts-rails » et sections mises à jour.

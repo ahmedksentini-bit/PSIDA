@@ -249,6 +249,22 @@ export function casCentrifuge(Vmax, alpha = 1, Lf = Infinity, { modele = 'LM71',
 export const effortLacet = (alpha = 1) => 100 * Math.max(alpha, 1);
 
 /**
+ * Longueur chargée d'un modèle sur une longueur d'influence L (note 1 du § 6.5.3(2) : pour SW/0 et SW/2, le démarrage et
+ * le freinage ne s'appliquent qu'aux parties chargées) : LM71 charge toute la longueur ; SW (deux blocs de longueur a
+ * séparés de c) : L si L ≤ a ; a si a < L ≤ a + c ; L − c si a + c < L ≤ 2a + c ; 2a au-delà.
+ */
+export function longueurChargee(modele, L) {
+  if (!(L > 0)) return 0;
+  if (modele === 'LM71') return L;
+  const s = SW[modele];
+  if (!s) throw new Error(`modèle ${modele} inconnu`);
+  if (L <= s.a) return L;
+  if (L <= s.a + s.c) return s.a;
+  if (L <= 2 * s.a + s.c) return L - s.c;
+  return 2 * s.a;
+}
+
+/**
  * Démarrage et freinage (6.5.3) [EN] : au niveau des rails, uniformes sur la longueur d'influence La,b ; ni Φ ni f.
  *  - démarrage : 33 kN/m · La,b ≤ 1000 kN (LM71, SW/0, SW/2) ;
  *  - freinage : 20 kN/m · La,b ≤ 6000 kN (LM71, SW/0) ; 35 kN/m · La,b sans plafond (SW/2).
