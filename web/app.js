@@ -901,6 +901,8 @@ $('#btn-poutres-docx').addEventListener('click', async () => {
 $('#btn-poutres-appuis').addEventListener('click', () => {
   if (!poutres) $('#btn-poutres').click();
   if (!poutres) return;
+  // pont à poutres sous rail : appuis et fondations sous charges ferroviaires = lot 5 du chantier ponts-rails
+  if (poutres.rail) { $('#error').textContent = 'Pont à poutres sous rail : la transmission des réactions et des actions horizontales ferroviaires aux appuis n\'est pas encore disponible (lot 5 du chantier ponts-rails).'; return; }
   ecrireAppuisSeuls(champsAppuisPoutres(poutres));
 });
 // tablier par phases ou mixte → appuis seuls (réactions, nature du tablier et données sismiques : web/transfert_appuis.js)
@@ -1006,6 +1008,23 @@ $('#btn-rail-superstructure').addEventListener('click', () => {
     + 'Charges réparties remplacées : ajouter l\'étanchéité, la couche de protection et les garde-ballast si nécessaire.';
   f.dispatchEvent(new Event('input', { bubbles: true }));
   renderScheme();
+});
+
+// Pont à poutres sous rail : superstructures de voie proposées depuis le ballast (même règle que le pont-dalle)
+$('#btn-pt-rail-superstructure').addEventListener('click', () => {
+  const f = $('#f'), d = Object.fromEntries(new FormData(f).entries()), info = $('#pt-rail-superstructure-info');
+  const R = parseRail(Object.fromEntries([['trafic', 'ferroviaire'], ...Object.entries(d).filter(([k]) => k.startsWith('pt_rail_')).map(([k, x]) => [k.slice(3), x])]));
+  const W = (+f.pt_n.value || 0) * (+f.pt_b1.value || 0);
+  const S = superstructureVoie({ voies: R.voies, ballast: R.ballast, hTraverse: R.hTraverse, longueurTraverse: R.longueurTraverse,
+    largeurBallast: R.largeurBallast, typeBallast: R.typeBallast, typeTraverse: R.typeTraverse, limites: W > 0 ? [-W / 2, W / 2] : null });
+  const n = v => String(+v.toFixed(3));
+  f.pt_bands.value = S.bandes.map(o => `${n(o.q)} sur ${n(o.y1)},${n(o.y2)} k ${n(o.kmin)}/${n(o.kmax)}`).join(' ; ');
+  const surAxe = e => R.voies.some(y => Math.abs(y - e) < 1e-6);
+  const autres = String(f.pt_lines.value || '').split(';').map(t => t.trim()).filter(Boolean).filter(t => !surAxe(+t.split('@')[1]));
+  f.pt_lines.value = [...autres, ...S.lignes.map(o => `${n(o.g)}@${n(o.e)}`)].join(' ; ');
+  const D = S.detail, fr = (v, p = 2) => v.toLocaleString('fr-FR', { maximumFractionDigits: p });
+  info.textContent = `Ballast ${fr(D.gammaBallast, 1)} kN/m³ × (${fr(R.ballast)} + ${fr(R.hTraverse)}) m = ${fr(D.q)} kN/m² de y = ${fr(D.y1)} à ${fr(D.y2)} m (k 0,7/1,3) ; par voie : rails ${fr(D.rails, 1)} + traverses ${fr(D.traverses, 1)}${D.deplace ? ` − ballast déplacé ${fr(D.deplace)}` : ' (volume des traverses bois non déduit)'} = ${fr(D.gVoie)} kN/m. Superstructures réparties remplacées : ajouter l\'étanchéité, la couche de protection et les garde-ballast si nécessaire.`;
+  f.dispatchEvent(new Event('input', { bubbles: true }));
 });
 
 // Onglet « Calcul sismique » : Pont EC8 complet dans une iframe (même origine), échanges par postMessage.

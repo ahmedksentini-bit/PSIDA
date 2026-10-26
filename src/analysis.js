@@ -643,7 +643,10 @@ export class SlabDeck {
     const dyn = coefficientDynamique({ LPhi: LP.LPhi, entretien: R.entretien, h: couverture });
     const phi = dyn.phi;
     const dif = diffusionBallast({ longueurTraverse: R.longueurTraverse, ballast: R.ballast });
-    const bw = dif.largeur + this.h, ecc = excentrement(R.ecartement);
+    // épaisseur de diffusion dans le béton : la dalle (h) ; pour un tablier à poutres, le hourdis (R.hDiffusion = h_d),
+    // la bande étant prise au feuillet moyen du hourdis
+    const hDif = R.hDiffusion > 0 ? R.hDiffusion : this.h;
+    const bw = dif.largeur + hDif, ecc = excentrement(R.ecartement);
     const avert = [];
     for (const y of voies) if (Math.abs(y) - bw / 2 < -this.b - 1e-9 || Math.abs(y) + bw / 2 > this.b + 1e-9) avert.push(`la bande de répartition de la voie d'axe y = ${y} m (${bw.toFixed(2)} m de large) déborde de la dalle : bande tronquée au bord libre`);
     const band = e => ({ e1: Math.max(-this.b, e - bw / 2), e2: Math.min(this.b, e + bw / 2) });
@@ -680,7 +683,7 @@ export class SlabDeck {
     if (R.V > 200) avert.push(`vitesse de ligne ${R.V} km/h > 200 km/h : l'analyse dynamique du § 6.4.4 (figure 6.9) est requise et sort du périmètre de PSIDA`);
     else if (R.V > 0) avert.push('le besoin d\'une analyse dynamique (§ 6.4.4, figure 6.9 : fréquence propre n₀ dans les limites de la figure 6.10) n\'est pas vérifié ici (lot 4 du chantier ponts-rails)');
     return {
-      params: R, voies, nV, continu, LPhi: LP, couverture, dyn, phi, diffusion: { ...dif, h: this.h, bw }, ecc, vert, groupes,
+      params: R, voies, nV, continu, LPhi: LP, couverture, dyn, phi, diffusion: { ...dif, h: hDif, bw }, ecc, vert, groupes,
       horizontal: { Ltot, demarrageFreinage: lf, demarrageFreinageSW2: lf2, lacet: effortLacet(R.alpha), centrifuge },
       avert, mention: MENTION,
     };

@@ -117,7 +117,9 @@ export function geometrieVIPP(p, L) {
  * ch = efforts de la poutre (Guyon-Massonnet) aux sections x : { x, G:{Mmax,Vmax}, TS, UDL, footway, gr1a, gr1b, A, Bc,
  *      Bt, Mc120, D240, trott } ; elsF61, eluF61 : combinaisons du Fascicule 61 (tableaux par section).
  */
-export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
+export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null, trafic = null } = {}) {
+  // trafic ferroviaire (pont à poutres sous rail) : parts de trafic déjà combinées par section (beamCombinationsRail) —
+  // caractéristique max Q_g, fréquente max ψ₁ Q_g, ELU max γ_g Q_g (moments et efforts tranchants), aux abscisses ch.x
   const D = DEFAUTS_VIPP, c = { ...D.cables, ...p.cables }, T = { ...D.dates, ...p.dates }, B = { ...D.beton, ...p.beton };
   if (!(T.t1 < T.t2 && T.t2 <= T.t2b && T.t2b <= T.t3 && T.t3 < T.fin)) throw new Error('VIPP : dates croissantes attendues (1re famille < hourdis ≤ 2e famille ≤ superstructures < fin)');
   const nb = p.nb || D.nb, f = p.forme, { S, beff, nh } = geometrieVIPP(p, L), P = S.poutre, H = S.hourdis;
@@ -190,8 +192,8 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
   const sigAt = (s, y) => s.pi + (s.ps - s.pi) * y / f.hp;
 
   // ---- combinaisons de service (EN 1990 A2) : moments du trafic par section
-  const Mchar = x => Math.max(Mq('gr1a', x), Mq('gr1b', x));
-  const Mfreq = x => Math.max(0.75 * Mq('TS', x) + 0.40 * Mq('UDL', x) + 0.40 * Mq('footway', x), 0.75 * Mq('gr1b', x));
+  const Mchar = trafic ? x => interp(trafic.Qcar, x) : x => Math.max(Mq('gr1a', x), Mq('gr1b', x));
+  const Mfreq = trafic ? x => interp(trafic.Qfreq, x) : x => Math.max(0.75 * Mq('TS', x) + 0.40 * Mq('UDL', x) + 0.40 * Mq('footway', x), 0.75 * Mq('gr1b', x));
   const MrareF = x => (elsF61 ? interp(elsF61, x) - Mq('G', x) : 0);
 
   // compression au jeune âge : 0,6 f_ck(t) ; éléments précontraints par pré-tension : k₆ f_ck(t), k₆ = 0,7 (§ 5.10.2.2 (5))
@@ -272,7 +274,7 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
   for (let j = 0; j <= nb / 2; j++) {
     const x = xs[j], seg = Math.min(j, nb - 1);
     const cabs = tr.cab.map((cb, ic) => { const N = cableAt(out.pas[iF], ic, seg); return { Ap: N > 0 ? ApC(cb) : 0, d: Hc - tr.y(cb, x), epm: N > 0 ? N / ApC(cb) / 1000 / Ep : 0 }; }).filter(q => q.Ap > 0);
-    const MEdE = 1.35 * Mq('G', x) + 1.35 * Mchar(x), MEdF = eluF61 ? interp(eluF61, x) : null;
+    const MEdE = 1.35 * Mq('G', x) + (trafic ? interp(trafic.QeluM, x) : 1.35 * Mchar(x)), MEdF = eluF61 ? interp(eluF61, x) : null;
     const MEd = Math.max(MEdE, MEdF ?? -Infinity);
     const base = { S, cables: cabs, ds, fcdP: fcd(fck), fcdH: fcd(fckH), fpd, Ep, fyd };
     let r = momentResistant({ ...base, As: AsMin });
@@ -304,8 +306,8 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
   const fywd = p.fyk / 1.15, nu1 = 0.6 * (1 - fck / 250), fcdV = fcd(fck), rhoMin = 0.08 * Math.sqrt(fck) / p.fyk;
   for (let j = 0; j <= nb / 2; j++) {
     const x = xs[j], seg = Math.min(j, nb - 1);
-    const VG = Math.abs(interp(ch.G.Vmax, x)), VQ = Math.max(Math.abs(interp(ch.gr1a?.Vmax, x)), Math.abs(interp(ch.gr1b?.Vmax, x)));
-    const VEd0 = 1.35 * VG + 1.35 * VQ;
+    const VG = Math.abs(interp(ch.G.Vmax, x)), VQ = trafic ? interp(trafic.QeluV, x) : Math.max(Math.abs(interp(ch.gr1a?.Vmax, x)), Math.abs(interp(ch.gr1b?.Vmax, x)));
+    const VEd0 = 1.35 * VG + (trafic ? VQ : 1.35 * VQ);
     let Vpd = 0, Pn = 0, ySum = 0;
     tr.cab.forEach((cb, ic) => { const N = cableAt(out.pas[iF], ic, seg), sl = tr.pente(cb, x); Vpd += N * Math.abs(sl) / Math.sqrt(1 + sl * sl); Pn += N; ySum += N * tr.y(cb, x); });
     const yp = Pn ? ySum / Pn : 0.2, d = Math.max(Hc - yp, 0.8 * Hc), z = 0.9 * d;
@@ -333,7 +335,7 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null } = {}) {
   if (prad) { const pr = tr.prad, sInf = Ptot.inf / pr.Ap / 1000, lbpd = longueurAncrage(pr, c.fp01k / 1.15, sInf); ancrage = { lbpd, sigPinf: sInf, lpt: pr.lpt, lpt2: pr.lpt2 }; }
 
   return {
-    L, S, beff, nh, trace: tr, sigP0, P0, sigP0Max, sigP0Reduite, sigPm0Max, sigPm0Lim, Ptot, pertes, modele, out, sections, verifs, elu, tranchant, fleches,
+    L, rail: !!trafic, S, beff, nh, trace: tr, sigP0, P0, sigP0Max, sigP0Reduite, sigPm0Max, sigPm0Lim, Ptot, pertes, modele, out, sections, verifs, elu, tranchant, fleches,
     charges: { wP, wH, wS, wG }, betons: { P: { fck, Ecm: bP.Ecm, h0: P.h0, phi: bP.phi(T.fin, T.t1), eps: bP.retrait(T.fin) }, H: { fck: fckH, Ecm: bH.Ecm, h0: H.h0, phi: bH.phi(T.fin - T.t2, T.t3 - T.t2), eps: bH.retrait(T.fin - T.t2) } },
     dates: T, expo: p.expo, quantites: { volP, volT, kgP, ratioP }, conception, n1, n2, prad: prad ? tr.prad : null, ancrage, seismeV,
     ok: verifs.every(v => v.ok) && elu.every(e => e.ok) && tranchant.every(t => t.ok) && (!seismeV || seismeV.eluOk),

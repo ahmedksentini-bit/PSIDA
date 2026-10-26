@@ -107,3 +107,38 @@ export function lineReactions(bd) {
   }
   return lines;
 }
+
+/**
+ * Réactions caractéristiques par ligne d'appui d'un pont à poutres sous rail (travées indépendantes), pour mémoire et pour
+ * le lot 5 (non transmises aux appuis) : permanentes = somme des réactions des travées adjacentes ; trafic par voie =
+ * maximum, sur la ligne d'influence en triangle des deux travées, de LM71 × α (4 essieux de 250α kN à 1,60 m et 80α kN/m
+ * hors des 6,40 m du groupe, sur les seules parties défavorables — ici toute la ligne d'influence, positive) et de SW/2
+ * (motif rigide 150 kN/m sur 2 × 25 m séparés de 7 m) si la ligne l'exige ; × Φ maximal des travées adjacentes
+ * (EN 1991-2 § 6.3.2, 6.3.3, 6.4.5 ; tableau 6.2, cas 6 : appareils d'appui, L_Φ des éléments portés). Les culées et
+ * fondations peuvent être calculées sans effets dynamiques (§ 6.4.5.4(2)) : valeurs sans Φ aussi rendues.
+ */
+export function lineReactionsRail(bd, rail) {
+  const spans = bd.spans, n = spans.length + 1, S = L => bd.bySpan.get(+L.toFixed(3));
+  const end = (j, side, key) => { if (j < 0 || j >= spans.length) return 0; const r = S(spans[j]).perm[key]; return r ? r[side === 'L' ? 0 : 1] : 0; };
+  const alpha = rail.alpha ?? 1, P = 250 * alpha, q = 80 * alpha;
+  const lines = [];
+  for (let i = 0; i < n; i++) {
+    const L1 = i > 0 ? spans[i - 1] : 0, L2 = i < spans.length ? spans[i] : 0;
+    // ligne d'influence de la réaction (1 sur l'appui) ; culée d'extrémité : pas de travée d'un côté (L = 0)
+    const il = x => (Math.abs(x) < 1e-12 ? 1 : x < 0 ? (L1 > 0 && x >= -L1 ? 1 + x / L1 : 0) : (L2 > 0 && x <= L2 ? 1 - x / L2 : 0));
+    const integ = (a, b) => { a = Math.max(a, -L1); b = Math.min(b, L2); if (b <= a) return 0; const m = 400; let s = 0; for (let k = 0; k < m; k++) s += il(a + (b - a) * (k + 0.5) / m); return s * (b - a) / m; };
+    const tot = (L1 + L2) / 2;
+    // position du groupe d'essieux (abscisse du 1er essieu) : balayage, plus chaque essieu exactement sur l'appui
+    const r71 = x0 => [0, 1.6, 3.2, 4.8].reduce((a, d) => a + P * il(x0 + d), 0) + q * (tot - integ(x0 - 0.8, x0 + 5.6));
+    let R71 = Math.max(...[0, 1.6, 3.2, 4.8].map(d => r71(-d)));
+    for (let x0 = -L1 - 6; x0 <= L2 + 1e-9; x0 += 0.05) R71 = Math.max(R71, r71(x0));
+    let RSW2 = 0;
+    if (rail.sw2) for (let x0 = -L1 - 57; x0 <= L2 + 1e-9; x0 += 0.1) RSW2 = Math.max(RSW2, 150 * (integ(x0, x0 + 25) + integ(x0 + 32, x0 + 57)));
+    const adj = [i - 1, i].filter(j => j >= 0 && j < spans.length).map(j => S(spans[j]));
+    const phi = Math.max(...adj.map(s => s.rail.phi)), nV = adj[0].rail.nV;
+    lines.push({ G: end(i - 1, 'R', 'Rmax') + end(i, 'L', 'Rmax'), Gmin: end(i - 1, 'R', 'Rmin') + end(i, 'L', 'Rmin'), rail: true,
+      phi, nV, LM71: R71, LM71phi: phi * R71, SW2: RSW2, SW2phi: phi * RSW2, Qmax: phi * Math.max(nV * R71, rail.sw2 ? RSW2 + (nV - 1) * R71 : 0),
+      A: 0, Bc: 0, Mc120: 0, trott: 0, TS: 0, UDL: 0 });
+  }
+  return lines;
+}

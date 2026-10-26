@@ -93,6 +93,16 @@ export function beamDeck(g) {
     const gp = guyonParams({ n, b1, L, Ip: sec.I, Kp: sec.K, hd: g.hd, Ie: g.Ie ?? null, Ke: g.Ke ?? null, le: g.le ?? 1 });
     const opts = { spans: [L], width, h: sec.H || g.hd, area: n * sec.A + (g.extraArea || 0), roadway: g.roadway, footways: g.footways || [],
       lines: g.lines || [], bands: g.bands || [], ys, Leq: [gp.Lguyon], alphaTorsion: gp.alpha, nu: 0, laneStep: g.laneStep || 0.25, nSec: 20, nGrid: 100, gammaC: g.gammaC || 25 };
+    if (g.rail) {
+      // pont à poutres sous rail : groupes ferroviaires (EN 1991-2 section 6) à la place du trafic routier ; bande de
+      // répartition diffusée dans le ballast puis dans le hourdis jusqu'à son feuillet moyen (h_d)
+      const chargesR = dk => ({ perm: dk.permanent(), rail: dk.ferroviaire({ ...g.rail, hDiffusion: g.hd }) });
+      const deck = new SlabDeck(opts), { perm, rail } = chargesR(deck);
+      const lev = n > 1 && g.levier !== false ? chargesR(new TablierLevier(opts)) : null;
+      const cas = P => ({ G: P.perm, ...Object.fromEntries(P.rail.groupes.map(G => [G.id, G.res])) });
+      bySpan.set(L, { L, gp, deck, perm, f61: null, ec: null, rail, beams: perBeamCases(deck, cas({ perm, rail }), lev ? cas(lev) : {}, b1, n) });
+      continue;
+    }
     const charges = dk => ({ perm: dk.permanent(), f61: dk.fascicule61({ nRetenue: g.nRetenue ?? 2, classe: g.classe ?? null, mil: g.mil || 'Mc120' }), ec: dk.eurocode({ alpha: EC_ALPHA[g.alphaEC || 'recommended'] }) });
     const deck = new SlabDeck(opts), { perm, f61, ec } = charges(deck);
     // règle des bras de levier (effort tranchant et réactions par poutre près des appuis) : inutile si n = 1
@@ -107,9 +117,13 @@ export function beamDeck(g) {
  * η_k = M_k/(M/n) à mi-travée (pratique PAP : mêmes coefficients de répartition pour M et V).
  */
 function perBeam(deck, perm, f61, ec, b1, n, lev = null) {
-  const secs = deck.beam.sections, mid = deck.beam.sectionIndex(0, 0.5);
   const casesDe = (P, F, E) => ({ G: P, A: F.A, Bc: F.Bc, Bt: F.Bt, Mc120: F.Mc120, D240: F.D240, trott: F.trottoir, TS: E.TS, UDL: E.UDL, footway: E.footway, LM1: E.LM1, gr1a: E.gr1a, gr1b: E.gr1b });
-  const cases = casesDe(perm, f61, ec), casesL = lev ? casesDe(lev.perm, lev.f61, lev.ec) : {};
+  return perBeamCases(deck, casesDe(perm, f61, ec), lev ? casesDe(lev.perm, lev.f61, lev.ec) : {}, b1, n);
+}
+
+/** Efforts par poutre pour un ensemble de cas de charge { id: résultat du tablier } (routiers ou ferroviaires). */
+function perBeamCases(deck, cases, casesL, b1, n) {
+  const secs = deck.beam.sections, mid = deck.beam.sectionIndex(0, 0.5);
   const etaDe = (r, k) => { if (!r) return null; const mx = r.mxMax || r.mx, Mt = (r.Mmax || r.M)[mid]; return Mt ? mx[mid][k] * b1 / (Mt / n) : 1; };
   return Array.from({ length: n }, (_, k) => {
     const out = { k, y: deck.ys[k], x: secs.map(s => s.x) };
@@ -128,6 +142,33 @@ function perBeam(deck, perm, f61, ec, b1, n, lev = null) {
     }
     return out;
   });
+}
+
+/**
+ * Combinaisons ferroviaires par poutre (EN 1990 A2, tableaux A2.3 et A2.4(B) ; groupes du tableau 6.11 de l'EN 1991-2),
+ * à chaque section, chaque groupe étant l'action variable dominante (seule action de trafic) :
+ * ELU 1,35 G + max_g γ_g Q_g (γ = 1,45 ; 1,20 pour les groupes contenant SW/2) ; caractéristique G + max_g Q_g ;
+ * fréquente G + max_g ψ₁,g Q_g ; quasi permanente G (ψ₂ = 0). Q_g : moments et efforts tranchants de la poutre sous le
+ * groupe g, coefficient dynamique Φ inclus. Rend aussi les parts de trafic seules (Qcar, Qfreq, QeluM, QeluV) pour la
+ * chaîne de précontrainte.
+ */
+export function beamCombinationsRail(bm, groupes) {
+  const nS = bm.G.Mmax.length, z = () => new Array(nS).fill(0);
+  const out = { ELS_car: z(), ELS_freq: z(), ELU: z(), Qcar: z(), Qfreq: z(), QeluM: z(), QeluV: z(), gov: [] };
+  for (let i = 0; i < nS; i++) {
+    let car = 0, freq = 0, elu = 0, vElu = 0, gov = null;
+    for (const G of groupes) {
+      const r = bm[G.id]; if (!r) continue;
+      const M = r.Mmax[i], V = Math.max(Math.abs(r.Vmax?.[i] ?? 0), Math.abs(r.Vmin?.[i] ?? 0));
+      car = Math.max(car, M); freq = Math.max(freq, G.psi1 * M);
+      if (G.gamma * M > elu) { elu = G.gamma * M; gov = G.id; }
+      vElu = Math.max(vElu, G.gamma * V);
+    }
+    const Gm = bm.G.Mmax[i];
+    out.Qcar[i] = car; out.Qfreq[i] = freq; out.QeluM[i] = elu; out.QeluV[i] = vElu; out.gov[i] = gov;
+    out.ELS_car[i] = Gm + car; out.ELS_freq[i] = Gm + freq; out.ELU[i] = 1.35 * Gm + elu;
+  }
+  return out;
 }
 
 /**

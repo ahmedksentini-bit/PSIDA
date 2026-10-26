@@ -604,3 +604,15 @@ flexion longitudinale, effort tranchant et flexion transversale ; actions horizo
 force centrifuge) reportées pour mémoire. Hors périmètre, signalé : déformations et vibrations (lot 4), appuis et
 transmission des efforts horizontaux (lot 5), fatigue ferroviaire, éléments locaux ; Fascicule 61, précontrainte et
 plaque sans objet en mode ferroviaire. Mode routier strictement inchangé.
+Ponts-rails : poids de la superstructure de voie proposé depuis le ballast (src/loads_rail.js superstructureVoie,
+EN 1991-1-1 annexe A tableau A.6 : ballast 20 ou 26 kN/m³, rails UIC 60 1,2 kN/m, traverses béton 4,8 ou bois 1,9 kN/m ;
+épaisseur de ballast ± 30 %, § 5.2.3(2)) — bouton du pont-dalle et du pont à poutres en mode ferroviaire.
+En cours — ponts-rails, lot 3 : pont à poutres sous rail (champ « Trafic porté » de l'onglet poutres ; src/beams/index.js
+beamDeck + beamCombinationsRail, src/beams/run.js traveeRail, src/beams/hourdis.js hourdisRail, src/beams/design.js
+lineReactionsRail, web/beams_view.js) — groupes ferroviaires sur le grillage de Guyon-Massonnet (bande diffusée dans le
+ballast puis dans le hourdis jusqu'à son feuillet moyen, excentricité ±r/18), Φ avec LΦ = portée (travées
+indépendantes) ; combinaisons EN 1990 A2 par groupe (ELU 1,35 G + γ Q, caractéristique, fréquente avec ψ₁, quasi
+permanente) dans les chaînes VIPP / PRAD, BA et section par valeurs (Fascicule 61 / BAEL / BPEL sans objet) ; hourdis
+sous traverses (Q/4-Q/2-Q/4, diffusion 4:1 puis 45°, Φ du cas 4.1 du tableau 6.2 plafonné à LΦ des poutres) ; réactions
+par ligne d'appui pour mémoire. Transfert vers l'onglet Appuis désactivé (lot 5) ; déformations, fatigue, passages de
+service, train à vide hors périmètre, signalés. Mode routier strictement inchangé.

@@ -26,6 +26,7 @@ import { BC, BT, BR, MC120, deltaDyn, classePont, voiesF61 } from '../loads_f61.
 import { EC_ALPHA, lm1, notionalLanes } from '../loads_ec.js';
 import { cantileverDesign } from '../cantilever.js';
 import { materialsEC2, shearVRdc } from '../section_ec2.js';
+import { coefficientDynamique, excentrement, longueurDeterminante, gammaGroupe, psi as psiRail } from '../loads_rail.js';
 
 const pasGrille = (bornes, pas) => {
   const v = [...new Set(bornes.map(x => +x.toFixed(4)))].sort((a, b) => a - b), out = [v[0]];
@@ -76,6 +77,8 @@ export function hourdisLocal(p) {
   for (const bd of p.bands || []) P.chargeRectangle(F, { x1: 0, x2: Lm, y1: Math.max(yMin, bd.y1), y2: Math.min(yMax, bd.y2), q: bd.q });
   for (const l of p.lines || []) for (let i = 0; i < xsF.length; i++) { const dx = (i < xsF.length - 1 ? xsF[i + 1] - xsF[i] : 0) / 2 + (i > 0 ? xsF[i] - xsF[i - 1] : 0) / 2; P.chargePonctuelle(F, { x: xsF[i], y: l.e, P: l.g * dx }); }
   const wG = P.resoudre(F), mG = P.moments(wG);
+
+  if (p.rail) return hourdisRail(p, { P, i0, cibles, mG, xsF, ys, yMin, yMax, Lm, x0, b, bt, ys0, hd, n, b1, etaAt });
 
   // ---- géométrie de la chaussée, voies EC
   const R = p.roadway, Lr = R.y2 - R.y1, nl = notionalLanes(Lr).n, alpha = EC_ALPHA[p.alphaEC || 'recommended'] || EC_ALPHA.recommended;
@@ -133,17 +136,97 @@ export function hourdisLocal(p) {
   });
 
   // ---- enveloppes et ferraillage par mètre (armatures transversales inférieures en travée, supérieures au nu des tables)
-  const design = type => {
-    const r = res.filter(q => q.type === type), s = type === 'travee' ? 1 : -1;
-    const gov = r.reduce((a, q) => (Math.max(s * q.EC.ELU, s * q.F61.ELU) > Math.max(s * a.EC.ELU, s * a.F61.ELU) ? q : a));
-    const mom = { ELU: Math.max(s * gov.EC.ELU, s * gov.F61.ELU, 0), CAR: Math.max(s * gov.EC.CAR, s * gov.F61.ELS, 0), FREQ: Math.max(s * gov.EC.FREQ, 0), hr: hd };
-    return { gov, mom, ...cantileverDesign(mom, { fck: p.fck, fyk: p.fyk, c: p.c ?? 0.03, phi: 0.014, wkMax: 0.3, kSlab: 1.0 }) };
-  };
-  const inf = design('travee'), sup = design('appui');
+  const inf = designHourdis(res, 'travee', p), sup = designHourdis(res, 'appui', p);
   // poinçonnement sous une roue du tandem (EN 1992-1-1 § 6.4.4) : aire chargée diffusée dans le revêtement
   const mat = materialsEC2({ fck: p.fck, fyk: p.fyk }), d = hd - (p.c ?? 0.03) - 0.007, a0 = 0.4 + 2 * tRev;
   const u1 = 4 * a0 + 2 * Math.PI * 2 * d, VEd = 1.35 * Q1, k = Math.min(2, 1 + Math.sqrt(0.2 / d));
   const rho = Math.min(0.02, Math.sqrt(inf.As * Math.max(inf.As, 1e-9)) / d), vRdc = Math.max(0.18 / 1.5 * k * Math.cbrt(100 * rho * p.fck), 0.035 * k ** 1.5 * Math.sqrt(p.fck));
   const poinc = { VEd, u1, d, vRdc, VRdc: vRdc * u1 * d * 1000, ok: VEd <= vRdc * u1 * d * 1000 };
   return { modele: { Lm, x0, nx: xsF.length, ny: ys.length, bt, ys0 }, cibles: res, inf, sup, poinc, Q1, Q2, nl };
+}
+
+/** Enveloppe d'un type de section (travée : armatures inférieures ; nu des tables : supérieures) et ferraillage par mètre. */
+function designHourdis(res, type, p) {
+  const r = res.filter(q => q.type === type), s = type === 'travee' ? 1 : -1;
+  const gov = r.reduce((a, q) => (Math.max(s * q.EC.ELU, s * q.F61.ELU) > Math.max(s * a.EC.ELU, s * a.F61.ELU) ? q : a));
+  const mom = { ELU: Math.max(s * gov.EC.ELU, s * gov.F61.ELU, 0), CAR: Math.max(s * gov.EC.CAR, s * gov.F61.ELS, 0), FREQ: Math.max(s * gov.EC.FREQ, 0), hr: p.hd };
+  return { gov, mom, ...cantileverDesign(mom, { fck: p.fck, fyk: p.fyk, c: p.c ?? 0.03, phi: 0.014, wkMax: 0.3, kSlab: 1.0 }) };
+}
+
+/**
+ * Hourdis sous rail (pont à poutres sous rail, EN 1991-2 section 6) — même plaque et mêmes surfaces d'influence que
+ * sous trafic routier ; charges :
+ *  - LM71 × α : chaque essieu réparti par le rail sur trois traverses (Q/4, Q/2, Q/4 à a = 0,60 m, § 6.3.6.1, figure 6.4) ;
+ *    sous chaque traverse, rectangle diffusé à 4:1 dans le ballast (§ 6.3.6.2, figure 6.5 ; § 6.3.6.3, figure 6.6) puis à
+ *    45° jusqu'au feuillet moyen du hourdis : a_x = w_t + e_b/2 + h_d (le long de la voie), a_y = ℓ_t + e_b/2 + h_d ;
+ *    80α kN/m sur la même largeur, hors des 6,40 m du groupe et sur les seules parties défavorables ; groupe d'essieux
+ *    déplacé le long de la voie ; axe de la voie décalé de e = r/18 dans les deux sens (§ 6.3.5) ;
+ *  - SW/2 si la ligne l'exige : 150 kN/m sur toute la longueur de la plaque, l'intervalle de 7 m placé au mieux ;
+ *  - deux voies : chaque voie au plus défavorable, isolément (groupes à une voie) ou ensemble (groupes à deux voies).
+ * Coefficient dynamique : Φ (2 ou 3) avec L_Φ = 3 × portée du hourdis (tableau 6.2, cas 4.1, portée perpendiculaire aux
+ * poutres ; portée prise entre nus des âmes), au plus L_Φ des poutres principales (note du tableau), réduit pour une
+ * couverture > 1 m (§ 6.4.5.4). Combinaisons EN 1990 A2 : ELU 1,35 G + γ Q (γ = 1,45 ; 1,20 avec SW/2), caractéristique
+ * G + Q, fréquente G + ψ₁ Q (0,8 une voie ; 0,7 deux voies), quasi permanente G (ψ₂ = 0).
+ * Paramètres (p.rail) : voies, alpha, sw2, ballast e_b, longueurTraverse ℓ_t, hTraverse, entretien, ecartement,
+ * largeurTraverse w_t (0,25 m par défaut, choix PSIDA), espacementTraverses a (0,60 m), LPhiPoutres, bw0 (épaisseur d'âme).
+ */
+function hourdisRail(p, M) {
+  const { P, i0, cibles, mG, xsF, ys, yMin, yMax, Lm, x0, b, bt, ys0, hd, n, b1, etaAt } = M;
+  const R = { alpha: 1, sw2: false, ballast: 0.30, longueurTraverse: 2.60, hTraverse: 0.22, entretien: 'normal', ecartement: 1.50, largeurTraverse: 0.25, espacementTraverses: 0.60, ...p.rail };
+  const voies = R.voies || [0], alpha = R.alpha, a = R.espacementTraverses;
+  const portee = Math.max(b1 - (p.bw0 ?? 0.20), 0.5);
+  const L41 = longueurDeterminante('dalle_transversale', { portee, LPhiPrincipal: R.LPhiPoutres });
+  const dyn = coefficientDynamique({ LPhi: L41.LPhi, entretien: R.entretien, h: R.ballast + R.hTraverse }), phi = dyn.phi;
+  const ax = R.largeurTraverse + R.ballast / 2 + hd, ay = R.longueurTraverse + R.ballast / 2 + hd, ecc = excentrement(R.ecartement);
+  const Q = 250 * alpha, q = 80 * alpha;
+  // pondération longitudinale des nœuds de la plaque (intégrales le long de la voie)
+  const wx = xsF.map((x, i) => (i < xsF.length - 1 ? xsF[i + 1] - x : 0) / 2 + (i > 0 ? x - xsF[i - 1] : 0) / 2);
+  // intégrale de η sur la bande de la voie (largeur a_y), par nœud x : profil le long de la voie
+  const profil = (eta, yc) => xsF.map((x, i) => { let s = 0; const m = 7; for (let k = 0; k < m; k++) s += etaAt(eta, x, yc - ay / 2 + ay * (k + 0.5) / m); return s * ay / m; });
+  const patch = (eta, x, yc) => { let s = 0; for (const u of [-1 / 3, 0, 1 / 3]) for (const v of [-1 / 3, 0, 1 / 3]) s += etaAt(eta, x + u * ax, yc + v * ay); return s / 9; };
+  const res = cibles.map(c => {
+    const sg = c.signe, eta = c.eta;
+    const G = mG.my[P.idx(i0, c.j)];
+    // contribution défavorable (signe sg) d'une voie d'axe yc, LM71 ou SW/2
+    const lm71 = yc => {
+      const pr = profil(eta, yc);
+      let best = 0;
+      for (let xg = x0 - 4.8 - 1.2; xg <= x0 + 1.2 + 1e-9; xg += 0.1) {
+        let v = 0;
+        for (const d of [0, 1.6, 3.2, 4.8]) for (const [dx, f] of [[-a, 0.25], [0, 0.5], [a, 0.25]]) v += Q * f * patch(eta, xg + d + dx, yc);
+        // répartie : hors du groupe [xg − 0,8 ; xg + 5,6], parties défavorables seulement
+        for (let i = 0; i < xsF.length; i++) if ((xsF[i] < xg - 0.8 || xsF[i] > xg + 5.6) && sg * pr[i] > 0) v += q / ay * pr[i] * wx[i];
+        if (sg * v > sg * best) best = v;
+      }
+      return best;
+    };
+    const sw2 = yc => {
+      const pr = profil(eta, yc), tot = pr.reduce((s2, v, i) => s2 + v * wx[i], 0);
+      let best = 150 / ay * tot;   // motif sans intervalle sur la plaque (25 m > longueur de plaque)
+      for (let g0 = 0; g0 <= Lm - 7 + 1e-9; g0 += 0.2) { let v = tot; for (let i = 0; i < xsF.length; i++) if (xsF[i] > g0 && xsF[i] < g0 + 7) v -= pr[i] * wx[i]; v *= 150 / ay; if (sg * v > sg * best) best = v; }
+      return sg * best > 0 ? best : 0;
+    };
+    const pire = f => voies.map(y => { const v = [f(y - ecc), f(y + ecc)]; return sg > 0 ? Math.max(...v) : Math.min(...v); });
+    const L1 = pire(lm71).map(v => v * phi), S2 = R.sw2 ? pire(sw2).map(v => v * phi) : null;
+    const better = (u, v) => (sg > 0 ? Math.max(u, v) : Math.min(u, v));
+    const cas = [];
+    for (const v of L1) cas.push({ id: 'rail1', ref: 'gr11', Q: v });
+    if (voies.length === 2) cas.push({ id: 'rail2', ref: 'gr21', Q: L1[0] + L1[1] });
+    if (S2) {
+      for (const v of S2) cas.push({ id: 'sw2', ref: 'gr16', Q: v });
+      if (voies.length === 2) cas.push({ id: 'sw2b', ref: 'gr26', Q: better(S2[0] + L1[1], S2[1] + L1[0]) });
+    }
+    let elu = 0, car = 0, freq = 0;
+    const det = {};
+    for (const k of cas) {
+      const gam = gammaGroupe(k.ref), p1 = psiRail(k.ref).psi1;
+      elu = better(elu, gam * k.Q); car = better(car, k.Q); freq = better(freq, p1 * k.Q);
+      det[k.id] = better(det[k.id] ?? 0, k.Q);
+    }
+    const EC = { ELU: 1.35 * G + elu, CAR: G + car, FREQ: G + freq, QP: G };
+    return { ...c, eta: undefined, G, rail: det, EC, F61: { ELU: EC.ELU, ELS: EC.CAR } };
+  });
+  const inf = designHourdis(res, 'travee', p), sup = designHourdis(res, 'appui', p);
+  return { modele: { Lm, x0, nx: xsF.length, ny: ys.length, bt, ys0 }, cibles: res, inf, sup, poinc: null, Q1: null, Q2: null, nl: null,
+    rail: { LPhi: L41.LPhi, portee, regle: L41.regle, plafonne: R.LPhiPoutres > 0 && 3 * portee > R.LPhiPoutres, dyn, phi, ax, ay, ecc, a, wt: R.largeurTraverse, sw2: !!R.sw2, nV: voies.length } };
 }

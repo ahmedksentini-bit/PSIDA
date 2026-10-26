@@ -7,6 +7,7 @@ import { parsePoutres } from '../src/beams/run.js';
 import { sectionVIPP, contourVIPP } from '../src/beams/vipp_section.js';
 import { traceCables, UNITES } from '../src/beams/vipp.js';
 import { positionsTorons, DEFAUTS_PRAD, TORONS } from '../src/beams/prad.js';
+import { superstructureVoie } from '../src/loads_rail.js';
 
 const F = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : '—');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -19,8 +20,9 @@ const COUL = ['#c8552b', '#d9902a'];   // 1re et 2e famille
 
 /** Coupe transversale du tablier : poutres, hourdis, chaussée, trottoirs. */
 function coupeTablier(inp, S) {
-  const w = 760, h = 190, n = inp.n, b1 = inp.b1, W = n * b1, ys = Array.from({ length: n }, (_, k) => -W / 2 + b1 * (k + 0.5));
-  const yMin = Math.min(-W / 2, inp.roadway.y1, ...inp.footways.map(f => f.y1)), yMax = Math.max(W / 2, inp.roadway.y2, ...inp.footways.map(f => f.y2));
+  const w = 760, h = inp.rail ? 208 : 190, n = inp.n, b1 = inp.b1, W = n * b1, ys = Array.from({ length: n }, (_, k) => -W / 2 + b1 * (k + 0.5));
+  const rw = inp.rail ? { y1: -W / 2, y2: W / 2 } : inp.roadway;
+  const yMin = Math.min(-W / 2, rw.y1, ...inp.footways.map(f => f.y1)), yMax = Math.max(W / 2, rw.y2, ...inp.footways.map(f => f.y2));
   const Hb = S ? S.forme.hp : (inp.beam.H || 2) - inp.hd, k = (w - 80) / (yMax - yMin), kz = Math.min(k, 90 / (Hb + inp.hd)), sx = y => 40 + (y - yMin) * k, yT = 64, s = [];
   s.push(g('pt_hd pt_n pt_b1', `<rect x="${sx(-W / 2)}" y="${yT}" width="${W * k}" height="${inp.hd * kz}" fill="#c9d6c4" stroke="#456"/>`));
   ys.forEach(y => {
@@ -30,7 +32,18 @@ function coupeTablier(inp, S) {
       s.push(g('pt_hp pt_bt pt_b0v pt_bta pt_hpi pt_tpan pt_hte pt_pt pt_gt pt_n pt_b1', `<polygon points="${pts}" fill="#dfe7f1" stroke="#456"/>`));
     } else s.push(g('pt_n pt_b1', `<rect x="${x - 0.2 * k}" y="${yT + inp.hd * kz}" width="${0.4 * k}" height="${Hb * kz}" fill="#dfe7f1" stroke="#456"/>`));
   });
-  s.push(g('pt_road', `<rect x="${sx(inp.roadway.y1)}" y="${yT - 10}" width="${(inp.roadway.y2 - inp.roadway.y1) * k}" height="6" fill="#555" opacity=".75"/>${T(sx((inp.roadway.y1 + inp.roadway.y2) / 2), yT - 16, `chaussée ${F(inp.roadway.y2 - inp.roadway.y1)} m`, { fs: 10.5 })}`));
+  if (inp.rail) {
+    // pont à poutres sous rail : lit de ballast (épaisseur dilatée), traverses, rails et axes de voie
+    const R = inp.rail, D = superstructureVoie({ voies: R.voies, ballast: R.ballast, hTraverse: R.hTraverse, longueurTraverse: R.longueurTraverse, largeurBallast: R.largeurBallast, limites: [-W / 2, W / 2] }).detail;
+    const hb = 14, ht = 6;
+    s.push(g('pt_rail_ballast pt_rail_hTrav pt_rail_bBallast', `<rect x="${sx(D.y1)}" y="${yT - hb}" width="${(D.y2 - D.y1) * k}" height="${hb}" fill="#d8d2c4" stroke="#8a7f6a" stroke-width=".6"/>`));
+    R.voies.forEach((yv, i) => {
+      s.push(g('pt_rail_traverse pt_rail_y pt_rail_entraxe', `<rect x="${sx(yv - R.longueurTraverse / 2)}" y="${yT - hb}" width="${R.longueurTraverse * k}" height="${ht}" fill="#666"/>`));
+      for (const dy of [-0.75, 0.75]) s.push(`<rect x="${sx(yv + dy) - 2}" y="${yT - hb - 6}" width="4" height="6" fill="#222"/>`);
+      s.push(g('pt_rail_y pt_rail_entraxe', `<line x1="${sx(yv)}" x2="${sx(yv)}" y1="${yT - hb - 12}" y2="${yT + inp.hd * kz}" stroke="#1f5fa8" stroke-dasharray="4 3"/>${T(sx(yv), yT - hb - 15, `voie ${i + 1} (y = ${F(yv)})`, { fs: 10, c: '#1f5fa8' })}`));
+    });
+    s.push(T(40, h - 6, `${R.voies.length} voie${R.voies.length > 1 ? 's' : ''} ferrée${R.voies.length > 1 ? 's' : ''} (EN 1991-2) : α = ${F(R.alpha)}, ${R.entretien === 'soigne' ? 'Φ2' : 'Φ3'}${R.sw2 ? ', SW/2' : ''} ; ballast ${F(R.ballast)} m sous traverses`, { a: 'start', fs: 10.5, c: '#1f5fa8' }));
+  } else s.push(g('pt_road', `<rect x="${sx(inp.roadway.y1)}" y="${yT - 10}" width="${(inp.roadway.y2 - inp.roadway.y1) * k}" height="6" fill="#555" opacity=".75"/>${T(sx((inp.roadway.y1 + inp.roadway.y2) / 2), yT - 16, `chaussée ${F(inp.roadway.y2 - inp.roadway.y1)} m`, { fs: 10.5 })}`));
   inp.footways.forEach(f => s.push(g('pt_foot', `<rect x="${sx(f.y1)}" y="${yT - 14}" width="${(f.y2 - f.y1) * k}" height="10" fill="#b9a17a" opacity=".8"/>`)));
   if (n > 1) s.push(cote(sx(ys[0]), sx(ys[1]), yT + (inp.hd + Hb) * kz + 22, `b₁ = ${F(b1)} m`, 'pt_b1'));
   s.push(T(40, 18, `${n} poutres ${inp.type === 'BA' ? 'en béton armé' : 'précontraintes'}, entraxe ${F(b1)} m, hourdis ${F(inp.hd)} m — largeur active 2b = ${F(W)} m`, { a: 'start', fs: 11.5 }));

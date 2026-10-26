@@ -66,7 +66,7 @@ export function parseRail(d) {
   return {
     voies: n === 2 ? [y - e / 2, y + e / 2] : [y], n, y, entraxe: e,
     alpha, alphaNormalise: ALPHAS.some(a => Math.abs(a - alpha) < 1e-9),
-    entretien: d.rail_entretien === 'soigne' ? 'soigne' : 'normal', sw2: d.rail_sw2 === 'on' || d.rail_sw2 === true,
+    entretien: d.rail_entretien === 'soigne' ? 'soigne' : 'normal', sw2: d.rail_sw2 === 'on' || d.rail_sw2 === true || +d.rail_sw2 === 1,   // case à cocher : 'on' (FormData) ou 1 (formSnapshot)
     ballast: v('rail_ballast', 0.30), longueurTraverse: v('rail_traverse', 2.60), hTraverse: v('rail_hTrav', 0.22),
     V: v('rail_V', 0), rayon: v('rail_r', 0), ecartement: 1.50,
     largeurBallast: v('rail_bBallast', 0) || null, typeBallast: d.rail_typeBallast === 'basaltique' ? 'basaltique' : 'normal',

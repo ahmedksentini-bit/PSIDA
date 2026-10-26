@@ -2,8 +2,9 @@
  * Onglet « Poutres » : lecture du formulaire, calcul du tablier à poutres, dimensionnement des poutres et réactions par
  * ligne d'appui (transmises au module « Appuis et fondations » en mode appuis seuls).
  */
-import { beamDeck, beamCombinations, beamSection } from './index.js';
-import { tBeamULS, prestressCheck, lineReactions, etriersEC2 } from './design.js';
+import { beamDeck, beamCombinations, beamCombinationsRail, beamSection } from './index.js';
+import { parseRail } from '../pipeline.js';
+import { tBeamULS, prestressCheck, lineReactions, lineReactionsRail, etriersEC2 } from './design.js';
 import { FORME_VIPP, sectionVIPP } from './vipp_section.js';
 import { chaineVIPP, DEFAUTS_VIPP } from './vipp.js';
 import { hourdisLocal } from './hourdis.js';
@@ -42,14 +43,18 @@ export function parsePoutres(d) {
   // séisme vertical des tabliers précontraints (EN 1998-2 § 4.1.7(2)P), quand le séisme est activé dans l'onglet Appuis
   const sv = spectreVerticalDuFormulaire(d);
   if (sv) { vipp.spectreV = sv.spectreV; vipp.siteV = sv.site; }
+  // pont à poutres sous rail (EN 1991-2 section 6) : mêmes données que le pont-dalle sous rail, champs pt_rail_*
+  const rail = d.pt_trafic === 'ferroviaire' ? parseRail(Object.fromEntries([['trafic', 'ferroviaire'],
+    ...Object.entries(d).filter(([k]) => k.startsWith('pt_rail_')).map(([k, x]) => [k.slice(3), x])])) : null;
   return {
-    geo, vipp, local,
+    geo, vipp, local, rail,
     spans: nums(d.pt_spans), n: v('pt_n', 4), b1: v('pt_b1', 3.28), hd: v('pt_hd', 0.30),
     beam: geo === 'rect' && parts.length ? { parts } : { A: v('pt_A', 1.98), I: v('pt_I', 1.006), K: v('pt_K', 0.0364), v: v('pt_v', 0.65), vp: v('pt_vp', 1.67), H: v('pt_H', 2.32) },
     roadway: (([y1, y2]) => ({ y1, y2 }))(nums(d.pt_road || '-4, 4')),
     footways: pairs(d.pt_foot).filter(p => p.length >= 2).map(([y1, y2]) => ({ y1, y2 })),
     lines: String(d.pt_lines || '').split(';').map(t => t.trim()).filter(Boolean).map(t => { const [g, e] = t.split('@').map(Number); return { g, e }; }).filter(l => Number.isFinite(l.g) && Number.isFinite(l.e)),
-    bands: String(d.pt_bands || '').split(';').map(t => t.trim()).filter(Boolean).map(t => { const [q, r] = t.split('sur'); const [y1, y2] = nums(r); return { q: +q, y1, y2 }; }).filter(b => Number.isFinite(b.q) && Number.isFinite(b.y1)),
+    // k min / k max facultatifs (« q sur y1,y2 k 0.7/1.3 », EN 1991-1-1 § 5.2.3 : ballast ± 30 %) ; sans k : valeur nominale
+    bands: String(d.pt_bands || '').split(';').map(t => t.trim()).filter(Boolean).map(t => { const m = t.match(/k\s*([\d.]+)\s*\/\s*([\d.]+)/i), t0 = m ? t.replace(m[0], '') : t; const [q, r] = t0.split('sur'); const [y1, y2] = nums(r); return m ? { q: +q, y1, y2, kmin: +m[1], kmax: +m[2] } : { q: +q, y1, y2 }; }).filter(b => Number.isFinite(b.q) && Number.isFinite(b.y1)),
     extraArea: v('pt_extra', 0) / 25,
     nRetenue: v('pt_ret', 0), mil: d.pt_mil || 'Mc120', alphaEC: d.alpha || 'recommended',
     type: d.pt_type || 'BP', fck: v('pt_fck', 35), fyk: v('pt_fyk', 500), b0: v('pt_b0', 0.25), cover: v('pt_cover', 0.12),
@@ -66,6 +71,7 @@ export function computePoutres(inp) {
   const bd = beamDeck(inp);
   const sec = bd.sec, H = sec.H || inp.beam.H || 2, v = sec.v ?? inp.beam.v, vp = sec.vp ?? inp.beam.vp;
   const spans = [...bd.bySpan.values()].map(S => {
+    if (inp.rail) return traveeRail(S, inp, sec, H, v, vp);
     const mid = S.deck.beam.sectionIndex(0, 0.5), x0 = S.deck.beam.sectionIndex(0, 0);
     const beams = S.beams.map(b => {
       const c = beamCombinations(b);
@@ -97,6 +103,7 @@ export function computePoutres(inp) {
     return { L: S.L, theta: S.gp.theta, alpha: S.gp.alpha, Lguyon: S.gp.Lguyon, classe: S.f61.classe, deltaB: S.f61.deltaBc[0], deltaC: S.f61.deltaMc?.[0], beams };
   });
   // hourdis (flexion locale) et entretoises d'about (vérinage) : sections connues par leurs dimensions ou leurs rectangles
+  // (sous rail : charges des traverses diffusées dans le ballast, coefficient dynamique du hourdis, tableau 6.2 cas 4.1)
   let hourdis = null, entretoise = null;
   const parts = inp.beam.parts, Lmax = Math.max(...inp.spans);
   const table = inp.geo === 'dims' ? { bt: inp.vipp.forme.bt, eTab: inp.vipp.forme.hte + inp.vipp.forme.pt * Math.max(inp.vipp.forme.bt / 2 - inp.vipp.forme.b0 / 2 - inp.vipp.forme.gt, 0) / 2, hp: inp.vipp.forme.hp }
@@ -104,7 +111,9 @@ export function computePoutres(inp) {
   const L0 = inp.local || {};
   if (table && inp.n >= 2) {
     try {
-      hourdis = hourdisLocal({ n: inp.n, b1: inp.b1, hd: inp.hd, bt: table.bt, eTab: table.eTab, L: Lmax, roadway: inp.roadway, footways: inp.footways, lines: inp.lines, bands: inp.bands, tRev: L0.tRev, fck: inp.geo === 'dims' ? inp.vipp.beton.fckH : inp.fck, fyk: inp.fyk, c: L0.c, alphaEC: inp.alphaEC, classe: spans[0].classe, mil: inp.mil });
+      hourdis = hourdisLocal({ n: inp.n, b1: inp.b1, hd: inp.hd, bt: table.bt, eTab: table.eTab, L: Lmax, roadway: inp.roadway, footways: inp.footways, lines: inp.lines, bands: inp.bands, tRev: L0.tRev, fck: inp.geo === 'dims' ? inp.vipp.beton.fckH : inp.fck, fyk: inp.fyk, c: L0.c, alphaEC: inp.alphaEC, classe: spans[0].classe, mil: inp.mil,
+        ...(inp.rail ? { rail: { ...inp.rail, LPhiPoutres: Math.min(...spans.map(q => q.rail.LPhi.LPhi)) },
+          bw0: inp.geo === 'dims' ? inp.vipp.forme.b0 : parts ? Math.min(...parts.map(q => q.b)) : inp.b0 } : {}) });
     } catch (e) { hourdis = { erreur: e.message }; }
   }
   {
@@ -112,7 +121,44 @@ export function computePoutres(inp) {
     entretoise = entretoiseVerinage({ ys: bd.ys, RG: sp.beams.map(b => b.V0.G ?? 0), dv: L0.dv, verinsRive: L0.verinsRive, he: Math.max(hp - 0.10, 0.5), te: L0.te, hd: inp.hd, fck: inp.fck, fyk: inp.fyk });
     entretoise.L = sp.L;
   }
-  return { inp, sec, spans, lines: lineReactions(bd), bd, hourdis, entretoise };
+  return { inp, sec, spans, lines: inp.rail ? lineReactionsRail(bd, inp.rail) : lineReactions(bd), bd, hourdis, entretoise, rail: !!inp.rail };
+}
+
+/**
+ * Travée d'un pont à poutres sous rail : efforts par poutre sous les groupes ferroviaires (Φ inclus), combinaisons EN 1990
+ * A2 (beamCombinationsRail) et dimensionnement des poutres aux Eurocodes seuls (Fascicule 61 / BAEL / BPEL sans objet).
+ */
+function traveeRail(S, inp, sec, H, v, vp) {
+  const mid = S.deck.beam.sectionIndex(0, 0.5), x0 = S.deck.beam.sectionIndex(0, 0), R = S.rail, groupes = R.groupes;
+  const ids = ['G', ...groupes.map(G => G.id)];
+  const beams = S.beams.map(b => {
+    const c = beamCombinationsRail(b, groupes), MuE = Math.max(...c.ELU);
+    const out = { k: b.k, y: b.y, mid: {}, eta: {}, etaL: {}, etaV: {}, V0: {}, MuF: null, MuE, rail: true,
+      comb: { ELS_F61: null, ELU_F61: null, ELS_EC: c.ELS_car[mid], FREQ_EC: c.ELS_freq[mid], ELU_EC: c.ELU[mid], gov: c.gov[mid] } };
+    for (const id of ids) if (b[id]) { out.mid[id] = b[id].Mmax[mid]; out.eta[id] = b[id].eta; out.etaL[id] = b[id].etaL ?? null; out.etaV[id] = b[id].etaV ?? b[id].eta; out.V0[id] = b[id].Vmax ? Math.max(Math.abs(b[id].Vmax[x0]), Math.abs(b[id].Vmin?.[x0] ?? 0)) : null; }
+    out.V0.QeluMax = c.QeluV[x0];
+    const d = H - inp.cover;
+    if ((inp.type === 'BP' || inp.type === 'PRAD') && inp.geo === 'dims') {
+      out.vipp = chaineVIPP({ ...inp.vipp, b1: inp.b1, hd: inp.hd, gExtra: 0 }, S.L, b, { trafic: { Qcar: c.Qcar, Qfreq: c.Qfreq, QeluM: c.QeluM, QeluV: c.QeluV } });
+    } else if (inp.type === 'BA') {
+      out.BA = { BAEL: null, EC: tBeamULS({ M: MuE, beff: inp.b1, hf: inp.hd, b0: inp.b0, d, fck: inp.fck, fyk: inp.fyk, code: 'EC' }) };
+      const secs = S.deck.beam.sections, half = secs.filter(q => q.x <= S.L / 2 + 1e-9);
+      out.BA.travee = half.map((q, i) => {
+        const VEd = 1.35 * Math.abs(b.G.Vmax?.[i] ?? 0) + c.QeluV[i];
+        const As = tBeamULS({ M: c.ELU[i], beff: inp.b1, hf: inp.hd, b0: inp.b0, d, fck: inp.fck, fyk: inp.fyk, code: 'EC' });
+        return { x: q.x, MEd: c.ELU[i], As: As.As, VEd, V: etriersEC2({ VEd, bw: inp.b0, z: 0.9 * d, fck: inp.fck, fyk: inp.fyk }) };
+      });
+    } else {
+      const base = { A: sec.A, I: sec.I, v, vp, P: inp.P, e0: inp.e0, Mmin: b.G.Mmin[mid], fck: inp.fck };
+      const ecQP = prestressCheck({ ...base, Mmax: b.G.Mmax[mid], code: 'EC' }), ecCar = prestressCheck({ ...base, Mmax: c.ELS_car[mid], code: 'EC' });
+      out.BP = { BPEL: null, EC: { ...ecQP, enChargeCar: ecCar.enCharge, ok: ecQP.enCharge.inf >= -1e-6 && ecQP.aVide.sup >= -1e-6 && ecCar.enCharge.sup <= ecCar.sigClim + 1e-6 } };
+    }
+    return out;
+  });
+  return { L: S.L, theta: S.gp.theta, alpha: S.gp.alpha, Lguyon: S.gp.Lguyon, classe: null, deltaB: null, deltaC: null, beams,
+    rail: { params: R.params, voies: R.voies, nV: R.nV, LPhi: R.LPhi, dyn: R.dyn, phi: R.phi, couverture: R.couverture, diffusion: R.diffusion, ecc: R.ecc,
+      groupes: groupes.map(G => ({ id: G.id, ref: G.ref, label: G.label, gamma: G.gamma, psi0: G.psi0, psi1: G.psi1, psi2: G.psi2, nArr: G.nArr })),
+      horizontal: R.horizontal, avert: R.avert } };
 }
 
 /** Texte « appuis seuls » (G ; G min ; A ; Bc ; Mc120 ; trottoirs ; TS ; UDL) à partir des réactions par ligne. */
