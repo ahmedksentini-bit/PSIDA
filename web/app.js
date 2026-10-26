@@ -118,7 +118,7 @@ function renderConception(st) {
 
 function bearingsTable(st) {
   const b = st.bearings;
-  let h = st.rail ? `<p class="small"><span class="badge warn">LOT 5</span> Pont-dalle sous rail : réactions verticales des groupes ferroviaires (γ 1,45 / 1,20) ; le freinage et les coefficients d'inégalité ci-dessous restent ceux du calcul routier — vérification ferroviaire des appareils au lot 5 du chantier ponts-rails.</p>` : '';
+  let h = st.rail ? `<p class="small"><span class="badge warn">PONT-RAIL</span> Pré-choix des appareils (règles de 1989) sous les réactions des groupes ferroviaires (Φ inclus) et l'effort horizontal de démarrage-freinage ferroviaire (§ 6.5.3) ; coefficients d'inégalité de répartition de PSI-DA 68 (établis pour les charges routières). Vérification NF EN 1337-3 sous les groupes ferroviaires (démarrage-freinage, force centrifuge, lacet, interaction voie-ouvrage) : « Appuis et fondations ».</p>` : '';
   h += `<p class="small">Règles du § 3.6.1 (bulletin technique n° 4 du SETRA) : σ = P/(ab) ≤ min(15 MPa ; G·ab/(t(a+b))) avec G = ${b.G1} MPa ; u_g/T ≤ 0,5 ; u_g/T + H/(G₂ab) ≤ 0,7 (G₂ = ${b.G2} MPa) ; T ≤ min(a, b)/5 ; t·T ≥ α·a²/3. Réactions ELS caractéristiques (G + trafic + T + Ta) ; réaction de l'appareil le plus chargé = [k_CP·R_G + k_Q·(R − R_G)]/${b.nb} avec les coefficients d'inégalité de répartition de PSI-DA 68 § 2.4.2 (entraxe × sin ψ = ${b.ineq ? b.ineq.e.toFixed(2) + ' m' : '—'} ; k_CP = ${b.ineq ? b.ineq.CP.toFixed(3) : '1'}, k_A (UDL) = ${b.ineq ? b.ineq.A.toFixed(3) : '1'}, k_B (TS) = ${b.ineq ? b.ineq.B.toFixed(3) : '1'}, k_Q pondéré par les réactions UDL/TS) ; u_g = (ε + α_T·ΔT)·distance au point fixe (ε = ${b.epsSlow}, ΔT = ${b.dT} °C, point fixe à x = ${b.xf.toFixed(1)} m) ; H = freinage EN 1991-2 § 4.4.1 = ${b.H.toFixed(0)} kN réparti sur ${b.nb * b.nLines} appareils ; α = ${(b.alpha0 * 1000).toFixed(0)} mrad de défaut de pose + rotation sous charges permanentes (module différé) + rotation sous gr1a (ligne d'influence de rotation). Sélection : plus petit appareil entièrement enrobé de la gamme standard du guide (NF T 47.815), ou appareil imposé dans le formulaire (culées, piles).</p>
   <table class="brg"><thead><tr><th>Ligne d'appui</th><th>Réactions [kN]</th><th>Déplacement, effort, rotation</th><th>Appareil retenu</th><th>Vérifications (valeur ≤ limite)</th><th>Observations</th></tr></thead><tbody>`;
   const f1 = v => v.toFixed(1), f2 = v => v.toFixed(2);
@@ -144,7 +144,7 @@ function bearingsTable(st) {
 
 function chevetresTable(st) {
   const cm = v => (v * 1e4).toFixed(1), f0 = v => v.toFixed(0), f2 = v => v.toFixed(2);
-  let h = `<h3>Chevêtres incorporés et réaction par appareil (annexe 4 du guide PSIDP-EL)</h3><p class="small">${st.rail ? 'Pont-dalle sous rail : ELU 1,35 G + ' + Math.max(...st.rail.groupes.map(G => G.gamma)).toFixed(2).replace('.', ',') + ' Q, Q = enveloppe verticale des groupes ferroviaires (règles d\'annexe 4 conçues pour les charges routières — à confirmer au lot 5).' : 'ELU fondamental 1,35 G + 1,35 LM1.'} Ligne d'appui de longueur B = 2b/sin ψ, ${st.chevetres[0].n} appareils à a = ${f2(st.chevetres[0].a)} m (le long de la ligne), consoles c = ${f2(st.chevetres[0].c)} m. Charges de type 1 (permanentes et trafic éloigné) réparties comme une charge uniforme, de type 2 (trafic à moins de d de la ligne) comme sur une poutre sur appuis : d = max[a + c ; (a + e)/2 ; min(B/2 ; L)], ζ_UDL = (d/L)(2 − d/L), ζ_TS = (1 − d/2L)·P_d/S_q. Moments du chevêtre par poutre continue sur les appareils (consoles c), moments locaux m_c⁻ = M_c⁻/(1,5 c), m_e = 1,5 M_e/e ; ferraillage par bandes (§ 6.2), section minimale en enveloppe avec le ferraillage courant de la dalle, d = ${f2(st.chevetres[0].dEff)} m. Culées : adaptation de la règle (L = about + demi-travée de rive).</p>
+  let h = `<h3>Chevêtres incorporés et réaction par appareil (annexe 4 du guide PSIDP-EL)</h3><p class="small">${st.rail ? 'Pont-dalle sous rail : ELU 1,35 G + ' + Math.max(...st.rail.groupes.map(G => G.gamma)).toFixed(2).replace('.', ',') + ' Q, Q = enveloppe verticale des groupes ferroviaires (règles d\'annexe 4 établies pour les charges routières, appliquées aux réactions ferroviaires avec Φ).' : 'ELU fondamental 1,35 G + 1,35 LM1.'} Ligne d'appui de longueur B = 2b/sin ψ, ${st.chevetres[0].n} appareils à a = ${f2(st.chevetres[0].a)} m (le long de la ligne), consoles c = ${f2(st.chevetres[0].c)} m. Charges de type 1 (permanentes et trafic éloigné) réparties comme une charge uniforme, de type 2 (trafic à moins de d de la ligne) comme sur une poutre sur appuis : d = max[a + c ; (a + e)/2 ; min(B/2 ; L)], ζ_UDL = (d/L)(2 − d/L), ζ_TS = (1 − d/2L)·P_d/S_q. Moments du chevêtre par poutre continue sur les appareils (consoles c), moments locaux m_c⁻ = M_c⁻/(1,5 c), m_e = 1,5 M_e/e ; ferraillage par bandes (§ 6.2), section minimale en enveloppe avec le ferraillage courant de la dalle, d = ${f2(st.chevetres[0].dEff)} m. Culées : adaptation de la règle (L = about + demi-travée de rive).</p>
   <table><thead><tr><th>Ligne</th><th>L [m]</th><th>d [m]</th><th>ζ TS / UDL</th><th>R rive / centre ELU [kN]</th><th>R moyen [kN]</th><th>M_c⁻ / M_e⁻ / M_e⁺ [kN·m]</th><th>m_c⁻ / m_e⁻ / m_e⁺ [kN·m/m]</th><th>Face sup. ① / ② / ③ [cm²/m]</th><th>Face inf. ①' / ②' [cm²/m]</th></tr></thead><tbody>`;
   if (st.chevetres[0].plaque) h += `<p class="small"><span class="badge ok">PLAQUE</span> Tablier calculé en plaque : réactions R et moments des bandes lus sur la plaque (moyenne de m_y de Wood-Armer sur chaque bande, ① pleine, ② et ③ en anneaux, ELU 1,35 G + 1,35 gr1a) ; d et ζ restent ceux du guide, pour mémoire (valeurs du guide dans l'onglet Tablier, comparaison).</p>`;
   for (const r of st.chevetres) {
@@ -266,7 +266,7 @@ function renderStatic(st) {
   renderConception(st); renderCase(st); renderSection(st); renderDesign(st); renderTransverse(st); renderExtra(st); renderRebar(st); renderPlans(st); renderSupports(st); renderPrecontrainte(st);
   try { renderMaillage(st); } catch (e) { const el = document.getElementById('maillage-info'); if (el) el.textContent = 'Maillage : ' + e.message; }
   try { renderPlaque(st); } catch (e) { const el = document.getElementById('plaque-info'); if (el) el.textContent = 'Affichage de la plaque impossible : ' + e.message; }
-  st._recoRef = ($('#supports-ref') && $('#supports-ref').value === 'F61') ? 'BAEL' : 'EC';
+  st._recoRef = (st.supports && st.supports.rail) ? 'EC' : ($('#supports-ref') && $('#supports-ref').value === 'F61') ? 'BAEL' : 'EC';
   majReco(st);
   try { NIV.refresh(); } catch (e) { /* plan de nivellement indisponible */ }
 }
@@ -301,7 +301,7 @@ async function solveReco(a) {
     try {
       const p = parseForm(f);
       if (c.calcul === 'appuis') {
-        const sup = computeSupports({ p, deck: base.deck, perm: base.perm, f61: base.f61, ec: base.ec, bearings: base.bearings, psidp: base.psidp, thermal: base.thermal }, p.supports);
+        const sup = computeSupports({ p, deck: base.deck, perm: base.perm, f61: base.f61, ec: base.ec, bearings: base.bearings, psidp: base.psidp, thermal: base.thermal, rail: base.rail, railAppuis: base.railAppuis }, p.supports);
         return !!c.verifie({ ...base, p, supports: sup });
       }
       if (p.methodeTablier === 'plaque') p.methodeTablier = 'guyon';   // recherche en Guyon-Massonnet (rapide), à confirmer par le calcul en plaque
@@ -340,7 +340,11 @@ function renderRebar(st) {
 function renderSupports(st) {
   const box = $('#supports-tables');
   if (!st.supports) { box.innerHTML = `<p class="small">Calcul des appuis indisponible${st.supportsError ? ` : ${st.supportsError}` : ''}.</p>`; return; }
-  box.innerHTML = blocksToHTML(supportsBlocks(st.supports, $('#supports-ref').value));
+  // pont-rail : Eurocodes seuls (référentiel Fascicule 61 / BAEL indisponible)
+  const ref = $('#supports-ref'), o61 = ref && ref.querySelector('option[value="F61"]');
+  if (o61) { o61.disabled = !!st.supports.rail; if (st.supports.rail) ref.value = 'EC'; }
+  const info = $('#ss-rail-info'); if (info) info.hidden = !(st.standalone && st.railAppuis);
+  box.innerHTML = blocksToHTML(supportsBlocks(st.supports, ref ? ref.value : 'EC'));
 }
 
 function renderExtra(st) {
@@ -901,8 +905,7 @@ $('#btn-poutres-docx').addEventListener('click', async () => {
 $('#btn-poutres-appuis').addEventListener('click', () => {
   if (!poutres) $('#btn-poutres').click();
   if (!poutres) return;
-  // pont à poutres sous rail : appuis et fondations sous charges ferroviaires = lot 5 du chantier ponts-rails
-  if (poutres.rail) { $('#error').textContent = 'Pont à poutres sous rail : la transmission des réactions et des actions horizontales ferroviaires aux appuis n\'est pas encore disponible (lot 5 du chantier ponts-rails).'; return; }
+  // pont à poutres sous rail : réactions ferroviaires (sans Φ, Φ par ligne) et paramètres de voie transmis aux appuis seuls
   ecrireAppuisSeuls(champsAppuisPoutres(poutres));
 });
 // tablier par phases ou mixte → appuis seuls (réactions, nature du tablier et données sismiques : web/transfert_appuis.js)
@@ -911,6 +914,8 @@ function ecrireAppuisSeuls(champs) {
   // liaisons saisies pour un autre ouvrage (autre nombre de lignes) : effacées
   if (f.ss_liaisons && f.ss_liaisons.value.trim() && f.ss_liaisons.value.split(/[,;]+/).filter(t => t.trim()).length !== n) f.ss_liaisons.value = '';
   for (const [k, v] of Object.entries(champs)) if (f[k]) f[k].value = String(v);
+  // données ferroviaires (ponts à poutres sous rail) : effacées pour tout autre tablier transmis
+  if (f.ss_rail) f.ss_rail.value = champs.ss_rail || '';
   // tablier justifié aux Eurocodes (VIPP, PRAD, phasage, mixte) : appuis affichés aux Eurocodes (le Fascicule 61 reste au choix)
   const ref = $('#supports-ref'); if (ref) ref.value = 'EC';
   $('#btn-standalone').click();

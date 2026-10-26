@@ -11,6 +11,7 @@ import { parseData, compute } from '../src/pipeline.js';
 import { formDefaults } from '../tools/formdefaults.mjs';
 import { buildNoteRail, railCardHTML } from '../web/note_rail.js';
 
+const note0 = st => buildNoteRail(st, {});
 const proche = (a, b, tol = 1e-3) => assert.ok(Math.abs(a - b) <= tol * Math.max(1, Math.abs(b)), `${a} ≠ ${b}`);
 const dalle = (spans, h = 0.8) => new SlabDeck({ spans, width: 6, h, roadway: { y1: -3, y2: 3 }, overhangs: [0, 0], lines: [], bands: [], footways: [], nGrid: 100, nSec: 20 });
 const RAIL = { voies: [0], alpha: 1, entretien: 'normal', sw2: false, ballast: 0.30, longueurTraverse: 2.60, hTraverse: 0.22 };
@@ -154,7 +155,8 @@ test('Chaîne complète en mode ferroviaire : tablier, transversal, note ; mode 
   const st = compute(parseData(d));
   assert.ok(st.rail); assert.equal(st.f61, null); assert.equal(st.design.F61, null); assert.equal(st.transDesign.F61, null);
   assert.ok(st.design.EC.rail); assert.ok(st.design.EC.punch.sansObjet);
-  assert.match(st.supportsError, /lot 5/);
+  assert.equal(st.supportsError, null); assert.ok(st.supports && st.supports.rail);   // appuis sous charges ferroviaires (lot 5)
+  assert.ok(note0(st).blocks.some(b => b.t === 'h1' && /Appuis et fondations/.test(b.text)));
   assert.ok(st.trans.spans.every(sp => sp.rail && !sp.ec));
   assert.ok(st.transDesign.EC.spans.every(sp => sp.bot.As > 0 && sp.top.As > 0));
   assert.ok(st.cases.some(c => c.id === 'rail1'));

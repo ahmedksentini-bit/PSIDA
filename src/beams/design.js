@@ -110,7 +110,7 @@ export function lineReactions(bd) {
 
 /**
  * Réactions caractéristiques par ligne d'appui d'un pont à poutres sous rail (travées indépendantes), pour mémoire et pour
- * le lot 5 (non transmises aux appuis) : permanentes = somme des réactions des travées adjacentes ; trafic par voie =
+ * les appuis (transmises aux « appuis seuls », lot 5) : permanentes = somme des réactions des travées adjacentes ; trafic par voie =
  * maximum, sur la ligne d'influence en triangle des deux travées, de LM71 × α (4 essieux de 250α kN à 1,60 m et 80α kN/m
  * hors des 6,40 m du groupe, sur les seules parties défavorables — ici toute la ligne d'influence, positive) et de SW/2
  * (motif rigide 150 kN/m sur 2 × 25 m séparés de 7 m) si la ligne l'exige ; × Φ maximal des travées adjacentes

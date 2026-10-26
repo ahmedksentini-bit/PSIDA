@@ -85,6 +85,11 @@ export function toPontEC8(st, opt = {}) {
     };
   });
   const site = { commune: '', zone: 3, categorie: 'III', classeSol: 'B', ST: 1.0, trafic: 'cas_general', ...(opt.site || {}) };
+  // pont-rail : ψ2,1 = 0,3 (EN 1998-2 § 4.1.2(4)P, ponts ferroviaires) et charge de trafic répartie = partie répartie de
+  // LM71 × α de chaque voie (80 α kN/m), pont chargé sur toute sa longueur (masses de Pont EC8)
+  const RA = st.railAppuis || null;
+  if (RA) site.trafic = 'ferroviaire_trafic_intense';
+  const chargeTrafic = RA ? RA.params.nV * 80 * (RA.params.alpha || 1) : 0;
   // nature du tablier : pont-dalle (PSI-DA ou PSI-DP) ou tablier quelconque des appuis seuls (poutres, caisson, mixte)
   const TYPES = { dalle: st.psidp ? 'dalle_bp' : 'dalle_ba', poutres: 'poutres', caisson: 'caisson', mixte: 'mixte' };
   const typeTablier = TYPES[deck.type || 'dalle'] || 'dalle_ba';
@@ -100,7 +105,7 @@ export function toPontEC8(st, opt = {}) {
     site,
     materiaux: { beton: { classe: betonClasse(sp.mat.fck), fck: sp.mat.fck, masseVolumique: 2.5 }, acier: { fyk: sp.mat.fyk, classeDuctilite: 'B' } },
     tablier: { type: typeTablier, travees: deck.spans.slice(), largeur: width, epaisseur: deck.h, aire: deck.area ?? di.area ?? width * deck.h, superstructures: superstr,
-      debordAbout: (di.overhangs || [0, 0])[0] || 0, chargeTrafic: 0, ...(inertieV ? { inertieVerticale: inertieV } : {}), ...(inertieT ? { inertieTransversale: inertieT } : {}),
+      debordAbout: (di.overhangs || [0, 0])[0] || 0, chargeTrafic, ...(inertieV ? { inertieVerticale: inertieV } : {}), ...(inertieT ? { inertieTransversale: inertieT } : {}),
       ...(deck.continuite === 'isostatique' ? { continuite: 'isostatique' } : {}) },
     appuis,
     comportement: { qLongitudinal: opt.q?.long ?? 1, qTransversal: opt.q?.trans ?? 1, amortissement: 5, plateauOrigine: true },

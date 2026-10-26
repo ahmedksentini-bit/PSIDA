@@ -7,6 +7,7 @@
  */
 import { brakingEC, selectBearing, designation, totalHeight, STANDARD_BEARINGS } from '../bearings.js';
 import { computeSupports } from './index.js';
+import { effortsLongitudinaux } from '../rail_appuis.js';
 
 const nums = s => String(s ?? '').split(/[,;\s]+/).filter(Boolean).map(Number);
 
@@ -30,7 +31,20 @@ export function parseStandalone(d) {
     Iv: +d.ss_Iv > 0 ? +d.ss_Iv : null, It: +d.ss_It > 0 ? +d.ss_It : null, fck: +d.ss_fck > 0 ? +d.ss_fck : null,
     liaisons: String(d.ss_liaisons || '').split(/[,;]+/).map(t => t.trim().toLowerCase()).filter(Boolean)
       .map(t => (t.startsWith('fix') ? 'fixe' : t.startsWith('gli') ? 'glissant' : 'elastomere')),
+    // pont-rail (lot 5) : données ferroviaires transmises par le module ponts à poutres (JSON), sinon trafic routier
+    rail: (() => { const t = String(d.ss_rail || '').trim(); if (!t) return null; try { return JSON.parse(t); } catch { return null; } })(),
   };
+}
+
+/**
+ * Données « appuis » d'un tablier sous rail transmis aux appuis seuls : réactions par ligne sans Φ des groupes à une voie
+ * (rail1 = LM71 × α), deux voies (rail2 = 2 × LM71), SW/2 (sw2) et SW/2 + LM71 (sw2b) ; Φ par ligne.
+ */
+export function railAppuisSeuls(rail, n) {
+  const z = new Array(n).fill(0), R71 = rail.R71 || z, S2 = rail.RSW2 || z;
+  const v = f => ({ Rmax: R71.map((_, i) => f(i)), Rmin: z.slice() });
+  return { source: 'poutres', params: { dTD: 30, ...rail.params }, phi: rail.phi || new Array(n).fill(1), extremites: rail.extremites || [],
+    vert: { rail1: v(i => R71[i]), rail2: v(i => 2 * R71[i]), sw2: v(i => S2[i]), sw2b: v(i => S2[i] + R71[i]) } };
 }
 
 /** État minimal (pipeline) à partir des données « appuis seuls ». */
@@ -40,8 +54,15 @@ export function standaloneState(inp, supportsInput) {
   const L = inp.lines, Ltot = inp.spans.reduce((a, v) => a + v, 0);
   const R = f => ({ Rmax: L.map(f), Rmin: L.map(() => 0) });
   const xs = [0]; inp.spans.forEach(s => xs.push(xs[xs.length - 1] + s));
-  // freinage : sur la longueur chargée d'un seul tenant (une travée si les travées sont indépendantes)
-  const H = brakingEC({ L: inp.continuite === 'isostatique' ? Math.max(...inp.spans) : Ltot });
+  // freinage : sur la longueur chargée d'un seul tenant (une travée si les travées sont indépendantes) ; pont-rail :
+  // démarrage-freinage ferroviaire le plus fort (§ 6.5.3), pour le choix des appareils
+  const RA = inp.rail ? railAppuisSeuls(inp.rail, n) : null;
+  if (RA) RA.params.dTD = inp.dTu;
+  const Lh = inp.continuite === 'isostatique' ? Math.max(...inp.spans) : Ltot;
+  const lgR = RA ? effortsLongitudinaux({ L: Lh, alpha: RA.params.alpha, continu: inp.continuite !== 'isostatique' && inp.spans.length > 1, sw2: RA.params.sw2, memeSens: RA.params.memeSens }) : null;
+  const H = RA ? Math.max(lgR.une, RA.params.nV === 2 ? lgR.deux : 0, RA.params.sw2 ? lgR.sw2Seul : 0, RA.params.sw2 && RA.params.nV === 2 ? lgR.sw2b : 0) : brakingEC({ L: Lh });
+  // pont-rail : réaction de trafic caractéristique la plus forte par ligne (Φ inclus) pour le choix des appareils
+  const QrailMax = i => (RA ? Math.max(...['rail1', 'rail2', 'sw2', 'sw2b'].filter(k => k !== 'rail2' || RA.params.nV === 2).filter(k => !k.startsWith('sw2') || RA.params.sw2).map(k => RA.vert[k].Rmax[i])) * (RA.phi[i] || 1) : 0);
   const xf = Ltot / 2;
   if (inp.liaisons && inp.liaisons.length && inp.liaisons.length !== n) throw new Error(`${n} liaisons attendues (une par ligne d'appui, culées comprises) : ${inp.liaisons.length} saisies.`);
   if (inp.liaisons && inp.liaisons.length && inp.liaisons.every(t => t === 'glissant')) throw new Error('toutes les liaisons sont glissantes : le tablier n\'est tenu horizontalement nulle part.');
@@ -49,7 +70,7 @@ export function standaloneState(inp, supportsInput) {
   // travées indépendantes : deux rangées d'appareils (une par about de travée) sur chaque pile
   const nbL = i => (inp.continuite === 'isostatique' && i > 0 && i < n - 1 ? 2 * inp.nb : inp.nb);
   const rows = L.map((l, i) => {
-    const Qmax = Math.max(l.A, l.Bc, l.Mc120, l.TS + l.UDL) + l.trott;
+    const Qmax = RA ? QrailMax(i) : Math.max(l.A, l.Bc, l.Mc120, l.TS + l.UDL) + l.trott;
     const Pmax = (l.G + Qmax) / nbL(i), Pmin = Math.max(0, l.Gmin) / nbL(i);
     const loads = { Pmax, Pmin, H: H / (nbL(i) * n), ug: (inp.epsSlow + 1e-5 * inp.dTu) * (inp.continuite === 'isostatique' ? Math.max(...inp.spans) / 2 : Math.abs(xs[i] - xf)), alpha: 0.003 + Math.abs(l.rot) };
     let sel;
@@ -82,6 +103,7 @@ export function standaloneState(inp, supportsInput) {
     ec: { TS: R(l => l.TS), UDL: R(l => l.UDL), gr1a: R(l => l.TS + l.UDL + 2 * l.trott), gr3: R(l => l.trott * 5 / 1.5) },
     bearings: { rows, nb: inp.nb, H, rotPerm: L.map(l => l.rot), notes },
     standalone: true,
+    ...(RA ? { railAppuis: RA } : {}),
   };
 }
 

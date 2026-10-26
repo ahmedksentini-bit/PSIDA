@@ -9,6 +9,7 @@ import { EC_ALPHA } from './loads_ec.js';
 import { designEC, designBAEL, designTransverseEC, designTransverseBAEL, designSingleActionEC, designRailEC } from './design.js';
 import { ALPHAS } from './loads_rail.js';
 import { deformationsRail, ecmDynamique } from './rail_deformations.js';
+import { effortsLongitudinaux } from './rail_appuis.js';
 import { TransverseModel } from './transverse.js';
 import { aideConception } from './conception.js';
 import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations, parseDesignation } from './bearings.js';
@@ -77,6 +78,15 @@ export function parseRail(d) {
     nT: v('rail_nT', 0) || null, confort: ['bon', 'acceptable'].includes(d.rail_confort) ? d.rail_confort : 'tres_bon',
     LdeltaFig: v('rail_Ld', 0) || null, about: String(d.rail_about ?? '').trim() === '' ? null : v('rail_about', 0),
     phiL600: d.rail_phiL600 === 'on' || d.rail_phiL600 === true || +d.rail_phiL600 === 1,
+    // appuis (lot 5) : rails aux extrémités du tablier (longs rails soudés continus, dispositif de dilatation à une ou aux
+    // deux extrémités), résistance k de la voie non chargée (20 à 40 kN/m), sens de circulation, voie conforme au
+    // § 6.5.4.5.1(2) (rail UIC 60), variation de température du rail ΔT_R
+    dilatation: ['une', 'deux'].includes(d.rail_dilatation) ? d.rail_dilatation : 'continue',
+    kVoie: v('rail_k', 40), memeSens: d.rail_sens === 'meme',
+    voieConforme: d.rail_voie !== 'autre', dTR: v('rail_dTR', 50),
+    // liaisons par ligne d'appui (pont-rail) : auto (élastomère), fixe (appareils à pot fixes) ou glissant (guidé)
+    liaisons: String(d.rail_liaisons || '').split(/[,;]+/).map(t => t.trim().toLowerCase()).filter(Boolean)
+      .map(t => (t.startsWith('fix') ? 'fixe' : t.startsWith('gli') ? 'glissant' : 'elastomere')),
   };
 }
 
@@ -402,8 +412,8 @@ export function compute(p) {
 /**
  * Adaptateur « résultat Eurocode » d'un pont-dalle sous rail pour les modules qui lisent `ec` (appareils d'appui, chevêtres,
  * rotations) : la charge verticale ferroviaire caractéristique (enveloppe des groupes, Φ inclus) occupe la place de TS / LM1 /
- * gr1a, les autres cas routiers sont nuls. Les coefficients et les actions horizontales de ces modules restent ceux du
- * calcul routier : leur adaptation aux ponts-rails relève du lot 5.
+ * gr1a, les autres cas routiers sont nuls. Appareils d'appui, appuis et fondations sous les groupes ferroviaires et les
+ * actions horizontales : computeSupports avec railAppuis (lot 5).
  */
 export function railCommeEC(deck, rail) {
   const zero = SlabDeck.scale(rail.groupes[0].res, 0);
@@ -418,9 +428,9 @@ export function railCommeEC(deck, rail) {
 /**
  * Pont-dalle sous rail (mode « trafic ferroviaire ») : charges de l'EN 1991-2 section 6 à la place du trafic routier.
  * Tablier en Guyon-Massonnet ; flexion longitudinale, effort tranchant et flexion transversale sous les groupes
- * ferroviaires ; Fascicule 61 / BAEL sans objet. Appareils d'appui et chevêtres : réactions ferroviaires dans le cadre
- * routier (à reprendre au lot 5) ; appuis et fondations, précontrainte, compléments routiers (LM3, fatigue FLM3,
- * encorbellement, profil de chantier) non calculés.
+ * ferroviaires ; Fascicule 61 / BAEL sans objet. Appareils d'appui, appuis et fondations sous les groupes ferroviaires,
+ * démarrage-freinage, force centrifuge, lacet et interaction voie-ouvrage (lot 5) ; précontrainte, compléments routiers
+ * (LM3, fatigue FLM3, encorbellement, profil de chantier) non calculés.
  */
 export function computeRail(p) {
   const t0 = performance.now();
@@ -456,9 +466,20 @@ export function computeRail(p) {
     return th;
   });
   const rotQ = ec.gr1a.Tmax.map((v, i) => Math.max(Math.abs(v), Math.abs(ec.gr1a.Tmin[i])) / EI);
-  const bearings = designBearings({ deck, beamComb: design.EC.beam, EI, nPerLine: p.concept.nBearings, xFixed: p.concept.xFixed, epsSlow: p.concept.epsSlow, dT: p.concept.dTu, alphaQ1: 1, alphaq1: 1, ineq, rot: { perm: rotPerm, traffic: rotQ },
+  // effort horizontal de dimensionnement des appareils (règles de 1989) : démarrage-freinage ferroviaire le plus fort
+  const ovR = deck.g.overhangs || [0, 0], Lrail = deck.spans.reduce((a, x) => a + x, 0) + ovR[0] + ovR[1];
+  const lgR = effortsLongitudinaux({ L: Lrail, alpha: p.rail.alpha, continu: deck.spans.length > 1, sw2: p.rail.sw2, memeSens: p.rail.memeSens });
+  const HtotRail = Math.max(lgR.une, rail.nV === 2 ? lgR.deux : 0, p.rail.sw2 ? lgR.sw2Seul : 0, p.rail.sw2 && rail.nV === 2 ? lgR.sw2b : 0);
+  const bearings = designBearings({ deck, beamComb: design.EC.beam, EI, nPerLine: p.concept.nBearings, xFixed: p.concept.xFixed, epsSlow: p.concept.epsSlow, dT: p.concept.dTu, alphaQ1: 1, alphaq1: 1, Htot: HtotRail, ineq, rot: { perm: rotPerm, traffic: rotQ },
     impose: p.concept.bearingEnd || p.concept.bearingPier ? { end: p.concept.bearingEnd, pier: p.concept.bearingPier } : null });
   bearings.rotPerm = rotPerm; bearings.EI = EI; bearings.rail = true;
+  // liaisons saisies (pont-rail) : appareils à pot fixes ou glissants (hors élastomères), comme les appuis seuls
+  const LI = p.rail.liaisons || [];
+  if (LI.length) {
+    if (LI.length !== bearings.rows.length) rail.avert.push(`liaisons par ligne : ${bearings.rows.length} attendues (culées comprises), ${LI.length} saisies — ignorées`);
+    else if (LI.every(t => t === 'glissant')) rail.avert.push('liaisons : toutes glissantes, le tablier n\'est tenu nulle part — ignorées');
+    else bearings.rows.forEach((r, i) => { if (LI[i] !== 'elastomere') { r.liaison = LI[i]; r.sel = null; } });
+  }
   const cases = rail.groupes.map(G => ({ id: G.id, label: G.label, res: G.res, ref: 'EC', rail: true }));
   if (thermal) cases.push({ id: 'therm', label: 'Gradient thermique (±)', res: { ...thermal, Vmax: thermal.Vmax, Vmin: thermal.Vmin }, ref: 'EC' }, { id: 'settle', label: 'Tassements aléatoires (±)', res: settle, ref: 'EC' });
   const chevetres = chevetresEC({ deck, perm, ec, n: bearings.nb, psi: p.concept.psi, cover: p.mat.c, phi: p.mat.phiT, fck: p.mat.fck, fyk: p.mat.fyk, gQ: Math.max(...rail.groupes.map(G => G.gamma)) });
@@ -472,8 +493,26 @@ export function computeRail(p) {
   try { rebar = rebarPlan({ deck, design: design.EC, trans: transDesign.EC, opt: { fck: p.mat.fck, fyk: p.mat.fyk, phiLong: Math.round(p.mat.phi * 1000), phiTrans: Math.round(p.mat.phiT * 1000), chevetres } }); rebar.governing = ['définitif']; }
   catch (e) { rebarError = `plan de ferraillage BA impossible (${e.message}) : sections d'acier hors des dispositions courantes — dalle à précontraindre ou à épaissir`; }
   const psidpError = p.bp && p.bp.actif ? 'mode ferroviaire : la dalle précontrainte (PSI-DP, charges du Fascicule 61) n\'est pas traitée sous charges ferroviaires' : null;
-  const supportsError = 'mode ferroviaire : appuis et fondations sous charges ferroviaires (freinage, démarrage, force centrifuge, lacet, interaction voie-ouvrage) — lot 5 du chantier ponts-rails, non calculés';
-  return { psidp: null, psidpError, supports: null, supportsError, rebar, rebarError, p, deck, keys, perm, ec, f61: null, rail, cases, thermal, settle, design, trans, transG: trans, transF: trans, transELU: null, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
+  // appuis et fondations sous charges ferroviaires (lot 5)
+  const railAppuis = donneesAppuisDalle(rail, p);
+  let supports = null, supportsError = null;
+  try { supports = computeSupports({ p, deck, perm, f61: null, ec, bearings, psidp: null, thermal, rail, railAppuis }, p.supports); } catch (e) { supportsError = e.message; }
+  return { psidp: null, psidpError, supports, supportsError, railAppuis, rebar, rebarError, p, deck, keys, perm, ec, f61: null, rail, cases, thermal, settle, design, trans, transG: trans, transF: trans, transELU: null, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
+}
+
+/**
+ * Données « appuis » d'un pont-dalle sous rail (lot 5) : réactions par ligne et par groupe sans Φ (Φ unique du tablier,
+ * tableau 6.2 cas 5.1 / 5.2) et avec Φ (résultats complets, rotations comprises), paramètres de voie, extrémités du
+ * tablier (δ_H, δ_V du lot 4).
+ */
+export function donneesAppuisDalle(rail, p) {
+  const phi = rail.phi, nL = rail.groupes[0].res.Rmax.length;
+  const vert = {}, resPhi = {};
+  for (const G of rail.groupes) { vert[G.id] = { Rmax: G.res.Rmax.map(v => v / phi), Rmin: G.res.Rmin.map(v => v / phi) }; resPhi[G.id] = G.res; }
+  const R = p.rail;
+  return { source: 'dalle', phi: new Array(nL).fill(phi), vert, resPhi, extremites: rail.deformations && rail.deformations.extremites ? rail.deformations.extremites : [],
+    params: { alpha: R.alpha, nV: rail.nV, sw2: !!R.sw2, V: R.V, rayon: R.rayon, memeSens: !!R.memeSens, dilatation: R.dilatation, kVoie: R.kVoie, voieConforme: R.voieConforme, dTR: R.dTR,
+      ballast: R.ballast, traverses: R.typeTraverse, dTD: p.concept.dTu ?? 30 } };
 }
 
 /**

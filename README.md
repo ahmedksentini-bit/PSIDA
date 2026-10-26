@@ -628,3 +628,20 @@ horizontale et rayon (tableau A2.8), fréquence latérale ≥ 1,2 Hz ; EN 1991-2
 aux extrémités. Flèches de la poutre continue en forme fermée (EI du tablier non fissuré, E_cm limité à C50/60) ×
 K̄(y) de Guyon-Massonnet au droit des rails. EN 1990/A1 A2.4.4 relue sur la norme (A_CONFIRMER_DEFORMATIONS vide). Analyse
 dynamique elle-même (HSLM, trains réels, accélération) hors périmètre. Mode routier strictement inchangé.
+
+En cours — ponts-rails, lot 5 : appuis sous charges ferroviaires (src/rail_appuis.js ; branchement dans
+src/supports/index.js, pont-dalle src/pipeline.js donneesAppuisDalle, poutres → « Appuis seuls » par
+web/transfert_appuis.js railPoutres et src/supports/standalone.js railAppuisSeuls ; web/rail_appuis_view.js) —
+démarrage-freinage (§ 6.5.3 : SW/0 et SW/2 sur leurs parties chargées, deux voies selon 6.5.3(9), sens opposés ou même
+sens), force centrifuge (tableau 6.8, enveloppe des cas ; SW/2 à 80 km/h) et lacet ; groupes du tableau 6.11 aux appuis
+(γ 1,45 / 1,20, ψ du tableau A2.3) ; réactions sans Φ pour les culées, fondations et fûts d'élancement < 30, avec Φ pour
+les appareils d'appui, chevêtres et fûts d'élancement ≥ 30 (§ 6.4.5.4(2), tableau 6.2 cas 6) ; répartition des efforts
+horizontaux selon les raideurs instantanées (longitudinal et transversal) ; réponse combinée voie-ouvrage par la méthode
+simplifiée du § 6.5.4.6.1 (conditions (1) et (2) contrôlées : tablier unique, L_T ≤ 40 m, δ_B ≤ 5 mm, δ_H ≤ 5 mm, voie
+conforme au 6.5.4.5.1(2), α, ΔT) — ξ du tableau 6.9, F_Tk (6.26 à 6.29, k = 40 kN/m par défaut), F_Qk (6.30, 6.31) ;
+hors domaine : ξ = 1 et analyse d'interaction (annexe G) signalée ; critères δ_B, δ_H, δ_V (§ 6.5.4.5.2) ; surcharge de
+remblai des culées (§ 6.3.6.4, sans Φ) ; séisme ψ2,1 = 0,3 et 80 α kN/m par voie (EN 1998-2 § 4.1.2(4)P) ; liaisons
+par ligne (fixe, glissant) pour le pont-dalle sous rail. Eurocodes seuls (Fascicule 61 / BAEL sans objet). Hors périmètre :
+analyse d'interaction complète, contraintes dans les rails hors méthode simplifiée, déraillement (§ 6.7), train à vide
+(gr15), chocs sur les piles, fatigue, garde-grève et garde-ballast sous charges locales ferroviaires. Mode routier
+strictement inchangé (empreintes des appuis, des appareils, de la note et de l'export Pont EC8 identiques).

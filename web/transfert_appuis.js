@@ -27,14 +27,33 @@ function champs({ spans, largeur, Lc, h, A, Iv, It, fck, type, continuite, reac,
     ss_type: type, ss_iso: continuite, ss_Iv: sig(Iv), ss_It: sig(It), ss_fck: fck, ss_bearing: 'auto',
     ...(nb ? { ss_nb: nb } : {}),
     ss_lines: reac.map(q => [q.G, q.Gmin ?? q.G, q.A || 0, q.Bc || 0, q.Mc120 || 0, q.trott || 0, q.TS || 0, q.UDL || 0].map(x => Math.round(x)).join(' ; ')).join('\n'),
+    ss_rail: '',
   };
 }
 
 /** Pont à poutres à travées indépendantes (VIPP, PRAD, BA) : résultat de computePoutres. */
 export function champsAppuisPoutres(P) {
   const inp = P.inp, W = inp.n * inp.b1, hd = inp.hd || 0.2;
-  return champs({ spans: inp.spans, largeur: W, Lc: inp.roadway.y2 - inp.roadway.y1, h: P.sec.H || inp.beam.H || 2,
+  const c = champs({ spans: inp.spans, largeur: W, Lc: inp.roadway.y2 - inp.roadway.y1, h: P.sec.H || inp.beam.H || 2,
     A: inp.n * P.sec.A, Iv: inp.n * P.sec.I, It: hd * W ** 3 / 12, fck: inp.fck, type: 'poutres', continuite: 'isostatique', reac: P.lines, nb: inp.n });
+  if (P.rail) c.ss_rail = JSON.stringify(railPoutres(P));
+  return c;
+}
+
+/**
+ * Pont à poutres sous rail (lot 5) : données ferroviaires transmises aux « appuis seuls » — réactions par ligne d'une voie
+ * LM71 × α et de SW/2, sans Φ, Φ par ligne (le plus grand des travées adjacentes), paramètres de voie, extrémités des
+ * travées (δ_H, δ_V du lot 4).
+ */
+export function railPoutres(P) {
+  const R = P.inp.rail, r3 = x => Math.round(x * 1000) / 1000;
+  const ext = P.spans.flatMap(s => (s.rail && s.rail.deformations && s.rail.deformations.extremites) || []);
+  return {
+    params: { alpha: R.alpha, nV: R.voies.length, sw2: !!R.sw2, V: R.V, rayon: R.rayon, memeSens: !!R.memeSens, dilatation: R.dilatation, kVoie: R.kVoie, voieConforme: R.voieConforme, dTR: R.dTR,
+      ballast: R.ballast, traverses: R.typeTraverse },
+    phi: P.lines.map(l => r3(l.phi)), R71: P.lines.map(l => r3(l.LM71)), RSW2: P.lines.map(l => r3(l.SW2)),
+    extremites: ext.map(e => ({ appui: e.appui, deltaH: e.deltaH, deltaV: e.deltaV, deltaVlim: e.deltaVlim, okV: e.okV })),
+  };
 }
 
 /** Moyenne pondérée par la longueur des barres d'un modèle par phases (aire et inertie). */

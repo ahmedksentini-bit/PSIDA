@@ -184,7 +184,7 @@ const RAIL_LIB = { rail1: '1 voie (LM71)', rail2: '2 voies (LM71)', sw2: 'SW/2',
 /** Éléments hors du périmètre du lot 3 (pont à poutres sous rail), signalés dans l'interface et la note. */
 export const HORS_PERIMETRE_POUTRES_RAIL = [
   'Analyse dynamique (§ 6.4.6 : HSLM, trains réels, accélération du tablier) lorsque l\'organigramme de la figure 6.9 la requiert ; effets du vent et du gradient thermique transversal sur la déformation transversale ; compression des appareils d\'appui dans δV.',
-  'Transmission aux appuis des actions horizontales (freinage, démarrage, force centrifuge, lacet) et des réactions ferroviaires, interaction voie-ouvrage (§ 6.5.4), appareils d\'appui, appuis et fondations : lot 5 (le transfert vers l\'onglet Appuis est désactivé en mode ferroviaire).',
+  'Appareils d\'appui, appuis et fondations : bouton « → Appuis » (réactions ferroviaires sans Φ et Φ par ligne, démarrage-freinage, force centrifuge, lacet, interaction voie-ouvrage par la méthode simplifiée du § 6.5.4.6.1). Succession de travées indépendantes : la méthode simplifiée ne s\'applique pas (annexe G, hors périmètre) ; efforts de démarrage-freinage transmis en totalité.',
   'Fatigue sous trafic ferroviaire (§ 6.9 et annexe D ; EN 1992-2 annexe NN).',
   'Passages de service non accessibles au public (5 kN/m², § 6.3.7) : non chargés ; murs garde-ballast et éléments locaux proches de la voie (§ 6.3.6.4(3)).',
   'Stabilité transversale sous train à vide (gr15) et actions de déraillement (§ 6.7.1) : non traitées ; travées continues : non disponibles dans ce module (travées indépendantes).',
@@ -222,7 +222,7 @@ function beamsBlocksRail(r) {
       ...(H.centrifuge.length ? H.centrifuge.map(c => [`Force centrifuge (${c.ref})`, `V = ${F0(c.V)} km/h, f = ${F3(c.f)} : ${F(c.qt, 2)} kN/m et ${F(c.Qt, 1)} kN par essieu à ${F2(c.hauteur)} m`, '§ 6.5.1, tableau 6.8']) : [['Force centrifuge', 'sans objet (vitesse ou rayon non renseignés)', '§ 6.5.1']]),
     ], { texte: true });
   }
-  comment('Actions horizontales non transmises aux appuis dans ce lot (lot 5).');
+  comment('Actions horizontales transmises aux appuis par le bouton « → Appuis » (groupes du tableau 6.11, interaction voie-ouvrage).');
   for (const s of r.spans) {
     h2(`Travée de ${F2(s.L)} m — moments à mi-travée par poutre [kN·m] (Φ inclus) et coefficients de répartition`);
     const ids = ['G', ...s.rail.groupes.map(G => G.id)];
@@ -248,10 +248,10 @@ function beamsBlocksRail(r) {
   }
   for (const s of r.spans) if (s.rail.deformations) B.push(...deformationsBlocks(s.rail.deformations, { travee: `travée de ${F2(s.L)} m` }));
   B.push(...localBlocks(r));
-  h2('Réactions caractéristiques par ligne d\'appui (pour mémoire, lot 5)');
+  h2('Réactions caractéristiques par ligne d\'appui (transmises aux appuis)');
   table(['Ligne', 'G', 'G min', 'LM71 × α, une voie (sans Φ)', 'Φ', ...(P.sw2 ? ['SW/2, une voie (sans Φ)'] : []), 'Trafic, toutes voies, Φ inclus'],
     r.lines.map((l, i) => [i === 0 || i === r.lines.length - 1 ? `Culée C${i}` : `Pile P${i}`, F0(l.G), F0(l.Gmin), F0(l.LM71), F3(l.phi), ...(P.sw2 ? [F0(l.SW2)] : []), F0(l.Qmax)]));
-  comment('Ligne d\'influence en triangle des deux travées adjacentes (travées indépendantes) ; LM71 sur toute la ligne d\'influence (positive), SW/2 en motif rigide ; Φ maximal des travées adjacentes (tableau 6.2, cas 6). Culées et fondations : effets dynamiques négligeables (§ 6.4.5.4(2)). Non transmises à l\'onglet Appuis (lot 5).');
+  comment('Ligne d\'influence en triangle des deux travées adjacentes (travées indépendantes) ; LM71 sur toute la ligne d\'influence (positive), SW/2 en motif rigide ; Φ maximal des travées adjacentes (tableau 6.2, cas 6). Culées et fondations : effets dynamiques négligeables (§ 6.4.5.4(2)). Transmises à l\'onglet Appuis par le bouton « → Appuis » (valeurs sans Φ et Φ par ligne).');
   h2('Hors périmètre de ce calcul');
   for (const t of HORS_PERIMETRE_POUTRES_RAIL) para('— ' + t);
   para(`Paramètres à fixer par le référentiel du gestionnaire du réseau : ${PARAMETRES_REFERENTIEL.join(' ')}`);

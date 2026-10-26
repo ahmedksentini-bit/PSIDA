@@ -23,6 +23,7 @@ import { verifyBearing1337 } from './bearings1337.js';
 import { localPressure, bearingSplitting, shortCorbel } from './pierhead.js';
 import { toPontEC8 } from '../ec8export.js';
 import * as EC8 from '../vendor/pont-ec8.js';
+import { effortsLongitudinaux, effortsTransversaux, coefficientXi, forceThermiqueVoie, forceDeformationVoie, methodeSimplifiee, limiteDeltaB, groupesAppuis, combinaisonsTeteRail, surchargeCulee, elancementFut, CRITERES_INTERACTION, PSI21_FERROVIAIRE, K_VOIE } from '../rail_appuis.js';
 
 /**
  * Chocs accidentels sur les piles (EN 1991-1-7, valeurs recommandées — à confronter à l'annexe nationale) :
@@ -228,13 +229,17 @@ function calculAvecSemelles(st, input) {
   // semelle sur pieux (ou B saisie) : largeur donnée, 3 m par défaut (dimensions du groupe de pieux à la charge du projeteur)
   if (!F.Bauto || F.type !== 'superficielle') return calculAppuis(st, F.B == null ? { ...input, found: { ...F, B: 3.0 } } : input);
   const r1 = calculAppuis(st, { ...input, found: { ...F, B: F.B ?? 3.0 } });
-  const Bligne = r1.lines.map(L => (L.EC.found.type === 'superficielle' ? Math.max(L.EC.found.B, L.BAEL.found.B) : null));
+  const Bligne = r1.lines.map(L => (L.EC.found.type === 'superficielle' ? Math.max(L.EC.found.B, L.BAEL ? L.BAEL.found.B : 0) : null));
   return calculAppuis(st, { ...input, found: { ...F, B: F.B ?? 3.0, Bligne } });
 }
 
 function calculAppuis(st, input = {}) {
   const sp = merge(SUPPORT_DEFAULTS, input);
   const { deck, perm, f61, ec, bearings } = st;
+  // pont-rail (lot 5) : charges ferroviaires à la place des charges routières, Eurocodes seuls (Fascicule 61 / BAEL /
+  // Fascicule 62 titre V sans objet sous charges ferroviaires)
+  const RA = st.railAppuis || null;
+  const CODES = RA ? ['EC'] : ['BAEL', 'EC'];
   // tablier à travées indépendantes : chaque pile porte deux rangées d'appareils (une par about). Voile d'épaisseur en tête
   // non donnée : tête élargie pour recevoir les deux bossages (appareil + 2 × 10 cm chacun) et l'ouverture du joint (10 cm)
   if (deck.continuite === 'isostatique' && (sp.pile.type || 'voile') === 'voile' && sp.pile.bTop == null && deck.spans.length > 1) {
@@ -446,12 +451,63 @@ function calculAppuis(st, input = {}) {
   const rTrace = deck.g.trace ? (() => { const t = deck.g.trace, ov = deck.g.overhangs || [0, 0], s0 = (t.s0 || 0) + deck.beam.x0[0]; return new Axe(t.segments).rayonMin(s0 - ov[0], s0 + Ltot + ov[1]); })() : Infinity;
   const Qv = qvEC(st.ec && st.ec.alpha ? st.ec.alpha.aQ : [1, 1, 1], st.ec && st.ec.lanes ? st.ec.lanes.n : 3);
   const optF61 = f61 ? { nv: f61.nv, bc: BC.bc[f61.classe] || BC.bc[1], delta: Math.max(1, ...(f61.deltaBc || [1])), Ltot } : null;
-  const centrifuge = Number.isFinite(rTrace) ? { r: rTrace, Qv, Qtk: forceCentrifuge({ r: rTrace, Qv }),
+  const centrifuge = !RA && Number.isFinite(rTrace) ? { r: rTrace, Qv, Qtk: forceCentrifuge({ r: rTrace, Qv }),
     F61: f61 ? forceCentrifugeF61({ r: rTrace, ...optF61 }) : null,
     plan: { EC: centrifugePlan('EC', r => forceCentrifuge({ r, Qv })), BAEL: f61 ? centrifugePlan('BAEL', r => forceCentrifugeF61({ r, ...optF61 }).F) : null } } : null;
   const RFsaisi = Math.max(0, st.p.concept.epsSlow ?? 2.5e-4), epsT = 1e-5 * (st.p.concept.dTu ?? 30);
   const RF = dp && dp.shorten ? dp.shorten.total : RFsaisi;
   const R = (res, i) => (res ? Math.max(0, res.Rmax[i]) : 0);
+  // --- pont-rail : efforts horizontaux ferroviaires, interaction voie-ouvrage (méthode simplifiée), groupes ---
+  const railSup = RA ? actionsRail() : null;
+  // parts des efforts horizontaux par ligne, au prorata des raideurs instantanées ; une ligne infiniment raide (culée
+  // remblayée bloquée en travers, appareils fixes) reprend tout, à parts égales s'il y en a plusieurs
+  const partage = d => { if (d.lines && d.braking && iso && d === distE) return d.braking(1); const K = d.K.inst, inf = K.map(k => !Number.isFinite(k)), nI = inf.filter(Boolean).length;
+    if (nI) return K.map((k, i) => (inf[i] ? 1 / nI : 0)); const S = K.reduce((a, b) => a + b, 0); return S > 0 ? K.map(k => k / S) : K.map(() => 1 / K.length); };
+  function actionsRail() {
+    const P = RA.params, nV = P.nV, x0d = distE.x0.diff, ov = deck.g.overhangs || [0, 0];
+    // tablier unique : continu, ou une seule travée ; travées indépendantes multiples : succession de tabliers (annexe G)
+    const tablierUnique = !iso || deck.spans.length === 1;
+    // longueur d'influence des efforts de démarrage-freinage : tablier entier (continu), ou une travée (indépendantes)
+    const Lh = iso ? Math.max(...deck.spans) + (deck.spans.length === 1 ? ov[0] + ov[1] : 0) : Ltot + ov[0] + ov[1];
+    const long = effortsLongitudinaux({ L: Lh, alpha: P.alpha, continu: !iso && deck.spans.length > 1, sw2: P.sw2, memeSens: P.memeSens });
+    const trans = effortsTransversaux({ L: Lh, alpha: P.alpha, continu: !iso && deck.spans.length > 1, V: P.V, rayon: P.rayon, sw2: P.sw2 });
+    // point fixe : ligne à appareils fixes, sinon centre des raideurs différées (dilatation lente du tablier)
+    const fixe = bearings.rows.findIndex(r => r.liaison === 'fixe');
+    const xf = iso ? (deck.spans.length === 1 ? (Array.isArray(x0d) ? x0d[0] : x0d) : null) : (fixe >= 0 ? xs[fixe] : x0d);
+    const ext = [-ov[0], Ltot + ov[1]];
+    const L1 = xf == null ? null : Math.min(xf - ext[0], ext[1] - xf), L2 = xf == null ? null : Math.max(xf - ext[0], ext[1] - xf);
+    const LT = xf == null ? Math.max(...deck.spans) : L2;
+    // première travée contiguë au point fixe (6.30) : la plus longue des travées adjacentes
+    const Lfix = xf == null ? Math.max(...deck.spans) : Math.max(...deck.spans.filter((L, j) => xs[j] <= xf + 1e-6 && xs[j + 1] >= xf - 1e-6), 0) || Math.max(...deck.spans);
+    // δ_B : déplacement du tablier sous le démarrage-freinage classifié (sans réduction ξ, côté de la sécurité)
+    const Hb = Math.max(long.une, nV === 2 ? long.deux : 0, P.sw2 ? long.sw2Seul : 0, P.sw2 && nV === 2 ? long.sw2b : 0);
+    const sh = distE.braking(Hb), dB = Math.max(0, ...sh.map((h, i) => (distE.K.inst[i] > 0 ? 1000 * h / distE.K.inst[i] : 0)));
+    const dH = RA.extremites && RA.extremites.length ? Math.max(...RA.extremites.map(e => e.deltaH ?? 0)) : null;
+    const lmSW = P.sw2 && P.alpha > 1 ? (P.alpha * (Lh >= 6.4 ? 1000 + 80 * (Lh - 6.4) : 250 * Math.min(4, 1 + Math.floor(Lh / 1.6))) <= 150 * Math.min(Lh, 50)) : false;
+    const simp = methodeSimplifiee({ tablierUnique, LT, deltaB: dB, deltaH: dH, voieConforme: P.voieConforme !== false, traverses: P.traverses, ballast: P.ballast, rayon: P.rayon,
+      alpha: P.alpha, alphaSousSW2: lmSW, dTD: P.dTD ?? (st.p.concept.dTu ?? 30), dTR: P.dTR ?? CRITERES_INTERACTION.dTR });
+    const xi0 = coefficientXi({ Ltot: Ltot + ov[0] + ov[1], dilatation: P.dilatation, portique: !!RA.portique });
+    const xi = simp.applicable && xi0 != null ? xi0 : 1;
+    const k = P.kVoie ?? K_VOIE.nonChargeeMax;
+    const FT = simp.applicable ? forceThermiqueVoie({ dilatation: P.dilatation, k, LT, L1: L1 ?? 0, L2: L2 ?? LT }) : { F: 0, eq: '—' };
+    const FQ = simp.applicable ? forceDeformationVoie({ dilatation: P.dilatation, L: Lfix }) : { F: 0, eq: '—' };
+    const groupes = groupesAppuis({ nV, sw2: P.sw2, long, trans, xi, FQ: FQ.F });
+    // fûts de pile : effets dynamiques (Φ) si l'élancement est ≥ 30 ; culées et fondations sans Φ (§ 6.4.5.4(2))
+    const lam = xs.map((x, i) => (isEnd(i) ? null : elancementFut({ H: Hpile(i) + (sp.pile.type === 'colonnes' ? sp.pile.hc : 0), ...(sp.pile.type === 'colonnes' ? { D: sp.pile.D } : { b: Math.min(bBot, bTop) }) })));
+    const avecPhi = i => !isEnd(i) && lam[i] >= 30 - 1e-9;
+    const Rv = (id, i, phi, kind = 'Rmax') => { const v = RA.vert[id]; if (!v) return 0; const r = kind === 'Rmax' ? Math.max(0, v.Rmax[i]) : Math.min(0, v.Rmin[i]); return phi ? r * (RA.phi[i] || 1) : r; };
+    const criteres = {
+      deltaB: { val: dB, lim: limiteDeltaB(P.dilatation), ref: '6.5.4.5.2(1)P' },
+      deltaH: (RA.extremites || []).map(e => ({ appui: e.appui, val: e.deltaH, lim: simp.applicable ? CRITERES_INTERACTION.deltaH.interaction : CRITERES_INTERACTION.deltaH.sansInteraction, ref: '6.5.4.5.2(2)P' })),
+      deltaV: (RA.extremites || []).map(e => ({ appui: e.appui, val: e.deltaV, lim: e.deltaVlim, ok: e.okV, ref: '6.5.4.5.2(3)P' })),
+    };
+    const avert = [];
+    if (!simp.applicable) avert.push(`méthode simplifiée du § 6.5.4.6.1 non applicable (${simp.conditions.filter(c => !c.ok).map(c => c.texte).join(' ; ')}) : la réponse combinée voie-ouvrage (contraintes additionnelles dans les rails, forces sur les appareils fixes) relève de l'annexe G ou d'une analyse selon 6.5.4.2 à 6.5.4.5, hors du périmètre de PSIDA — efforts de démarrage-freinage transmis en totalité aux appuis (ξ = 1), F_Tk et F_Qk non évaluées`);
+    else if (xi0 == null) avert.push('longueur totale de l\'ouvrage > 40 m : hors du tableau 6.9, ξ = 1');
+    if (long.auDela300) avert.push('longueur chargée > 300 m : exigences complémentaires pour le freinage (§ 6.5.3(5))');
+    return { P, Lh, long, trans, LT, L1, L2, xf, Lfix, tablierUnique, simp, xi, xi0, k, FT, FQ, groupes, dB, dH, lam, avecPhi, Rv, criteres, avert,
+      surcharge: surchargeCulee({ alpha: P.alpha, sw2: P.sw2, nV, largeur: width }) };
+  }
   let seisme = null;
   if (sp.seisme.actif) {
     if (sp.seisme.source === 'onglet') seisme = externalSeismic(sp.seisme.externe, nL, deck.spans);
@@ -462,17 +518,20 @@ function calculAppuis(st, input = {}) {
   const khCulee = seisme && seisme.actionSite ? seisme.actionSite.ag * seisme.actionSite.S * (seisme.actionSite.ST || 1) / (seisme.actionSite.g || 9.81) : 0;
   // inertie propre des fûts (Pont EC8, export des efforts) : effort tranchant et moment au pied, par direction
   const futOf = k => (k.fut ? { fut: { Fx: Math.abs(k.fut.Fx), Mx: Math.abs(k.fut.Mx), Fy: Math.abs(k.fut.Fy), My: Math.abs(k.fut.My) } } : {});
-  const accidental = (i, Nfreq) => {
+  const accidental = (i, Nfreq, Qsis = 0) => {
     const out = [];
+    // pont-rail : ψ2,1 Q_k,1 = 0,3 × charge verticale de toutes les voies (EN 1998-2 § 4.1.2(4)P), ajouté côté défavorable
+    const Q21 = RA ? PSI21_FERROVIAIRE * Qsis : 0;
     if (seisme && seisme.efforts) {
-      // EN 1990 6.4.3.4 : G + ψ2,1 Q + A_Ed (ψ2,1 = 0 pour le trafic routier courant) ; Fz pris avec ± (G max + Fz, G min − Fz)
+      // EN 1990 6.4.3.4 : G + ψ2,1 Q + A_Ed (ψ2,1 = 0 pour le trafic routier courant ; 0,3 pour les ponts ferroviaires) ;
+      // Fz pris avec ± (G max + Fz, G min − Fz)
       for (const k of seisme.efforts.appuis[i].cas) for (const sgn of [1, -1]) {
-        out.push({ label: `ACC séisme ${k.nom} ${sgn > 0 ? '(+Z)' : '(−Z)'}`, ls: 'ACC', acc: true, sis: true, N: (sgn > 0 ? Gmax(i) : Gmin(i)) + sgn * Math.abs(k.Fz), H: Math.abs(k.Fx), Hy: Math.abs(k.Fy), Nsus: Gmax(i), Ninst: 0, Hsus: 0, Hinst: Math.abs(k.Fx), cx: /^X/.test(k.nom) ? 1 : 0.3, ...futOf(k) });
+        out.push({ label: `ACC séisme ${k.nom} ${sgn > 0 ? '(+Z)' : '(−Z)'}`, ls: 'ACC', acc: true, sis: true, N: (sgn > 0 ? Gmax(i) : Gmin(i)) + sgn * Math.abs(k.Fz) + (sgn > 0 ? Q21 : 0), H: Math.abs(k.Fx), Hy: Math.abs(k.Fy), Nsus: Gmax(i), Ninst: sgn > 0 ? Q21 : 0, Hsus: 0, Hinst: Math.abs(k.Fx), cx: /^X/.test(k.nom) ? 1 : 0.3, ...futOf(k) });
       }
       // fondations seules (EN 1998-2 5.8.2) : effets × q (ductilité limitée, pont isolé) ou dimensionnement en capacité des
       // piles ; non repris pour les fûts, dimensionnés sous A_Ed
       for (const k of seisme.efforts.appuis[i].casFondations || []) for (const sgn of [1, -1]) {
-        out.push({ label: `ACC séisme ${k.nom} ${sgn > 0 ? '(+Z)' : '(−Z)'}`, ls: 'ACC', acc: true, sis: true, fond: true, N: (sgn > 0 ? Gmax(i) : Gmin(i)) + sgn * Math.abs(k.Fz), H: Math.abs(k.Fx), Hy: Math.abs(k.Fy), Nsus: Gmax(i), Ninst: 0, Hsus: 0, Hinst: Math.abs(k.Fx), cx: /^X/.test(k.nom) ? 1 : 0.3, ...futOf(k) });
+        out.push({ label: `ACC séisme ${k.nom} ${sgn > 0 ? '(+Z)' : '(−Z)'}`, ls: 'ACC', acc: true, sis: true, fond: true, N: (sgn > 0 ? Gmax(i) : Gmin(i)) + sgn * Math.abs(k.Fz) + (sgn > 0 ? Q21 : 0), H: Math.abs(k.Fx), Hy: Math.abs(k.Fy), Nsus: Gmax(i), Ninst: sgn > 0 ? Q21 : 0, Hsus: 0, Hinst: Math.abs(k.Fx), cx: /^X/.test(k.nom) ? 1 : 0.3, ...futOf(k) });
       }
     }
     if (!isEnd(i)) {
@@ -493,7 +552,7 @@ function calculAppuis(st, input = {}) {
   const inWater = i => sp.eau.actif && !isEnd(i) && (nivEau(i) ?? (!sp.eau.appuis || !sp.eau.appuis.length || sp.eau.appuis.includes(i + 1)));
   const water = xs.map((x, i) => (inWater(i) ? pierWater(S(i).eau, { type: sp.pile.type, b: sp.pile.b, Lv, D: sp.pile.D, nCol: sp.pile.nCol, s: sp.pile.nCol > 1 ? width / sp.pile.nCol : 0,
     Hf: Hpile(i), dBed: (niv.actif && niv.lignes[i] && niv.lignes[i].dBed != null) ? niv.lignes[i].dBed : Math.max(0, F0(i).De - F0(i).hs) }) : null));
-  const waterCombos = (i, Nfreq) => {
+  const waterCombos = (i, Nfreq, gQ = 1.35) => {
     const w = water[i]; if (!w) return { F61: [], EC: [] };
     // F_wa action variable de courte durée (γ_Q = 1,5) ; BAEL/F61 : comme le vent (annexe D), sans trafic ; EC : action
     // dominante, trafic d'accompagnement ψ₀ (TS 0,75, UDL 0,4) ; poussée d'Archimède au niveau des PHE (γ = 1, défavorable
@@ -501,11 +560,34 @@ function calculAppuis(st, input = {}) {
     const mk = (label, ls, gG, gW, NQ) => ({ label, ls, N: gG * jG(i) * perm.Rmax[i] + hypMax[i] + jQ(i) * NQ, H: 0, Hy: 0, wat: { F: gW * w.F, M: gW * w.M, U: w.Ushaft, gG }, Nsus: gG * jG(i) * perm.Rmax[i] + hypMax[i], Ninst: jQ(i) * NQ, Hsus: 0, Hinst: 0 });
     return {
       F61: [mk('ELU crue : 1,35 G + 1,5 F_eau', 'ELU', 1.35, 1.5, 0), mk('ELS crue : G + F_eau', 'ELS', 1, 1, 0)],
-      EC: [mk('ELU crue : 1,35 G + 1,5 F_eau + 1,35 ψ₀ Q', 'ELU', 1.35, 1.5, 1.35 * Nfreq), mk('ELS car. crue : G + F_eau + ψ₀ Q', 'ELS', 1, 1, Nfreq)],
+      EC: [mk(`ELU crue : 1,35 G + 1,5 F_eau + ${gQ === 1.35 ? '1,35' : String(gQ).replace('.', ',')} ψ₀ Q`, 'ELU', 1.35, 1.5, gQ * Nfreq), mk('ELS car. crue : G + F_eau + ψ₀ Q', 'ELS', 1, 1, Nfreq)],
     };
   };
+  /**
+   * Pont-rail : combinaisons en tête par groupe ferroviaire — réaction verticale sans Φ (culées, fondations, fûts
+   * d'élancement < 30) ou avec Φ (fûts d'élancement ≥ 30) ; efforts horizontaux répartis selon les raideurs instantanées
+   * (longitudinal : lignes d'appui ; transversal : raideurs transversales) ; F_Tk réparti de même.
+   */
+  /** Résumé pour l'interface et la note : efforts par groupe, répartition par ligne, interaction voie-ouvrage. */
+  function resumeRail(r) {
+    const sB = partage(distE), sT = partage(distTE);
+    return { params: r.P, Lh: r.Lh, long: r.long, trans: r.trans, LT: r.LT, L1: r.L1, L2: r.L2, xf: r.xf, Lfix: r.Lfix, tablierUnique: r.tablierUnique, simp: r.simp, xi: r.xi, xi0: r.xi0, k: r.k,
+      FT: r.FT, FQ: r.FQ, dB: r.dB, dH: r.dH, criteres: r.criteres, avert: r.avert, surcharge: r.surcharge, lam: r.lam, phi: RA.phi, source: RA.source,
+      groupes: r.groupes.map(g => ({ ...g, parLigne: xs.map((_, i) => ({ H: jH(i) * g.H * sB[i], Hy: jH(i) * g.Hy * sT[i], N: jQ(i) * r.Rv(g.vertId, i, r.avecPhi(i)), Nphi: jQ(i) * r.Rv(g.vertId, i, true), phi: r.avecPhi(i) })) })),
+      FTligne: xs.map((_, i) => jH(i) * r.P.nV * r.FT.F * sB[i]) };
+  }
+  function teteRail(i, x, G) {
+    const q = jQ(i), h = jH(i), sB = partage(distE)[i], sT = partage(distTE)[i], ph = railSup.avecPhi(i);
+    const QE = railSup.groupes.map(g => ({ label: g.label, N: q * railSup.Rv(g.vertId, i, ph), H: h * g.H * sB, Hy: h * g.Hy * sT, gamma: g.gamma, psi0: g.psi0 }));
+    const EC = combinaisonsTeteRail({ G, Q: QE, RF: { H: Math.abs(h * distE.imposed(RF).H[i]) + Hp('E', i) }, T: { H: h * distE.imposed(epsT).H[i] }, FT: { H: h * railSup.P.nV * railSup.FT.F * sB } });
+    const Qmax = QE.reduce((m, c) => (c.N > m.N ? c : m), QE[0] || { N: 0, psi0: 0.8 });
+    const Nfreq = (Qmax.psi0 ?? 0.8) * Qmax.N;
+    const acc = accidental(i, Nfreq, q * railSup.Rv(railSup.P.nV === 2 ? 'rail2' : 'rail1', i, false)), wc = waterCombos(i, Nfreq, 1.45);
+    return { x, F61: [], EC: [...EC, ...wc.EC, ...acc] };
+  }
   const heads = xs.map((x, i) => {
     const G = { N: jG(i) * perm.Rmax[i], P: hypMax[i] };
+    if (railSup) return teteRail(i, x, G);
     const tr = R(f61.trottoir, i), q = jQ(i), h = jH(i);
     const bB = distB.braking(1)[i];
     const QF = [
@@ -551,9 +633,15 @@ function calculAppuis(st, input = {}) {
     // ouvrage courbe précontraint : réactions différentielles des appareils dues au couple de la poussée radiale des câbles
     const tC = dp && dp.courbe && dp.courbe.dRmax ? dp.courbe : null;
     const Gb = row.kCP * perm.Rmax[i] / nb, GbMin = perm.Rmin[i] / nb, Pmax = hypMax[i] / nb + (tC ? tC.dRmax[i] : 0), Pmin = hypMin[i] / nb + (tC ? tC.dRmin[i] : 0);
-    const tr = R(f61.trottoir, i);
+    const tr = railSup ? 0 : R(f61.trottoir, i);
     const bB = distB.braking(1)[i], bE = distE.braking(1)[i];
-    const QQ = code === 'BAEL'
+    // pont-rail : groupes ferroviaires, réactions avec Φ (appareils d'appui : L_Φ des éléments portés, tableau 6.2 cas 6),
+    // effort horizontal par appareil = résultante longitudinale (démarrage-freinage × ξ, F_Qk) et transversale (force
+    // centrifuge, lacet) du groupe ; F_Tk (température) en accompagnement : 1,5 × 0,6 F_Tk
+    const tT = railSup ? partage(distTE)[i] : 0, bR = railSup ? partage(distE)[i] : 0;
+    const railQQ = railSup ? railSup.groupes.map(g => ({ label: g.label, res: RA.resPhi && RA.resPhi[g.vertId] ? RA.resPhi[g.vertId] : { Rmax: RA.vert[g.vertId].Rmax.map((v, k) => v * (RA.phi[k] || 1)), Rmin: RA.vert[g.vertId].Rmin.map((v, k) => v * (RA.phi[k] || 1)) },
+      add: 0, g: g.gamma, H: Math.hypot(g.H * bR, g.Hy * tT) / nb, Hfix: 1.5 * 0.6 * railSup.P.nV * railSup.FT.F * bR / nb })) : null;
+    const QQ = railQQ ? railQQ : code === 'BAEL'
       ? [{ label: 'A(l)', res: f61.A, add: tr, g: 1.605, H: brk.A * bB / nb }, { label: 'Bc', res: f61.Bc, add: tr, g: 1.605, H: Math.max(brk.Bc * bB, centrifuge && centrifuge.plan.BAEL ? Math.hypot(centrifuge.plan.BAEL.Hx[i], centrifuge.plan.BAEL.Hy[i]) : 0) / nb },
         ...(f61.Mc120 ? [{ label: 'Mc120', res: f61.Mc120, add: tr, g: 1.35, H: 0 }] : [])]
       : [{ label: 'gr1a', res: ec.gr1a, add: 0, g: 1.35, H: 0 }, { label: centrifuge && centrifuge.Qtk ? 'gr2 (freinage + centrifuge)' : 'gr2 (freinage)', noT: true, res: ec.gr1a, frac: R(ec.gr1a, i) > 0 ? (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)) / R(ec.gr1a, i) : 0, add: 0, g: 1.35, H: Math.hypot(bearings.H * bE + (centrifuge ? centrifuge.plan.EC.Hx[i] : 0), centrifuge ? centrifuge.plan.EC.Hy[i] : 0) / nb }];
@@ -565,12 +653,14 @@ function calculAppuis(st, input = {}) {
     const psi0T = 0.6, combos = [];
     for (const q of QQ) {
       const f = q.frac ?? 1, Qmax = f * (row.kQ * R(q.res, i) + q.add) / nb, Qmin = f * Math.min(0, q.res ? q.res.Rmin[i] : 0) / nb, aQ = f * rotOf(q.res, i);
-      combos.push({ label: `ELU ${q.label} (max)`, Fz: 1.35 * Gb + Pmax + q.g * Qmax + (q.noT ? 0 : gTq * NtMax), vSlow: vRF + (q.noT ? 0 : 1.5 * psi0T * vT), Hx: q.g * q.H, alpha: 1.35 * aG + q.g * aQ + a0 });
-      if (Qmin < 0) combos.push({ label: `ELU ${q.label} (min, enveloppe)`, Fz: GbMin + Pmin + q.g * Qmin + (q.noT ? 0 : gTq * NtMin), vSlow: vRF + (q.noT ? 0 : 1.5 * psi0T * vT), Hx: q.g * q.H, alpha: aG + q.g * aQ + a0, minimal: true, indicatif: true });
+      combos.push({ label: `ELU ${q.label} (max)`, Fz: 1.35 * Gb + Pmax + q.g * Qmax + (q.noT ? 0 : gTq * NtMax), vSlow: vRF + (q.noT ? 0 : 1.5 * psi0T * vT), Hx: q.g * q.H + (q.Hfix || 0), alpha: 1.35 * aG + q.g * aQ + a0 });
+      if (Qmin < 0) combos.push({ label: `ELU ${q.label} (min, enveloppe)`, Fz: GbMin + Pmin + q.g * Qmin + (q.noT ? 0 : gTq * NtMin), vSlow: vRF + (q.noT ? 0 : 1.5 * psi0T * vT), Hx: q.g * q.H + (q.Hfix || 0), alpha: aG + q.g * aQ + a0, minimal: true, indicatif: true });
     }
     // température dominante (BAEL : comb. 8 de la pratique ; EC : 1,5 T + 1,35 ψ₀ trafic)
-    const q0 = QQ[0], psiQ = code === 'BAEL' ? 0 : (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)) / Math.max(1e-9, R(ec.gr1a, i));
-    combos.push({ label: 'ELU température', Fz: 1.35 * Gb + Pmax + gTd * NtMax + 1.35 * psiQ * row.kQ * R(q0.res, i) / nb, vSlow: vRF + 1.5 * vT, Hx: 0, alpha: 1.35 * aG + 1.35 * psiQ * rotOf(q0.res, i) + a0 });
+    // pont-rail : trafic d'accompagnement ψ0 = 0,8 (tableau A2.3) × γ du groupe le plus chargé ; F_Tk en action dominante (1,5)
+    const q0 = railQQ ? railQQ.reduce((m, q) => (R(q.res, i) > R(m.res, i) ? q : m), railQQ[0]) : QQ[0];
+    const psiQ = railQQ ? 0.8 : code === 'BAEL' ? 0 : (0.75 * R(ec.TS, i) + 0.4 * R(ec.UDL, i)) / Math.max(1e-9, R(ec.gr1a, i)), gQT = railQQ ? q0.g : 1.35;
+    combos.push({ label: 'ELU température', Fz: 1.35 * Gb + Pmax + gTd * NtMax + gQT * psiQ * row.kQ * R(q0.res, i) / nb, vSlow: vRF + 1.5 * vT, Hx: railQQ ? 1.5 * railSup.P.nV * railSup.FT.F * bR / nb : 0, alpha: 1.35 * aG + gQT * psiQ * rotOf(q0.res, i) + a0 });
     combos.push({ label: th ? 'G + P + N_θ (min)' : 'G + P (min)', Fz: GbMin + Pmin + NtMin, vSlow: vRF + vT, Hx: 0, alpha: aG + a0, minimal: true });
     // non-glissement : effort vertical minimal concomitant (permanent seul ; ou trafic minimal avec son freinage)
     const slides = [{ FzMin: GbMin + Pmin + NtMin, vSlow: vRF + vT, Hx: 0, FzGmin: GbMin + Pmin, vPerm: vRF, label: th ? 'G + P + N_θ (min)' : 'G + P (min)' },
@@ -655,7 +745,7 @@ function calculAppuis(st, input = {}) {
     const end = isEnd(i), profile = profileOf(i), out = { i, x, kind: end ? 'culee' : 'pile', joint: jointAt(i), type: end ? sp.culee.type : sp.pile.type, head: heads[i], profile: profile.name };
     out.K = { BAEL: { inst: distB.K.inst[i], diff: distB.K.diff[i] }, EC: { inst: distE.K.inst[i], diff: distE.K.diff[i] } };
     const per = {};
-    for (const code of ['BAEL', 'EC']) {
+    for (const code of CODES) {
       const combos = code === 'BAEL' ? heads[i].F61 : heads[i].EC;
       const gU = 1.35;
       let base, shaftRes, extra = {};
@@ -676,7 +766,7 @@ function calculAppuis(st, input = {}) {
         if (col && P.hc > 0) {
           const nb = bearings.nb, pitch = bearingSpacing({ width, psi: st.p.concept.psi, n: nb });
           const ys = Array.from({ length: nb }, (_, k) => width / 2 + (k - (nb - 1) / 2) * pitch);
-          const row = bearings.rows[i], kQ = code === 'BAEL' ? 1.605 : 1.35;
+          const row = bearings.rows[i], kQ = code === 'BAEL' ? 1.605 : railSup ? Math.max(...railSup.groupes.map(g => g.gamma)) : 1.35;
           const Pu = (jG(i) * 1.35 * row.kCP * perm.Rmax[i] + hypMax[i] + jQ(i) * kQ * row.kQ * Math.max(0, row.Rmax - perm.Rmax[i])) / nb;
           extra.cap = pierCap({ length: width, supports: Array.from({ length: P.nCol }, (_, j) => ({ x: width * (2 * j + 1) / (2 * P.nCol) })), loads: ys.map(y => ({ x: y, P: Pu })), q: 1.35 * 25 * P.hc * P.lc, b: P.lc, h: P.hc, c, fck, fyk, code });
           extra.cap.Pu = Pu;
@@ -685,8 +775,10 @@ function calculAppuis(st, input = {}) {
         const C = sp.culee, Hm = C.Hm, rem = C.type === 'remblayee', app = C.type === 'apparente';
         // poussée : mur de front ; pile-culée noyée : colonnes de largeur fictive min(3D ; entraxe) (hypothèse PSIDA, pratique
         // des guides de culées) ; pile-culée apparente : partie haute seulement (PP73 1.3.2 § 3.1.3.1, i = 1/3, p = 15 kPa)
-        const ep = app ? earthPressureUpper({ h1: hGG + C.hc + Math.max(0, C.hv), Htot: Hm + C.hc + hGG, L: width, gamma: soil.gamma })
-          : earthPressure({ H: Hm + hGG, B: rem ? width : C.nCol * Math.min(3 * C.D, width / C.nCol), K: KA, gamma: soil.gamma, q: soil.q });
+        // pont-rail : surcharge de remblai ferroviaire (§ 6.3.6.4, sans Φ) au lieu de la surcharge routière
+        const qRem = railSup ? railSup.surcharge.qEq : soil.q;
+        const ep = app ? earthPressureUpper({ h1: hGG + C.hc + Math.max(0, C.hv), Htot: Hm + C.hc + hGG, L: width, gamma: soil.gamma, ...(railSup ? { p: qRem } : {}) })
+          : earthPressure({ H: Hm + hGG, B: rem ? width : C.nCol * Math.min(3 * C.D, width / C.nCol), K: KA, gamma: soil.gamma, q: qRem });
         const dt = dalleTransition({ Hr: Hm + hGG });
         const Wtop = rem ? 25 * (0.3 * hGG + 1.0 * (C.em + 0.3)) * width : 25 * C.hc * C.lc * width + 25 * 0.3 * hGG * width;
         const Wwall = rem ? 25 * C.em * Hm * width : 25 * C.nCol * Math.PI * C.D ** 2 / 4 * Hm;
@@ -700,9 +792,11 @@ function calculAppuis(st, input = {}) {
           masses: [{ W: Wwall, z: Hm / 2 }, { W: Wtop, z: Hm + (rem ? hGG / 2 : C.hc / 2) }, { W: Wret, z: Hter / 2 }] }) : null;
         if (sisC) extra.seisme = sisC;
         base = combos.map(cb => {
-          const elu = cb.ls === 'ELU', g = elu ? gU : 1, gq = cb.ls === 'ACC' ? 0 : code === 'BAEL' ? (elu ? 1.605 : 1.2) : (elu ? 1.35 : 1);
+          const elu = cb.ls === 'ELU', g = elu ? gU : 1, gq = cb.ls === 'ACC' ? 0 : code === 'BAEL' ? (elu ? 1.605 : 1.2) : (elu ? (railSup ? railSup.surcharge.gamma : 1.35) : 1);
           const kS = cb.sis && sisC ? (cb.cx ?? 1) : 0, dH = kS ? kS * sisC.H : 0, dM = kS ? kS * sisC.M : 0;
-          return { ...cb, Wst: Wtop + Wwall + Wret + dt.Rg * width, Nb: cb.N + g * (Wtop + Wwall + Wret + dt.Rg * width) + gq * dt.Rq * width / 3, Mb: cb.H * (Hm + (rem ? 0 : C.hc)) + g * ep.Mg + gq * ep.Mq + dM, Hb: cb.H + g * ep.Pg + gq * ep.Pq + dH,
+          // dalle de transition : surcharge routière 60 kN/m (largeur /3) ; pont-rail : surcharge ferroviaire q_eq sur L/2
+          const Nq = railSup ? railSup.surcharge.qEq * dt.L / 2 * width : dt.Rq * width / 3;
+          return { ...cb, Wst: Wtop + Wwall + Wret + dt.Rg * width, Nb: cb.N + g * (Wtop + Wwall + Wret + dt.Rg * width) + gq * Nq, Mb: cb.H * (Hm + (rem ? 0 : C.hc)) + g * ep.Mg + gq * ep.Mq + dM, Hb: cb.H + g * ep.Pg + gq * ep.Pq + dH,
             ...(kS ? { culeeSis: kS, sisInst: { H: dH, M: dM } } : {}) };
         });
         // culée sans tablier (remblai mis en place avant la pose du tablier, PP73 1.3.2 § 3.1.4.6)
@@ -720,7 +814,7 @@ function calculAppuis(st, input = {}) {
         if (!rem && C.hc > 0) {
           const nb = bearings.nb, pitch = bearingSpacing({ width, psi: st.p.concept.psi, n: nb });
           const ys = Array.from({ length: nb }, (_, k) => width / 2 + (k - (nb - 1) / 2) * pitch);
-          const row = bearings.rows[i], kQ = code === 'BAEL' ? 1.605 : 1.35;
+          const row = bearings.rows[i], kQ = code === 'BAEL' ? 1.605 : railSup ? Math.max(...railSup.groupes.map(g => g.gamma)) : 1.35;
           const Pu = (jG(i) * 1.35 * row.kCP * perm.Rmax[i] + hypMax[i] + jQ(i) * kQ * row.kQ * Math.max(0, row.Rmax - perm.Rmax[i])) / nb;
           // PP73 1.3.2 § 2.2.2 : garde-grève (poids propre), dalle de transition (15 + D) t/ml ou, sans dalle, 5,5 t/ml × 2 = 11 t/ml ;
           // murs en retour ou murettes : poids propre et charge verticale à l'extrémité (4 tf, murettes ≤ 2,5 m : 5 tf) ;
@@ -830,8 +924,8 @@ function calculAppuis(st, input = {}) {
         const bEff = Math.min(3 * D, Lf_ / nP);
         const earthLoad = f => {
           if (!(hR > 0)) return null;
-          const elu = f.ls === 'ELU', gE = f.ls === 'ACC' ? 1 : elu ? 1.35 : 1, gQ = f.ls === 'ACC' ? 0 : code === 'BAEL' ? (elu ? 1.605 : 1.2) : (elu ? 1.35 : 1);
-          return z => (z < hR ? RB.Ka * (gE * RB.gamma * (F.De + z) + gQ * soil.q) * bEff : 0);
+          const elu = f.ls === 'ELU', gE = f.ls === 'ACC' ? 1 : elu ? 1.35 : 1, gQ = f.ls === 'ACC' ? 0 : code === 'BAEL' ? (elu ? 1.605 : 1.2) : (elu ? (railSup ? railSup.surcharge.gamma : 1.35) : 1);
+          return z => (z < hR ? RB.Ka * (gE * RB.gamma * (F.De + z) + gQ * (railSup ? railSup.surcharge.qEq : soil.q)) * bEff : 0);
         };
         /**
          * Modèle PSH : efforts au niveau des têtes de pieux décomposés en part soutenue (modules différés du béton, k × kSus)
@@ -1010,21 +1104,23 @@ function calculAppuis(st, input = {}) {
       if (found) found.talon = talon(F.B);
       per[code] = { base, shaft: shaftRes, ...extra, found, brg, headChk };
     }
-    out.BAEL = per.BAEL; out.EC = per.EC;
+    out.BAEL = per.BAEL || null; out.EC = per.EC;
     out.warnings = geometryWarnings(sp, end, width, Lfoot(i));
+    if (railSup && end) out.warnings.push('pont-rail : garde-grève, murs garde-ballast et éléments proches de la voie sous charges locales ferroviaires (§ 6.3.6.4(3)) non traités — le garde-grève affiché suit les règles routières du PP73');
+    if (railSup && !end) out.warnings.push(railSup.avecPhi(i) ? `fût d'élancement ${railSup.lam[i].toFixed(0)} ≥ 30 : réactions ferroviaires prises avec Φ (§ 6.4.5.4(2))` : `fût d'élancement ${railSup.lam[i].toFixed(0)} < 30 : réactions ferroviaires sans Φ (§ 6.4.5.4(2))`);
     for (const t of (bearings.notes || [])) if (t.startsWith(`ligne ${i + 1} :`)) out.warnings.push(t.replace(/^ligne \d+ : /, ''));
     if (bearings.rows[i] && bearings.rows[i].liaison && bearings.rows[i].liaison !== 'elastomere') out.liaison = bearings.rows[i].liaison;
     if (jointAt(i)) out.warnings.push(`pile de joint : réactions du tablier adjacent prises égales à r_G = ${J.rG ?? 1}, r_Q = ${J.rQ ?? 1}, r_H = ${J.rH ?? 1} fois celles du tablier étudié (géométrie de pile commune aux autres piles)${sp.seisme.actif ? ' ; le calcul sismique (Pont EC8) traite encore cette ligne comme une culée' : ''}`);
     const hv = Math.max(0, ...(per.EC.found.rows || per.EC.found.checks || []).filter(r => r.ls === 'ELU' && !r.vide).map(r => Math.abs(r.H) / Math.max(1e-9, r.V)));
     // semelle superficielle qui ne passe pas (glissement, portance ou excentrement), même élargie au maximum dimensionné
     // (12 m) : fondations profondes à envisager pour cette ligne (le dimensionnement automatique s'arrête à 12 m)
-    { const fs = ['EC', 'BAEL'].map(k => per[k] && per[k].found).filter(f => f && f.type === 'superficielle');
+    { const fs = CODES.map(k => per[k] && per[k].found).filter(f => f && f.type === 'superficielle');
       const ko = fs.find(f => (f.worstH > 1 + 1e-9 || f.worstV > 1 + 1e-9 || !f.excOk));
       if (ko) out.warnings.push(`semelle superficielle non vérifiée${ko.Bauto && ko.B >= 12 - 1e-9 ? ' même élargie à 12 m' : ''} (${[ko.worstH > 1 + 1e-9 ? `glissement H/R_h = ${ko.worstH.toFixed(2)}` : '', ko.worstV > 1 + 1e-9 ? `portance V/R_v = ${ko.worstV.toFixed(2)}` : '', !ko.excOk ? 'excentrement' : ''].filter(Boolean).join(', ')}) : fondations profondes (semelle sur pieux, « Type de fondations ») à envisager pour cette ligne, ou bêche et butée à justifier`); }
     if (sp.found.type !== 'superficielle' && hv > 0.20) out.warnings.push(`H/V = ${hv.toFixed(2)} > 0,20 à l'ELU : envisager des pieux inclinés (PP73 1.1.3 § 2.2.2.7)`);
     if (end && sp.found.type !== 'superficielle' && sp.found.nFiles === 1 && sp.found.pileD < 0.80 - 1e-9) out.warnings.push(`culée sur une file de pieux Ø ${sp.found.pileD} m : Ø 0,80 m minimal (PP73 1.2.3 § 1.2.3)`);
     return out;
   });
-  const footRotAll = xs.every((_, i) => onPiles(i)) ? null : xs.map((x, i) => (onPiles(i) ? null : { BAEL: footRot(i, 'BAEL'), EC: footRot(i, 'EC') }));
-  return { sp, niv, pente, centrifuge, distTB, distTE, spLigne: parLigne ? xs.map((_, i) => SL(i)) : null, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: bearings.H }, eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
+  const footRotAll = xs.every((_, i) => onPiles(i)) ? null : xs.map((x, i) => (onPiles(i) ? null : { BAEL: RA ? null : footRot(i, 'BAEL'), EC: footRot(i, 'EC') }));
+  return { sp, niv, pente, centrifuge, distTB, distTE, spLigne: parLigne ? xs.map((_, i) => SL(i)) : null, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: railSup ? Math.max(...railSup.groupes.map(g => g.H)) : bearings.H }, ...(railSup ? { rail: resumeRail(railSup) } : {}), eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
 }

@@ -170,9 +170,9 @@ export async function buildReport(st) {
 
   // 12. Références
   if (st.supports) {
-    h += `<h2>11 bis. Appuis et fondations</h2><h3>Eurocodes</h3>${blocksToHTML(supportsBlocks(st.supports, 'EC', { noWater: true }))}<h3>Fascicule 61 / BAEL / Fascicule 62 titre V</h3>${blocksToHTML(supportsBlocks(st.supports, 'F61', { noWater: true }))}`;
+    h += `<h2>11 bis. Appuis et fondations</h2><h3>Eurocodes</h3>${blocksToHTML(supportsBlocks(st.supports, 'EC', { noWater: true }))}${st.supports.rail ? '' : `<h3>Fascicule 61 / BAEL / Fascicule 62 titre V</h3>${blocksToHTML(supportsBlocks(st.supports, 'F61', { noWater: true }))}`}`;
     const wE = waterBlocks(st.supports, 'EC');
-    if (wE.length) h += `<h2>11 ter. Piles en rivière — courant, embâcles, affouillement</h2><h3>Eurocodes</h3>${blocksToHTML(wE)}<h3>Fascicule 61 / BAEL / Fascicule 62 titre V</h3>${blocksToHTML(waterBlocks(st.supports, 'F61'))}`;
+    if (wE.length) h += `<h2>11 ter. Piles en rivière — courant, embâcles, affouillement</h2><h3>Eurocodes</h3>${blocksToHTML(wE)}${st.supports.rail ? '' : `<h3>Fascicule 61 / BAEL / Fascicule 62 titre V</h3>${blocksToHTML(waterBlocks(st.supports, 'F61'))}`}`;
     h += `<h2>11 quater. Calcul sismique — EN 1998-2 (Pont EC8)</h2>${blocksToHTML(seismicBlocks(st.supports.sp.seisme.actif ? st.supports.seisme : null))}`;
   }
   if (st.ddr) h += `<h2>11 quinquies. Dispositifs de retenue — indice de danger</h2>${blocksToHTML(ddrBlocks(st.ddr))}`;
