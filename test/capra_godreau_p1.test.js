@@ -46,6 +46,13 @@ test('appuis du pont-dalle en zone 4 : culées (F1, F3) et inertie des fûts ajo
   // culée : la combinaison sismique X dominante porte F1 + F3 en plus des efforts des appareils
   const bx = C.base.find(b => b.sis && /^ACC séisme X/.test(b.label) && !b.fond);
   assert.ok(bx && Math.abs(bx.sisInst.H - (C.seisme.F1 + C.seisme.F3)) < 1e-6);
+  // fondation de la culée : F2 (inertie du remblai sur le talon) s'ajoute, pondérée par cx (1 en X, 0,3 en « 0,3 X + Y »)
+  const fx = C.found.checks.find(c => c.sis && /^ACC séisme X \+ 0,3 Y/.test(c.label));
+  const b03 = C.base.find(b => b.sis && /^ACC séisme 0,3 X \+ Y/.test(b.label) && !b.fond);
+  const f03 = C.found.checks.find(c => c.sis && /^ACC séisme 0,3 X \+ Y/.test(c.label));
+  const F2x = fx.Hx - bx.Hb, F2y = f03.Hx - b03.Hb;
+  assert.ok(Number.isFinite(F2x) && F2x > 0, 'F2 appliqué à la fondation de la culée');
+  close(F2y, 0.3 * F2x, 1e-6, 'F2 pondéré par cx = 0,3');
   // pile : effort et moment propres du fût au pied
   const pb = P.base.find(b => b.sis && /^ACC séisme X/.test(b.label) && !b.fond);
   assert.ok(pb.fut && pb.fut.Fx > 0 && Math.abs(pb.Hb - pb.H - pb.fut.Fx) < 1e-6);

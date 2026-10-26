@@ -856,7 +856,9 @@ function calculAppuis(st, input = {}) {
         const Hi = (b.Hinst || 0) + (b.imp ? b.imp.F : 0) + fu.H, Vi = b.Nsus !== undefined && b.N !== undefined ? b.N - b.Nsus : 0;
         const Mi = (b.Hinst || 0) * (armHead + F.hs) + (b.imp ? b.imp.F * (b.imp.h + F.hs) : 0) + fu.M + fu.H * F.hs;
         // culée en séisme : inertie du remblai sur le débord arrière de la semelle F2 = M_R a_g S (EN 1998-2 6.7.2)
-        const F2 = end && b.culeeSis && extra.seisme ? b.culeeSis * inertieRemblaiTalon({ kh: extra.seisme.kh, gamma: soil.gamma, debord: (B - bWall) / 2, hauteur: sp.culee.Hm + hGG, L: Lf }) : null;
+        // (b.culeeSis = coefficient cx de la combinaison 100/30/30 : il pondère la force, pas l'objet { F2, z })
+        const t2 = end && b.culeeSis && extra.seisme ? inertieRemblaiTalon({ kh: extra.seisme.kh, gamma: soil.gamma, debord: (B - bWall) / 2, hauteur: sp.culee.Hm + hGG, L: Lf }) : null;
+        const F2 = t2 ? { F2: b.culeeSis * t2.F2, z: t2.z } : null;
         const Hx = b.Hb + (F2 ? F2.F2 : 0), Mx = b.Mb + b.Hb * F.hs + (F2 ? F2.F2 * (F.hs + F2.z) : 0);
         const inst = { V: Vi, H: Hi + (F2 ? F2.F2 : 0), M: Mi + (F2 ? F2.F2 * (F.hs + F2.z) : 0) };
         const flags = { ls: b.ls, H: Math.hypot(Hx, wt ? Hy : 0), Hx, Hy, My: (b.Myb || 0) + Hy * F.hs, crue: wt, vide: !!b.vide, acc: !!b.acc, sis: !!b.sis, inst };
