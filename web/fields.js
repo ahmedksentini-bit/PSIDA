@@ -140,6 +140,8 @@ const ED = {
 
 /* ---------- affichage conditionnel ---------- */
 function showRule(form, rule) {
+  // règles composées : « a=x&&b!=y||c=z » (OU de ET) ; « | » sépare les valeurs admises d'un même champ
+  if (/&&|\|\|/.test(rule)) return rule.split('||').some(t => t.split('&&').every(u => showRule(form, u.trim())));
   const m = rule.match(/^(\w+)\s*(!?=)\s*(.*)$/);
   if (!m) { const el = form.elements[rule]; return !!(el && el.checked); }
   const el = form.elements[m[1]]; if (!el) return true;
@@ -200,11 +202,14 @@ export function enhanceForm(form) {
   const sa = form.querySelector('#standalone');
   if (sa) sa.addEventListener('toggle', () => dependents('spans').forEach(syncDep));
   // affichage conditionnel : saisies et affectations programmées (exemples, lien partagé)
-  const ctrl = new Set([...form.querySelectorAll('[data-show]')].map(b => b.dataset.show.match(/^\w+/)[0]));
+  // champs de pilotage : tous ceux cités dans les règles, composées comprises (« a=x&&b=y||c=z »)
+  const ctrl = new Set([...form.querySelectorAll('[data-show]')].flatMap(b => b.dataset.show.split(/&&|\|\|/).map(t => (t.trim().match(/^\w+/) || [])[0]).filter(Boolean)));
   for (const n of ctrl) {
     const el = form.elements[n]; if (!el) continue;
     if (el instanceof HTMLSelectElement) Object.defineProperty(el, 'value', { configurable: true, get() { return SVAL.get.call(this); }, set(v) { SVAL.set.call(this, v); refreshShow(); } });
     else if (el.type === 'checkbox') Object.defineProperty(el, 'checked', { configurable: true, get() { return CHK.get.call(this); }, set(v) { CHK.set.call(this, v); refreshShow(); } });
+    // champ caché de pilotage (ouvrage choisi dans le parcours) : affectation programmée sans événement
+    else if (el.type === 'hidden' && !el.dataset.ed) Object.defineProperty(el, 'value', { configurable: true, get() { return VAL.get.call(this); }, set(v) { VAL.set.call(this, v); refreshShow(); } });
   }
   form.addEventListener('change', refreshShow);
   form.addEventListener('input', refreshShow);

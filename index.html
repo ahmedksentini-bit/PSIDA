@@ -44,6 +44,7 @@
   .form-card input, .form-card select { padding:5px 7px; min-width:0; }
   .form-card input[type=number], .form-card label:not(.wide) > input, .form-card .ed-in { text-align:right; }
   .form-card [hidden] { display:none !important; }
+  .cols[hidden], .card[hidden] { display:none !important; }   /* blocs pilotés par data-show (onglet Retenue sous rail) */
   .form-card .grp { margin:18px 0 2px; padding-bottom:3px; border-bottom:1px solid var(--line); font-weight:650; font-size:13.5px; color:var(--ink); }
   .form-card h2 + .grp, .form-card details > .grp:first-child, .form-card #help-box + .grp { margin-top:8px; }
   .form-card .sub { margin:12px 0 0; font-size:12.5px; font-weight:600; color:var(--muted); }
@@ -191,7 +192,7 @@
     <div class="fld">Abouts au-delà des appuis d'extrémité [m]<input type="hidden" name="overhangs" value="0.5, 0.5" data-ed="tuple" data-items="côté gauche|côté droit"></div>
     <div class="grp">Profil en travers (repère y de −b à +b)</div>
     <div class="thumbs" role="group" aria-label="Schéma du repère"><button type="button" class="thumb" data-zoom="web/schemas/reperes.svg" data-cap="Repère de PSIDA : x le long de l'axe depuis l'appui de la culée C0, y en travers de −b à +b (y = 0 sur l'axe). M > 0 tend la fibre inférieure ; m_x et m_y sont des moments par mètre ; δ > 0 vers le bas, R > 0 vers le haut." title="Agrandir"><img src="web/schemas/reperes.svg" alt="Repère et signes" loading="lazy"><span>Repère et signes</span></button></div>
-    <div class="fld">Chaussée [m]<input type="hidden" name="roadway" value="-5, 5" data-ed="tuple" data-items="bord gauche y1|bord droit y2"></div>
+    <div class="fld" data-show="trafic!=ferroviaire">Chaussée [m]<input type="hidden" name="roadway" value="-5, 5" data-ed="tuple" data-items="bord gauche y1|bord droit y2"></div>
     <div class="fld">Trottoirs [m]<input type="hidden" name="footways" value="-6,-5 ; 5,6" data-ed="table" data-fmt="pairs" data-cols="y1|y2" data-add="Ajouter un trottoir"></div>
     <div class="grp">Superstructures (charges permanentes)</div>
     <div class="fld">Charges linéaires : g [kN/m] à l'abscisse e [m]<input type="hidden" name="lines" value="5 @ -5.9 ; 5 @ 5.9 ; 6.5 @ -5.3 ; 6.5 @ 5.3 ; 5 @ -5.5 ; 5 @ 5.5" data-ed="table" data-fmt="lines" data-cols="g [kN/m]|e [m]|k min|k max" data-add="Ajouter une charge linéaire"></div>
@@ -200,7 +201,7 @@
     <div class="fld">Ordonnées de calcul y [m]<input type="hidden" name="ys" value="-6, -4.5, -3, -1.5, 0, 1.5, 3, 4.5, 6" data-ed="list" data-item="y" data-count="Nombre d'ordonnées"></div>
     <label>Méthode de calcul du tablier<select name="methodeTablier"><option value="guyon">Guyon-Massonnet (CHAMOA, PSIDA)</option><option value="plaque">Plaque par éléments finis (≈ 40 s)</option></select></label>
     <label>Coefficient de Poisson ν<input name="nu" value="0.2" type="number" step="0.05" min="0" max="0.3"></label>
-    <label>Pas de glissement des voies [m]<input name="laneStep" value="0.5" type="number" step="0.1" min="0.1"></label>
+    <label data-show="trafic!=ferroviaire">Pas de glissement des voies [m]<input name="laneStep" value="0.5" type="number" step="0.1" min="0.1"></label>
     <label>L_eq imposées, une par travée [m]<input name="Leq" value="" placeholder="calculées"></label>
     <label>Calcul de L_eq<select name="leqMethod"><option value="moments">points de moment nul (CHAMOA)</option><option value="fleches">flèche à mi-travée (PSIDA.EL 1984)</option></select></label>
     <div class="grp">Charges de trafic</div>
@@ -432,34 +433,35 @@
 <section class="tab" id="tab-complements">
   <div class="cols">
     <div class="card form-card"><h2>Phase de chantier, convois LM3, encorbellements, fatigue, zonage</h2>
+      <p class="small rail-mention" data-show="trafic=ferroviaire"><b>Pont-dalle sous rail</b> — phase de chantier routière, convoi LM3, encorbellement routier et fatigue FLM3 sans objet (fatigue sous trafic ferroviaire : hors périmètre) ; seul le zonage du ferraillage reste à renseigner.</p>
 
-      <div class="grp">Phase de chantier</div>
-      <label><input type="checkbox" name="withChantier">Profil provisoire (phase de chantier)</label>
-      <div data-show="withChantier">
+      <div class="grp" data-show="trafic!=ferroviaire">Phase de chantier</div>
+      <label data-show="trafic!=ferroviaire"><input type="checkbox" name="withChantier">Profil provisoire (phase de chantier)</label>
+      <div data-show="withChantier&&trafic!=ferroviaire">
       <div class="fld">Chaussée de chantier [m]<input type="hidden" name="chRoadway" value="-4, 4" data-ed="tuple" data-items="bord gauche y1|bord droit y2"></div>
-      <label>Bande neutralisée de chaque côté [m]<input name="chNeutral" value="1" type="number" step="0.5"></label>
+      <label data-show="trafic!=ferroviaire">Bande neutralisée de chaque côté [m]<input name="chNeutral" value="1" type="number" step="0.5"></label>
       <div class="fld">Remblai provisoire<input type="hidden" name="chRemblai" value="0.5 sur -5,5" data-ed="tuple" data-fmt="sur" data-items="hauteur h [m]|de y1 [m]|à y2 [m]"></div>
       <div class="fld">Enrobé provisoire<input type="hidden" name="chEnrobe" value="0.2 sur -4,4" data-ed="tuple" data-fmt="sur" data-items="épaisseur t [m]|de y1 [m]|à y2 [m]"></div>
       <label class="wide">Engins de chantier, un par ligne : « nom : P@x ; P@x | w=largeur e=entraxe des roues dyn=coefficient »<textarea name="chVehicles">Véhicule spécial : 100@1 ; 100@9 | w=3 e=2 dyn=1.5</textarea></label>
       </div>
-      <div class="grp">Convoi exceptionnel LM3</div>
-      <label>Convoi<select name="lm3"><option value="">aucun</option><option value="VS 600/150">VS 600/150</option><option value="VS 900/150">VS 900/150</option><option value="VS 1200/150">VS 1200/150</option><option value="VS 1200/200">VS 1200/200</option><option value="VS 1500/200">VS 1500/200</option><option value="VS 1800/200">VS 1800/200</option><option value="VS 2400/200">VS 2400/200</option><option value="VS 3000/200">VS 3000/200</option><option value="VS 3600/200">VS 3600/200</option><option value="VS 2400/240">VS 2400/240</option><option value="custom">personnalisé (ci-dessous)</option></select></label>
-      <label class="wide" data-show="lm3=custom">Convoi personnalisé : « P@x ; … | w= e= unc= »<input name="lm3Custom" value=""></label>
-      <label>Circulation<select name="lm3Speed"><option value="rapide">vitesse normale (dyn = 1 + 0,7/(1 + 0,2 L))</option><option value="lent">au pas (dyn = 1)</option></select></label>
-      <div class="grp">Encorbellement</div>
-      <div class="thumbs" role="group" aria-label="Schéma d'un encorbellement"><button type="button" class="thumb" data-zoom="web/schemas/encorbellement.svg" data-cap="Encorbellement : console de longueur L_c, d'épaisseur h à l'encastrement et h à l'extrémité. Charges linéiques g à l'abscisse x comptée depuis l'encastrement, trottoir de x1 à x2, chaussée éventuelle ; la roue du tandem se diffuse à 45° jusqu'au feuillet moyen." title="Agrandir"><img src="web/schemas/encorbellement.svg" alt="Encorbellement" loading="lazy"><span>Encorbellement</span></button></div>
-      <div class="fld">Géométrie (vide = sans encorbellement) [m]<input type="hidden" name="cant" value="" data-ed="tuple" data-items="longueur L_c|h à l'encastrement|h à l'extrémité" data-ph="sans|sans|sans"></div>
-      <div class="fld">Charges linéiques : g [kN/m] à x [m] de l'encastrement<input type="hidden" name="cantLines" value="10@2.35" data-ed="table" data-fmt="lines0" data-cols="g [kN/m]|x [m]" data-add="Ajouter une charge"></div>
-      <div class="fld">Bandes permanentes : q [kN/m²] de x1 à x2 [m]<input type="hidden" name="cantBands" value="" data-ed="table" data-fmt="bands0" data-cols="q [kN/m²]|x1 [m]|x2 [m]" data-add="Ajouter une bande"></div>
-      <div class="fld">Trottoir sur l'encorbellement [m]<input type="hidden" name="cantFootway" value="" data-ed="tuple" data-items="de x1|à x2" data-ph="sans|sans"></div>
-      <label>Chaussée empiétant sur l'encorbellement [m]<input name="cantRoad" value="0" type="number" step="0.1"></label>
-      <div class="grp">Fatigue (EN 1992-2 annexe NN)</div>
-      <label>λ_s,1 (figure NN.1)<input name="fatLambda1" value="1.0" type="number" step="0.05"></label>
-      <label>Trafic (Q̄)<select name="fatTrafic"><option value="longue">longue distance (1,0)</option><option value="moyenne">moyenne distance (0,94)</option><option value="locale">local (0,82)</option></select></label>
-      <label>Catégorie de trafic (N_obs)<select name="fatCat"><option value="1">1 (2·10⁶/an)</option><option value="2" selected>2 (0,5·10⁶/an)</option><option value="3">3 (0,125·10⁶/an)</option><option value="4">4 (0,05·10⁶/an)</option></select></label>
-      <label>Durée d'utilisation [ans]<input name="fatYears" value="100" type="number"></label>
-      <label>Nombre de voies lentes<input name="fatLanes" value="1" type="number"></label>
-      <label>Coefficient φ_fat<input name="fatPhi" value="1.0" type="number" step="0.1"></label>
+      <div class="grp" data-show="trafic!=ferroviaire">Convoi exceptionnel LM3</div>
+      <label data-show="trafic!=ferroviaire">Convoi<select name="lm3"><option value="">aucun</option><option value="VS 600/150">VS 600/150</option><option value="VS 900/150">VS 900/150</option><option value="VS 1200/150">VS 1200/150</option><option value="VS 1200/200">VS 1200/200</option><option value="VS 1500/200">VS 1500/200</option><option value="VS 1800/200">VS 1800/200</option><option value="VS 2400/200">VS 2400/200</option><option value="VS 3000/200">VS 3000/200</option><option value="VS 3600/200">VS 3600/200</option><option value="VS 2400/240">VS 2400/240</option><option value="custom">personnalisé (ci-dessous)</option></select></label>
+      <label class="wide" data-show="lm3=custom&&trafic!=ferroviaire">Convoi personnalisé : « P@x ; … | w= e= unc= »<input name="lm3Custom" value=""></label>
+      <label data-show="trafic!=ferroviaire">Circulation<select name="lm3Speed"><option value="rapide">vitesse normale (dyn = 1 + 0,7/(1 + 0,2 L))</option><option value="lent">au pas (dyn = 1)</option></select></label>
+      <div class="grp" data-show="trafic!=ferroviaire">Encorbellement</div>
+      <div data-show="trafic!=ferroviaire" class="thumbs" role="group" aria-label="Schéma d'un encorbellement"><button type="button" class="thumb" data-zoom="web/schemas/encorbellement.svg" data-cap="Encorbellement : console de longueur L_c, d'épaisseur h à l'encastrement et h à l'extrémité. Charges linéiques g à l'abscisse x comptée depuis l'encastrement, trottoir de x1 à x2, chaussée éventuelle ; la roue du tandem se diffuse à 45° jusqu'au feuillet moyen." title="Agrandir"><img src="web/schemas/encorbellement.svg" alt="Encorbellement" loading="lazy"><span>Encorbellement</span></button></div>
+      <div data-show="trafic!=ferroviaire" class="fld">Géométrie (vide = sans encorbellement) [m]<input type="hidden" name="cant" value="" data-ed="tuple" data-items="longueur L_c|h à l'encastrement|h à l'extrémité" data-ph="sans|sans|sans"></div>
+      <div data-show="trafic!=ferroviaire" class="fld">Charges linéiques : g [kN/m] à x [m] de l'encastrement<input type="hidden" name="cantLines" value="10@2.35" data-ed="table" data-fmt="lines0" data-cols="g [kN/m]|x [m]" data-add="Ajouter une charge"></div>
+      <div data-show="trafic!=ferroviaire" class="fld">Bandes permanentes : q [kN/m²] de x1 à x2 [m]<input type="hidden" name="cantBands" value="" data-ed="table" data-fmt="bands0" data-cols="q [kN/m²]|x1 [m]|x2 [m]" data-add="Ajouter une bande"></div>
+      <div data-show="trafic!=ferroviaire" class="fld">Trottoir sur l'encorbellement [m]<input type="hidden" name="cantFootway" value="" data-ed="tuple" data-items="de x1|à x2" data-ph="sans|sans"></div>
+      <label data-show="trafic!=ferroviaire">Chaussée empiétant sur l'encorbellement [m]<input name="cantRoad" value="0" type="number" step="0.1"></label>
+      <div class="grp" data-show="trafic!=ferroviaire">Fatigue (EN 1992-2 annexe NN)</div>
+      <label data-show="trafic!=ferroviaire">λ_s,1 (figure NN.1)<input name="fatLambda1" value="1.0" type="number" step="0.05"></label>
+      <label data-show="trafic!=ferroviaire">Trafic (Q̄)<select name="fatTrafic"><option value="longue">longue distance (1,0)</option><option value="moyenne">moyenne distance (0,94)</option><option value="locale">local (0,82)</option></select></label>
+      <label data-show="trafic!=ferroviaire">Catégorie de trafic (N_obs)<select name="fatCat"><option value="1">1 (2·10⁶/an)</option><option value="2" selected>2 (0,5·10⁶/an)</option><option value="3">3 (0,125·10⁶/an)</option><option value="4">4 (0,05·10⁶/an)</option></select></label>
+      <label data-show="trafic!=ferroviaire">Durée d'utilisation [ans]<input name="fatYears" value="100" type="number"></label>
+      <label data-show="trafic!=ferroviaire">Nombre de voies lentes<input name="fatLanes" value="1" type="number"></label>
+      <label data-show="trafic!=ferroviaire">Coefficient φ_fat<input name="fatPhi" value="1.0" type="number" step="0.1"></label>
       <div class="grp">Zonage du ferraillage</div>
       <label>Entraxe des appareils d'appui [m]<input name="bearingPitch" value="" placeholder="auto"></label>
     </div>
@@ -1199,7 +1201,8 @@ e 18 33 2.7 1.6
   <iframe id="ec8-frame" title="Pont EC8" data-src="web/ec8/index.html" style="width:100%;height:calc(100vh - 150px);min-height:640px;border:1px solid var(--line, #d7dce3);border-radius:8px;background:#fff"></iframe>
 </section>
 <section class="tab" id="tab-retenue">
-  <div class="cols">
+  <div class="card" data-show="ouvrage=dalle&&trafic=ferroviaire||ouvrage=poutres&&pt_trafic=ferroviaire"><h2>Dispositifs de retenue</h2><p class="small rail-mention"><b>Tablier sous rail</b> — l'indice de danger et les dispositifs de retenue routiers (Cerema 2021) sont sans objet : l'ouvrage ne porte pas de trafic routier. Le confinement des véhicules ferroviaires déraillés (EN 1991-2 § 6.7.1) relève du référentiel du gestionnaire du réseau et n'est pas traité.</p></div>
+  <div class="cols" data-show="ouvrage!=dalle&&ouvrage!=poutres||ouvrage=dalle&&trafic!=ferroviaire||ouvrage=poutres&&pt_trafic!=ferroviaire">
     <div class="card form-card"><h2>Indice de danger (Cerema 2021)</h2>
       <p class="small">Choix du niveau de retenue d'un dispositif en bord libre d'ouvrage d'art. Trafics actuels (les trafics à 15 ans sont calculés : × 1,25).</p>
       <div class="grp">Voie portée</div>
