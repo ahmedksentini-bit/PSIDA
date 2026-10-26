@@ -4,7 +4,7 @@
  * Les articles cités sont ceux de la NF EN 1991-2 (section 6) et de la NF EN 1990/A1 (annexe A2) ; aucun texte de la
  * norme n'est reproduit.
  */
-import { MENTION, PARAMETRES_REFERENTIEL } from '../src/loads_rail.js';
+import { MENTION, PARAMETRES_REFERENTIEL, superstructureVoie } from '../src/loads_rail.js';
 import { guideCrossSectionSVG } from './guide_schema.js';
 
 const F = (v, n = 1) => (v === null || v === undefined || !isFinite(v) ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: n, maximumFractionDigits: n }));
@@ -61,6 +61,22 @@ function lignesHorizontales(st) {
   return out;
 }
 
+/**
+ * Superstructure de voie proposée (EN 1991-1-1 annexe A, tableau A.6 et § 5.2.3), à comparer aux charges permanentes
+ * effectivement saisies dans les données (celles qui entrent dans le calcul).
+ */
+function lignesSuperstructure(st) {
+  const R = st.rail.params, b = st.deck && st.deck.b;
+  const S = superstructureVoie({ voies: st.rail.voies, ballast: R.ballast, hTraverse: R.hTraverse, longueurTraverse: R.longueurTraverse,
+    largeurBallast: R.largeurBallast, typeBallast: R.typeBallast, typeTraverse: R.typeTraverse, limites: b ? [-b, b] : null }).detail;
+  return [
+    ['Ballast', `γ = ${F1(S.gammaBallast)} kN/m³ × (e_b + h_t) = ${F2(R.ballast)} + ${F2(R.hTraverse)} m → q = ${F2(S.q)} kN/m², de y = ${F2(S.y1)} à ${F2(S.y2)} m (lit de ${F2(S.largeur)} m par voie)`, 'EN 1991-1-1 tableau A.6'],
+    ['Épaisseur de ballast : valeurs caractéristiques', 'nominale ± 30 % → k_min = 0,7 ; k_max = 1,3 (valeur défavorable selon l\'effet)', 'EN 1991-1-1 § 5.2.3(2)'],
+    ['Rails et traverses, par voie', `2 rails UIC 60 ${F1(S.rails)} kN/m + traverses ${S.traversesBois ? 'bois' : 'béton précontraint'} avec attaches ${F1(S.traverses)} kN/m${S.deplace ? ` − ballast déplacé par les traverses ${F2(S.deplace)} kN/m (volume g_t/25)` : ' (volume des traverses bois non déduit du ballast)'} = ${F2(S.gVoie)} kN/m, à l'axe`, 'EN 1991-1-1 tableau A.6 (traverses espacées de 600 mm) ; § 5.2.3(5)'],
+    ['Total par voie', `${F1(S.parVoie)} kN/m (valeur nominale)`, ''],
+  ];
+}
+
 /** Carte « Charges ferroviaires » de l'onglet Tablier (HTML). */
 export function railCardHTML(st) {
   const r = st.rail;
@@ -68,6 +84,7 @@ export function railCardHTML(st) {
   let h = `<p class="small rail-mention"><b>${esc(MENTION)}</b> Le trafic routier n'est pas appliqué au tablier.</p>`;
   if (r.avert.length) h += `<ul class="checks">${r.avert.map(a => `<li><span class="badge warn">ATTENTION</span>${esc(a)}</li>`).join('')}</ul>`;
   h += tab(['Donnée', 'Valeur', 'Référence'], lignesDonnees(st));
+  h += `<h3>Superstructure de voie proposée</h3>` + tab(['Élément', 'Valeur proposée', 'Référence'], lignesSuperstructure(st)) + `<p class="small">Le bouton « Calculer les charges permanentes depuis le ballast » du formulaire reporte ces valeurs dans les charges permanentes ; le calcul retient celles des données.</p>`;
   h += `<h3>Groupes de charges (flexion de la dalle)</h3>` + tab(['Groupe', 'γ ELU', 'ψ₀', 'ψ₁', 'ψ₂', 'arrangements', 'M [kN·m], Φ inclus (max en travée, min sur appui)'], lignesGroupes(st));
   h += `<p class="small">Groupes du tableau 6.11 (EN 1991-2 § 6.8.2) : chaque groupe est une action variable unique ; dans la flexion de la dalle, seule sa composante verticale intervient (coefficient 1). γ : EN 1990 tableau A2.4(B) ; ψ : tableau A2.3 (ψ₂ = 0, ψ₂ = 1 pour les seules déformations). Combinaisons : ELU γ_G G + γ Q ; ELS caractéristique G + Ta + max(T + ψ₀ Q ; 0,6 T + Q) ; fréquent G + max(0,6 T ; 0,5 T + ψ₁ Q) ; quasi permanent G + Ta + 0,5 T.</p>`;
   h += `<h3>Actions horizontales (pour mémoire)</h3>` + tab(['Action', 'Valeur caractéristique', 'Référence'], lignesHorizontales(st));
@@ -85,6 +102,9 @@ export function railNoteBlocks(st) {
   B.push({ t: 'h2', text: 'Données ferroviaires, coefficient dynamique et répartition' });
   B.push({ t: 'table', head: ['Donnée', 'Valeur', 'Référence'], rows: lignesDonnees(st), texte: true });
   B.push({ t: 'comment', text: 'Longitudinalement, LM71 est déplacé sur les lignes d\'influence de la poutre continue : essieux et charge répartie sur les seules parties défavorables, hors des 6,40 m du groupe d\'essieux ; SW/0 et SW/2 en motif rigide. Pour chaque voie, la charge verticale est l\'enveloppe « LM71 ou SW/0 ». Transversalement, chaque voie charge une bande b_w centrée sur son axe décalé de ±e ; les coefficients K̄ de Guyon-Massonnet de cette bande donnent m_x(y) comme pour une bande routière. Φ s\'applique aux moments, aux tranchants et aux réactions.' });
+  B.push({ t: 'h2', text: 'Superstructure de voie (charges permanentes)' });
+  B.push({ t: 'table', head: ['Élément', 'Valeur proposée', 'Référence'], rows: lignesSuperstructure(st), texte: true });
+  B.push({ t: 'comment', text: 'Valeurs proposées par PSIDA à partir du ballast et du type de traverses ; le calcul retient les charges permanentes des données (charges réparties et linéaires), qui peuvent les reprendre ou les corriger. Lit de ballast arasé au dessus des traverses ; largeur par défaut = longueur de traverse + 2 × 0,50 m (choix PSIDA, à adapter au profil type de la ligne). Étanchéité, couche de protection et garde-ballast à ajouter s\'il y a lieu.' });
   B.push({ t: 'h2', text: 'Groupes de charges et coefficients' });
   B.push({ t: 'table', head: ['Groupe', 'γ ELU', 'ψ₀', 'ψ₁', 'ψ₂', 'Arrangements', 'M poutre entière [kN·m], Φ inclus'], rows: lignesGroupes(st), texte: true });
   B.push({ t: 'comment', text: 'EN 1991-2 tableau 6.11 (groupes), EN 1990 tableaux A2.3 (ψ) et A2.4(B) (γ = 1,45 ; 1,20 pour les groupes contenant SW/2). Dans la flexion de la dalle, seule la composante verticale du groupe intervient, avec le coefficient 1.' });

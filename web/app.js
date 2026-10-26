@@ -13,6 +13,8 @@ import { TransverseModel } from '../src/transverse.js';
 import { buildReport } from './report.js';
 import { buildNote, noteToHTML, noteToDocx } from './note.js';
 import { railCardHTML, buildNoteRail, RAIL_COURT } from './note_rail.js';
+import { superstructureVoie } from '../src/loads_rail.js';
+import { parseRail } from '../src/pipeline.js';
 import { aideConception, rechercheEpaisseur } from '../src/conception.js';
 import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations } from '../src/bearings.js';
 import { chevetresEC } from '../src/chevetre.js';
@@ -980,6 +982,29 @@ $('#btn-chamoa').addEventListener('click', () => {
   f.withChantier.checked = true; f.chRoadway.value = '-4, 4'; f.chNeutral.value = 1; f.chRemblai.value = '0.5 sur -5,5'; f.chEnrobe.value = '0.2 sur -4,4'; f.chVehicles.value = 'Véhicule spécial : 100@1 ; 100@9 | w=3 e=2 dyn=1.5';
   f.lm3.value = 'VS 1200/200'; f.lm3Speed.value = 'rapide'; f.cant.value = ''; f.fatLambda1.value = 1.0; f.fatCat.value = '2'; f.bearingPitch.value = '';
   $('#hs-min').value = ''; $('#hs-max').value = '';
+  renderScheme();
+});
+
+// Pont-dalle sous rail : charges permanentes de voie proposées depuis le ballast (EN 1991-1-1 tableau A.6, § 5.2.3).
+// Les charges réparties sont remplacées par le lit de ballast ; sur chaque axe de voie, la charge linéaire existante
+// (calcul précédent) est remplacée par rails + traverses ; les autres charges linéaires (corniches, garde-ballast) restent.
+$('#btn-rail-superstructure').addEventListener('click', () => {
+  const f = $('#f'), d = Object.fromEntries(new FormData(f).entries()), R = parseRail(d), info = $('#rail-superstructure-info');
+  if (!R) return;
+  const b = +f.width.value > 0 ? +f.width.value / 2 : null;
+  const S = superstructureVoie({ voies: R.voies, ballast: R.ballast, hTraverse: R.hTraverse, longueurTraverse: R.longueurTraverse,
+    largeurBallast: R.largeurBallast, typeBallast: R.typeBallast, typeTraverse: R.typeTraverse, limites: b ? [-b, b] : null });
+  const n = v => String(+v.toFixed(3));
+  const k = o => (o.kmin !== 1 || o.kmax !== 1 ? ` k ${n(o.kmin)}/${n(o.kmax)}` : '');
+  f.bands.value = S.bandes.map(o => `${n(o.q)} sur ${n(o.y1)},${n(o.y2)}${k(o)}`).join(' ; ');
+  const surAxe = e => R.voies.some(y => Math.abs(y - e) < 1e-6);
+  const autres = String(f.lines.value || '').split(';').map(t => t.trim()).filter(Boolean).filter(t => !surAxe(+t.split('@')[1]?.split('k')[0]));
+  f.lines.value = [...autres, ...S.lignes.map(o => `${n(o.g)} @ ${n(o.e)}${k(o)}`)].join(' ; ');
+  const D = S.detail, fr = (v, p = 2) => v.toLocaleString('fr-FR', { maximumFractionDigits: p });
+  info.textContent = `Ballast ${fr(D.gammaBallast, 1)} kN/m³ × (${fr(R.ballast)} + ${fr(R.hTraverse)}) m = ${fr(D.q)} kN/m² de y = ${fr(D.y1)} à ${fr(D.y2)} m (k 0,7/1,3) ; `
+    + `par voie : rails ${fr(D.rails, 1)} + traverses ${fr(D.traverses, 1)}${D.deplace ? ` − ballast déplacé ${fr(D.deplace)}` : ' (volume des traverses bois non déduit)'} = ${fr(D.gVoie)} kN/m. `
+    + 'Charges réparties remplacées : ajouter l\'étanchéité, la couche de protection et les garde-ballast si nécessaire.';
+  f.dispatchEvent(new Event('input', { bubbles: true }));
   renderScheme();
 });
 

@@ -151,3 +151,16 @@ test('Cadre sous rail : SW/2 ne prend pas α, SW/0 et LM71 si', async () => {
   proche(d2['SW/0'] / d1['SW/0'], 1.33, 1e-9);
   proche(d2.LM71 / d1.LM71, 1.33, 1e-9);
 });
+
+test('Superstructure de voie (EN 1991-1-1 tableau A.6, § 5.2.3)', () => {
+  // deux voies à ± 2,10 m, ballast 0,30 m sous traverses de 2,60 × 0,22 m, béton : calcul à la main
+  const S = R.superstructureVoie({ voies: [-2.1, 2.1], ballast: 0.30, hTraverse: 0.22, longueurTraverse: 2.60 });
+  // lit B = 2,60 + 2 × 0,50 = 3,60 m ; bande de −2,1 − 1,8 = −3,9 à +3,9 m ; q = 20 × 0,52 = 10,4 kN/m², k 0,7/1,3
+  assert.equal(S.bandes.length, 1); proche(S.bandes[0].q, 10.4); proche(S.bandes[0].y1, -3.9); proche(S.bandes[0].y2, 3.9);
+  assert.deepEqual([S.bandes[0].kmin, S.bandes[0].kmax], [0.7, 1.3]);
+  // par voie : 1,2 + 4,8 − 20 × 4,8/25 = 6,0 − 3,84 = 2,16 kN/m à l'axe, valeur nominale
+  assert.equal(S.lignes.length, 2); proche(S.lignes[0].g, 2.16); assert.equal(S.lignes[1].e, 2.1); assert.equal(S.lignes[0].kmax, 1);
+  // une voie, ballast basaltique, traverses bois, lit imposé de 4 m, tablier de ± 1,8 m : bande bornée, volume bois non déduit
+  const T = R.superstructureVoie({ voies: [0], ballast: 0.35, hTraverse: 0.15, longueurTraverse: 2.60, largeurBallast: 4, typeBallast: 'basaltique', typeTraverse: 'bois', limites: [-1.8, 1.8] });
+  proche(T.bandes[0].q, 26 * 0.5); proche(T.bandes[0].y1, -1.8); proche(T.lignes[0].g, 1.2 + 1.9); assert.ok(T.detail.traversesBois);
+});

@@ -83,6 +83,52 @@ export function surchargeRemblai(alpha = 1, avecSW2 = false, largeur = 3.0) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
+// Superstructure de voie (charges permanentes)
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * Poids des superstructures de voie (EN 1991-1-1, annexe A, tableau A.6) [EN, recoupé sur deux reproductions du tableau] :
+ *  - ballast normal (granite, gneiss…) 20,0 kN/m³ ; ballast basaltique 26 kN/m³ ;
+ *  - ouvrages à voie ballastée, par mètre de voie : 2 rails UIC 60 1,2 kN/m ; traverses en béton précontraint avec
+ *    attaches 4,8 kN/m ; traverses en bois avec attaches 1,9 kN/m (espacement des traverses 600 mm, note du tableau).
+ * Épaisseur de ballast (EN 1991-1-1 § 5.2.3(2)) : valeurs caractéristiques haute et basse = nominale ± 30 % → k 0,7 / 1,3.
+ * Béton des traverses : 25 kN/m³ (tableau A.1, béton armé ou précontraint) — sert à déduire le ballast déplacé.
+ * Les traverses béton avec cornières métalliques ne sont pas proposées (valeur non recoupée) : saisir la charge à la main.
+ */
+export const SUPERSTRUCTURE = {
+  ballast: { normal: 20.0, basaltique: 26.0 }, rails: 1.2, traverses: { beton: 4.8, bois: 1.9 },
+  ecartBallast: 0.30, betonTraverses: 25, epaulement: 0.50,
+};
+
+/**
+ * Charges permanentes de voie proposées pour un tablier ballasté (valeurs nominales, toutes modifiables ensuite) :
+ *  - ballast arasé au dessus des traverses, sur une bande continue de min(y) − B/2 à max(y) + B/2 :
+ *    q = γ_b (e_b + h_t) [kN/m²], k 0,7 / 1,3 (§ 5.2.3(2)) ; B = largeur du lit de ballast d'une voie, par défaut
+ *    ℓ_t + 2 × 0,50 m (épaulement de 0,50 m au-delà des abouts de traverse : choix PSIDA, à adapter au profil type) ;
+ *  - par voie, à l'axe : rails + traverses − ballast déplacé par les traverses béton (volume g_t / 25), k 1 / 1
+ *    (éléments non structuraux à valeur nominale, § 5.2.3(5)). Traverses bois : volume non déduit (prudent, signalé).
+ * Rend { bandes: [{ q, y1, y2, kmin, kmax }], lignes: [{ g, e, kmin, kmax }], detail }.
+ */
+export function superstructureVoie({ voies = [0], ballast = 0.30, hTraverse = 0.22, longueurTraverse = 2.60, largeurBallast = null,
+  typeBallast = 'normal', typeTraverse = 'beton', limites = null } = {}) {
+  const S = SUPERSTRUCTURE;
+  const gb = S.ballast[typeBallast] ?? S.ballast.normal, gt = S.traverses[typeTraverse] ?? S.traverses.beton;
+  const B = largeurBallast > 0 ? largeurBallast : longueurTraverse + 2 * S.epaulement;
+  let y1 = Math.min(...voies) - B / 2, y2 = Math.max(...voies) + B / 2;
+  if (limites) { y1 = Math.max(y1, limites[0]); y2 = Math.min(y2, limites[1]); }
+  const ep = ballast + hTraverse, q = gb * ep;
+  const deplace = typeTraverse === 'beton' ? gb * gt / S.betonTraverses : 0;
+  const gVoie = S.rails + gt - deplace;
+  const k = S.ecartBallast;
+  return {
+    bandes: [{ q, y1, y2, kmin: 1 - k, kmax: 1 + k }],
+    lignes: voies.map(e => ({ g: gVoie, e, kmin: 1, kmax: 1 })),
+    detail: { gammaBallast: gb, epaisseur: ep, largeur: B, y1, y2, q, rails: S.rails, traverses: gt, deplace, gVoie,
+      kBallast: [1 - k, 1 + k], parVoie: q * B + gVoie, traversesBois: typeTraverse === 'bois' },
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
 // Coefficient dynamique
 // ---------------------------------------------------------------------------------------------------------------------
 

@@ -215,12 +215,16 @@
     <label data-show="trafic=ferroviaire">Ballast sous traverse [m]<input name="rail_ballast" value="0.30" type="number" step="0.01"></label>
     <label data-show="trafic=ferroviaire">Longueur des traverses [m]<input name="rail_traverse" value="2.60" type="number" step="0.01"></label>
     <label data-show="trafic=ferroviaire">Hauteur des traverses [m]<input name="rail_hTrav" value="0.22" type="number" step="0.01"></label>
+    <label data-show="trafic=ferroviaire">Largeur du lit de ballast d'une voie [m]<input name="rail_bBallast" value="" type="number" step="0.05" placeholder="auto"></label>
+    <label data-show="trafic=ferroviaire">Ballast<select name="rail_typeBallast"><option value="normal">normal — granite, gneiss (20 kN/m³)</option><option value="basaltique">basaltique (26 kN/m³)</option></select></label>
+    <label data-show="trafic=ferroviaire">Traverses<select name="rail_typeTraverse"><option value="beton">béton précontraint avec attaches (4,8 kN/m)</option><option value="bois">bois avec attaches (1,9 kN/m)</option></select></label>
+    <div class="fld full" data-show="trafic=ferroviaire"><button type="button" class="btn" id="btn-rail-superstructure">Calculer les charges permanentes depuis le ballast</button><p class="small" id="rail-superstructure-info">Remplit les charges réparties (ballast, ± 30 %) et ajoute rails + traverses sur chaque axe de voie (EN 1991-1-1 tableau A.6 et § 5.2.3) ; valeurs modifiables ensuite.</p></div>
     <label data-show="trafic=ferroviaire">Vitesse maximale de ligne [km/h]<input name="rail_V" value="" type="number" step="10" placeholder="non renseignée"></label>
     <label data-show="trafic=ferroviaire">Rayon en plan de la voie [m]<input name="rail_r" value="" type="number" step="any" placeholder="alignement droit"></label>
-    <label>Coefficients α (Eurocode)<select name="alpha"><option value="recommended">EN 1991-2 valeurs recommandées (α = 1)</option><option value="FR1">NF EN 1991-2/NA classe 1</option><option value="FR2">NF EN 1991-2/NA classe 2</option></select></label>
-    <label>F61 : nombre de dispositifs de retenue<input name="nRetenue" value="2" type="number" step="1" min="0" max="2"></label>
-    <label>F61 : classe du pont imposée<input name="classe" value="" placeholder="auto"></label>
-    <label>F61 : charges militaires et exceptionnelles<select name="mil"><option value="Mc120+D240">Mc120 et D240</option><option value="Mc120">Mc120 seule</option><option value="D240">D240 seul</option><option value="aucune">aucune</option></select></label>
+    <label data-show="trafic!=ferroviaire">Coefficients α (Eurocode)<select name="alpha"><option value="recommended">EN 1991-2 valeurs recommandées (α = 1)</option><option value="FR1">NF EN 1991-2/NA classe 1</option><option value="FR2">NF EN 1991-2/NA classe 2</option></select></label>
+    <label data-show="trafic!=ferroviaire">F61 : nombre de dispositifs de retenue<input name="nRetenue" value="2" type="number" step="1" min="0" max="2"></label>
+    <label data-show="trafic!=ferroviaire">F61 : classe du pont imposée<input name="classe" value="" placeholder="auto"></label>
+    <label data-show="trafic!=ferroviaire">F61 : charges militaires et exceptionnelles<select name="mil"><option value="Mc120+D240">Mc120 et D240</option><option value="Mc120">Mc120 seule</option><option value="D240">D240 seul</option><option value="aucune">aucune</option></select></label>
     <div class="grp">Chanfreins</div>
     <label>Hauteur au bord libre [m]<input name="hEdge" value="" placeholder="sans"></label>
     <label>Largeur de la joue [m]<input name="joue" value="" placeholder="sans"></label>

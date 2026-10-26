@@ -69,6 +69,8 @@ export function parseRail(d) {
     entretien: d.rail_entretien === 'soigne' ? 'soigne' : 'normal', sw2: d.rail_sw2 === 'on' || d.rail_sw2 === true,
     ballast: v('rail_ballast', 0.30), longueurTraverse: v('rail_traverse', 2.60), hTraverse: v('rail_hTrav', 0.22),
     V: v('rail_V', 0), rayon: v('rail_r', 0), ecartement: 1.50,
+    largeurBallast: v('rail_bBallast', 0) || null, typeBallast: d.rail_typeBallast === 'basaltique' ? 'basaltique' : 'normal',
+    typeTraverse: d.rail_typeTraverse === 'bois' ? 'bois' : 'beton',
   };
 }
 

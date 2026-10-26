@@ -161,6 +161,10 @@ test('Chaîne complète en mode ferroviaire : tablier, transversal, note ; mode 
   assert.ok(note.blocks.some(b => b.t === 'h1' && /Charges ferroviaires/.test(b.text)));
   assert.ok(note.blocks.some(b => b.t === 'comment' && /gestionnaire du réseau/.test(b.text)));
   assert.match(railCardHTML(st), /tableau 6\.2/);
+  // superstructure de voie proposée (EN 1991-1-1 tableau A.6, § 5.2.3) dans la note et la carte
+  const sup = note.blocks.find(b => b.t === 'table' && b.rows.some(r => /UIC 60/.test(r[1])));
+  assert.ok(sup && sup.rows.some(r => /± 30 %/.test(r[1])));
+  assert.match(railCardHTML(st), /Superstructure de voie/);
   // plaque demandée : repli sur Guyon-Massonnet signalé
   const st2 = compute(parseData({ ...d, methodeTablier: 'plaque' }));
   assert.ok(st2.rail.avert.some(t => /plaque/.test(t)));
