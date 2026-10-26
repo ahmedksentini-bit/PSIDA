@@ -617,3 +617,7 @@ défaut. Cadres : sous-pression à la sous-face du radier, cas à sec, S du coef
 choc PIPO. Poutres : σ_pm0 (EN 1992-1-1 § 5.10.3 (2)), pertes PRAD depuis le banc, tranchant de rive. Phasage et mixte :
 légende des moments du fléau, Résal, joint de clavage, fluage non linéaire, flexion latérale du mixte courbe, n_L à 96 j.
 Fenêtre Recommandations. Manuel : chapitre « Ponts-rails » et sections mises à jour.
+Correctif 0.99 du 26/10/2026 : l'inertie F2 du remblai sur le talon des culées (EN 1998-2 § 6.7.2), calculée mais jamais
+appliquée (le coefficient 100/30/30 multipliait l'objet { F2, z } : NaN), est ajoutée aux efforts en tête de fondation
+(exemple par défaut, zone 4, culée C0 : +361,6 kN en « séisme X », +108,5 kN en « 0,3 X » ; test de non-régression).
+Manuel : § 16.9 et 16.17, chapitres 12 et 15 et variantes des § 16.13–16.14 rejoués en 0.99.
