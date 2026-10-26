@@ -176,7 +176,7 @@ function deformationsPoutresRail(S, inp, sec) {
     const gPerm = { nom: files.reduce((a, f) => a + f.q, 0), min: files.reduce((a, f) => a + f.q * (f.kmin ?? 1), 0), max: files.reduce((a, f) => a + f.q * (f.kmax ?? 1), 0) };
     const R = S.rail.params, about = R.about;
     const D = deformationsRail(S.deck, S.rail, { EI: E * 1000 * n * sec.I, EIz: E * 1000 * inp.hd * (n * inp.b1) ** 3 / 12, gPerm, eSup: sec.v ?? inp.beam.v ?? 0, abouts: about != null ? [about, about] : [0, 0],
-      type: inp.type === 'BA' ? 'beton_arme' : 'precontraint', nT: R.nT, confort: R.confort, LdeltaFig: R.LdeltaFig, simple: true, E, nTravees: inp.spans.length });
+      type: inp.type === 'BA' ? 'beton_arme' : 'precontraint', nT: R.nT, confort: R.confort, LdeltaFig: R.LdeltaFig, phiL600: R.phiL600, simple: true, E, nTravees: inp.spans.length });
     if (about == null) D.avert.push('distance de l\'appareil d\'appui à l\'extrémité du tablier non renseignée : soulèvement δV de l\'extrémité (§ 6.5.4.5.2(3)) non vérifié');
     return D;
   } catch (e) { return { erreur: e.message }; }

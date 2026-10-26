@@ -621,8 +621,10 @@ pont-dalle : src/pipeline.js deformationsDalleRail ; poutres : src/beams/run.js 
 web/rail_deformations_view.js) — organigramme de la figure 6.9 de l'EN 1991-2 (n₀ par l'éq. 6.3 sous permanentes,
 limites de la figure 6.10, fourchette k min / k max du ballast, amortissement du tableau 6.6, tableaux F.1 / F.2 de
 l'annexe F, n_T facultative) ; EN 1990 A2.4.4 : flèche L/600, gauche sur 3 m (t₁ t₂ t₃, entrée et sortie comprises,
-excentrement centrifuge), confort des voyageurs (L/δ de la figure A2.3 à saisir, × 0,7 / 0,9 / b_v, ≥ 600), rotation
+excentrement centrifuge), flèche L/600 sous charges classifiées sans Φ (option « majorée par Φ »), confort des
+voyageurs (figure A2.3 numérisée sur la NF EN 1990/A1, ± 2 %, forçage possible ; max(k × (L/δ)_fig / b_v ; 600), k = 0,7 /
+0,9 / 1,0, plancher 600 non multiplié ; au-delà de 120 m ou 350 km/h : analyse spéciale), rotation
 horizontale et rayon (tableau A2.8), fréquence latérale ≥ 1,2 Hz ; EN 1991-2 § 6.5.4.5.2 : δH ≤ 10 mm et δV ≤ 3 / 2 mm
 aux extrémités. Flèches de la poutre continue en forme fermée (EI du tablier non fissuré, E_cm limité à C50/60) ×
-K̄(y) de Guyon-Massonnet au droit des rails. Valeurs à confirmer sur l'EN 1990/A1 : A_CONFIRMER_DEFORMATIONS. Analyse
+K̄(y) de Guyon-Massonnet au droit des rails. EN 1990/A1 A2.4.4 relue sur la norme (A_CONFIRMER_DEFORMATIONS vide). Analyse
 dynamique elle-même (HSLM, trains réels, accélération) hors périmètre. Mode routier strictement inchangé.

@@ -9,8 +9,7 @@
  *    sur l'exemplaire NF EN 1991-2 fourni (pages 56-59, 66-67, 117-118) ;
  *  - NF EN 1990/A1 (2006), annexe A2.4.4 : gauche du tablier (A2.4.4.2.2), flèche verticale L/600 (A2.4.4.2.3),
  *    déformation transversale et fréquence latérale (A2.4.4.2.4, tableau A2.8), confort des voyageurs (A2.4.4.3,
- *    tableau A2.9, figure A2.3) — recoupés sur la reproduction bilingue de l'EN 1990/A1 (ДСТУ-Н Б В.1.2-13:2008,
- *    Amendement 1, dnaop.com) ; les points non recoupés sont dans `A_CONFIRMER_DEFORMATIONS`.
+ *    tableau A2.9, figure A2.3) — relus sur la NF EN 1990/A1 (pages 22 à 27 de la norme) ; figure A2.3 numérisée.
  *
  * Modèle : la flèche du tablier sous une voie chargée est celle de la poutre continue (rigidité EI de tout le tablier,
  * section non fissurée, module instantané E_cm) multipliée par le coefficient K̄(y) de Guyon-Massonnet de la bande de
@@ -22,12 +21,11 @@
 import { coefKBand } from './guyon.js';
 import { LM71, lm71, sw, coefficientDynamique } from './loads_rail.js';
 
-/** Valeurs non recoupées sur un texte de la norme : à relire sur l'exemplaire de l'EN 1990/A1 (annexe A2). */
-export const A_CONFIRMER_DEFORMATIONS = [
-  'EN 1990/A1, A2.4.4.3.2, figure A2.3 : valeurs de L/δ admissibles (confort très bon, b_v = 1,0 m/s²) selon V et L — non codées ; la limite est à saisir (champ « L/δ lu sur la figure A2.3 »).',
-  'EN 1990/A1, A2.4.4.3.2(5) : coefficients 0,7 (une travée, deux travées indépendantes ou deux travées continues) et 0,9 (trois travées continues ou plus) appliqués aux valeurs de la figure A2.3, sans descendre sous L/δ = 600 (sens exact de la phrase sur L/δ = 600 à relire).',
-  'EN 1990/A1, A2.4.4.2.3(1) : coefficient dynamique Φ inclus dans la flèche verticale L/600 (hypothèse prudente retenue ; le texte recoupé cite les charges verticales classifiées, sans préciser Φ).',
-];
+/**
+ * Valeurs non recoupées sur un texte de la norme : vide depuis la relecture de la NF EN 1990/A1 (A2.4.4, pages 22 à 27 de
+ * la norme) le 26/10/2026. La figure A2.3 est une numérisation (voir FIGURE_A23) : sa précision est indiquée dans la note.
+ */
+export const A_CONFIRMER_DEFORMATIONS = [];
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Matériau, fréquences et organigramme de la figure 6.9
@@ -178,14 +176,63 @@ export const FH0 = 1.2;
 /** Accélération verticale dans les voitures b_v [m/s²] par niveau de confort (A2.4.4.3.1, tableau A2.9). */
 export const BV = { tres_bon: 1.0, bon: 1.3, acceptable: 2.0 };
 /**
- * Coefficient appliqué aux L/δ de la figure A2.3 (A2.4.4.3.2(5)) : 0,7 pour une travée, deux travées indépendantes ou deux
- * travées continues ; 0,9 pour trois travées continues ou plus ; 1,0 pour une suite de trois travées indépendantes ou plus
- * (cas de la figure). [À CONFIRMER]
+ * Coefficient appliqué aux L/δ de la figure A2.3 (A2.4.4.3.2(5)) : la figure vaut pour trois travées indépendantes
+ * successives ou plus (1,0) ; une travée, ou deux travées indépendantes ou continues : 0,7 ; ouvrage continu à trois
+ * travées ou plus : 0,9. Ces coefficients ne s'appliquent pas à la limite L/δ = 600 (note sous la figure A2.3).
  */
 export function facteurConfort({ nTravees, continu }) {
   if (continu) return nTravees >= 3 ? 0.9 : 0.7;
   return nTravees >= 3 ? 1.0 : 0.7;
 }
+
+/**
+ * Figure A2.3 de l'EN 1990/A1 (b_v = 1 m/s², trois travées indépendantes ou plus), numérisée sur la NF EN 1990/A1 (scan
+ * redressé de 0,69°, quadrillage relevé au pixel, segments ajustés par moindres carrés sur les traits — résidus 1 à 5 px,
+ * précision ≈ ± 2 %) : chaque courbe = palier jusqu'à Lp, rampe linéaire jusqu'au sommet (Ls ; vs), descente linéaire
+ * jusqu'au plancher 600 (atteint en L600) ou jusqu'à 120 m (v120). Plancher L/δ = 600 commun à toutes les courbes.
+ */
+export const FIGURE_A23 = {
+  120: { palier: 800, Lp: 10.2, Ls: 22.2, vs: 889, L600: 36.8 },
+  160: { palier: 900, Lp: 12.4, Ls: 29.5, vs: 1196, L600: 63.6 },
+  200: { palier: 1000, Lp: 14.7, Ls: 37.5, vs: 1518, L600: 90.0 },
+  220: { palier: 1100, Lp: 17.1, Ls: 41.1, vs: 1662, L600: 101.8 },
+  250: { palier: 1200, Lp: 19.6, Ls: 47.1, vs: 1910, v120: 644 },
+  280: { palier: 1300, Lp: 22.2, Ls: 52.4, vs: 2119, v120: 954 },
+  300: { palier: 1400, Lp: 24.6, Ls: 56.2, vs: 2276, v120: 1173 },
+  350: { palier: 1500, Lp: 27.2, Ls: 65.1, vs: 2648, v120: 1695 },
+};
+const courbeA23 = (c, L) => {
+  if (L <= c.Lp) return c.palier;
+  if (L <= c.Ls) return c.palier + (c.vs - c.palier) * (L - c.Lp) / (c.Ls - c.Lp);
+  const v = c.L600 ? c.vs + (600 - c.vs) * (L - c.Ls) / (c.L600 - c.Ls) : c.vs + (c.v120 - c.vs) * (L - c.Ls) / (120 - c.Ls);
+  return Math.max(600, v);
+};
+/**
+ * L/δ de la figure A2.3 pour une vitesse V [km/h] et une portée L [m] : interpolation linéaire en V entre les courbes ;
+ * V < 120 km/h : courbe 120 km/h (côté sécurité, la figure ne descend pas plus bas) ; V > 350 km/h et L > 120 m : hors
+ * du domaine de la figure (A2.4.4.3.2(6) : analyse spéciale) → null.
+ */
+export function lSurDeltaFigure(V, L) {
+  if (!(L > 0) || L > 120 + 1e-9 || V > 350 + 1e-9) return null;
+  const Vs = Object.keys(FIGURE_A23).map(Number);
+  const v = Math.max(V || 0, 120);
+  let i = 0; while (i < Vs.length - 2 && v > Vs[i + 1]) i++;
+  const [Va, Vb] = [Vs[i], Vs[i + 1]], t = Math.min(1, Math.max(0, (v - Va) / (Vb - Va)));
+  return courbeA23(FIGURE_A23[Va], L) * (1 - t) + courbeA23(FIGURE_A23[Vb], L) * t;
+}
+/**
+ * L/δ requis pour le confort (A2.4.4.3.2(4)-(5)) : max(k × (L/δ)_fig / b_v ; 600) — k (0,7 / 0,9 / 1,0) et b_v ne
+ * s'appliquent pas au plancher 600 ; si k et b_v font passer sous 600, le plancher est retenu et signalé (`plancher`).
+ */
+export function lSurDeltaRequis({ fig, k = 1, bv = 1 }) {
+  if (!(fig > 0)) return null;
+  const brut = k * fig / bv;
+  return { brut, requis: Math.max(brut, 600), plancher: brut < 600 - 1e-9 };
+}
+
+/** Accélération verticale maximale du tablier (A2.4.4.2.1(4)) : γ_bt = 3,5 m/s² (ballast), γ_df = 5 m/s² (pose directe). */
+export const ACCELERATION_MAX = { ballast: 3.5, poseDirecte: 5.0 };
+
 /** δH [mm] admissible à l'extrémité du tablier sous charges verticales (EN 1991-2 § 6.5.4.5.2(2)). */
 export const deltaHLim = (interaction = false) => (interaction ? 8 : 10);
 /** δV [mm] admissible entre le dessus du tablier et la construction adjacente (EN 1991-2 § 6.5.4.5.2(3)). */
@@ -265,7 +312,7 @@ function enveloppe(beam, il, modele) {
  * @param {object} o EI [kN·m²] (tablier entier, non fissuré, E_cm) ; EIz [kN·m²] (flexion horizontale du tablier) ;
  *   gPerm { nom, min, max } [kN/m] ; eSup [m] (axe neutre → dessus du tablier) ; abouts [aG, aD] [m] (extrémité du tablier
  *   au-delà de l'appareil d'appui) ; type ('beton_arme' | 'precontraint') ; nT [Hz] ; confort ('tres_bon'…) ;
- *   LdeltaFig (L/δ lu sur la figure A2.3, b_v = 1) ; simple (structure simple au sens de la note 1) ; ecartementVoie
+ *   LdeltaFig (forçage de L/δ de la figure A2.3, b_v = 1 ; sinon figure numérisée) ; phiL600 (flèche L/600 majorée par Φ) ; simple (structure simple au sens de la note 1) ; ecartementVoie
  *   (1,435 m) ; multiTabliers
  */
 export function deformationsRail(deck, rail, o = {}) {
@@ -302,8 +349,9 @@ export function deformationsRail(deck, rail, o = {}) {
     for (const f of fracs) {
       const x = beam.x0[j] + f * Lj, il = ligne(beam, p => F.w(x, p));
       const env = mods => Math.max(...mods.map(m => enveloppe(beam, il, m).max));
-      // L/600 : charges classifiées (α), SW/0 sur les ouvrages continus, SW/2 si requis ; Φ inclus [à confirmer] ; toutes les voies
-      const wA = env(M(alpha, phi)), wS2 = sw2 ? env([sw2(phi)]) : 0;
+      // L/600 : charges verticales classifiées (α), SW/0 sur les ouvrages continus, SW/2 si requis ; toutes les voies chargées (prudent)
+      const kL600 = o.phiL600 ? phi : 1;     // A2.4.4.2.3(1) : charges classifiées, sans Φ (option prudente : × Φ)
+      const wA = env(M(alpha, kL600)), wS2 = sw2 ? env([sw2(kL600)]) : 0;
       // confort : LM71 × Φ, α = 1, une seule voie chargée (A2.4.4.3.2)
       const wC = env(M(1, phi).filter(m => m.nom === 'LM71'));
       for (const [t, yt] of voies.entries()) {
@@ -320,10 +368,16 @@ export function deformationsRail(deck, rail, o = {}) {
     const lim = Lj / FLECHE_L_SUR;
     fleches.push({ j, L: Lj, x: best.x, voie: best.voie, w: best.w, lim, ok: best.w <= lim + 1e-12, LsurD: Lj / best.w });
     const fac = facteurConfort({ nTravees: o.nTravees || n, continu: rail.continu }), bv = BV[o.confort || 'tres_bon'] || 1;
-    const limFig = o.LdeltaFig > 0 ? Math.max(FLECHE_L_SUR, fac * o.LdeltaFig / bv) : null;
-    confort.push({ j, L: Lj, x: bestC.x, voie: bestC.voie, w: bestC.w, LsurD: Lj / bestC.w, facteur: fac, bv, LsurDlim: limFig, ok: limFig ? Lj / bestC.w >= limFig - 1e-9 : null });
+    // (L/δ)_fig : valeur saisie (forçage) ou figure A2.3 numérisée ; hors domaine (L > 120 m, V > 350 km/h) : analyse spéciale
+    const fig = o.LdeltaFig > 0 ? o.LdeltaFig : lSurDeltaFigure(V, Lj), req = lSurDeltaRequis({ fig, k: fac, bv });
+    confort.push({ j, L: Lj, x: bestC.x, voie: bestC.voie, w: bestC.w, LsurD: Lj / bestC.w, facteur: fac, bv, fig, source: o.LdeltaFig > 0 ? 'saisie' : 'figure',
+      LsurDbrut: req ? req.brut : null, LsurDlim: req ? req.requis : null, plancher: req ? req.plancher : false, horsDomaine: !req, ok: req ? Lj / bestC.w >= req.requis - 1e-9 : null });
   }
 
+  if (!(V > 0)) avert.push('vitesse de ligne non renseignée : confort vérifié avec la courbe V = 120 km/h de la figure A2.3');
+  else if (V < 120) avert.push(`V = ${V} km/h < 120 km/h : confort vérifié avec la courbe V = 120 km/h de la figure A2.3 (la plus basse, côté sécurité)`);
+  if (confort.some(c => c.horsDomaine)) avert.push('confort : portée > 120 m ou vitesse > 350 km/h, hors du domaine de la figure A2.3 — analyse spéciale nécessaire (EN 1990 A2.4.4.3.2(6))');
+  if (confort.some(c => c.plancher)) avert.push('confort : le coefficient du nombre de travées et b_v font passer L/δ sous 600 ; le plancher L/δ = 600 de la figure A2.3, non multiplié, est retenu');
   // ---- 2. gauche du tablier sur 3 m (A2.4.4.2.2) : LM71 × α × Φ (SW/0, SW/2), force centrifuge (excentrement) ; les
   // points hors du tablier (remblai d'accès) ont une flèche nulle → gauche d'entrée et de sortie compris
   let eCf = 0;
@@ -397,5 +451,5 @@ export function deformationsRail(deck, rail, o = {}) {
   }
 
   return { fleches, confort, gauche, extremites, n0: { L: L1, d0, n0, n0min, n0max, m, zeta, type: o.type || 'beton_arme', limites: limitesN0(L1), E: o.E }, decision, transversal,
-    hyp: { EI: o.EI, EIz: o.EIz, eSup: o.eSup, s, phi, alpha, V, confort: o.confort || 'tres_bon', LdeltaFig: o.LdeltaFig || null }, avert, aConfirmer: A_CONFIRMER_DEFORMATIONS };
+    hyp: { EI: o.EI, EIz: o.EIz, eSup: o.eSup, s, phi, alpha, V, confort: o.confort || 'tres_bon', LdeltaFig: o.LdeltaFig || null, phiL600: !!o.phiL600 }, avert, aConfirmer: A_CONFIRMER_DEFORMATIONS };
 }

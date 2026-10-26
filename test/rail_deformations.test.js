@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SlabDeck } from '../src/analysis.js';
 import { coefKBand } from '../src/guyon.js';
-import { limitesN0, n0DepuisFleche, vSurN0Lim, decisionAnalyseDynamique, amortissement, limiteGauche, limiteTransversale, deformationsRail, ecmDynamique, facteurConfort } from '../src/rail_deformations.js';
+import { lSurDeltaFigure, lSurDeltaRequis, A_CONFIRMER_DEFORMATIONS, limitesN0, n0DepuisFleche, vSurN0Lim, decisionAnalyseDynamique, amortissement, limiteGauche, limiteTransversale, deformationsRail, ecmDynamique, facteurConfort } from '../src/rail_deformations.js';
 import { parseData, compute } from '../src/pipeline.js';
 import { parsePoutres, computePoutres } from '../src/beams/run.js';
 import { formDefaults } from '../tools/formdefaults.mjs';
@@ -79,17 +79,27 @@ test('Flèche LM71 à mi-portée d\'une travée de 15 m (RdM) et flèche sous la
   const deck = new SlabDeck({ spans: [L], width: 9, h: 0.9, roadway: { y1: -4.5, y2: 4.5 }, overhangs: [0, 0], lines: [], bands: [], footways: [], nGrid: 100, nSec: 20 });
   const rail = deck.ferroviaire(RAIL), phi = rail.phi;
   const D = deformationsRail(deck, rail, { EI, gPerm: { nom: 202.5 }, eSup: 0.45, type: 'beton_arme', E });
-  // flèche sous la voie (L/600) : Φ × K̄ × flèche de la poutre ; K̄ au rail (y = ±0,7175) de la bande b_w décalée de ±r/18
+  // flèche sous la voie (L/600, A2.4.4.2.3(1)) : charges classifiées SANS Φ → K̄ × flèche de la poutre ; K̄ au rail
+  // (y = ±0,7175) de la bande b_w décalée de ±r/18
   const bw = rail.diffusion.bw, e = rail.ecc, Kr = y => Math.max(...[e, -e].map(s => coefKBand({ b: 4.5, L, e1: s - bw / 2, e2: s + bw / 2, y, nu: 0.2, alpha: 1 })));
-  const attendu = phi * wPoutre * Kr(0.7175);
-  proche(D.fleches[0].w, attendu, 2e-3, 'flèche sous la voie');
+  const wVoie = wPoutre * Kr(0.7175);
+  proche(D.fleches[0].w, wVoie, 2e-3, 'flèche sous la voie, sans Φ');
   assert.ok(D.fleches[0].ok); proche(D.fleches[0].lim, 0.025, 1e-12);
-  // confort : α = 1, une voie : même valeur ici (α = 1, une seule voie)
-  proche(D.confort[0].w, attendu, 2e-3, 'confort');
-  assert.equal(D.confort[0].ok, null);   // L/δ de la figure A2.3 non saisi
-  // avec L/δ lu (1 000) : une travée → × 0,7 → 700 ≥ 600
+  const Dphi = deformationsRail(deck, rail, { EI, gPerm: { nom: 202.5 }, eSup: 0.45, E, phiL600: true });
+  proche(Dphi.fleches[0].w, phi * wVoie, 2e-3, 'option majorée par Φ');
+  // confort (A2.4.4.3.2(2)) : LM71 × Φ, α = 1, une voie
+  proche(D.confort[0].w, phi * wVoie, 2e-3, 'confort');
+  // figure A2.3, V = 160 km/h, L = 15 m : rampe 900 → 1 196 entre 12,4 et 29,5 m → 900 + 296 × 2,6/17,1 = 945,0 ;
+  // une travée : × 0,7 → 661,5 ≥ 600 (plancher non atteint)
+  proche(D.confort[0].fig, 945.0, 1e-3); proche(D.confort[0].LsurDlim, 661.5, 1e-3); assert.equal(D.confort[0].plancher, false);
+  assert.equal(D.confort[0].ok, D.confort[0].LsurD >= 661.5);
+  // forçage (L/δ)_fig = 1 000 : 0,7 × 1 000 = 700
   const D2 = deformationsRail(deck, rail, { EI, gPerm: { nom: 202.5 }, eSup: 0.45, LdeltaFig: 1000, E });
-  proche(D2.confort[0].LsurDlim, 700, 1e-12);
+  proche(D2.confort[0].LsurDlim, 700, 1e-12); assert.equal(D2.confort[0].source, 'saisie');
+  // confort « bon » (b_v = 1,3) : 0,7 × 945,0 / 1,3 = 508,8 < 600 → plancher 600, non multiplié, signalé
+  const D3 = deformationsRail(deck, rail, { EI, gPerm: { nom: 202.5 }, eSup: 0.45, confort: 'bon', E });
+  proche(D3.confort[0].LsurDbrut, 0.7 * 945.0 / 1.3, 1e-3); assert.equal(D3.confort[0].LsurDlim, 600); assert.ok(D3.confort[0].plancher);
+  assert.ok(D3.avert.some(a => /plancher/.test(a)));
   assert.equal(facteurConfort({ nTravees: 3, continu: true }), 0.9); assert.equal(facteurConfort({ nTravees: 2, continu: false }), 0.7);
 });
 
@@ -158,4 +168,20 @@ test('Branchement : pont-dalle et pont à poutres sous rail (interface, note), m
   const Dp = r.spans[0].rail.deformations;
   assert.ok(!Dp.erreur, Dp.erreur); assert.ok(Dp.n0.n0 > 0); assert.ok(Dp.extremites[0].deltaV > 0);
   assert.ok(poutresNote(r).blocks.some(b => b.t === 'h2' && /Déformations et vibrations/.test(b.text)));
+});
+
+test('Figure A2.3 numérisée : points de contrôle, interpolation, domaine, plancher 600', () => {
+  // V = 160, L = 15 : 900 + (1 196 − 900)(15 − 12,4)/(29,5 − 12,4) = 945,0 (lecture du coordinateur ≈ 948, à 0,3 %)
+  proche(lSurDeltaFigure(160, 15), 945.0, 1e-3);
+  // V = 200, L = 50 : descente 1 518 → 600 entre 37,5 et 90,0 m : 1 518 − 918 × 12,5/52,5 = 1 299,4 (lecture ≈ 1 278 : 1,7 %)
+  proche(lSurDeltaFigure(200, 50), 1299.4, 1e-3);
+  assert.equal(lSurDeltaFigure(120, 40), 600);                              // plancher atteint dès 36,8 m
+  assert.equal(lSurDeltaFigure(120, 5), 800); assert.equal(lSurDeltaFigure(90, 5), 800);   // V < 120 : courbe 120
+  proche(lSurDeltaFigure(250, 120), 644, 1e-9); proche(lSurDeltaFigure(350, 65.1), 2648, 1e-9);
+  proche(lSurDeltaFigure(180, 30), (lSurDeltaFigure(160, 30) + lSurDeltaFigure(200, 30)) / 2, 1e-12);   // interpolation en V
+  assert.equal(lSurDeltaFigure(160, 130), null); assert.equal(lSurDeltaFigure(360, 30), null);   // A2.4.4.3.2(6)
+  // L/δ requis : coefficients sur la courbe, jamais sur le plancher 600
+  assert.deepEqual(lSurDeltaRequis({ fig: 600, k: 0.7 }), { brut: 420, requis: 600, plancher: true });
+  proche(lSurDeltaRequis({ fig: 1500, k: 0.9, bv: 1.3 }).requis, 1038.46, 1e-5);
+  assert.deepEqual(A_CONFIRMER_DEFORMATIONS, []);
 });

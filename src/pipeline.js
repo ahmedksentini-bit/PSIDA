@@ -76,6 +76,7 @@ export function parseRail(d) {
     // figure A2.3 de l'EN 1990/A1 (facultatif), distance de l'appareil d'appui à l'extrémité du tablier (poutres)
     nT: v('rail_nT', 0) || null, confort: ['bon', 'acceptable'].includes(d.rail_confort) ? d.rail_confort : 'tres_bon',
     LdeltaFig: v('rail_Ld', 0) || null, about: String(d.rail_about ?? '').trim() === '' ? null : v('rail_about', 0),
+    phiL600: d.rail_phiL600 === 'on' || d.rail_phiL600 === true || +d.rail_phiL600 === 1,
   };
 }
 
@@ -486,7 +487,7 @@ export function deformationsDalleRail(deck, rail, p) {
     const files = deck.permanentFiles();
     const gPerm = { nom: files.reduce((a, f) => a + f.q, 0), min: files.reduce((a, f) => a + f.q * (f.kmin ?? 1), 0), max: files.reduce((a, f) => a + f.q * (f.kmax ?? 1), 0) };
     const D = deformationsRail(deck, rail, { EI: E * 1000 * I, EIz: E * 1000 * deck.h * (2 * deck.b) ** 3 / 12, gPerm, eSup: deck.h / 2, abouts: deck.g.overhangs || [0, 0], type: 'beton_arme',
-      nT: p.rail.nT, confort: p.rail.confort, LdeltaFig: p.rail.LdeltaFig, simple: true, E });
+      nT: p.rail.nT, confort: p.rail.confort, LdeltaFig: p.rail.LdeltaFig, phiL600: p.rail.phiL600, simple: true, E });
     const psi = p.concept?.psi || 100;
     if (psi < 100 - 1e-9) D.avert.push(`biais ψ = ${psi} gr : la « structure simple » de la note 1 de la figure 6.9 suppose des effets de biais négligeables — à vérifier`);
     D.I = I;
