@@ -1,5 +1,6 @@
 /** Ponts à poutres : blocs de présentation (interface et note). */
 import { MENTION, PARAMETRES_REFERENTIEL } from '../src/loads_rail.js';
+import { deformationsBlocks } from './rail_deformations_view.js';
 const F = (v, n = 1) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: n, maximumFractionDigits: n }));
 const F0 = v => F(v, 0), F2 = v => F(v, 2), F3 = v => F(v, 3);
 const CM = v => (v === null || v === undefined || !Number.isFinite(v) ? '—' : F(v * 1e4, 1));
@@ -182,9 +183,9 @@ const RAIL_LIB = { rail1: '1 voie (LM71)', rail2: '2 voies (LM71)', sw2: 'SW/2',
 
 /** Éléments hors du périmètre du lot 3 (pont à poutres sous rail), signalés dans l'interface et la note. */
 export const HORS_PERIMETRE_POUTRES_RAIL = [
-  'Déformations et vibrations du tablier (EN 1991-2 § 6.4.4 et figure 6.10 ; EN 1990 A2.4.4) : lot 4 du chantier ponts-rails.',
+  'Analyse dynamique (§ 6.4.6 : HSLM, trains réels, accélération du tablier) lorsque l\'organigramme de la figure 6.9 la requiert ; effets du vent et du gradient thermique transversal sur la déformation transversale ; compression des appareils d\'appui dans δV.',
   'Transmission aux appuis des actions horizontales (freinage, démarrage, force centrifuge, lacet) et des réactions ferroviaires, interaction voie-ouvrage (§ 6.5.4), appareils d\'appui, appuis et fondations : lot 5 (le transfert vers l\'onglet Appuis est désactivé en mode ferroviaire).',
-  'Fatigue sous trafic ferroviaire (§ 6.9 et annexe D ; EN 1992-2 annexe NN) ; analyse dynamique au-delà de 200 km/h (§ 6.4.4).',
+  'Fatigue sous trafic ferroviaire (§ 6.9 et annexe D ; EN 1992-2 annexe NN).',
   'Passages de service non accessibles au public (5 kN/m², § 6.3.7) : non chargés ; murs garde-ballast et éléments locaux proches de la voie (§ 6.3.6.4(3)).',
   'Stabilité transversale sous train à vide (gr15) et actions de déraillement (§ 6.7.1) : non traitées ; travées continues : non disponibles dans ce module (travées indépendantes).',
 ];
@@ -245,6 +246,7 @@ function beamsBlocksRail(r) {
       comment(`Section donnée par ses valeurs : contraintes normales à mi-travée sur la section composite avec P∞ et e₀ = ${F2(inp.e0)} m ; EN 1992-2 : décompression sous quasi permanente (G seul, ψ₂ = 0), compression ≤ 0,6 f_ck sous caractéristique.`);
     }
   }
+  for (const s of r.spans) if (s.rail.deformations) B.push(...deformationsBlocks(s.rail.deformations, { travee: `travée de ${F2(s.L)} m` }));
   B.push(...localBlocks(r));
   h2('Réactions caractéristiques par ligne d\'appui (pour mémoire, lot 5)');
   table(['Ligne', 'G', 'G min', 'LM71 × α, une voie (sans Φ)', 'Φ', ...(P.sw2 ? ['SW/2, une voie (sans Φ)'] : []), 'Trafic, toutes voies, Φ inclus'],
@@ -263,7 +265,7 @@ export function poutresNote(r, { version = '' } = {}) {
     title: `Note de calcul — pont à poutres sous rail (${vipp ? (r.inp.type === 'PRAD' ? 'PRAD' : 'VIPP') : r.inp.type === 'BA' ? 'béton armé' : 'poutres précontraintes'})`,
     meta: `PSIDA ${version} — ${r.inp.n} poutres, travées ${r.inp.spans.join(' + ')} m — EN 1991-2 section 6`,
     blocks: [{ t: 'h1', text: '1. Tablier à poutres sous rail' }, ...beamsBlocks(r), { t: 'h1', text: '2. Références' },
-      { t: 'ref', text: 'NF EN 1991-2 section 6 (charges ferroviaires) ; NF EN 1990/A1 annexe A2 (tableaux A2.3, A2.4) ; NF EN 1991-1-1 annexe A (poids des superstructures de voie).' },
+      { t: 'ref', text: 'NF EN 1991-2 section 6 (charges ferroviaires ; § 6.4.4, figures 6.9 et 6.10, tableau 6.6, § 6.5.4.5.2, annexe F) ; NF EN 1990/A1 annexe A2 (tableaux A2.3, A2.4 ; A2.4.4 déformations et vibrations) ; NF EN 1991-1-1 annexe A (poids des superstructures de voie).' },
       { t: 'ref', text: 'NF EN 1992-1-1 et NF EN 1992-2 (béton armé et précontraint). Guyon (1946), Massonnet (1950) : répartition transversale ; Sétra, programme PONTYPE / PAP.' },
       ...(vipp ? [{ t: 'ref', text: 'Sétra, VIPP — guide de conception (1996) ; Z. P. Bažant (1972) ; A. Ghali, R. Favre, M. Elbadry (2012) — effets différés.' }] : [])],
   };

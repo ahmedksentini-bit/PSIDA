@@ -616,3 +616,13 @@ permanente) dans les chaînes VIPP / PRAD, BA et section par valeurs (Fascicule 
 sous traverses (Q/4-Q/2-Q/4, diffusion 4:1 puis 45°, Φ du cas 4.1 du tableau 6.2 plafonné à LΦ des poutres) ; réactions
 par ligne d'appui pour mémoire. Transfert vers l'onglet Appuis désactivé (lot 5) ; déformations, fatigue, passages de
 service, train à vide hors périmètre, signalés. Mode routier strictement inchangé.
+En cours — ponts-rails, lot 4 : déformations, vibrations et décision d'analyse dynamique (src/rail_deformations.js ;
+pont-dalle : src/pipeline.js deformationsDalleRail ; poutres : src/beams/run.js deformationsPoutresRail ;
+web/rail_deformations_view.js) — organigramme de la figure 6.9 de l'EN 1991-2 (n₀ par l'éq. 6.3 sous permanentes,
+limites de la figure 6.10, fourchette k min / k max du ballast, amortissement du tableau 6.6, tableaux F.1 / F.2 de
+l'annexe F, n_T facultative) ; EN 1990 A2.4.4 : flèche L/600, gauche sur 3 m (t₁ t₂ t₃, entrée et sortie comprises,
+excentrement centrifuge), confort des voyageurs (L/δ de la figure A2.3 à saisir, × 0,7 / 0,9 / b_v, ≥ 600), rotation
+horizontale et rayon (tableau A2.8), fréquence latérale ≥ 1,2 Hz ; EN 1991-2 § 6.5.4.5.2 : δH ≤ 10 mm et δV ≤ 3 / 2 mm
+aux extrémités. Flèches de la poutre continue en forme fermée (EI du tablier non fissuré, E_cm limité à C50/60) ×
+K̄(y) de Guyon-Massonnet au droit des rails. Valeurs à confirmer sur l'EN 1990/A1 : A_CONFIRMER_DEFORMATIONS. Analyse
+dynamique elle-même (HSLM, trains réels, accélération) hors périmètre. Mode routier strictement inchangé.

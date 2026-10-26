@@ -141,7 +141,8 @@ test('Actions horizontales : freinage, démarrage, lacet, force centrifuge (tabl
   const f = 1 - (160 - 120) / 1000 * (814 / 160 + 1.75) * (1 - Math.sqrt(2.88 / 30));
   proche(b.f, f, 1e-9); proche(b.Qt, 160 ** 2 / (127 * 800) * f * 250, 1e-9);
   proche(a.Qt, 120 ** 2 / (127 * 800) * 1.21 * 250, 1e-9);
-  assert.ok(r.avert.some(t => /6\.4\.4/.test(t)));
+  // lot 4 : la décision d'analyse dynamique (§ 6.4.4) est calculée avec les déformations ; plus d'avertissement « non vérifié »
+  assert.ok(!r.avert.some(t => /lot 4/.test(t)));
   const r2 = d.ferroviaire({ ...RAIL, V: 220 });
   assert.ok(r2.avert.some(t => /> 200 km\/h/.test(t)));
 });

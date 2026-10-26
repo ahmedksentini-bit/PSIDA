@@ -6,6 +6,7 @@
  */
 import { MENTION, PARAMETRES_REFERENTIEL, superstructureVoie } from '../src/loads_rail.js';
 import { guideCrossSectionSVG } from './guide_schema.js';
+import { deformationsBlocks, deformationsHTML } from './rail_deformations_view.js';
 
 const F = (v, n = 1) => (v === null || v === undefined || !isFinite(v) ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: n, maximumFractionDigits: n }));
 const F0 = v => F(v, 0), F1 = v => F(v, 1), F2 = v => F(v, 2), F3 = v => F(v, 3);
@@ -15,9 +16,9 @@ const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').re
 /** Libellé court des groupes (graphiques, sélecteurs). */
 export const RAIL_COURT = { rail1: '1 voie (LM71/SW0)', rail2: '2 voies (LM71/SW0)', sw2: 'SW/2', sw2b: 'SW/2 + LM71' };
 
-/** Éléments hors du périmètre du lot 2, signalés dans l'interface et la note. */
+/** Éléments hors du périmètre du calcul ferroviaire du pont-dalle, signalés dans l'interface et la note. */
 export const HORS_PERIMETRE = [
-  'Déformations et vibrations du tablier (EN 1991-2 § 6.4.4 et figure 6.10 ; EN 1990 A2.4.4) : lot 4 du chantier ponts-rails.',
+  'Analyse dynamique (§ 6.4.6 : HSLM, trains réels, accélération du tablier, EN 1990 A2.4.4.2.1) lorsque l\'organigramme de la figure 6.9 la requiert ; effets du vent et du gradient thermique transversal sur la déformation transversale.',
   'Transmission aux appuis des actions horizontales (freinage, démarrage, force centrifuge, lacet), interaction voie-ouvrage (§ 6.5.4), appareils d\'appui, chevêtres, appuis et fondations sous charges ferroviaires : lot 5. Les appareils d\'appui et chevêtres affichés reçoivent les réactions verticales ferroviaires mais gardent les règles et le freinage routiers.',
   'Fatigue sous trafic ferroviaire (§ 6.9 et annexe D ; EN 1992-2 annexe NN pour les ponts-rails).',
   'Murs garde-ballast et éléments locaux proches de la voie (§ 6.3.6.4(3)) ; effets locaux des charges de roue sur la dalle.',
@@ -89,6 +90,7 @@ export function railCardHTML(st) {
   h += `<p class="small">Groupes du tableau 6.11 (EN 1991-2 § 6.8.2) : chaque groupe est une action variable unique ; dans la flexion de la dalle, seule sa composante verticale intervient (coefficient 1). γ : EN 1990 tableau A2.4(B) ; ψ : tableau A2.3 (ψ₂ = 0, ψ₂ = 1 pour les seules déformations). Combinaisons : ELU γ_G G + γ Q ; ELS caractéristique G + Ta + max(T + ψ₀ Q ; 0,6 T + Q) ; fréquent G + max(0,6 T ; 0,5 T + ψ₁ Q) ; quasi permanent G + Ta + 0,5 T.</p>`;
   h += `<h3>Actions horizontales (pour mémoire)</h3>` + tab(['Action', 'Valeur caractéristique', 'Référence'], lignesHorizontales(st));
   h += `<p class="small">Calculées pour la note ; leur transmission aux appareils d'appui et aux appuis relève du lot 5 (non branchée).</p>`;
+  if (r.deformations) h += deformationsHTML(r.deformations, { titre: 'Déformations et vibrations (EN 1991-2 § 6.4.4 ; EN 1990 A2.4.4)' });
   h += `<h3>Hors périmètre de ce calcul</h3><ul class="small">${HORS_PERIMETRE.map(t => `<li>${esc(t)}</li>`).join('')}</ul>`;
   h += `<p class="small">Paramètres à fixer par le référentiel du gestionnaire du réseau : ${esc(PARAMETRES_REFERENTIEL.join(' '))}</p>`;
   return h;
@@ -111,6 +113,7 @@ export function railNoteBlocks(st) {
   B.push({ t: 'h2', text: 'Actions horizontales (pour mémoire)' });
   B.push({ t: 'table', head: ['Action', 'Valeur caractéristique', 'Référence'], rows: lignesHorizontales(st), texte: true });
   B.push({ t: 'comment', text: 'Ces actions ne sont pas ajoutées à la flexion de la dalle ; leur transmission aux appuis relève du lot 5.' });
+  if (st.rail.deformations) B.push(...deformationsBlocks(st.rail.deformations));
   B.push({ t: 'h2', text: 'Hors périmètre' });
   for (const t of HORS_PERIMETRE) B.push({ t: 'p', text: '— ' + t });
   return B;
@@ -179,8 +182,8 @@ export function buildNoteRail(st, { figures = {}, project = {} } = {}) {
 
   h1('Références', 6);
   for (const t of [
-    'NF EN 1991-2 (2004) : Actions sur les ponts, dues au trafic — section 6 (trafic ferroviaire) : § 6.3.2 à 6.3.6, 6.4.5, 6.5.1 à 6.5.3, 6.8.2, tableaux 6.1, 6.2, 6.8, 6.11.',
-    'NF EN 1990/A1 (2006) : annexe A2, tableaux A2.3 (coefficients ψ des ponts ferroviaires) et A2.4(B) (coefficients γ).',
+    'NF EN 1991-2 (2004) : Actions sur les ponts, dues au trafic — section 6 (trafic ferroviaire) : § 6.3.2 à 6.3.6, 6.4.4 (figures 6.9 et 6.10), 6.4.5, 6.4.6.3, 6.5.1 à 6.5.3, 6.5.4.5.2, 6.8.2, tableaux 6.1, 6.2, 6.6, 6.8, 6.11 ; annexe F (tableaux F.1, F.2).',
+    'NF EN 1990/A1 (2006) : annexe A2, tableaux A2.3 (coefficients ψ des ponts ferroviaires) et A2.4(B) (coefficients γ) ; A2.4.4 (déformations et vibrations des ponts ferroviaires, tableaux A2.8 et A2.9, figure A2.3).',
     'NF EN 1992-1-1 et NF EN 1992-2 : dimensionnement des sections en béton armé.',
     'Guyon-Massonnet (répartition transversale), guide SETRA « Ponts-dalles » (1989), note CHAMOA-PSIDA (pratique de calcul des dalles).',
   ]) para('— ' + t);

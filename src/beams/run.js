@@ -10,6 +10,7 @@ import { chaineVIPP, DEFAUTS_VIPP } from './vipp.js';
 import { hourdisLocal } from './hourdis.js';
 import { entretoiseVerinage } from './entretoise.js';
 import { spectreVerticalDuFormulaire } from '../seisme_vertical.js';
+import { deformationsRail, ecmDynamique } from '../rail_deformations.js';
 
 const nums = s => String(s ?? '').split(/[,;\s]+/).filter(Boolean).map(Number);
 const pairs = s => String(s ?? '').split(';').map(t => t.trim()).filter(Boolean).map(t => nums(t));
@@ -158,7 +159,27 @@ function traveeRail(S, inp, sec, H, v, vp) {
   return { L: S.L, theta: S.gp.theta, alpha: S.gp.alpha, Lguyon: S.gp.Lguyon, classe: null, deltaB: null, deltaC: null, beams,
     rail: { params: R.params, voies: R.voies, nV: R.nV, LPhi: R.LPhi, dyn: R.dyn, phi: R.phi, couverture: R.couverture, diffusion: R.diffusion, ecc: R.ecc,
       groupes: groupes.map(G => ({ id: G.id, ref: G.ref, label: G.label, gamma: G.gamma, psi0: G.psi0, psi1: G.psi1, psi2: G.psi2, nArr: G.nArr })),
-      horizontal: R.horizontal, avert: R.avert } };
+      horizontal: R.horizontal, avert: R.avert, deformations: deformationsPoutresRail(S, inp, sec) } };
+}
+
+/**
+ * Déformations et vibrations d'une travée de pont à poutres sous rail (lot 4) : tablier entier = n poutres composites
+ * (poutre + hourdis, I de la section de calcul) non fissurées au module instantané E_cm du béton des poutres (limité à
+ * C50/60, EN 1991-2 § 6.4.6.3.3) ; flexion horizontale portée par le hourdis seul (h_d (n b₁)³/12, prudent) ; répartition
+ * transversale de Guyon-Massonnet du tablier à poutres (dalle orthotrope équivalente, θ et α de la travée) ; amortissement
+ * du béton précontraint (VIPP, PRAD, BP) ou du béton armé (tableau 6.6) ; travée indépendante = structure simple (note 1).
+ */
+function deformationsPoutresRail(S, inp, sec) {
+  try {
+    const fck = inp.geo === 'dims' ? inp.vipp.beton.fckP : inp.fck, E = ecmDynamique(fck || 35), n = inp.n;
+    const files = S.deck.permanentFiles();
+    const gPerm = { nom: files.reduce((a, f) => a + f.q, 0), min: files.reduce((a, f) => a + f.q * (f.kmin ?? 1), 0), max: files.reduce((a, f) => a + f.q * (f.kmax ?? 1), 0) };
+    const R = S.rail.params, about = R.about;
+    const D = deformationsRail(S.deck, S.rail, { EI: E * 1000 * n * sec.I, EIz: E * 1000 * inp.hd * (n * inp.b1) ** 3 / 12, gPerm, eSup: sec.v ?? inp.beam.v ?? 0, abouts: about != null ? [about, about] : [0, 0],
+      type: inp.type === 'BA' ? 'beton_arme' : 'precontraint', nT: R.nT, confort: R.confort, LdeltaFig: R.LdeltaFig, simple: true, E, nTravees: inp.spans.length });
+    if (about == null) D.avert.push('distance de l\'appareil d\'appui à l\'extrémité du tablier non renseignée : soulèvement δV de l\'extrémité (§ 6.5.4.5.2(3)) non vérifié');
+    return D;
+  } catch (e) { return { erreur: e.message }; }
 }
 
 /** Texte « appuis seuls » (G ; G min ; A ; Bc ; Mc120 ; trottoirs ; TS ; UDL) à partir des réactions par ligne. */

@@ -680,8 +680,8 @@ export class SlabDeck {
     const centrifuge = R.V > 0 && R.rayon > 0
       ? casCentrifuge(R.V, R.alpha, Ltot).filter(c => !c.sansCentrifuge).map(c => ({ ...c, ...forceCentrifuge({ V: c.V, r: R.rayon, f: c.f, Qv: c.alpha * LM71.P, qv: c.alpha * LM71.qv }) }))
       : [];
-    if (R.V > 200) avert.push(`vitesse de ligne ${R.V} km/h > 200 km/h : l'analyse dynamique du § 6.4.4 (figure 6.9) est requise et sort du périmètre de PSIDA`);
-    else if (R.V > 0) avert.push('le besoin d\'une analyse dynamique (§ 6.4.4, figure 6.9 : fréquence propre n₀ dans les limites de la figure 6.10) n\'est pas vérifié ici (lot 4 du chantier ponts-rails)');
+    if (R.V > 200) avert.push(`vitesse de ligne ${R.V} km/h > 200 km/h : voir la décision d'analyse dynamique (§ 6.4.4, figure 6.9) ; l'analyse dynamique elle-même (HSLM, trains réels, accélération du tablier) sort du périmètre de PSIDA`);
+    else if (!(R.V > 0)) avert.push('vitesse de ligne non renseignée : gauche admissible pris pour V ≤ 120 km/h et organigramme de la figure 6.9 évalué pour V ≤ 200 km/h');
     return {
       params: R, voies, nV, continu, LPhi: LP, couverture, dyn, phi, diffusion: { ...dif, h: hDif, bw }, ecc, vert, groupes,
       horizontal: { Ltot, demarrageFreinage: lf, demarrageFreinageSW2: lf2, lacet: effortLacet(R.alpha), centrifuge },

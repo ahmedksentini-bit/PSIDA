@@ -8,6 +8,7 @@ import { SlabDeck } from './analysis.js';
 import { EC_ALPHA } from './loads_ec.js';
 import { designEC, designBAEL, designTransverseEC, designTransverseBAEL, designSingleActionEC, designRailEC } from './design.js';
 import { ALPHAS } from './loads_rail.js';
+import { deformationsRail, ecmDynamique } from './rail_deformations.js';
 import { TransverseModel } from './transverse.js';
 import { aideConception } from './conception.js';
 import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations, parseDesignation } from './bearings.js';
@@ -71,6 +72,10 @@ export function parseRail(d) {
     V: v('rail_V', 0), rayon: v('rail_r', 0), ecartement: 1.50,
     largeurBallast: v('rail_bBallast', 0) || null, typeBallast: d.rail_typeBallast === 'basaltique' ? 'basaltique' : 'normal',
     typeTraverse: d.rail_typeTraverse === 'bois' ? 'bois' : 'beton',
+    // déformations et vibrations (lot 4) : fréquence de torsion n_T [Hz] (facultative), niveau de confort, L/δ lu sur la
+    // figure A2.3 de l'EN 1990/A1 (facultatif), distance de l'appareil d'appui à l'extrémité du tablier (poutres)
+    nT: v('rail_nT', 0) || null, confort: ['bon', 'acceptable'].includes(d.rail_confort) ? d.rail_confort : 'tres_bon',
+    LdeltaFig: v('rail_Ld', 0) || null, about: String(d.rail_about ?? '').trim() === '' ? null : v('rail_about', 0),
   };
 }
 
@@ -427,6 +432,7 @@ export function computeRail(p) {
   rail.avert = [...avert, ...rail.avert];
   if (!p.rail.alphaNormalise) rail.avert.push(`α = ${p.rail.alpha} ne fait pas partie de la liste du § 6.3.2(3)P`);
   const ec = railCommeEC(deck, rail);
+  rail.deformations = deformationsDalleRail(deck, rail, p);
   const thermal = p.withTherm ? deck.thermal({ dTheat: p.dT[0], dTcool: p.dT[1], E: p.E, I: p.I }) : null;
   const settle = p.withTherm ? deck.settlements({ delta: p.delta, E: p.E, I: p.I, phi: p.phiFluage }) : null;
   const design = { EC: designRailEC(deck, perm, rail, { ...p.mat, thermal, settle }), F61: null };
@@ -467,6 +473,25 @@ export function computeRail(p) {
   const psidpError = p.bp && p.bp.actif ? 'mode ferroviaire : la dalle précontrainte (PSI-DP, charges du Fascicule 61) n\'est pas traitée sous charges ferroviaires' : null;
   const supportsError = 'mode ferroviaire : appuis et fondations sous charges ferroviaires (freinage, démarrage, force centrifuge, lacet, interaction voie-ouvrage) — lot 5 du chantier ponts-rails, non calculés';
   return { psidp: null, psidpError, supports: null, supportsError, rebar, rebarError, p, deck, keys, perm, ec, f61: null, rail, cases, thermal, settle, design, trans, transG: trans, transF: trans, transELU: null, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
+}
+
+/**
+ * Déformations et vibrations d'un pont-dalle sous rail (lot 4) : rigidité de la dalle entière non fissurée au module
+ * instantané E_cm (limité à C50/60, EN 1991-2 § 6.4.6.3.3), I donné ou 2b h³/12 ; flexion horizontale h (2b)³/12 ;
+ * masse sous permanentes nominales (k min / k max : fourchette de n₀) ; axe neutre à mi-épaisseur ; abouts du tablier.
+ */
+export function deformationsDalleRail(deck, rail, p) {
+  try {
+    const E = ecmDynamique(p.mat.fck || 30), I = p.I || 2 * deck.b * deck.h ** 3 / 12;
+    const files = deck.permanentFiles();
+    const gPerm = { nom: files.reduce((a, f) => a + f.q, 0), min: files.reduce((a, f) => a + f.q * (f.kmin ?? 1), 0), max: files.reduce((a, f) => a + f.q * (f.kmax ?? 1), 0) };
+    const D = deformationsRail(deck, rail, { EI: E * 1000 * I, EIz: E * 1000 * deck.h * (2 * deck.b) ** 3 / 12, gPerm, eSup: deck.h / 2, abouts: deck.g.overhangs || [0, 0], type: 'beton_arme',
+      nT: p.rail.nT, confort: p.rail.confort, LdeltaFig: p.rail.LdeltaFig, simple: true, E });
+    const psi = p.concept?.psi || 100;
+    if (psi < 100 - 1e-9) D.avert.push(`biais ψ = ${psi} gr : la « structure simple » de la note 1 de la figure 6.9 suppose des effets de biais négligeables — à vérifier`);
+    D.I = I;
+    return D;
+  } catch (e) { return { erreur: e.message }; }
 }
 
 /** Aide à la conception seule : géométrie, charges permanentes et règles du guide (quelques dixièmes de seconde). */

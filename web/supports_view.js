@@ -450,7 +450,7 @@ export function blocksToHTML(blocks) {
     if (b.t === 'math') return `<div class="math" data-tex="${esc(b.tex).replace(/"/g, '&quot;')}">${esc(b.tex)}</div>`;
     if (b.t === 'svg') return `<figure class="fig-sondage" style="max-width:760px;margin:8px 0">${b.svg}<figcaption class="small">${esc(b.caption || '')}</figcaption></figure>`;
     if (b.t === 'comment') return `<p class="small" style="font-style:italic">${esc(b.text)}</p>`;
-    if (b.t === 'table') return `<table><thead><tr>${b.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.rows.map(r => `<tr>${r.map(c => `<td>${esc(c).replace(/\bNON\b/g, '<span class="badge warn">NON</span>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    if (b.t === 'table') return `<table><thead><tr>${b.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.rows.map(r => `<tr>${r.map((c, i) => `<td${b.wrap && i ? ' style="white-space:normal;text-align:left"' : ''}>${esc(c).replace(/\bNON\b/g, '<span class="badge warn">NON</span>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
     return '';
   }).join('');
 }
