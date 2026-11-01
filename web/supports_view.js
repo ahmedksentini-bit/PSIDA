@@ -446,7 +446,8 @@ export function supportsNote(sup, { ref = 'F61', version = '', standalone = fals
 
 /** Rendu HTML minimal des blocs (interface). */
 /**
- * Indication « → à modifier » sous un « NON » (onglet Cadres) : { texte, champ?, champs?, actuel?, valeur?, valeurChamp?,
+ * Indication « → à modifier » sous un « NON » (onglets Cadres et Phasage ; colonne du verdict : b.hintCol, la dernière
+ * par défaut) : { texte, champ?, champs?, actuel?, valeur?, valeurChamp?,
  * unite? }. Le lien montre le champ du formulaire ; le bouton écrit la valeur (ou l'ensemble de valeurs) et relance le
  * calcul (gestionnaire délégué dans web/app.js). Les notes de calcul n'en reçoivent pas.
  */
@@ -474,7 +475,7 @@ export function blocksToHTML(blocks) {
     if (b.t === 'math') return `<div class="math" data-tex="${esc(b.tex).replace(/"/g, '&quot;')}">${esc(b.tex)}</div>`;
     if (b.t === 'svg') return `<figure class="fig-sondage" style="max-width:760px;margin:8px 0">${b.svg}<figcaption class="small">${esc(b.caption || '')}</figcaption></figure>`;
     if (b.t === 'comment') return `<p class="small" style="font-style:italic">${esc(b.text)}</p>`;
-    if (b.t === 'table') return `<table><thead><tr>${b.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.rows.map((r, ri) => `<tr>${r.map((c, i) => `<td${b.wrap && i ? ' style="white-space:normal;text-align:left"' : ''}>${esc(c).replace(/\bNON\b/g, '<span class="badge warn">NON</span>')}${b.hints && b.hints[ri] && i === r.length - 1 ? hintHTML(b.hints[ri]) : ''}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    if (b.t === 'table') return `<table><thead><tr>${b.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.rows.map((r, ri) => `<tr>${r.map((c, i) => `<td${b.wrap && i ? ' style="white-space:normal;text-align:left"' : ''}>${esc(c).replace(/\bNON\b/g, '<span class="badge warn">NON</span>')}${b.hints && b.hints[ri] && i === (b.hintCol ?? r.length - 1) ? hintHTML(b.hints[ri]) : ''}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
     return '';
   }).join('');
 }
