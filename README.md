@@ -621,3 +621,13 @@ Correctif 0.99 du 26/10/2026 : l'inertie F2 du remblai sur le talon des culées 
 appliquée (le coefficient 100/30/30 multipliait l'objet { F2, z } : NaN), est ajoutée aux efforts en tête de fondation
 (exemple par défaut, zone 4, culée C0 : +361,6 kN en « séisme X », +108,5 kN en « 0,3 X » ; test de non-régression).
 Manuel : § 16.9 et 16.17, chapitres 12 et 15 et variantes des § 16.13–16.14 rejoués en 0.99.
+v0.99.5 : recommandations des cadres et portiques (src/reco/cadre.js). Sous chaque « NON » de l'onglet « Cadres et
+portiques » (sections, gabarit, choc, portance, réserves bloquantes), l'indication « → à modifier » nomme la donnée du
+formulaire et la valeur qui suffit, avec « Appliquer et recalculer » ; le bouton « Recommandations » de l'en-tête suit le
+calcul de l'onglet affiché (compteur compris) et détaille le constat, la règle (BAEL 91 A.5.2,2 et A.4.3, EN 1992-1-1
+§ 6.2.2 et 7.3.4, catalogue des dispositions, Fascicule 62 titre V ou NF P94-261, EN 1991-1-7, guide PICF-EL) et les autres
+solutions. Les valeurs sont cherchées par recalcul complet du cadre (dichotomie sur une grille) : épaisseurs de traverse,
+radier, piédroits et voiles cherchées ensemble (montée puis descente, jeu localement minimal), puis béton, nuance d'acier,
+largeur des semelles du PIPO, profondeur d'assise, hauteur intérieure (gabarit), radier ou remblai (flottaison), biais,
+modèle de sol. Quand aucune épaisseur ne suffit (effort tranchant sans armatures notamment), la recommandation le dit et
+renvoie aux armatures d'effort tranchant ou à un changement de conception. Test : test/reco_cadre.test.js.

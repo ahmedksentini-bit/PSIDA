@@ -445,18 +445,36 @@ export function supportsNote(sup, { ref = 'F61', version = '', standalone = fals
 }
 
 /** Rendu HTML minimal des blocs (interface). */
+/**
+ * Indication « → à modifier » sous un « NON » (onglet Cadres) : { texte, champ?, champs?, actuel?, valeur?, valeurChamp?,
+ * unite? }. Le lien montre le champ du formulaire ; le bouton écrit la valeur (ou l'ensemble de valeurs) et relance le
+ * calcul (gestionnaire délégué dans web/app.js). Les notes de calcul n'en reçoivent pas.
+ */
+export function hintHTML(h) {
+  if (!h) return '';
+  const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  const champs = h.champs || (h.champ && h.valeurChamp != null ? { [h.champ]: h.valeurChamp } : null);
+  let t = '<span class="reco-hint">→ à modifier : ';
+  if (h.champs) t += `<a href="#" data-reco-go="${esc(Object.keys(h.champs)[0])}">${esc(h.texte)}</a>`;
+  else if (h.champ) t += `<a href="#" data-reco-go="${esc(h.champ)}">${esc(h.texte)}</a>${h.valeur != null ? ` ${h.actuel != null ? esc(h.actuel) + ' → ' : '→ '}<strong>${esc(h.valeur)}</strong>${h.unite ? ' ' + esc(h.unite) : ''}` : ' (à renseigner)'}`;
+  else t += esc(h.texte);
+  if (champs) t += ` <button type="button" class="mini" data-reco-apply="${esc(JSON.stringify(champs))}" title="${esc(h.complet || '')}">Appliquer et recalculer</button>`;
+  else t += ' <span class="small">(voir « Recommandations »)</span>';
+  return t + '</span>';
+}
+
 export function blocksToHTML(blocks) {
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
   return blocks.map(b => {
     if (b.t === 'h2') return `<h3>${esc(b.text)}</h3>`;
-    if (b.t === 'p') return `<p class="small">${esc(b.text)}</p>`;
+    if (b.t === 'p') return `<p class="small">${esc(b.text)}${b.hint ? hintHTML(b.hint) : ''}</p>`;
     if (b.t === 'h1') return `<h3>${esc(b.text)}</h3>`;
     if (b.t === 'h3') return `<h5>${esc(b.text)}</h5>`;
     if (b.t === 'ref') return `<p class="small ref">${esc(b.text)}</p>`;
     if (b.t === 'math') return `<div class="math" data-tex="${esc(b.tex).replace(/"/g, '&quot;')}">${esc(b.tex)}</div>`;
     if (b.t === 'svg') return `<figure class="fig-sondage" style="max-width:760px;margin:8px 0">${b.svg}<figcaption class="small">${esc(b.caption || '')}</figcaption></figure>`;
     if (b.t === 'comment') return `<p class="small" style="font-style:italic">${esc(b.text)}</p>`;
-    if (b.t === 'table') return `<table><thead><tr>${b.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.rows.map(r => `<tr>${r.map((c, i) => `<td${b.wrap && i ? ' style="white-space:normal;text-align:left"' : ''}>${esc(c).replace(/\bNON\b/g, '<span class="badge warn">NON</span>')}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+    if (b.t === 'table') return `<table><thead><tr>${b.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${b.rows.map((r, ri) => `<tr>${r.map((c, i) => `<td${b.wrap && i ? ' style="white-space:normal;text-align:left"' : ''}>${esc(c).replace(/\bNON\b/g, '<span class="badge warn">NON</span>')}${b.hints && b.hints[ri] && i === r.length - 1 ? hintHTML(b.hints[ri]) : ''}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
     return '';
   }).join('');
 }

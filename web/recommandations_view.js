@@ -4,6 +4,7 @@
  * dans le formulaire (les résultats deviennent périmés jusqu'au prochain calcul), « Voir » ouvre l'onglet du champ.
  */
 import { recommandations } from '../src/recommandations.js';
+import { recommandationsCadre } from '../src/reco/cadre.js';
 
 /** Libellé du champ lu dans le formulaire (texte de son <label>, sans les valeurs des listes). */
 function libelle(form, name) {
@@ -17,12 +18,24 @@ const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '
 
 let dernier = null;
 
-/** Met à jour le compteur du bouton d'en-tête. */
+/** Met à jour le compteur du bouton d'en-tête (tablier et appuis : état du calcul complet). */
 export function majBouton(st) {
+  if (!st) { const b = document.getElementById('btn-reco'); if (b) b.hidden = true; return; }
+  maj(st, () => recommandations(st));
+}
+/**
+ * Même chose pour l'onglet « Cadres et portiques » : out = résultat de computeCadre, data = données du formulaire qui
+ * l'ont produit ; `rec` déjà calculé (recommandationsCadre) évite de refaire les recherches.
+ */
+export function majBoutonCadre(out, data, rec = null) {
+  if (!out) { const b = document.getElementById('btn-reco'); if (b) b.hidden = true; return null; }
+  maj(out, () => rec || recommandationsCadre(out, data));
+  return dernier;
+}
+function maj(cle, calc) {
   const b = document.getElementById('btn-reco');
   if (!b) return;
-  if (!st) { b.hidden = true; return; }
-  try { dernier = { ...recommandations(st), st }; } catch (e) { dernier = { items: [], erreur: e.message, st }; }
+  if (!(dernier && dernier.st === cle)) { try { dernier = { ...calc(), st: cle }; } catch (e) { dernier = { items: [], erreur: e.message, st: cle }; } }
   const n = dernier.items.length;
   b.hidden = false;
   b.classList.toggle('ok', n === 0);
@@ -41,6 +54,12 @@ export function ouvrir(st, { form, onApply, goField, solve }) {
   if (rec.erreur) h += `<p class="small">Recommandations indisponibles : ${esc(rec.erreur)}</p>`;
   if (!rec.items.length) h += `<p><span class="badge ok">OK</span> Aucune vérification non satisfaite dans les résultats affichés.</p>`;
   else h += `<p class="small">${rec.items.length} vérification(s) non satisfaite(s). Pour chacune : ce qui ne passe pas, puis les paramètres à modifier, du plus efficace au plus coûteux. « Calculer » cherche la valeur qui suffit (les autres données restant inchangées) ; « Appliquer » l'écrit dans le formulaire, puis relancez le calcul.</p>`;
+  if (rec.synthese) {
+    const a = { texte: rec.synthese.texte, champs: rec.synthese.champs, valeur: 'ensemble' };
+    rec._synthese = a;
+    h += `<div class="reco-synthese" id="reco-syn"><strong>${esc(a.texte)}</strong> : ${Object.entries(a.champs).map(([k, v]) => `« ${esc(libelle(form, k))} » ${esc(String(v).replace('.', ','))}`).join(' ; ')} <button type="button" class="mini" data-apply="reco-syn">Appliquer</button><span class="reco-res small"></span></div>`;
+    a._id = 'reco-syn';
+  }
   let k = 0;
   for (const [dom, items] of parDomaine) {
     h += `<h3>${esc(dom)}</h3>`;
@@ -49,24 +68,30 @@ export function ouvrir(st, { form, onApply, goField, solve }) {
       for (const a of it.actions) {
         const id = `reco-a${k++}`;
         a._id = id;
-        const champ = a.champ ? ` <span class="small">[« ${esc(a.libelleChamp || libelle(form, a.champ))} » : ${esc(form.elements[a.champ] ? (form.elements[a.champ].value === '' ? 'vide' : form.elements[a.champ].value) : '')}]</span>` : '';
+        const val = n => (form.elements[n] ? (form.elements[n].value === '' ? 'vide' : form.elements[n].value) : '');
+        const champ = a.champ ? ` <span class="small">[« ${esc(a.libelleChamp || libelle(form, a.champ))} » : ${esc(val(a.champ))}]</span>`
+          : a.champs ? ` <span class="small">[${Object.keys(a.champs).map(n => `« ${esc(libelle(form, n))} » : ${esc(val(n))}`).join(' ; ')}]</span>` : '';
         h += `<li id="${id}">${esc(a.texte)}${champ}`;
-        if (a.valeur != null) h += ` → <strong>${esc(a.valeur)}</strong>${a.unite ? ' ' + esc(a.unite) : ''}`;
+        if (a.valeur != null && !a.champs) h += ` → <strong>${esc(a.valeur)}</strong>${a.unite ? ' ' + esc(a.unite) : ''}`;
         if (a.chercher) h += ` <button type="button" class="mini" data-solve="${id}">Calculer</button>`;
-        if (a.champ && a.valeur != null) h += ` <button type="button" class="mini" data-apply="${id}">Appliquer</button>`;
-        if (a.champ) h += ` <button type="button" class="mini secondary" data-go="${id}">Voir</button>`;
+        if ((a.champ || a.champs) && a.valeur != null) h += ` <button type="button" class="mini" data-apply="${id}">Appliquer</button>`;
+        if (a.champ || a.champs) h += ` <button type="button" class="mini secondary" data-go="${id}">Voir</button>`;
         h += `<span class="reco-res small"></span></li>`;
       }
       h += `</ol></div>`;
     }
   }
   dlg.innerHTML = h;
-  const find = id => rec.items.flatMap(i => i.actions).find(a => a._id === id);
+  const find = id => (id === 'reco-syn' ? rec._synthese : rec.items.flatMap(i => i.actions).find(a => a._id === id));
   dlg.onclick = async ev => {
     const t = ev.target;
     if (t.matches('[data-close]')) { dlg.close(); return; }
-    if (t.dataset.go) { const a = find(t.dataset.go); dlg.close(); goField(a.champ); return; }
-    if (t.dataset.apply) { const a = find(t.dataset.apply); onApply(a.champ, a.valeurChamp ?? a.valeur); t.textContent = 'Appliqué ✓'; t.disabled = true; return; }
+    if (t.dataset.go) { const a = find(t.dataset.go); dlg.close(); goField(a.champ || Object.keys(a.champs)[0]); return; }
+    if (t.dataset.apply) {
+      const a = find(t.dataset.apply);
+      if (a.champs) for (const [k, v] of Object.entries(a.champs)) onApply(k, v); else onApply(a.champ, a.valeurChamp ?? a.valeur);
+      t.textContent = 'Appliqué ✓'; t.disabled = true; return;
+    }
     if (t.dataset.solve) {
       const a = find(t.dataset.solve), li = document.getElementById(t.dataset.solve), out = li.querySelector('.reco-res');
       t.disabled = true; out.textContent = ' calcul…';
