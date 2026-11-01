@@ -530,7 +530,7 @@ ferraillage par mètre et poinçonnement ; entretoises d'about (src/beams/entret
 ferraillage de principe ; aperçu, DXF, PDF) ; assistant de saisie (coupe du tablier, section et câblage) ; note de calcul
 HTML et Word ; manuel chapitre 29.
 Projets antérieurs (section par valeurs) inchangés.
-v0.93 : pont mixte — structure achevée (src/mixte/trafic.js, verifs.js) : poutre continue à inertie variable (n₀ en travée,
+v0.93 : pont mixte — structure achevée (src/mixte/poutre_continue.js, verifs.js) : poutre continue à inertie variable (n₀ en travée,
 fissurée sur appuis), lignes d'influence, répartition transversale (levier / Courbon), LM1 et trottoirs, écart thermique ±10 K
 (effets primaires et hyperstatiques) ; ELU par classe de section (M_pl,Rd ou contraintes cumulées par phase, âme efficace
 EN 1993-1-5 § 4.4), voilement par cisaillement et interaction M-V, déversement de la semelle comprimée sur berceaux élastiques

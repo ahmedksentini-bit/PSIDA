@@ -17,7 +17,7 @@
  * Unités : m, kN, kN·m, MPa (traction positive).
  */
 import { couches, proprietes, fyEpaisseur } from './section.js';
-import { PoutreContinue } from './trafic.js';
+import { PoutreContinue } from './poutre_continue.js';
 import { resultante } from '../phasage/phasage.js';
 
 const EA = 210000;

@@ -2,7 +2,7 @@
  * Pont mixte bipoutre / quadripoutre : vérifications de la structure achevée (NF EN 1994-2, NF EN 1993-2, NF EN 1993-1-5).
  *
  * Actions : permanentes et effets différés du calcul par phases (src/mixte/bipoutre.js, retrait hyperstatique compris),
- * trafic LM1 et trottoirs, écart thermique ±10 K, FLM3 (src/mixte/trafic.js). Combinaisons EN 1990 A2 :
+ * trafic LM1 et trottoirs, écart thermique ±10 K, FLM3 (src/mixte/poutre_continue.js). Combinaisons EN 1990 A2 :
  *   ELU  1,35 G + 1,35 (LM1 + trottoirs) + 1,5 × 0,6 T ;   ELS caractéristique G + Q + 0,6 T.
  * Vérifications, à chaque section du modèle :
  *  - classe de la section (EN 1993-1-1 tableau 5.2 ; semelle connectée en classe 1) ;
@@ -24,7 +24,7 @@
  * Unités : m, kN, kN·m, MPa.
  */
 import { couches, proprietes, equivalence, momentPlastique, classeSection } from './section.js';
-import { PoutreContinue, enveloppe, chargesPoutre, FLM3, repartition } from './trafic.js';
+import { PoutreContinue, enveloppe, chargesPoutre, FLM3, repartition } from './poutre_continue.js';
 import { resultante } from '../phasage/phasage.js';
 import { contraintesMixtes } from './bipoutre.js';
 import { EC_ALPHA, lm1 } from '../loads_ec.js';
