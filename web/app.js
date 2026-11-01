@@ -312,7 +312,8 @@ async function solveReco(a) {
   const c = a.chercher, f = $('#f'), el = f.elements[c.champ];
   if (!el) throw new Error(`champ ${c.champ} introuvable`);
   const ancien = el.value, base = state;
-  const vals = candidats({ min: c.min, max: c.max, pas: c.pas, vers: c.vers, depart: c.depart ?? (c.vers === 'haut' ? c.min : c.max) });
+  // c.valeurs : candidats déjà filtrés par la règle (ponts à poutres : tracé logé dans le talon), sinon la grille régulière
+  const vals = c.valeurs || candidats({ min: c.min, max: c.max, pas: c.pas, vers: c.vers, depart: c.depart ?? (c.vers === 'haut' ? c.min : c.max) });
   const essai = async v => {
     el.value = String(v);
     try {
@@ -948,13 +949,14 @@ $('#btn-poutres').addEventListener('click', () => {
     // l'affichage des résultats ; les « NON » reçoivent ensuite l'indication « → à modifier » et le bouton d'en-tête son compteur
     const p0 = poutres;
     recoPoutres = null;
+    if (T.current() === 'poutres' && recoSource === 'poutres') majBoutonPoutres(null);   // compteur périmé masqué pendant la recherche
     $('#poutres-tables').insertAdjacentHTML('afterbegin', '<p class="small" id="poutres-reco-attente">Recherche des valeurs qui font passer les vérifications…</p>');
     recommandationsPoutres(p0, data, { annule: () => poutres !== p0, onProgress: n => { const w = $('#poutres-reco-attente'); if (w) w.textContent = `Recherche des valeurs qui font passer les vérifications… (${n} calcul${n > 1 ? 's' : ''} des poutres)`; } })
       .then(rec => {
         if (poutres !== p0) return;
-        recoPoutres = { out: p0, data, rec }; recoSource = 'poutres';
+        recoPoutres = { out: p0, data, rec };
         $('#poutres-tables').innerHTML = blocksToHTML(beamsBlocks(p0, { reco: rec }));
-        majBoutonPoutres(p0, rec);
+        majRecoCourant();   // l'en-tête suit l'onglet affiché : l'utilisateur a pu en changer pendant la recherche
       })
       .catch(e => { if (poutres !== p0) return; const w = $('#poutres-reco-attente'); if (w) w.textContent = 'Recommandations indisponibles : ' + e.message; });
   } catch (e) { $('#error').textContent = e.stack || String(e); }

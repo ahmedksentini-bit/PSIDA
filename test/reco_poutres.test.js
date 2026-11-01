@@ -6,7 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parsePoutres, computePoutres } from '../src/beams/run.js';
-import { recommandationsPoutres, evaluerPoutres, indicationsParCible, cleCible } from '../src/reco/poutres.js';
+import { recommandationsPoutres, evaluerPoutres, indicationsParCible, cleCible, familleOk, familles, FAM_RAIL } from '../src/reco/poutres.js';
 import { beamsBlocks } from '../web/beams_view.js';
 
 // valeurs par défaut du formulaire (Pont de Noé : 4 poutres VIPP de 33 m), une seule travée
@@ -105,7 +105,7 @@ test('Budget de calcul épuisé : la recherche est laissée au bouton « Calcule
   const op = calc(p), a = (await recommandationsPoutres(op, p, { budget: 0 })).items[0].actions.find(x => x.champ === 'pt_P');
   assert.ok(a.chercher && a.chercher.calcul === 'poutres' && a.valeurChamp == null);
   assert.ok(indicationsParCible((await recommandationsPoutres(op, p, { budget: 0 })).items).get(cleCible({ si: 0, type: 'BP', k: 0 })), 'indication même sans valeur');
-  const c = a.chercher, v = await dichotomie(candidats(c), x => c.verifie(evaluerPoutres({ ...p, ...c.base, [c.champ]: String(x) })));   // comme solveReco (web/app.js)
+  const c = a.chercher, v = await dichotomie(c.valeurs || candidats(c), x => c.verifie(evaluerPoutres({ ...p, ...c.base, [c.champ]: String(x) })));   // comme solveReco (web/app.js)
   assert.equal(String(v), action((await recommandationsPoutres(op, p)).items[0], 'pt_P').valeurChamp);
 });
 
@@ -115,4 +115,46 @@ test('evaluerPoutres (essais des recherches) reproduit computePoutres sans le ho
   a.spans.forEach((s, si) => s.beams.forEach((x, k) => assert.equal(cle(b.spans[si].beams[k].vipp), cle(x.vipp), `travée ${si}, poutre ${k + 1}`)));
   const ba = { ...BASE, pt_type: 'BA', pt_geo: 'rect', pt_parts: '0.6 0.25 ; 0.25 1.47 ; 1.0 0.3' };
   assert.equal(JSON.stringify(evaluerPoutres(ba, { exact: true }).spans[0].beams.map(x => x.BA)), JSON.stringify(calc(ba).spans[0].beams.map(x => x.BA)));
+});
+
+test('Résultat absent ou en erreur (hourdis, déformations sous rail) : jamais accepté comme vérifié', () => {
+  const poinc = { cle: 'poinc' };
+  assert.equal(familleOk({ spans: [], hourdis: { erreur: 'plaque singulière' } }, poinc), false);
+  assert.equal(familleOk({ spans: [], hourdis: null }, poinc), false);
+  assert.equal(familleOk({ spans: [], hourdis: { poinc: null } }, poinc), false);
+  assert.equal(familleOk({ spans: [], hourdis: { poinc: { ok: true } } }, poinc), true);
+  assert.equal(familleOk(null, familles('vipp')[0]), false);
+  const D = { fleches: [{ ok: true }], confort: [{ ok: true }], gauche: { ok: true }, extremites: [{ okH: true, okV: true }], transversal: null };
+  for (const f of FAM_RAIL) {
+    assert.equal(familleOk({ spans: [{ rail: { deformations: D } }] }, f), true, `${f.cle} : résultat valide`);
+    assert.equal(familleOk({ spans: [{ rail: { deformations: D } }, { rail: { deformations: { erreur: 'instable' } } }] }, f), false, `${f.cle} : travée en erreur`);
+    assert.equal(familleOk({ spans: [{ rail: { deformations: D } }, { rail: {} }] }, f), false, `${f.cle} : travée sans résultat`);
+  }
+});
+
+test('Construction et σ_pm0 dépendent de la portée : chaque travée est vérifiée (33 m OK, 24 m en échec)', async () => {
+  const constrC = familles('vipp').find(f => f.cle === 'constrC');
+  const v = ok => ({ verifs: [{ nom: 'Construction : compression (poutre inf., t = 7.0 j)', ok }], trace: { alerte: [] } });
+  assert.equal(familleOk({ spans: [{ beams: [{ k: 0, vipp: v(true) }] }, { beams: [{ k: 0, vipp: v(false) }] }] }, constrC), false, 'seconde travée en échec');
+  const d = { ...BASE, pt_spans: '33, 24' }, out = calc(d);
+  assert.ok(out.spans[0].beams.every(b => b.vipp.ok) && !out.spans[1].beams[0].vipp.verifs.find(q => /^Construction : compression/.test(q.nom)).ok);
+  const rec = await recommandationsPoutres(out, d);
+  assert.ok(rec.items.some(i => /^Construction : compression/.test(i.verification)), 'le « NON » de la travée de 24 m est traité');
+  indicationsSousLesNon(out, rec);
+  assert.ok(vippOk(calc({ ...d, ...rec.synthese.champs })), 'ensemble appliqué : les deux travées passent');
+});
+
+test('Budget épuisé après la recherche d\'ensemble : une valeur seule qui fait tomber une autre vérification ne devient pas l\'indication', async () => {
+  const d = { ...BASE, pt_type: 'PRAD' }, out = calc(d), complet = await recommandationsPoutres(out, d);
+  let n = 0;
+  const t0 = Date.now(), horloge = () => (n >= complet.calculsEnsemble ? t0 + 1e9 : Date.now());   // épuisé dès le contrôle final de l'ensemble
+  const rec = await recommandationsPoutres(out, d, { onProgress: k => { n = k; }, maintenant: horloge });
+  assert.deepEqual(rec.ensemble, complet.ensemble, 'ensemble trouvé avant l\'épuisement du budget');
+  assert.ok(rec.duree > 1e8, 'budget épuisé pendant la construction des actions');
+  const dec = rec.items.find(i => /^Décompression/.test(i.verification));
+  assert.ok(dec.actions[0].champs, 'l\'ensemble passe devant');
+  const seul = dec.actions.find(a => a.champ === 'pr_nt' && a.valeurChamp != null);
+  assert.match(seul.texte, /fait apparaître/);
+  const q = out.spans[0].beams[0].vipp.verifs.find(x => /^Décompression/.test(x.nom));
+  assert.ok(indicationsParCible(rec.items).get(cleCible({ si: 0, type: 'verif', k: 0, nom: q.nom })).champs, 'indication de ligne : l\'ensemble');
 });

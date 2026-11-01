@@ -146,8 +146,7 @@ export function alertesTrace(data) {
   } catch (e) { return [e.message]; }
 }
 const blochet = v => (v.S.forme.Lb ?? 0) + 1e-9;
-const premiereVipp = r => { for (const s of r.spans) for (const b of s.beams) if (b.vipp) return b.vipp; return null; };
-const alertes = r => { const v = premiereVipp(r); return v ? v.trace.alerte : []; };
+const alertes = r => [...new Set(r.spans.flatMap(s => (s.beams[0] && s.beams[0].vipp ? s.beams[0].vipp.trace.alerte : [])))];
 
 /**
  * Familles de vérifications. test(b) : la poutre b passe ; unique : identique pour toutes les poutres (construction,
@@ -179,15 +178,38 @@ function familles(mode) {
   ];
   return [];
 }
+/**
+ * Verdict d'une famille sur un résultat (computePoutres ou evaluerPoutres) : vrai si toutes les vérifications de la famille
+ * passent. Un résultat absent ou en erreur n'est jamais accepté (hourdis, déformations). Familles `unique` (construction,
+ * σ_pm0, tracé : identiques pour les poutres d'une même travée, mais fonction de la portée) : une poutre par travée.
+ * prio : Map facultative famille → [travée, poutre] de la dernière poutre en échec, testée en premier.
+ */
+export function familleOk(r, f, prio = null) {
+  try {
+    if (!r) return false;
+    if (f.cle === 'poinc') return !!(r.hourdis && !r.hourdis.erreur && r.hourdis.poinc && r.hourdis.poinc.ok !== false);
+    if (f.global) return !!f.testR(r);
+    const liste = [];
+    r.spans.forEach((s, si) => (f.unique ? s.beams.slice(0, 1) : s.beams).forEach(b => liste.push([si, b])));
+    if (!liste.length) return false;
+    const p = prio && prio.get(f.cle);
+    if (p) liste.sort((a, b) => (a[0] === p[0] && a[1].k === p[1] ? -1 : 0) - (b[0] === p[0] && b[1].k === p[1] ? -1 : 0));
+    for (const [si, b] of liste) if (!f.test(b, r)) { if (prio) prio.set(f.cle, [si, b.k]); return false; }
+    return true;
+  } catch { return false; }
+}
+export { familles, FAM_RAIL };
+
 /** Déformations et vibrations sous rail (EN 1990 A2.4.4, EN 1991-2 § 6.5.4.5.2) : vérifications du tablier entier. */
-const defos = r => r.spans.map(s => s.rail && s.rail.deformations).filter(D => D && !D.erreur);
+/** Déformations de chaque travée ; une travée sans résultat ou en erreur rend la liste invalide (null) : critère non vérifié. */
+const defos = r => { const l = r.spans.map(s => s.rail && s.rail.deformations); return l.every(D => D && !D.erreur) ? l : null; };
 const transvOk = (T, x) => x.thetaH <= T.lim.thetaH + 1e-12 || x.rayon >= T.lim.rayon;
 const FAM_RAIL = [
-  { cle: 'railFleche', global: true, testR: r => defos(r).every(D => D.fleches.every(f => f.ok) && D.confort.every(c => c.horsDomaine || c.ok)) },
-  { cle: 'railGauche', global: true, testR: r => defos(r).every(D => D.gauche.ok) },
-  { cle: 'railDH', global: true, testR: r => defos(r).every(D => D.extremites.every(e => e.okH)) },
-  { cle: 'railDV', global: true, testR: r => defos(r).every(D => D.extremites.every(e => e.okV !== false)) },
-  { cle: 'railTransv', global: true, testR: r => defos(r).every(D => !D.transversal || D.transversal.rows.every(x => transvOk(D.transversal, x) && (x.fh == null || x.fh >= D.transversal.fh0))) },
+  { cle: 'railFleche', global: true, testR: r => !!defos(r) && defos(r).every(D => D.fleches.every(f => f.ok) && D.confort.every(c => c.horsDomaine || c.ok)) },
+  { cle: 'railGauche', global: true, testR: r => !!defos(r) && defos(r).every(D => D.gauche.ok) },
+  { cle: 'railDH', global: true, testR: r => !!defos(r) && defos(r).every(D => D.extremites.every(e => e.okH)) },
+  { cle: 'railDV', global: true, testR: r => !!defos(r) && defos(r).every(D => D.extremites.every(e => e.okV !== false)) },
+  { cle: 'railTransv', global: true, testR: r => !!defos(r) && defos(r).every(D => !D.transversal || D.transversal.rows.every(x => transvOk(D.transversal, x) && (x.fh == null || x.fh >= D.transversal.fh0))) },
 ];
 
 // ===================================================================================================== paramètres
@@ -310,13 +332,13 @@ function actionParam(p, v, suffixe = '') {
  * du panneau) ; onProgress(n) : nombre de calculs faits ; annule() → true : arrêt (un nouveau calcul a été lancé).
  * Asynchrone : rend la main entre deux essais (l'interface reste vivante).
  */
-export async function recommandationsPoutres(out, data, { budget = 45000, onProgress = null, annule = null } = {}) {
-  const t0 = Date.now(), d = { ...data }, items = [], cache = new Map(), memo = new Map();
+export async function recommandationsPoutres(out, data, { budget = 45000, onProgress = null, annule = null, maintenant = Date.now } = {}) {   // maintenant : horloge du budget (injectable pour les tests)
+  const t0 = maintenant(), d = { ...data }, items = [], cache = new Map(), memo = new Map();
   const inp = out.inp, vippMode = out.spans.some(s => s.beams[0] && s.beams[0].vipp);
   const mode = vippMode ? 'vipp' : inp.type === 'BA' ? 'BA' : 'BP', prad = vippMode && inp.type === 'PRAD';
   const nomType = mode === 'vipp' ? (prad ? 'Poutres PRAD (pré-tension)' : 'Poutres VIPP (post-tension)') : mode === 'BA' ? 'Poutres en béton armé' : 'Poutres précontraintes (vérification simplifiée)';
   let nCalc = 0;
-  const dansBudget = () => Date.now() - t0 < budget;
+  const dansBudget = () => maintenant() - t0 < budget;
   const essai = async (modifs, opt = {}) => {
     const cle = JSON.stringify([modifs, !!opt.local, !!opt.exact]);
     if (memo.has(cle)) return memo.get(cle);
@@ -327,20 +349,11 @@ export async function recommandationsPoutres(out, data, { budget = 45000, onProg
     if (memo.size > 60) memo.clear();
     memo.set(cle, r); return r;
   };
-  const fams = [...familles(mode), ...(out.rail ? FAM_RAIL : [])], prio = new Map();
-  const famOk = (r, f) => {
-    try {
-      if (f.cle === 'poinc') return !(r.hourdis && r.hourdis.poinc && r.hourdis.poinc.ok === false);
-      if (f.global) return f.testR(r);
-      const liste = [];
-      r.spans.forEach((s, si) => s.beams.forEach(b => liste.push([si, b])));
-      if (f.unique) return f.test(liste[0][1], r);
-      const p = prio.get(f.cle);
-      if (p) liste.sort((a, b) => (a[0] === p[0] && a[1].k === p[1] ? -1 : 0) - (b[0] === p[0] && b[1].k === p[1] ? -1 : 0));
-      for (const [si, b] of liste) if (!f.test(b, r)) { prio.set(f.cle, [si, b.k]); return false; }
-      return true;
-    } catch { return false; }
-  };
+  // sous rail, les familles de déformations ne sont cherchées que si le calcul de base les a produites sans erreur (sinon
+  // une recommandation signale le calcul impossible)
+  const defosBase = out.rail ? defos(out) : null;
+  const fams = [...familles(mode), ...(out.rail && defosBase ? FAM_RAIL : [])], prio = new Map();
+  const famOk = (r, f) => familleOk(r, f, prio);
   const permises = new Set(alertes(out).map(natureAlerte)); permises.delete('autre');
   const alertesOk = r => { try { return mode !== 'vipp' || alertes(r).every(t => permises.has(natureAlerte(t))); } catch { return false; } };
 
@@ -361,17 +374,25 @@ export async function recommandationsPoutres(out, data, { budget = 45000, onProg
   const joints = echecs.filter(f => parametres(f.cle, ctx0).length), ignorees = new Set(echecs.filter(f => !joints.includes(f)));
   const allOk = r => !!r && fams.every(f => ignorees.has(f) || famOk(r, f)) && alertesOk(r);
 
+  /** Valeurs géométriquement admissibles de p (pas de nouvelle alerte de tracé : contrôle du moteur, sans calcul). */
+  const admissibles = (p, base = {}) => (mode !== 'vipp' ? p.vals : p.vals.filter(x => alertesTrace({ ...d, ...base, [p.champ]: p.ecrire(x) }).every(t => permises.has(natureAlerte(t)))));
+  /** Recherche laissée au bouton « Calculer » du panneau : candidats admissibles et même critère que `cherche`. */
+  const aChercher = (f, p) => {
+    const local = f.cle === 'poinc', vals = p.regulier ? admissibles(p) : [];
+    return vals.length ? { champ: p.champ, min: Math.min(...vals), max: Math.max(...vals), pas: p.pas, vers: p.vers, depart: vals[0], valeurs: vals.map(Number), calcul: 'poutres', local, base: {},
+      verifie: r => famOk(r, f) && (local || alertesOk(r)) } : null;
+  };
   /** Plus petite modification du paramètre p (autres modifications : base) qui fait passer la famille f. */
   const cherche = async (f, p, base = {}, { tous = false } = {}) => {
     if (!dansBudget()) return { budget: true };
     const local = f.cle === 'poinc';
     // valeurs géométriquement admissibles (pas de nouvelle alerte de tracé : contrôle du moteur, sans calcul) — sans ce
     // filtre, le haut de la grille (12 câbles qui sortent du talon) rompt la monotonie de la dichotomie
-    const vals = mode !== 'vipp' ? p.vals : p.vals.filter(x => alertesTrace({ ...d, ...base, [p.champ]: p.ecrire(x) }).every(t => permises.has(natureAlerte(t))));
+    const vals = admissibles(p, base);
     if (!vals.length) return { valeur: null, vide: true };
     let v;
     try { v = await dicho(vals, async x => {
-      if (Date.now() - t0 > 1.5 * budget) throw new HorsBudget();   // essais longs (pont-rail : calcul complet à chaque essai)
+      if (maintenant() - t0 > 1.5 * budget) throw new HorsBudget();   // essais longs (pont-rail : calcul complet à chaque essai)
       const r = await essai({ ...base, [p.champ]: p.ecrire(x) }, { local });
       return !!r && (tous ? allOk(r) : famOk(r, f) && (local || alertesOk(r)));
     }); } catch (e) { if (e instanceof HorsBudget) return { budget: true }; throw e; }
@@ -436,6 +457,7 @@ export async function recommandationsPoutres(out, data, { budget = 45000, onProg
     // contrôle final sans partage des poutres symétriques
     if (jointOk && Object.keys(cur).length) jointOk = allOk(await essai(cur, { exact: true }));
   }
+  const calculsEnsemble = nCalc;
   const ensemble = jointOk && Object.keys(cur).length ? cur : null;
   const texteEnsemble = ensemble ? texteChamps(ensemble) : '';
 
@@ -444,12 +466,14 @@ export async function recommandationsPoutres(out, data, { budget = 45000, onProg
     const acts = [], ps = parametres(f.cle, ctx0), l = seules.get(f.cle) || [];
     const sol = l.find(x => x.res.valeur != null);
     const autresEchecs = async (p, v) => {
-      const r = await essai({ [p.champ]: p.ecrire(v) });
-      return r ? fams.filter(g => g !== f && famOk(out, g) && !famOk(r, g)).map(g => libFam(g.cle)) : [];
+      const r = await essai({ [p.champ]: p.ecrire(v) }, { local: f.cle === 'poinc' });
+      return r ? fams.filter(g => g !== f && famOk(out, g) && !famOk(r, g)).map(g => libFam(g.cle)) : ['calcul impossible'];
     };
     // la valeur seule fait passer la vérification ; si elle en fait tomber d'autres, l'ensemble passe devant (c'est lui que
     // l'indication « → à modifier » applique)
-    const nouv = sol && dansBudget() ? await autresEchecs(sol.p, sol.res.valeur) : [];
+    // contrôle fait même budget épuisé : sans lui, la valeur seule pourrait devenir l'indication appliquée alors qu'elle
+    // fait tomber une autre vérification
+    const nouv = sol ? await autresEchecs(sol.p, sol.res.valeur) : [];
     const aEns = ensemble && !(sol && Object.keys(ensemble).length === 1 && ensemble[sol.p.champ] === sol.p.ecrire(sol.res.valeur));
     const actEns = aEns ? { texte: `Appliquer l'ensemble cherché par recalcul pour que toutes les vérifications des poutres passent : ${texteEnsemble}`, champs: { ...ensemble }, valeur: 'ensemble', court: texteEnsemble } : null;
     if (actEns && (!sol || nouv.length)) acts.push(actEns);
@@ -467,8 +491,8 @@ export async function recommandationsPoutres(out, data, { budget = 45000, onProg
       if (!res && dansBudget()) res = await chercheSeule(f, p);
       if (res && res.valeur != null) acts.push({ ...actionParam(p, res.valeur, 'seul, les autres données restant inchangées'), texte: 'Ou ' + actionParam(p, res.valeur, 'seul, les autres données restant inchangées').texte.replace(/^./, c => c.toLowerCase()) });
       else if (res && res.valeur === null) acts.push({ texte: `${(LIB_POUTRES[p.champ] || p.champ)} : ${res.vide ? 'aucune autre valeur n\'est compatible avec l\'encombrement du talon (alertes de tracé)' : `ne suffit pas seul (essayé jusqu'à ${p.aff(res.max)}${p.regulier && p.unite ? ' ' + p.unite : ''}${res.max !== p.vals[p.vals.length - 1] ? ', au-delà le tracé ne loge plus dans le talon' : ''})`}`, champ: p.champ, unite: p.unite });
-      else if (p.regulier) acts.push({ texte: `Ou modifier : ${min1(LIB_POUTRES[p.champ] || p.champ)} (${p.affActuel}${p.unite ? ' ' + p.unite : ''})`, champ: p.champ, unite: p.unite, court: LIB_POUTRES[p.champ], actuel: p.affActuel,
-        chercher: { champ: p.champ, min: p.min, max: p.max, pas: p.pas, vers: p.vers, depart: p.vers === 'haut' ? p.min : p.max, calcul: 'poutres', local: f.cle === 'poinc', base: {}, verifie: r => famOk(r, f) } });
+      else if (p.regulier && aChercher(f, p)) acts.push({ texte: `Ou modifier : ${min1(LIB_POUTRES[p.champ] || p.champ)} (${p.affActuel}${p.unite ? ' ' + p.unite : ''})`, champ: p.champ, unite: p.unite, court: LIB_POUTRES[p.champ], actuel: p.affActuel,
+        chercher: aChercher(f, p) });
       else acts.push({ texte: `Ou modifier : ${min1(LIB_POUTRES[p.champ] || p.champ)}`, champ: p.champ, court: LIB_POUTRES[p.champ] });
     }
     return acts;
@@ -573,7 +597,12 @@ export async function recommandationsPoutres(out, data, { budget = 45000, onProg
     }
   }
   // sous rail : déformations et vibrations (calcul complet relancé pour chaque essai)
-  if (out.rail) {
+  if (out.rail && !defosBase) {
+    const e = out.spans.map(s => s.rail && s.rail.deformations).find(D => !D || D.erreur);
+    items.push({ domaine: `${nomType} sous rail — déformations et vibrations`, lieu: 'Tablier', verification: 'Calcul des déformations', constat: `calcul impossible${e && e.erreur ? ` : ${e.erreur}` : ''}`, regle: 'EN 1990 A2.4.4 ; EN 1991-2 § 6.4.4',
+      actions: [{ texte: 'Vérifier les données ferroviaires (voies, vitesse, about) : aucune valeur ne peut être cherchée tant que le calcul échoue' }], cibles: [] });
+  }
+  if (out.rail && defosBase) {
     const lignesR = [];   // { cle, si, nom, ok, constat, regle }
     out.spans.forEach((s, si) => {
       const D = s.rail && s.rail.deformations; if (!D || D.erreur) return;
@@ -604,17 +633,18 @@ export async function recommandationsPoutres(out, data, { budget = 45000, onProg
   if (poincKo) {
     const f = { cle: 'poinc' }, P = out.hourdis.poinc, ps = parametres('poinc', ctx0), a = [];
     for (const p of ps) {
-      const res = dansBudget() ? await cherche(f, p) : null;
+      let res = dansBudget() ? await cherche(f, p) : null;
+      if (res && res.budget) res = null;   // dichotomie interrompue : recherche à reprendre (« Calculer »), pas une absence de solution
       if (res && res.valeur != null) a.push(a.length ? { ...actionParam(p, res.valeur), texte: 'Ou ' + actionParam(p, res.valeur, 'seul').texte.replace(/^./, c => c.toLowerCase()) } : actionParam(p, res.valeur, 'valeur cherchée par recalcul complet (plaque du hourdis), les autres données restant inchangées'));
       else if (res) a.push({ texte: `${LIB_POUTRES[p.champ] || p.champ} : ne suffit pas seul (essayé jusqu'à ${p.aff(res.max ?? p.vals[p.vals.length - 1])} ${p.unite})`, champ: p.champ, unite: p.unite });
       else a.push({ texte: `Ou modifier : ${min1(LIB_POUTRES[p.champ] || p.champ)} (${p.affActuel} ${p.unite})`, champ: p.champ, unite: p.unite, court: LIB_POUTRES[p.champ], actuel: p.affActuel,
-        chercher: { champ: p.champ, min: p.min, max: p.max, pas: p.pas, vers: p.vers, depart: p.vers === 'haut' ? p.min : p.max, calcul: 'poutres', local: true, base: {}, verifie: r => famOk(r, f) } });
+        chercher: aChercher(f, p) });
     }
     items.push({ domaine: 'Hourdis', lieu: 'Hourdis', verification: 'Poinçonnement sous la roue du tandem', constat: `V_Ed = ${fx(P.VEd, 0)} > V_Rd,c = ${fx(P.VRdc, 0)} kN (d = ${fx(P.d, 3)} m, v_Rd,c = ${fx(P.vRdc, 3)} MPa)`,
       regle: 'EN 1992-1-1 § 6.4.4', actions: a, cibles: [{ type: 'poinc' }] });
   }
   const synthese = ensemble && items.length ? { texte: 'Valeurs cherchées ensemble pour que toutes les vérifications des poutres passent', champs: { ...ensemble } } : null;
-  return { items, synthese, ensemble, jointOk, bloque: bloque && bloque.cle, horsBudget, calculs: nCalc, duree: Date.now() - t0 };
+  return { items, synthese, ensemble, jointOk, bloque: bloque && bloque.cle, horsBudget, calculs: nCalc, calculsEnsemble, duree: maintenant() - t0 };
 }
 
 /** Première action applicable (champ et valeur) d'un élément : c'est l'indication « → à modifier » des tableaux. */
