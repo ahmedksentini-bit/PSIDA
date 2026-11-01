@@ -1,6 +1,7 @@
 /** Ponts à poutres : blocs de présentation (interface et note). */
 import { MENTION, PARAMETRES_REFERENTIEL } from '../src/loads_rail.js';
 import { deformationsBlocks } from './rail_deformations_view.js';
+import { indicationsParCible, cleCible, texteChamps } from '../src/reco/poutres.js';
 const F = (v, n = 1) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: n, maximumFractionDigits: n }));
 const F0 = v => F(v, 0), F2 = v => F(v, 2), F3 = v => F(v, 3);
 const CM = v => (v === null || v === undefined || !Number.isFinite(v) ? '—' : F(v * 1e4, 1));
@@ -136,16 +137,59 @@ export function vippBlocks(v, titre) {
   return B;
 }
 
-export function beamsBlocks(r) {
-  if (r.rail) return beamsBlocksRail(r);
-  const B = [], h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), comment = text => B.push({ t: 'comment', text });
+/**
+ * Indications « → à modifier » (interface seulement) : `reco` = résultat de recommandationsPoutres ; rend la fonction
+ * qui donne l'indication d'une ligne { si, type, k, nom | x | texte }, et le paragraphe de synthèse à placer en tête.
+ */
+function indications(reco, para) {
+  if (!reco) return null;
+  const ind = indicationsParCible(reco.items), s = reco.synthese;
+  if (reco.items.length) para(`${reco.items.length} vérification(s) non satisfaite(s) ou alerte(s) : sous chaque « NON », la donnée à modifier et la valeur qui suffit (cherchée par recalcul du modèle) ; détail, règles et autres solutions dans « Recommandations » (en-tête).`,
+    s ? { texte: `${s.texte} : ${texteChamps(s.champs)}`, champs: s.champs } : null);
+  else para('Toutes les vérifications des poutres sont satisfaites.');
+  return c => ind.get(cleCible(c)) || null;
+}
+/** Indications sur les blocs détaillés d'une poutre VIPP / PRAD (vérifications ELS, ELU, effort tranchant, tracé). */
+function indiquerVipp(B, v, si, k, hint) {
+  if (!hint) return B;
+  for (const b of B) {
+    if (b.t === 'table' && b.head[0] === 'Vérification') b.hints = v.verifs.map(q => (q.ok ? null : hint({ si, type: 'verif', k, nom: q.nom })));
+    else if (b.t === 'table' && b.head.includes('M_Rd [kN·m]')) b.hints = v.elu.map(e => (e.ok ? null : hint({ si, type: 'elu', k, x: e.x })));
+    else if (b.t === 'table' && b.head.includes('V_Rd,max [kN]')) b.hints = v.tranchant.map(t => (t.ok ? null : hint({ si, type: 'tranchant', k, x: t.x })));
+    else if (b.t === 'p' && b.text.startsWith('ATTENTION — ')) b.hint = hint({ si, type: 'trace', texte: b.text.replace(/^ATTENTION — [^:]*: /, '').replace(/\.$/, '') });
+  }
+  const iS = B.findIndex(b => b.t === 'comment' && /^Séisme vertical/.test(b.text));
+  if (v.seismeV && !v.seismeV.eluOk && iS >= 0) B.splice(iS + 1, 0, { t: 'p', text: 'Séisme vertical, ELU G + E_z : NON', hint: hint({ si, type: 'seismeElu', k }) });
+  return B;
+}
+/** Indications du tableau des déformations sous rail (mêmes lignes, dans le même ordre, que deformationsBlocks). */
+function indiquerDefo(B, D, si, hint) {
+  const t = hint && D && !D.erreur ? B.find(b => b.t === 'table' && b.head[0] === 'Vérification' && b.head[3] === 'Verdict') : null;
+  if (!t) return B;
+  const h = (ok, nom) => (ok ? null : hint({ si, type: 'defo', nom }));
+  const T = D.transversal;
+  t.hints = [...D.fleches.map(f => h(f.ok, 'fleche')), h(D.gauche.ok, 'gauche'), ...D.confort.map(c => h(!c.horsDomaine && c.ok, 'confort')),
+    ...D.extremites.flatMap(e => [h(e.okH, 'dH'), h(e.about > 0 && e.okV, 'dV')]),
+    ...(T ? T.rows.flatMap(x => [h(x.thetaH <= T.lim.thetaH + 1e-12 || x.rayon >= T.lim.rayon, 'transv'), h(x.fh != null && x.fh >= T.fh0, 'fh')]) : [])];
+  return B;
+}
+/** Indication du poinçonnement du hourdis (paragraphe de localBlocks). */
+function indiquerHourdis(B, hint) {
+  if (hint) for (const b of B) if (b.t === 'p' && /^Poinçonnement sous une roue/.test(b.text) && /: NON\.$/.test(b.text)) b.hint = hint({ type: 'poinc' });
+  return B;
+}
+
+export function beamsBlocks(r, { reco = null } = {}) {
+  if (r.rail) return beamsBlocksRail(r, { reco });
+  const B = [], h2 = text => B.push({ t: 'h2', text }), para = (text, hint) => B.push({ t: 'p', text, ...(hint ? { hint } : {}) }), comment = text => B.push({ t: 'comment', text });
   const table = (head, rows, opt = {}) => B.push({ t: 'table', head, rows, ...opt });
+  const hint = indications(reco, para), hints = (l, f) => (hint ? { hints: l.map(f) } : {});
   const inp = r.inp, sec = r.sec;
   h2('Section et paramètres de Guyon-Massonnet');
   para(`${inp.n} poutres d'entraxe ${F2(inp.b1)} m (largeur active 2b = ${F2(inp.n * inp.b1)} m), hourdis ${F2(inp.hd)} m ; poutre + hourdis : A = ${F3(sec.A)} m², I = ${F(sec.I, 4)} m⁴, K = ${F(sec.K, 5)} m⁴${sec.v ? `, v = ${F3(sec.v)} m, v' = ${F3(sec.vp)} m` : ''}.`);
   table(['Travée L [m]', 'θ', 'α', 'Classe F61', 'δ_B', 'δ_C'], r.spans.map(s => [F2(s.L), F3(s.theta), F3(s.alpha), String(s.classe), F3(s.deltaB), F3(s.deltaC)]));
   comment('θ = (b/L)(ρ_p/ρ_e)^¼, α = (γ_p + γ_e)/(2√(ρ_p ρ_e)), ρ_p = I_p/b₁, γ_p = K_p/(2 b₁) (G = E/2), hourdis ρ_e = γ_e = h_d³/12 ; répartition transversale de Guyon-Massonnet avec l\'interpolation de Massonnet K = K₀ + (K₁ − K₀)√α (pratique PONTYPE/PAP, reproduite sur le Pont de Noé). M_poutre = K̄(y_k) M/n, charges placées transversalement au plus défavorable pour chaque poutre.');
-  for (const s of r.spans) {
+  for (const [si, s] of r.spans.entries()) {
     h2(`Travée de ${F2(s.L)} m — moments à mi-travée par poutre [kN·m] et coefficients de répartition`);
     const ids = ['G', 'A', 'Bc', 'Bt', 'Mc120', 'D240', 'trott', 'gr1a', 'gr1b'].filter(id => s.beams[0].mid[id] !== undefined);
     const lab = { G: 'Permanentes', A: 'A(l)', Bc: 'Bc', Bt: 'Bt', Mc120: 'Mc120', D240: 'D240', trott: 'Trottoirs', gr1a: 'EC gr1a', gr1b: 'EC gr1b' };
@@ -155,24 +199,24 @@ export function beamsBlocks(r) {
     comment('Fascicule 61 / BAEL : ELS G + max[1,2 (A ou B + trottoirs) ; Mc120 + trottoirs] ; ELU 1,35 G + max[1,605 (A ou B + trottoirs) ; 1,35 (Mc120 + trottoirs)] (pratique PAP). Eurocodes : ELU 1,35 G + 1,35 max(gr1a ; gr1b). Efforts tranchants par poutre = V du tablier × η / n (δ inclus pour B et Mc120) ; poutres de rive, à l\'appui : η = max(Guyon-Massonnet ; règle des bras de levier), raccordé à Guyon-Massonnet sur la largeur du tablier (« levier » : la règle des bras de levier commande) ; poutres intérieures : Guyon-Massonnet (pratique PAP).');
     if (s.beams[0].vipp) {
       table(['Poutre', 'Superstructures [kN/m]', 'P∞ mi-travée [kN]', 'Pertes', 'σ inf. QP t∞ [MPa]', 'σ sup. car. [MPa]', 'M_Ed / M_Rd mi-travée', 'A_sw/s appui [cm²/m]', 'Flèche t∞ [mm]', 'Résultat'],
-        s.beams.map(b => { const v = b.vipp, m = v.sections[v.sections.length - 1], e = v.elu[v.elu.length - 1]; return [String(b.k + 1), F(v.charges.wS), F0(v.Ptot.inf), `${F((1 - v.Ptot.inf / v.Ptot.P0) * 100, 1)} %`, F2(m.qp.F.pi), F2(Math.min(m.car.F.ps, m.car.S.ps)), `${F0(e.MEd)} / ${F0(e.MRd)}`, F(v.tranchant[0].AswS * 1e4, 1), F(v.fleches.infini * 1000, 1), v.ok ? 'OK' : 'NON']; }));
+        s.beams.map(b => { const v = b.vipp, m = v.sections[v.sections.length - 1], e = v.elu[v.elu.length - 1]; return [String(b.k + 1), F(v.charges.wS), F0(v.Ptot.inf), `${F((1 - v.Ptot.inf / v.Ptot.P0) * 100, 1)} %`, F2(m.qp.F.pi), F2(Math.min(m.car.F.ps, m.car.S.ps)), `${F0(e.MEd)} / ${F0(e.MRd)}`, F(v.tranchant[0].AswS * 1e4, 1), F(v.fleches.infini * 1000, 1), v.ok ? 'OK' : 'NON']; }), hints(s.beams, b => (b.vipp.ok ? null : hint({ si, type: 'poutre', k: b.k }))));
       comment('Chaîne complète pour chaque poutre (même câblage) : détail ci-dessous pour la poutre la plus sollicitée (moment ELU à mi-travée).');
       const gov = s.beams.reduce((a, b) => (b.vipp.elu[b.vipp.elu.length - 1].MEd > a.vipp.elu[a.vipp.elu.length - 1].MEd || (!b.vipp.ok && a.vipp.ok) ? b : a));
-      B.push(...vippBlocks(gov.vipp, `Poutre ${gov.k + 1}`));
+      B.push(...indiquerVipp(vippBlocks(gov.vipp, `Poutre ${gov.k + 1}`), gov.vipp, si, gov.k, hint));
     } else if (inp.type === 'BA') {
-      table(['Poutre', 'M_u F61 [kN·m]', 'A_s BAEL [cm²]', 'M_u EC [kN·m]', 'A_s EC2 [cm²]', 'Mode'], s.beams.map(b => [String(b.k + 1), F0(b.MuF), CM(b.BA.BAEL.As), F0(b.MuE), CM(b.BA.EC.As), b.BA.EC.mode]));
+      table(['Poutre', 'M_u F61 [kN·m]', 'A_s BAEL [cm²]', 'M_u EC [kN·m]', 'A_s EC2 [cm²]', 'Mode'], s.beams.map(b => [String(b.k + 1), F0(b.MuF), CM(b.BA.BAEL.As), F0(b.MuE), CM(b.BA.EC.As), b.BA.EC.mode]), hints(s.beams, b => hint({ si, type: 'BA', k: b.k })));
       comment(`Poutre en T à l'ELU : table b_eff = b₁ = ${F2(inp.b1)} m, h_f = ${F2(inp.hd)} m, âme b₀ = ${F2(inp.b0)} m, d = H − ${F2(inp.cover)} m ; diagramme rectangulaire ; minimum de non-fragilité.`);
       const gov = s.beams.reduce((a, b) => (b.MuE > a.MuE ? b : a));
       if (gov.BA.travee) {
-        table(['x [m]', 'M_Ed [kN·m]', 'A_s [cm²]', 'V_Ed [kN]', 'cot θ', 'V_Rd,max [kN]', 'A_sw/s [cm²/m]', 'Proposition', 'Résultat'], gov.BA.travee.map(t => [F(t.x, 1), F0(t.MEd), CM(t.As), F0(t.VEd), F2(t.V.cot), F0(t.V.VRdmax), F(t.V.AswS * 1e4, 1), etriers(t.V.AswS, (sec.H || 2) - inp.cover), t.V.ok ? 'OK' : 'NON']));
+        table(['x [m]', 'M_Ed [kN·m]', 'A_s [cm²]', 'V_Ed [kN]', 'cot θ', 'V_Rd,max [kN]', 'A_sw/s [cm²/m]', 'Proposition', 'Résultat'], gov.BA.travee.map(t => [F(t.x, 1), F0(t.MEd), CM(t.As), F0(t.VEd), F2(t.V.cot), F0(t.V.VRdmax), F(t.V.AswS * 1e4, 1), etriers(t.V.AswS, (sec.H || 2) - inp.cover), t.V.ok ? 'OK' : 'NON']), hints(gov.BA.travee, t => (t.V.ok ? null : hint({ si, type: 'BAV', k: gov.k, x: t.x }))));
         comment(`Poutre ${gov.k + 1} (la plus sollicitée), le long de la demi-travée : armatures inférieures pour l'enveloppe des ELU (EC et Fascicule 61) ; étriers EN 1992-1-1 § 6.2.3 avec V_Ed = 1,35 V_G + 1,35 max(V_gr1a ; V_gr1b), z = 0,9 d, b_w = b₀.`);
       }
     } else {
-      table(['Poutre', 'P∞ [kN]', 'P min (Guyon) [kN]', 'σ sup / inf à vide [MPa]', 'σ sup / inf en charge [MPa]', 'BPEL classe II', 'EC2 (décompression QP, 0,6 f_ck)'], s.beams.map(b => [String(b.k + 1), F0(inp.P), F0(b.BP.BPEL.Pmin), `${MPa(b.BP.BPEL.aVide.sup)} / ${MPa(b.BP.BPEL.aVide.inf)}`, `${MPa(b.BP.BPEL.enCharge.sup)} / ${MPa(b.BP.BPEL.enCharge.inf)}`, b.BP.BPEL.ok ? 'OK' : 'NON', b.BP.EC.ok ? 'OK' : 'NON']));
+      table(['Poutre', 'P∞ [kN]', 'P min (Guyon) [kN]', 'σ sup / inf à vide [MPa]', 'σ sup / inf en charge [MPa]', 'BPEL classe II', 'EC2 (décompression QP, 0,6 f_ck)'], s.beams.map(b => [String(b.k + 1), F0(inp.P), F0(b.BP.BPEL.Pmin), `${MPa(b.BP.BPEL.aVide.sup)} / ${MPa(b.BP.BPEL.aVide.inf)}`, `${MPa(b.BP.BPEL.enCharge.sup)} / ${MPa(b.BP.BPEL.enCharge.inf)}`, b.BP.BPEL.ok ? 'OK' : 'NON', b.BP.EC.ok ? 'OK' : 'NON']), hints(s.beams, b => hint({ si, type: 'BP', k: b.k })));
       comment(`Section donnée par ses valeurs : vérification simplifiée des contraintes normales à mi-travée sur la section composite (poutre + hourdis) avec la précontrainte finale P∞ et l'excentricité e₀ = ${F2(inp.e0)} m : σ = P/A ± P e v/I ∓ M v/I. BPEL 91 classe II : traction ≥ −f_tj sous combinaison rare, compression ≤ 0,6 f_cj ; EC2 : décompression sous quasi-permanente (G), compression ≤ 0,6 f_ck sous caractéristique ; précontrainte minimale de Guyon P ≥ (M_max v'/I + σ_t)/(1/A + e v'/I). Ne remplace pas le calcul phasé (poutre seule puis section composite, pertes instantanées et différées, câblage réel) d'un programme du type PONTYPE/BP.`);
     }
   }
-  B.push(...localBlocks(r));
+  B.push(...indiquerHourdis(localBlocks(r), hint));
   h2('Réactions caractéristiques par ligne d\'appui (pour l\'onglet Appuis et fondations)');
   table(['Ligne', 'G', 'A(l)', 'Bc (δ appui)', 'Mc120 (δ appui)', 'Trottoirs', 'TS', 'UDL'], r.lines.map((l, i) => [i === 0 || i === r.lines.length - 1 ? `Culée C${i}` : `Pile P${i}`, F0(l.G), F0(l.A), F0(l.Bc), F0(l.Mc120), F0(l.trott), F0(l.TS), F0(l.UDL)]));
   comment('Travées indépendantes : permanentes et charges réparties = somme des réactions des travées adjacentes ; convois = maximum sur la ligne d\'influence des deux travées (deux sens de circulation), δ d\'appui ½[δ + max(δ ; 1,5)] (B) et ½[δ + max(δ ; 1,2)] (Mc120).');
@@ -191,9 +235,10 @@ export const HORS_PERIMETRE_POUTRES_RAIL = [
 ];
 
 /** Pont à poutres sous rail : blocs de l'interface et de la note (Eurocodes seuls). */
-function beamsBlocksRail(r) {
-  const B = [], h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), comment = text => B.push({ t: 'comment', text });
+function beamsBlocksRail(r, { reco = null } = {}) {
+  const B = [], h2 = text => B.push({ t: 'h2', text }), para = (text, hint) => B.push({ t: 'p', text, ...(hint ? { hint } : {}) }), comment = text => B.push({ t: 'comment', text });
   const table = (head, rows, opt = {}) => B.push({ t: 'table', head, rows, ...opt });
+  const hint = indications(reco, para), hints = (l, f) => (hint ? { hints: l.map(f) } : {});
   const inp = r.inp, sec = r.sec, s0 = r.spans[0], R0 = s0.rail, P = R0.params;
   comment(MENTION);
   for (const a of [...new Set(r.spans.flatMap(s => s.rail.avert))]) comment(`Attention : ${a}.`);
@@ -223,7 +268,7 @@ function beamsBlocksRail(r) {
     ], { texte: true });
   }
   comment('Actions horizontales transmises aux appuis par le bouton « → Appuis » (groupes du tableau 6.11, interaction voie-ouvrage).');
-  for (const s of r.spans) {
+  for (const [si, s] of r.spans.entries()) {
     h2(`Travée de ${F2(s.L)} m — moments à mi-travée par poutre [kN·m] (Φ inclus) et coefficients de répartition`);
     const ids = ['G', ...s.rail.groupes.map(G => G.id)];
     table(['Poutre (y [m])', ...ids.map(i => (i === 'G' ? 'Permanentes' : RAIL_LIB[i]))], s.beams.map(b => [`${b.k + 1} (${F2(b.y)})`, ...ids.map(i => `${F0(b.mid[i])}${i !== 'G' ? ` (η ${F3(b.eta[i])})` : ''}`)]), { small: true });
@@ -231,23 +276,23 @@ function beamsBlocksRail(r) {
     comment('EN 1990 A2 : ELU 1,35 G + max γ_g Q_g ; caractéristique G + max Q_g ; fréquente G + max ψ₁,g Q_g ; quasi permanente G. Efforts tranchants par poutre = V du tablier × η / n ; poutres de rive à l\'appui : max(Guyon-Massonnet ; bras de levier), comme sous trafic routier.');
     if (s.beams[0].vipp) {
       table(['Poutre', 'Superstructures [kN/m]', 'P∞ mi-travée [kN]', 'Pertes', 'σ inf. QP t∞ [MPa]', 'σ sup. car. [MPa]', 'M_Ed / M_Rd mi-travée', 'A_sw/s appui [cm²/m]', 'Flèche t∞ [mm]', 'Résultat'],
-        s.beams.map(b => { const v = b.vipp, m = v.sections[v.sections.length - 1], e = v.elu[v.elu.length - 1]; return [String(b.k + 1), F(v.charges.wS), F0(v.Ptot.inf), `${F((1 - v.Ptot.inf / v.Ptot.P0) * 100, 1)} %`, F2(m.qp.F.pi), F2(Math.min(m.car.F.ps, m.car.S.ps)), `${F0(e.MEd)} / ${F0(e.MRd)}`, F(v.tranchant[0].AswS * 1e4, 1), F(v.fleches.infini * 1000, 1), v.ok ? 'OK' : 'NON']; }), { small: true });
+        s.beams.map(b => { const v = b.vipp, m = v.sections[v.sections.length - 1], e = v.elu[v.elu.length - 1]; return [String(b.k + 1), F(v.charges.wS), F0(v.Ptot.inf), `${F((1 - v.Ptot.inf / v.Ptot.P0) * 100, 1)} %`, F2(m.qp.F.pi), F2(Math.min(m.car.F.ps, m.car.S.ps)), `${F0(e.MEd)} / ${F0(e.MRd)}`, F(v.tranchant[0].AswS * 1e4, 1), F(v.fleches.infini * 1000, 1), v.ok ? 'OK' : 'NON']; }), { small: true, ...hints(s.beams, b => (b.vipp.ok ? null : hint({ si, type: 'poutre', k: b.k }))) });
       comment('Chaîne complète pour chaque poutre (même câblage) : détail ci-dessous pour la poutre la plus sollicitée (moment ELU à mi-travée).');
       const gov = s.beams.reduce((a, b) => (b.vipp.elu[b.vipp.elu.length - 1].MEd > a.vipp.elu[a.vipp.elu.length - 1].MEd || (!b.vipp.ok && a.vipp.ok) ? b : a));
-      B.push(...vippBlocks(gov.vipp, `Poutre ${gov.k + 1}`));
+      B.push(...indiquerVipp(vippBlocks(gov.vipp, `Poutre ${gov.k + 1}`), gov.vipp, si, gov.k, hint));
     } else if (inp.type === 'BA') {
-      table(['Poutre', 'M_Ed [kN·m]', 'A_s EC2 [cm²]', 'Mode'], s.beams.map(b => [String(b.k + 1), F0(b.MuE), CM(b.BA.EC.As), b.BA.EC.mode]));
+      table(['Poutre', 'M_Ed [kN·m]', 'A_s EC2 [cm²]', 'Mode'], s.beams.map(b => [String(b.k + 1), F0(b.MuE), CM(b.BA.EC.As), b.BA.EC.mode]), hints(s.beams, b => hint({ si, type: 'BA', k: b.k })));
       comment(`Poutre en T à l'ELU (EN 1992-1-1) : table b_eff = b₁ = ${F2(inp.b1)} m, h_f = ${F2(inp.hd)} m, âme b₀ = ${F2(inp.b0)} m, d = H − ${F2(inp.cover)} m ; diagramme rectangulaire ; minimum de non-fragilité.`);
       const gov = s.beams.reduce((a, b) => (b.MuE > a.MuE ? b : a));
-      table(['x [m]', 'M_Ed [kN·m]', 'A_s [cm²]', 'V_Ed [kN]', 'cot θ', 'V_Rd,max [kN]', 'A_sw/s [cm²/m]', 'Proposition', 'Résultat'], gov.BA.travee.map(t => [F(t.x, 1), F0(t.MEd), CM(t.As), F0(t.VEd), F2(t.V.cot), F0(t.V.VRdmax), F(t.V.AswS * 1e4, 1), etriers(t.V.AswS, (sec.H || 2) - inp.cover), t.V.ok ? 'OK' : 'NON']), { small: true });
+      table(['x [m]', 'M_Ed [kN·m]', 'A_s [cm²]', 'V_Ed [kN]', 'cot θ', 'V_Rd,max [kN]', 'A_sw/s [cm²/m]', 'Proposition', 'Résultat'], gov.BA.travee.map(t => [F(t.x, 1), F0(t.MEd), CM(t.As), F0(t.VEd), F2(t.V.cot), F0(t.V.VRdmax), F(t.V.AswS * 1e4, 1), etriers(t.V.AswS, (sec.H || 2) - inp.cover), t.V.ok ? 'OK' : 'NON']), { small: true, ...hints(gov.BA.travee, t => (t.V.ok ? null : hint({ si, type: 'BAV', k: gov.k, x: t.x }))) });
       comment(`Poutre ${gov.k + 1} (la plus sollicitée), le long de la demi-travée : V_Ed = 1,35 V_G + max γ_g V_g, z = 0,9 d, b_w = b₀ (EN 1992-1-1 § 6.2.3).`);
     } else {
-      table(['Poutre', 'P∞ [kN]', 'σ sup / inf à vide [MPa]', 'σ sup / inf QP [MPa]', 'σ sup caractéristique [MPa]', 'EC2 (décompression QP, 0,6 f_ck)'], s.beams.map(b => [String(b.k + 1), F0(inp.P), `${MPa(b.BP.EC.aVide.sup)} / ${MPa(b.BP.EC.aVide.inf)}`, `${MPa(b.BP.EC.enCharge.sup)} / ${MPa(b.BP.EC.enCharge.inf)}`, MPa(b.BP.EC.enChargeCar.sup), b.BP.EC.ok ? 'OK' : 'NON']));
+      table(['Poutre', 'P∞ [kN]', 'σ sup / inf à vide [MPa]', 'σ sup / inf QP [MPa]', 'σ sup caractéristique [MPa]', 'EC2 (décompression QP, 0,6 f_ck)'], s.beams.map(b => [String(b.k + 1), F0(inp.P), `${MPa(b.BP.EC.aVide.sup)} / ${MPa(b.BP.EC.aVide.inf)}`, `${MPa(b.BP.EC.enCharge.sup)} / ${MPa(b.BP.EC.enCharge.inf)}`, MPa(b.BP.EC.enChargeCar.sup), b.BP.EC.ok ? 'OK' : 'NON']), hints(s.beams, b => hint({ si, type: 'BP', k: b.k })));
       comment(`Section donnée par ses valeurs : contraintes normales à mi-travée sur la section composite avec P∞ et e₀ = ${F2(inp.e0)} m ; EN 1992-2 : décompression sous quasi permanente (G seul, ψ₂ = 0), compression ≤ 0,6 f_ck sous caractéristique.`);
     }
   }
-  for (const s of r.spans) if (s.rail.deformations) B.push(...deformationsBlocks(s.rail.deformations, { travee: `travée de ${F2(s.L)} m` }));
-  B.push(...localBlocks(r));
+  for (const [si, s] of r.spans.entries()) if (s.rail.deformations) B.push(...indiquerDefo(deformationsBlocks(s.rail.deformations, { travee: `travée de ${F2(s.L)} m` }), s.rail.deformations, si, hint));
+  B.push(...indiquerHourdis(localBlocks(r), hint));
   h2('Réactions caractéristiques par ligne d\'appui (transmises aux appuis)');
   table(['Ligne', 'G', 'G min', 'LM71 × α, une voie (sans Φ)', 'Φ', ...(P.sw2 ? ['SW/2, une voie (sans Φ)'] : []), 'Trafic, toutes voies, Φ inclus'],
     r.lines.map((l, i) => [i === 0 || i === r.lines.length - 1 ? `Culée C${i}` : `Pile P${i}`, F0(l.G), F0(l.Gmin), F0(l.LM71), F3(l.phi), ...(P.sw2 ? [F0(l.SW2)] : []), F0(l.Qmax)]));

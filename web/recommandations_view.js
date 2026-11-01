@@ -33,7 +33,11 @@ export function majBoutonCadre(out, data, rec = null) {
   return dernier;
 }
 /** Onglet « Phasage » : out = résultat de computePhasage, rec = recommandationsPhasage (calculé dans un Web Worker). */
-export function majBoutonPhasage(out, rec) {
+export function majBoutonPhasage(out, rec) { return majBoutonCalcule(out, rec); }
+/** Onglet « Ponts à poutres » : out = résultat de computePoutres, rec = recommandationsPoutres (déjà calculé). */
+export function majBoutonPoutres(out, rec) { return majBoutonCalcule(out, rec); }
+/** Bouton d'en-tête pour des recommandations déjà calculées (rec) ; sans résultat, bouton masqué. */
+function majBoutonCalcule(out, rec) {
   if (!out || !rec) { const b = document.getElementById('btn-reco'); if (b) b.hidden = true; return null; }
   maj(out, () => rec);
   return dernier;
