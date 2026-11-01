@@ -1,0 +1,4 @@
+# Cloudflare Pages : revalidation systématique (ETag) des pages et des scripts, pour qu'une mise à jour ne mélange
+# jamais des modules de deux versions (voir aussi la carte d'import de tools/version.mjs).
+/*
+  Cache-Control: no-cache
