@@ -19,7 +19,8 @@ import { aideConception, rechercheEpaisseur } from '../src/conception.js';
 import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations } from '../src/bearings.js';
 import { chevetresEC } from '../src/chevetre.js';
 import { renderPlaque } from './plaque_view.js';
-import { majBouton as majReco, ouvrir as ouvrirReco } from './recommandations_view.js';
+import { majBouton as majRecoTablier, majBoutonCadre, ouvrir as ouvrirReco } from './recommandations_view.js';
+import { recommandationsCadre } from '../src/reco/cadre.js';
 import { initNivellement } from './nivellement_view.js';
 import { initTrace, planSVG as planTrace } from './trace_view.js';
 import { Axe } from '../src/geom/axe.js';
@@ -267,11 +268,23 @@ function renderStatic(st) {
   try { renderMaillage(st); } catch (e) { const el = document.getElementById('maillage-info'); if (el) el.textContent = 'Maillage : ' + e.message; }
   try { renderPlaque(st); } catch (e) { const el = document.getElementById('plaque-info'); if (el) el.textContent = 'Affichage de la plaque impossible : ' + e.message; }
   st._recoRef = (st.supports && st.supports.rail) ? 'EC' : ($('#supports-ref') && $('#supports-ref').value === 'F61') ? 'BAEL' : 'EC';
-  majReco(st);
+  recoSource = 'tablier'; majReco(st);
   try { NIV.refresh(); } catch (e) { /* plan de nivellement indisponible */ }
 }
 
 // --- recommandations : écrire une valeur, montrer un champ, chercher la valeur qui suffit ---
+// Le bouton d'en-tête suit le calcul courant : celui de l'onglet affiché s'il existe (Cadres et portiques ↔ cadre ;
+// autres onglets ↔ tablier et appuis), sinon le dernier lancé.
+let recoSource = 'tablier', recoCadre = null, cadre = null, recoTimer = null;   // cadre : dernier calcul de l'onglet Cadres
+function majReco(st) { if (recoSource === 'tablier') majRecoTablier(st); }
+function majRecoCourant() {
+  const ong = T.current();
+  if (ong === 'cadres' && cadre && recoCadre) recoSource = 'cadre';
+  else if (ong !== 'cadres' && state) recoSource = 'tablier';
+  if (recoSource === 'cadre' && cadre && recoCadre) majBoutonCadre(cadre, recoCadre.data, recoCadre.rec);
+  else if (state) majRecoTablier(state);
+}
+window.addEventListener('psida-tab', () => { try { majRecoCourant(); } catch (e) { console.error(e); } });
 function setField(name, value) {
   const f = $('#f'), el = f.elements[name];
   if (!el) return;
@@ -299,6 +312,10 @@ async function solveReco(a) {
   const essai = async v => {
     el.value = String(v);
     try {
+      if (c.calcul === 'cadre') {   // cadre : calcul complet de l'onglet (quelques centièmes de seconde), données de base éventuelles
+        await new Promise(r => setTimeout(r, 0));
+        return !!c.verifie(computeCadre(parseCadre({ ...Object.fromEntries(new FormData(f).entries()), ...(c.base || {}), [c.champ]: String(v) })));
+      }
       const p = parseForm(f);
       if (c.calcul === 'appuis') {
         const sup = computeSupports({ p, deck: base.deck, perm: base.perm, f61: base.f61, ec: base.ec, bearings: base.bearings, psidp: base.psidp, thermal: base.thermal, rail: base.rail, railAppuis: base.railAppuis }, p.supports);
@@ -311,10 +328,13 @@ async function solveReco(a) {
   };
   const v = await dichotomie(vals, essai);
   if (v == null) return null;
-  return { champ: String(v), affiche: String(v).replace('.', ','), detail: c.calcul === 'complet' ? 'calcul complet relancé pour chaque essai' : 'calcul des appuis relancé pour chaque essai' };
+  return { champ: String(v), affiche: String(v).replace('.', ','), detail: c.calcul === 'complet' || c.calcul === 'cadre' ? 'calcul complet relancé pour chaque essai' : 'calcul des appuis relancé pour chaque essai' };
 }
 document.addEventListener('change', ev => { if (ev.target && ev.target.id === 'supports-ref' && state && state.supports) { state._recoRef = ev.target.value === 'F61' ? 'BAEL' : 'EC'; majReco(state); } });
-$('#btn-reco').addEventListener('click', () => { if (state) ouvrirReco(state, { form: $('#f'), onApply: setField, goField, solve: solveReco }); });
+$('#btn-reco').addEventListener('click', () => {
+  if (recoSource === 'cadre' && cadre && recoCadre) ouvrirReco(cadre, { form: $('#f'), onApply: setField, goField, solve: solveReco });
+  else if (state) ouvrirReco(state, { form: $('#f'), onApply: setField, goField, solve: solveReco });
+});
 
 function renderPrecontrainte(st) {
   const box = $('#bp-out'); if (!box) return;
@@ -561,7 +581,7 @@ const FORM_UI = enhanceForm($('#f')); // saisie valeur par valeur des champs mul
 const NIV = initNivellement($('#f'), () => state);
 const TRACE = initTrace($('#f'), { setField });
 // manuel d'utilisation : PDF publié avec le site (docs/manuel), paramètre de version pour ne pas servir un ancien PDF en cache
-const MANUEL = { version: '0.99.4', url: 'docs/manuel/PSIDA_Manuel.pdf' };
+const MANUEL = { version: '0.99.5', url: 'docs/manuel/PSIDA_Manuel.pdf' };
 $('#btn-manuel').addEventListener('click', () => window.open(`${MANUEL.url}?v=${MANUEL.version}`, '_blank', 'noopener'));
 $('#f').addEventListener('change', ev => { if (ev.target.name === 'niv_actif') NIV.refresh(); });
 applyHelp($('#f'), $('#help-list'));
@@ -615,7 +635,7 @@ async function saveProject() {
   const form = $('#f');
   const spans = String(form.spans.value || '').split(/[,;\s]+/).filter(Boolean).join('-');
   const name = projName || `projet-psida-${spans || 'ouvrage'}.json`;
-  const file = { format: PROJ_FORMAT, version: '0.99.4', date: new Date().toISOString(), data: formSnapshot(form) };
+  const file = { format: PROJ_FORMAT, version: '0.99.5', date: new Date().toISOString(), data: formSnapshot(form) };
   if (ec8Data) file.ec8 = ec8Data;
   const txt = JSON.stringify(file, null, 1);
   if (window.showSaveFilePicker) { // Chrome, Edge : choix du nom et du dossier
@@ -707,7 +727,7 @@ $('#btn-report').addEventListener('click', async () => {
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
     // pont-dalle sous rail : la note imprimable est la note ferroviaire (le rapport routier suppose LM1 et le Fascicule 61)
-    const html = state.rail ? noteToHTML(await makeNote()) : await buildReport({ ...state, version: '0.99.4', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = state.rail ? noteToHTML(await makeNote()) : await buildReport({ ...state, version: '0.99.5', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -744,8 +764,8 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  if (state.rail) return buildNoteRail({ ...state, version: '0.99.4' }, { figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
-  return buildNote({ ...state, version: '0.99.4', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  if (state.rail) return buildNoteRail({ ...state, version: '0.99.5' }, { figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.99.5', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -775,20 +795,40 @@ function renderDDR() {
 }
 $('#tab-retenue').addEventListener('input', renderDDR); $('#tab-retenue').addEventListener('change', renderDDR);
 renderDDR();
-let cadre = null;
 const runCadre = () => {
+  clearTimeout(recoTimer); recoCadre = null;
   try {
-    cadre = computeCadre(parseCadre(Object.fromEntries(new FormData($('#f')).entries())));
+    const data = Object.fromEntries(new FormData($('#f')).entries());
+    cadre = computeCadre(parseCadre(data));
     $('#cadre-tables').innerHTML = blocksToHTML(cadreBlocks(cadre));
     $('#card-cadre').hidden = false; $('#error').textContent = '';
     renderCadrePlans(cadre);
+    // recommandations : recherches par recalcul (quelques dixièmes de seconde), après l'affichage des résultats ; les
+    // « NON » reçoivent ensuite l'indication « → à modifier » et le bouton d'en-tête son compteur
+    const c0 = cadre;
+    if (cadre.blocs.some(r => !r.ok)) $('#cadre-tables').insertAdjacentHTML('afterbegin', '<p class="small" id="cadre-reco-attente">Recherche des valeurs qui font passer les vérifications…</p>');
+    recoTimer = setTimeout(() => {
+      if (cadre !== c0) return;
+      try {
+        const rec = recommandationsCadre(c0, data);
+        recoCadre = { data, rec }; recoSource = 'cadre';
+        $('#cadre-tables').innerHTML = blocksToHTML(cadreBlocks(c0, { reco: rec }));
+        majBoutonCadre(c0, data, rec);
+      } catch (e) { const w = $('#cadre-reco-attente'); if (w) w.textContent = 'Recommandations indisponibles : ' + e.message; }
+    }, 30);
   } catch (e) { cadre = null; renderCadrePlans(null); $('#error').textContent = e.stack || String(e); }
 };
 $('#btn-cadre').addEventListener('click', runCadre);
+// indications « → à modifier » sous les NON : montrer le champ, ou écrire la valeur et recalculer le cadre
+$('#cadre-tables').addEventListener('click', ev => {
+  const go = ev.target.closest('[data-reco-go]'), ap = ev.target.closest('[data-reco-apply]');
+  if (go) { ev.preventDefault(); goField(go.dataset.recoGo); return; }
+  if (ap) { ev.preventDefault(); for (const [k, v] of Object.entries(JSON.parse(ap.dataset.recoApply))) setField(k, v); runCadre(); $('#card-cadre').scrollIntoView({ block: 'start' }); }
+});
 initCadrePlans(() => cadre);
 $('#btn-cadre-note').addEventListener('click', () => {
   if (!cadre) runCadre(); if (!cadre) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.99.4' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.99.5' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-cadre.html'; aEl.click(); }
 });
@@ -796,7 +836,7 @@ $('#btn-cadre-docx').addEventListener('click', async () => {
   if (!cadre) runCadre(); if (!cadre) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.99.4' })), docx);
+    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.99.5' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = `note-cadre-${cadre.inp.geom.nom || 'ouvrage'}.docx`; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -858,7 +898,7 @@ initPoutresPlans(() => poutres);
 initParcours();
 $('#btn-phasage-note').addEventListener('click', () => {
   if (!phasage) runPhasage(); if (!phasage) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.99.4' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.99.5' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-phasage.html'; aEl.click(); }
 });
@@ -866,7 +906,7 @@ $('#btn-phasage-docx').addEventListener('click', async () => {
   if (!phasage) runPhasage(); if (!phasage) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.99.4' })), docx);
+    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.99.5' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = 'note-phasage.docx'; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -898,7 +938,7 @@ $('#btn-poutres').addEventListener('click', () => {
 });
 $('#btn-poutres-note').addEventListener('click', () => {
   if (!poutres) $('#btn-poutres').click(); if (!poutres) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(poutresNote(poutres, { version: '0.99.4' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(poutresNote(poutres, { version: '0.99.5' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-pont-poutres.html'; aEl.click(); }
 });
@@ -906,7 +946,7 @@ $('#btn-poutres-docx').addEventListener('click', async () => {
   if (!poutres) $('#btn-poutres').click(); if (!poutres) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(poutresNote(poutres, { version: '0.99.4' })), docx);
+    const blob = await noteToDocx(await svgToImg(poutresNote(poutres, { version: '0.99.5' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = 'note-pont-poutres.docx'; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -946,7 +986,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.99.4', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.99.5', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));

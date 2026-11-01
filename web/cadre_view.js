@@ -1,6 +1,7 @@
 /** Cadres fermés (PICF) et portiques ouverts (PIPO) : blocs de présentation (interface et note) et figures SVG. */
 import { goussetSup, goussetInf } from '../src/cadre/details.js';
 import { portee, hauteurCalc, nCell, epVoile } from '../src/cadre/cadre.js';
+import { indicationsParCible, cleCible, LIB_CADRE } from '../src/reco/cadre.js';
 
 const F = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: n, maximumFractionDigits: n }));
 const F0 = v => F(v, 0), F1 = v => F(v, 1), F3 = v => F(v, 3);
@@ -67,11 +68,20 @@ export function cadreSVG(r, { largeur = 760 } = {}) {
   return s + '</svg>';
 }
 
-/** Blocs (titres, paragraphes, tableaux, figures) d'un calcul de cadre, pour l'interface et la note. */
-export function cadreBlocks(out) {
-  const B = [], h2 = text => B.push({ t: 'h2', text }), h3 = text => B.push({ t: 'h3', text }), para = text => B.push({ t: 'p', text }), comment = text => B.push({ t: 'comment', text });
+/**
+ * Blocs (titres, paragraphes, tableaux, figures) d'un calcul de cadre, pour l'interface et la note.
+ * `reco` (interface seulement) : résultat de recommandationsCadre — chaque « NON » reçoit l'indication « → à modifier ».
+ */
+export function cadreBlocks(out, { reco = null } = {}) {
+  const B = [], h2 = text => B.push({ t: 'h2', text }), h3 = text => B.push({ t: 'h3', text }), para = (text, hint) => B.push({ t: 'p', text, ...(hint ? { hint } : {}) }), comment = text => B.push({ t: 'comment', text });
   const table = (head, rows, opt = {}) => B.push({ t: 'table', head, rows, ...opt });
   const { inp, split } = out, ouvert = inp.type === 'pipo';
+  const ind = reco ? indicationsParCible(reco.items) : null, hint = c => (ind ? ind.get(cleCible(c)) || null : null);
+  if (reco && reco.items.length) {
+    const s = reco.synthese;
+    para(`${reco.items.length} vérification(s) non satisfaite(s) ou réserve(s) : sous chaque « NON », la donnée à modifier et la valeur qui suffit (cherchée par recalcul complet) ; détail, règles et autres solutions dans « Recommandations » (en-tête).`,
+      s ? { texte: `${s.texte} : ${Object.entries(s.champs).map(([k, v]) => `${(LIB_CADRE[k] || k).toLowerCase()} ${F(+v)} m`).join(' ; ')}`, champs: s.champs } : null);
+  } else if (reco) para('Toutes les vérifications sont satisfaites.');
   if (split && split.blocs.length > 1) para(split.explication);
   out.blocs.forEach((r, ib) => {
     const g = r.geom, h = r.h, titre = out.blocs.length > 1 ? `Bloc ${ib + 1} (${split.blocs[ib].label})` : (g.nom || (ouvert ? 'Portique ouvert' : 'Cadre fermé'));
@@ -109,7 +119,8 @@ export function cadreBlocks(out) {
       return [sx.barre, sx.ou, F(sx.e), F3(sx.d), `${a1[0]} : ${F(a1[1])}`, a1[2].option?.label || 'aucune', `${a2[0]} : ${F(a2[1])}`, a2[2].option?.label || 'aucune',
         sx.tranchantEc2 ? `${F(sx.tranchantEc2.ved)} / ${F(sx.tranchantEc2.vRd)}` : `${F3(sx.tranchant.tau)} / ${F3(sx.tranchant.lim)}`, sx.echec ? 'NON' : 'OK'];
     };
-    table(['Barre', 'Section', 'e [m]', 'd [m]', 'A_s face int. (g.) [cm²/ml]', 'Barres', 'A_s face ext. (d.) [cm²/ml]', 'Barres', h.code === 'EC2' ? 'V_Ed / V_Rd,c' : 'τ_u / τ_lim [MPa]', 'Verdict'], r.sections.map(ligne), { small: true });
+    table(['Barre', 'Section', 'e [m]', 'd [m]', 'A_s face int. (g.) [cm²/ml]', 'Barres', 'A_s face ext. (d.) [cm²/ml]', 'Barres', h.code === 'EC2' ? 'V_Ed / V_Rd,c' : 'τ_u / τ_lim [MPa]', 'Verdict'], r.sections.map(ligne),
+      { small: true, ...(ind ? { hints: r.sections.map(sx => (sx.echec ? hint({ bloc: ib, type: 'section', barre: sx.barre, ou: sx.ou }) : null)) } : {}) });
     comment(`Hauteur utile d = e − enrobage − φ/2, recalculée avec le diamètre retenu ; flexion composée à l'ELS (BAEL) dès que N > 0,5 t/ml, avec la compression la plus faible ; non-fragilité ${h.code === 'EC2' ? 'EN 1992-1-1 §9.2.1.1' : '0,23 d f_t28/f_e'} ; effort tranchant sans armatures ${h.code === 'EC2' ? 'V_Rd,c (§6.2.2)' : '0,07 f_c28/γ_b (A.5.2,2)'}.`);
     const B0 = r.geom.B, gs = goussetSup(B0), gi = goussetInf(B0);
     para(`Dispositions du guide PICF-EL : renfort de gousset supérieur ${F(gs.L)} m, ${gs.n} barres (${gs.base}) ; ${ouvert ? '' : `gousset inférieur ${F(gi.L)} m, ${gi.n} barres (${gi.base}) ; `}voiles : espacement 0,40 m, 0,20 m sur 2,00 m près des joints.`);
@@ -120,11 +131,12 @@ export function cadreBlocks(out) {
         r.reactions.map(a => [a.appui, `${F(a.els.Vmin)} / ${F(a.els.Vmax)}`, `${F(a.els.Hmin)} / ${F(a.els.Hmax)}`, `${F(a.els.Mmin)} / ${F(a.els.Mmax)}`, `${F(a.elu.Vmin)} / ${F(a.elu.Vmax)}`, `${F(a.elu.Hmin)} / ${F(a.elu.Hmax)}`, `${F(a.elu.Mmin)} / ${F(a.elu.Mmax)}`]), { small: true });
       comment('Réaction exercée par la semelle sur le piédroit : V vers le haut, H vers la droite (+x), M positif dans le sens trigonométrique.');
     }
-    if (r.gabarit) para(`Gabarit : hauteur libre ${F(r.gabarit.hauteurLibre)} m${r.gabarit.hauteurRequise > 0 ? ` pour ${F(r.gabarit.hauteurRequise)} m requis` : ''}, ouverture ${F(r.gabarit.largeurLibre)} m${r.gabarit.largeurRequise > 0 ? ` pour ${F(r.gabarit.largeurRequise)} m requis` : ''} — ${r.gabarit.ok ? 'OK' : 'NON'}.`);
+    if (r.gabarit) para(`Gabarit : hauteur libre ${F(r.gabarit.hauteurLibre)} m${r.gabarit.hauteurRequise > 0 ? ` pour ${F(r.gabarit.hauteurRequise)} m requis` : ''}, ouverture ${F(r.gabarit.largeurLibre)} m${r.gabarit.largeurRequise > 0 ? ` pour ${F(r.gabarit.largeurRequise)} m requis` : ''} — ${r.gabarit.ok ? 'OK' : 'NON'}.`, r.gabarit.ok ? null : hint({ bloc: ib, type: 'gabarit' }));
     if (r.choc) {
       h3('Choc sur les piédroits (situation accidentelle)');
       table(['Barre', 'Section', 'z choc [m]', 'M [t·m/ml]', 'A_s requis', 'A_s fourni [cm²/ml]', 'τ / τ_lim [MPa]', 'Verdict'],
-        r.choc.verifs.map(v => [v.barre, v.ou, F(v.z), F(v.M), v.surarme ? 'surarmé' : F(v.asReq), v.sansDisposition ? `${F(v.asFournie)} (requis, aucune disposition)` : F(v.asFournie), `${F3(v.tau)} / ${F3(v.tauLim)}`, v.okFlexion && v.okTranchant ? 'OK' : 'NON']), { small: true });
+        r.choc.verifs.map(v => [v.barre, v.ou, F(v.z), F(v.M), v.surarme ? 'surarmé' : F(v.asReq), v.sansDisposition ? `${F(v.asFournie)} (requis, aucune disposition)` : F(v.asFournie), `${F3(v.tau)} / ${F3(v.tauLim)}`, v.okFlexion && v.okTranchant ? 'OK' : 'NON']),
+        { small: true, ...(ind ? { hints: r.choc.verifs.map(v => (v.okFlexion && v.okTranchant ? null : hint({ bloc: ib, type: 'choc', barre: v.barre, ou: v.ou, z: v.z }))) } : {}) });
     }
     if (r.sisme) {
       const z = r.sisme;
@@ -141,11 +153,12 @@ export function cadreBlocks(out) {
     if (r.portance && !r.portance.erreur) {
       h3(`Portance du sol (${r.portance.referentiel === 'F62' ? 'Fascicule 62 titre V' : 'NF P94-261'})`);
       table(['Fondation', 'État', 'Combinaison la plus défavorable', 'V [kN/ml]', 'H [kN/ml]', 'M [kN·m/ml]', 'e [m]', 'δ [°]', 'Taux', 'Verdict'],
-        r.portance.synthese.map(v => [v.fondation, v.etat, v.combinaison, F0(v.V), F0(v.H), F0(v.M), F(v.e), F1(v.delta), Number.isFinite(v.taux) ? F(v.taux) : '∞', v.ok ? 'OK' : 'NON']), { small: true });
+        r.portance.synthese.map(v => [v.fondation, v.etat, v.combinaison, F0(v.V), F0(v.H), F0(v.M), F(v.e), F1(v.delta), Number.isFinite(v.taux) ? F(v.taux) : '∞', v.ok ? 'OK' : 'NON']),
+        { small: true, ...(ind ? { hints: r.portance.synthese.map(v => (v.ok ? null : hint({ bloc: ib, type: 'portance', fondation: v.fondation, etat: v.etat }))) } : {}) });
     }
     if (r.flottaison) para(r.flottaison.message);
     para(`Avant-métré : ${r.metre.note}`);
-    if (r.reserves.length) { h3('Réserves bloquantes'); for (const x of r.reserves) para('RÉSERVE — ' + x); }
+    if (r.reserves.length) { h3('Réserves bloquantes'); r.reserves.forEach((x, ir) => para('RÉSERVE — ' + x, hint({ bloc: ib, type: 'reserve', index: ir }))); }
     h3('Hypothèses retenues et observations');
     for (const x of r.alertes) comment(x);
   });
