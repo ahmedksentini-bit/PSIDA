@@ -32,6 +32,12 @@ export function majBoutonCadre(out, data, rec = null) {
   maj(out, () => rec || recommandationsCadre(out, data));
   return dernier;
 }
+/** Onglet « Phasage » : out = résultat de computePhasage, rec = recommandationsPhasage (calculé dans un Web Worker). */
+export function majBoutonPhasage(out, rec) {
+  if (!out || !rec) { const b = document.getElementById('btn-reco'); if (b) b.hidden = true; return null; }
+  maj(out, () => rec);
+  return dernier;
+}
 function maj(cle, calc) {
   const b = document.getElementById('btn-reco');
   if (!b) return;
@@ -101,7 +107,8 @@ export function ouvrir(st, { form, onApply, goField, solve }) {
         if (r == null) out.textContent = ' aucune valeur ne suffit dans la plage explorée : changer de solution (voir les autres actions).';
         else {
           a.valeur = r.affiche; a.valeurChamp = r.champ; out.innerHTML = ` → <strong>${esc(r.affiche)}</strong>${a.unite ? ' ' + esc(a.unite) : ''} suffit${r.detail ? ` (${esc(r.detail)})` : ''} `;
-          if (a.champ) { const b = document.createElement('button'); b.type = 'button'; b.className = 'mini'; b.textContent = 'Appliquer'; b.onclick = () => { onApply(a.champ, a.valeurChamp); b.textContent = 'Appliqué ✓'; b.disabled = true; }; out.appendChild(b); }
+          // r.champs : plusieurs champs écrits ensemble (phasage : précontrainte P et section A_p)
+          if (a.champ) { const b = document.createElement('button'); b.type = 'button'; b.className = 'mini'; b.textContent = 'Appliquer'; b.onclick = () => { if (r.champs) for (const [k, v] of Object.entries(r.champs)) onApply(k, v); else onApply(a.champ, a.valeurChamp); b.textContent = 'Appliqué ✓'; b.disabled = true; }; out.appendChild(b); }
         }
       } catch (e) { out.textContent = ' ' + e.message; }
       t.disabled = false;

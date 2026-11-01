@@ -19,8 +19,9 @@ import { aideConception, rechercheEpaisseur } from '../src/conception.js';
 import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations } from '../src/bearings.js';
 import { chevetresEC } from '../src/chevetre.js';
 import { renderPlaque } from './plaque_view.js';
-import { majBouton as majRecoTablier, majBoutonCadre, ouvrir as ouvrirReco } from './recommandations_view.js';
+import { majBouton as majRecoTablier, majBoutonCadre, majBoutonPhasage, ouvrir as ouvrirReco } from './recommandations_view.js';
 import { recommandationsCadre } from '../src/reco/cadre.js';
+import { recommanderPhasage, chercherPhasageWorker } from './reco_phasage_client.js';
 import { initNivellement } from './nivellement_view.js';
 import { initTrace, planSVG as planTrace } from './trace_view.js';
 import { Axe } from '../src/geom/axe.js';
@@ -276,12 +277,15 @@ function renderStatic(st) {
 // Le bouton d'en-tête suit le calcul courant : celui de l'onglet affiché s'il existe (Cadres et portiques ↔ cadre ;
 // autres onglets ↔ tablier et appuis), sinon le dernier lancé.
 let recoSource = 'tablier', recoCadre = null, cadre = null, recoTimer = null;   // cadre : dernier calcul de l'onglet Cadres
+let recoPhasage = null;   // phasage : { out, data, rec } du dernier calcul de l'onglet Phasage (recherches dans un Worker)
 function majReco(st) { if (recoSource === 'tablier') majRecoTablier(st); }
 function majRecoCourant() {
   const ong = T.current();
   if (ong === 'cadres' && cadre && recoCadre) recoSource = 'cadre';
+  else if (ong === 'phasage' && recoPhasage) recoSource = 'phasage';
   else if (ong !== 'cadres' && state) recoSource = 'tablier';
   if (recoSource === 'cadre' && cadre && recoCadre) majBoutonCadre(cadre, recoCadre.data, recoCadre.rec);
+  else if (recoSource === 'phasage' && recoPhasage) majBoutonPhasage(recoPhasage.out, recoPhasage.rec);
   else if (state) majRecoTablier(state);
 }
 window.addEventListener('psida-tab', () => { try { majRecoCourant(); } catch (e) { console.error(e); } });
@@ -305,6 +309,7 @@ function goField(name) {
 }
 /** Recherche de la plus petite modification d'un champ qui satisfait la vérification (calcul des appuis seul, ou complet). */
 async function solveReco(a) {
+  if (a.chercher && a.chercher.calcul === 'phasage') return solvePhasage(a.chercher);
   const c = a.chercher, f = $('#f'), el = f.elements[c.champ];
   if (!el) throw new Error(`champ ${c.champ} introuvable`);
   const ancien = el.value, base = state;
@@ -333,6 +338,7 @@ async function solveReco(a) {
 document.addEventListener('change', ev => { if (ev.target && ev.target.id === 'supports-ref' && state && state.supports) { state._recoRef = ev.target.value === 'F61' ? 'BAEL' : 'EC'; majReco(state); } });
 $('#btn-reco').addEventListener('click', () => {
   if (recoSource === 'cadre' && cadre && recoCadre) ouvrirReco(cadre, { form: $('#f'), onApply: setField, goField, solve: solveReco });
+  else if (recoSource === 'phasage' && recoPhasage) ouvrirReco(recoPhasage.out, { form: $('#f'), onApply: setField, goField, solve: solveReco });
   else if (state) ouvrirReco(state, { form: $('#f'), onApply: setField, goField, solve: solveReco });
 });
 
@@ -843,14 +849,43 @@ $('#btn-cadre-docx').addEventListener('click', async () => {
 // calcul par phases (poutres précontraintes rendues continues)
 let phasage = null;
 const runPhasage = () => {
+  recoPhasage = null;
   try {
-    phasage = computePhasage(Object.fromEntries(new FormData($('#f')).entries()));
+    const data = Object.fromEntries(new FormData($('#f')).entries());
+    phasage = computePhasage(data);
     $('#phasage-tables').innerHTML = blocksToHTML(phasageBlocks(phasage));
     $('#card-phasage').hidden = false; $('#phasage-empty').hidden = true; $('#error').textContent = '';
     renderPhasagePlans(phasage);
+    recoPhasageLancer(phasage, data);
   } catch (e) { phasage = null; renderPhasagePlans(null); $('#error').textContent = e.stack || String(e); }
 };
 $('#btn-phasage').addEventListener('click', runPhasage);
+// recommandations du phasage : recherches par recalcul complet (quelques secondes chacune) dans un Web Worker ; les
+// « NON » reçoivent ensuite l'indication « → à modifier » et le bouton d'en-tête son compteur
+function recoPhasageLancer(p0, data) {
+  if (T.current() === 'phasage') majBoutonPhasage(null);   // compteur périmé jusqu'au résultat de la recherche
+  const enDefaut = p0.type === 'mixte' ? !p0.v || !p0.v.ok : !p0.acheve || !p0.acheve.ok || /NON/.test($('#phasage-tables').textContent);
+  if (enDefaut) $('#phasage-tables').insertAdjacentHTML('afterbegin', '<p class="small" id="phasage-reco-attente">Recherche des valeurs qui font passer les vérifications (recalcul complet pour chaque essai, en arrière-plan)…</p>');
+  recommanderPhasage(data, { progres: n => { const w = $('#phasage-reco-attente'); if (w) w.textContent = `Recherche des valeurs qui font passer les vérifications : ${n} calcul(s) complet(s)…`; } })
+    .then(rec => {
+      if (phasage !== p0) return;
+      recoPhasage = { out: p0, data, rec }; if (T.current() === 'phasage') recoSource = 'phasage';
+      $('#phasage-tables').innerHTML = blocksToHTML(phasageBlocks(p0, { reco: rec }));
+      majRecoCourant();
+    })
+    .catch(e => { if (e.message === 'abandonné') return; const w = $('#phasage-reco-attente'); if (w) w.textContent = 'Recommandations indisponibles : ' + e.message; });
+}
+/** Bouton « Calculer » du panneau (recherche laissée faute de temps) : même recherche, dans le Worker. */
+async function solvePhasage(c) {
+  const r = await chercherPhasageWorker(Object.fromEntries(new FormData($('#f')).entries()), c);
+  return r ? { champ: r.champ, affiche: r.affiche, champs: r.champs, detail: 'calcul par phases et ouvrage terminé relancés pour chaque essai' } : null;
+}
+// indications « → à modifier » sous les NON : montrer le champ, ou écrire la valeur et recalculer les phases
+$('#phasage-tables').addEventListener('click', ev => {
+  const go = ev.target.closest('[data-reco-go]'), ap = ev.target.closest('[data-reco-apply]');
+  if (go) { ev.preventDefault(); goField(go.dataset.recoGo); return; }
+  if (ap) { ev.preventDefault(); for (const [k, v] of Object.entries(JSON.parse(ap.dataset.recoApply))) setField(k, v); runPhasage(); $('#card-phasage').scrollIntoView({ block: 'start' }); }
+});
 // pont-dalle coulé par phases successives (onglet Précontrainte)
 $('#btn-dph').addEventListener('click', async () => {
   const out = $('#dph-out');

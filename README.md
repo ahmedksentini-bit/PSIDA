@@ -631,3 +631,16 @@ radier, piédroits et voiles cherchées ensemble (montée puis descente, jeu loc
 largeur des semelles du PIPO, profondeur d'assise, hauteur intérieure (gabarit), radier ou remblai (flottaison), biais,
 modèle de sol. Quand aucune épaisseur ne suffit (effort tranchant sans armatures notamment), la recommandation le dit et
 renvoie aux armatures d'effort tranchant ou à un changement de conception. Test : test/reco_cadre.test.js.
+Recommandations de l'onglet « Phasage » (src/reco/phasage.js) : poutres préfabriquées rendues continues, fléaux (caisson)
+et pont mixte. Sous chaque « NON » (contraintes des phases, compression ELS, décompression, traction fréquente, joint de
+clavage, effort tranchant, poinçonnement du hourdis ; fléaux en construction, diaphragme et appareils du voussoir sur pile ;
+classes et résistance des sections mixtes, voilement par cisaillement et interaction M-V, déversement en service et au
+bétonnage, ELS de l'acier, de la dalle et des armatures, connexion, fatigue, courbure) l'indication « → à modifier » nomme
+la donnée et la valeur qui suffit, avec « Appliquer et recalculer » ; sections saisies par leurs valeurs et calculs
+impossibles sont signalés aussi. Les valeurs sont cherchées par recalcul complet (phases avec fluage, retrait et relaxation,
+puis ouvrage terminé), par familles de vérifications : précontrainte (P et A_p), béton, date de mise en tension, âmes,
+hourdis, câbles de fléau ou de continuité, diaphragme, semelles et âmes de chaque zone, entretoisement, dalle, armatures,
+goujons. Les familles en défaut sont traitées ensemble (point fixe puis descente, comme les épaisseurs des cadres) et le jeu
+final est recalculé en entier ; les autres leviers sont proposés en variantes cherchées seules. Un calcul complet prenant
+quelques secondes, les recherches tournent dans un Web Worker (web/reco_phasage_worker.js) ; au-delà de 150 s, la valeur
+est laissée au bouton « Calculer » du panneau. Test : test/reco_phasage.test.js.

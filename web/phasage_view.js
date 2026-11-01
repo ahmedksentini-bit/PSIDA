@@ -7,6 +7,7 @@ import { calculPhasage, resultante } from '../src/phasage/phasage.js';
 import { lirePhasage, poutresContinues, momentsRemarquables, diagramme, lireFleau, fleaux, momentsFleau, diagrammeFleau, contreflechesFleau, flechesPoutres } from '../src/phasage/exemples.js';
 import { betonEC2 } from '../src/phasage/fluage.js';
 import { contraintesPhases, contraintesBarre } from '../src/phasage/contraintes.js';
+import { indicationsParCible, cleCible, LIB_PHASAGE } from '../src/reco/phasage.js';
 
 const F = (x, d = 0) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',').replace(/^-0(,0+)?$/, '0$1') : '—');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -55,9 +56,14 @@ function elevationSVG(p) {
   return s.join('');
 }
 
-/** Calcul complet : modèle, résultats, blocs de note. */
-export function computePhasage(d) {
-  if (d.ph_type === 'mixte') return computeMixte(d);
+/**
+ * Calcul complet : modèle, résultats, blocs de note. `opts` ne sert qu'aux recherches des recommandations
+ * (src/reco/phasage.js), qui relancent le calcul des dizaines de fois : acheve = false (phases seules, plus le
+ * déséquilibre des fléaux), hourdis = false (flexion locale du hourdis ou de la dalle, indépendante des données
+ * cherchées), annexes = false (distortion et flexion transversale du caisson, sans vérification). Par défaut, tout.
+ */
+export function computePhasage(d, opts = {}) {
+  if (d.ph_type === 'mixte') return computeMixte(d, opts);
   let out;
   if (d.ph_type === 'fleau') { const p = lireFleau(d), { modele, reperes } = fleaux(p); out = { type: 'fleau', p, modele, reperes, r: calculPhasage(modele) }; }
   else { const p = lirePhasage(d), { modele, reperes } = poutresContinues(p), r = calculPhasage(modele); out = { type: 'poutres', p, modele, reperes, r }; }
@@ -67,13 +73,13 @@ export function computePhasage(d) {
     const fl = out.type === 'fleau', Lr = fl ? v('fl_Lr', (out.p.caisson ? out.p.caisson.B : 12) - 2) : v('ph_Lr', 8), tr = fl ? v('fl_trott', 0) : v('ph_trott', 1);
     // séisme vertical du tablier précontraint (EN 1998-2 § 4.1.7(2)P) quand le séisme est activé dans l'onglet Appuis
     const sv = spectreVerticalDuFormulaire(d), spectreV = sv ? sv.spectreV : null, siteV = sv ? sv.site : null;
-    try {
+    if (opts.acheve !== false) try {
       out.acheve = structureAchevee(out, { spectreV, siteV, nPoutres: v('ph_nP', 4), chaussee: { y1: -Lr / 2, y2: Lr / 2 }, trottoirs: tr > 0 ? [{ y1: -Lr / 2 - tr, y2: -Lr / 2 }, { y1: Lr / 2, y2: Lr / 2 + tr }] : [],
         alpha: EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended, alphaKey: d.alpha || 'recommended', expo: (fl ? d.fl_expo : d.ph_expo) || 'XC' });
     } catch (e) { out.acheveErreur = e.message; }
     // poutres rendues continues : flexion locale du hourdis (plaque sur les poutres, roues EC et F61), comme l'onglet
     // Tablier à poutres ; ses sections remplacent le minimum dans la nomenclature
-    if (!fl && out.acheve && out.p.forme) {
+    if (!fl && out.acheve && out.p.forme && opts.hourdis !== false) {
       try {
         const f = out.p.forme, nP = out.acheve.nP, W = nP * f.bh, gb = v('ph_gbord', 8), tR = v('ph_trev', 0.08), ch = { y1: -Lr / 2, y2: Lr / 2 };
         const H = hourdisLocal({ n: nP, b1: f.bh, W, hd: f.hd, bt: f.bt, eTab: f.ht, L: out.p.L, roadway: ch, footways: tr > 0 ? [{ y1: -Lr / 2 - tr, y2: -Lr / 2 }, { y1: Lr / 2, y2: Lr / 2 + tr }] : [],
@@ -86,7 +92,7 @@ export function computePhasage(d) {
     if (fl) {
       // caisson : distortion (poutre sur appui élastique, diaphragmes), puis flexion transversale du cadre avec la part de
       // distortion répartie (calcul de dimensionnement) et sans (cadre par mètre, référence) ; fléaux en construction
-      const al = EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended, base = out.p.caisson ? { K: { ...out.p.caisson, ti: out.p.caisson.tic }, h: out.p.hc, Lr, gBord: v('fl_gbord', 8), tRev: v('fl_trev', 0.08), tEnc: v('fl_tenc', 0.45), tGou: v('fl_tgou', 0.40), fck: out.p.fck, alpha: al } : null;
+      const al = EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended, base = out.p.caisson && opts.annexes !== false && opts.acheve !== false ? { K: { ...out.p.caisson, ti: out.p.caisson.tic }, h: out.p.hc, Lr, gBord: v('fl_gbord', 8), tRev: v('fl_trev', 0.08), tEnc: v('fl_tenc', 0.45), tGou: v('fl_tgou', 0.40), fck: out.p.fck, alpha: al } : null;
       try { if (base) out.distortion = distortionCaisson({ ...base, Lspan: 2 * out.p.a, sd: v('fl_sdia', 0) }); } catch (e) { out.distortionErreur = e.message; }
       try {
         if (base) {
@@ -103,13 +109,14 @@ export function computePhasage(d) {
 }
 
 /** Bloc « contraintes » commun : vérifications enveloppes et tableau aux sections remarquables. */
-function blocsContraintes(B, out, tService, sections, instants) {
+function blocsContraintes(B, out, tService, sections, instants, hint = null) {
   const { modele, reperes: R, r } = out, F2 = v => F(v, 2);
   B.push({ t: 'h2', text: 'Contraintes normales du béton (actions permanentes et précontrainte)' });
-  if (!R.fibres) { B.push({ t: 'p', text: 'Contraintes non calculées : les sections sont saisies par leurs valeurs (A, I, e) ; choisir « par leurs dimensions » pour obtenir les fibres extrêmes.' }); return; }
+  if (!R.fibres) { B.push({ t: 'p', text: 'Contraintes non calculées : les sections sont saisies par leurs valeurs (A, I, e) ; choisir « par leurs dimensions » pour obtenir les fibres extrêmes.', ...(hint && hint('nonverif', 'geo') ? { hint: hint('nonverif', 'geo') } : {}) }); return; }
   const C = contraintesPhases(r, modele, R.fibres, tService);
   B.push({ t: 'table', head: ['Partie', 'Critère', 'σ [MPa]', 'Limite [MPa]', 'Taux', 'Lieu', 'Instant [j] (âge)', 'Verdict'],
-    rows: C.verifs.map(v => [v.partie, v.critere, F2(v.valeur), F2(v.limite), v.taux == null ? '—' : F2(v.taux), `${modele.barres[v.ou.barre].nom}, fibre ${v.ou.fibre}, ${v.ou.xi === 0 ? 'origine' : v.ou.xi === 1 ? 'extrémité' : 'milieu'} de barre`, `${F(v.ou.t)} (${F(v.ou.age)} j)`, v.ok ? 'OK' : 'NON']) });
+    rows: C.verifs.map(v => [v.partie, v.critere, F2(v.valeur), F2(v.limite), v.taux == null ? '—' : F2(v.taux), `${modele.barres[v.ou.barre].nom}, fibre ${v.ou.fibre}, ${v.ou.xi === 0 ? 'origine' : v.ou.xi === 1 ? 'extrémité' : 'milieu'} de barre`, `${F(v.ou.t)} (${F(v.ou.age)} j)`, v.ok ? 'OK' : 'NON']),
+    ...(hint ? { hints: C.verifs.map((v, i) => (v.ok ? null : hint('phase', i))) } : {}) });
   if (C.nonLineaire) { const q = C.nonLineaire; B.push({ t: 'p', text: `ATTENTION — fluage non linéaire : la compression atteint ${F2(-q.ou.s)} MPa, soit k_σ = ${F2(q.k)} f_ck(t) (${q.partie}, à ${F(q.ou.t)} j, âge ${F(q.ou.age)} j), au-delà de 0,45 f_ck(t). Le calcul emploie une loi de fluage linéaire ; si cette compression dure (EN 1992-1-1 § 5.10.2.2 (5)), le fluage est à majorer de exp(1,5 (k_σ − 0,45)) = ${F2(q.facteur)} (§ 3.1.4 (4), éq. 3.7). Pour l'éviter : mise en tension plus tardive, béton plus résistant au jeune âge ou précontrainte en deux temps.` }); }
   B.push({ t: 'p', text: 'Enveloppe sur tous les pas de calcul et toutes les barres (origine, milieu, extrémité), traction positive. Limites : compression 0,6 f_ck(t) en construction (EN 1992-1-1 § 5.10.2.2 (5), EN 1992-2 § 113.3.2) et 0,45 f_ck en service sous charges permanentes (§ 7.2 (3)) ; traction comparée à f_ctm(t) ; décompression des parties précontraintes en service (EN 1992-2, tableau 7.101N, XC2 à XC4, combinaison quasi permanente). Trafic et gradient thermique non inclus : ils s\'ajoutent sur l\'ouvrage terminé.' });
   const rows = [];
@@ -130,10 +137,24 @@ function blocsPertesInst(B, pi, nom, c) {
     caption: `Frottement P₀ e^{−μ(θ + kx)} (μ = ${F(c.mu, 2)}, k = ${F(c.k, 3)} rad/m) et recul d'ancrage g = ${F(c.g * 1000, 1)} mm (NF EN 1992-1-1 § 5.10.5.2 et 5.10.5.3) ; longueur d'influence λ = ${F(Math.max(...pi.lambda), 1)} m${pi.lambda[1] ? ' de chaque côté' : ''}.` });
 }
 
-export function phasageBlocks(out) {
-  if (out.type === 'mixte') return mixteBlocks(out);
-  if (out.type === 'fleau') return fleauBlocks(out);
-  const { p, modele, reperes: R, r } = out, B = [];
+/**
+ * Indications « → à modifier » d'un résultat de recommandationsPhasage (interface seulement ; les notes n'en reçoivent
+ * pas) : fonction (type, index) → indication, et paragraphe d'introduction.
+ */
+function indications(reco) {
+  if (!reco) return { hint: null, intro: [] };
+  const ind = indicationsParCible(reco.items), hint = (type, index) => ind.get(cleCible({ type, index })) || null;
+  const s = reco.synthese, n = reco.items.length;
+  const intro = n ? [{ t: 'p', text: `${n} vérification(s) non satisfaite(s) ou non faite(s) : sous chaque « NON », la donnée à modifier et la valeur qui suffit (cherchée par recalcul complet du phasage et de l'ouvrage terminé) ; détail, règles et autres solutions dans « Recommandations » (en-tête).`,
+    ...(s ? { hint: { texte: `${s.texte} : ${Object.entries(s.champs).map(([k, v]) => `${(LIB_PHASAGE[k] || k).charAt(0).toLowerCase()}${(LIB_PHASAGE[k] || k).slice(1)} ${String(v).replace('.', ',')}`).join(' ; ')}${s.ok ? '' : ' (certaines vérifications restent à « NON »)'}`, champs: s.champs } } : {}) }]
+    : [{ t: 'p', text: 'Toutes les vérifications sont satisfaites.' }];
+  return { hint, intro };
+}
+
+export function phasageBlocks(out, { reco = null } = {}) {
+  if (out.type === 'mixte') return mixteBlocks(out, { reco });
+  if (out.type === 'fleau') return fleauBlocks(out, { reco });
+  const { p, modele, reperes: R, r } = out, { hint, intro } = indications(reco), B = [...intro];
   const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
   const bP = betonEC2(modele.betons.P), bH = betonEC2(modele.betons.H);
   h2('Ouvrage et phases de construction');
@@ -167,7 +188,7 @@ export function phasageBlocks(out) {
     const kSup = debutPh(modele.phases.length - 1), mid = R.nb / 2 - 1, e1 = R.nb - 1;
     const inst = [[`mise en tension (${F(p.dates.tension)} j)`, debutPh(0)], [`avant clavage (${F(p.dates.continuite)} j)`, r.finPhase[Math.max(0, modele.phases.findIndex(ph => ph.liaisons) - 1)]], [`après superstructures (${F(p.dates.superstructures)} j)`, kSup], [`fin (${F(p.dates.fin)} j)`, r.pas.length - 1]];
     const secs = [['mi-travée 1', [R.iP[mid], R.iH[mid]], 1], ...(p.n > 1 ? [['appui 1 (travée 1)', [R.iP[e1], R.iH[e1]], 1]] : [])];
-    blocsContraintes(B, out, p.dates.superstructures, secs, inst);
+    blocsContraintes(B, out, p.dates.superstructures, secs, inst, hint);
   }
   // évolution dans le temps
   const kC = debutPh(modele.phases.findIndex(ph => ph.liaisons));
@@ -194,9 +215,9 @@ export function phasageBlocks(out) {
   if (r.pertesInstantanees && r.pertesInstantanees[0]) blocsPertesInst(B, r.pertesInstantanees[0], 'câble T1', p.cable);
   para(`Pertes calculées pas à pas : raccourcissement du béton sous les charges successives, fluage et retrait (EN 1992-1-1 annexe B et § 3.1.4) et relaxation (§ 3.3.2), en interaction avec la structure. ${r.pertesInstantanees && r.pertesInstantanees[0] ? `Force au vérin P₀ = ${F(p.cable.P0)} kN, pertes instantanées calculées (frottement, recul d\'ancrage).` : 'La force après mise en tension est une donnée (pertes instantanées non calculées).'}`);
 
-  B.push(...acheveBlocks(out));
-  B.push(...constructionFleauBlocks(out));
-  B.push(...transversalBlocks(out));
+  B.push(...acheveBlocks(out, hint));
+  B.push(...constructionFleauBlocks(out, hint));
+  B.push(...transversalBlocks(out, hint));
   h2('Méthode et limites');
   para('Méthode pas à pas (Bažant ; Ghali, Favre et Elbadry, Concrete Structures: Stresses and Deformations, ch. 5) sur une ossature plane : chaque incrément d\'effort est affecté de la fonction de fluage J(t, τ) de son béton et de son âge ; un changement de schéma (clavage, activation du hourdis) ne sollicite que par les incréments postérieurs. Moteur recoupé sur les solutions fermées de Dischinger, l\'équation intégrale de Volterra, le Bulletin technique Sétra n° 7 (1972, annexe I), le guide Sétra « Eurocode 2 — application aux ponts-routes en béton » (2008) et l\'éq. (5.46) de l\'EN 1992-1-1.');
   para('Limites : effort normal constant par barre (le maillage doit rester fin), sections non fissurées, armatures passives non prises en compte dans le fluage (coefficient k_s du guide Sétra non appliqué), une poutre et sa largeur de hourdis pour les actions permanentes ; trafic réparti par les coefficients de Guyon-Massonnet d\'une travée de même portée ; hourdis : flexion locale calculée plus haut (plaque sur les poutres), sans superposition de la flexion transversale d\'ensemble ; joint de clavage vérifié sans câble ; fluage linéaire (avertissement au-delà de 0,45 f_ck(t)) ; gradient thermique linéaire seul (approche 1).');
@@ -230,8 +251,8 @@ function elevationFleauSVG(p, R) {
   return s.join('');
 }
 
-export function fleauBlocks(out) {
-  const { p, modele, reperes: R, r } = out, B = [];
+export function fleauBlocks(out, { reco = null } = {}) {
+  const { p, modele, reperes: R, r } = out, { hint, intro } = indications(reco), B = [...intro];
   const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
   const bt = betonEC2(modele.betons.V0);
   h2('Ouvrage et phases de construction');
@@ -273,7 +294,7 @@ export function fleauBlocks(out) {
   const diag = [{ nom: 'fin de construction des fléaux', pts: diagrammeFleau(r.pas[r.finPhase[iCl - 1]], R, modele) }, { nom: 'après superstructures', pts: diagrammeFleau(r.pas[debut(iS)], R, modele), coul: '#2a8f6a' }, { nom: `t = ${F(p.dates.fin)} j`, pts: diagrammeFleau(r.final, R, modele), coul: '#c8552b' }];
   B.push({ t: 'svg', svg: courbesSVG(diag, { titre: 'Moment le long de l’ouvrage [kN·m]', xlab: 'abscisse [m]', ylab: 'M [kN·m]', marques: [0, p.a, 2 * p.a, 3 * p.a, 4 * p.a].map(x => ({ x, nom: '' })) }), caption: 'Diagrammes en fin de construction des fléaux, après pose des superstructures et à la fin du calcul.' });
   blocsContraintes(B, out, p.dates.superstructures, [['sur pile P1 (côté travée centrale)', [R.F[0].bD[0]], 0], ['à la clé', [R.F[0].bD[R.nv]], 1], ['mi-travée de rive', [R.F[0].bG[Math.floor(R.nv / 2)]], 0]],
-    [[`fin de construction des fléaux (${F(p.dates.clavage)} j)`, r.finPhase[iCl - 1]], ['après superstructures', debut(iS)], [`fin (${F(p.dates.fin)} j)`, r.pas.length - 1]]);
+    [[`fin de construction des fléaux (${F(p.dates.clavage)} j)`, r.finPhase[iCl - 1]], ['après superstructures', debut(iS)], [`fin (${F(p.dates.fin)} j)`, r.pas.length - 1]], hint);
   h2('Précontrainte : pertes instantanées et différées');
   const rows = [];
   modele.cables.forEach((c, ic) => {
@@ -293,10 +314,11 @@ export function fleauBlocks(out) {
   B.push({ t: 'svg', svg: courbesSVG([{ nom: 'contre-flèche totale', pts: cf.map(c => [c.x, c.contrefleche * 1000]) }, { nom: 'part de la construction', pts: cf.map(c => [c.x, -c.construction * 1000]), tirets: true }],
     { titre: 'Contre-flèches à donner aux coffrages des voussoirs [mm] (+ vers le haut)', xlab: 'abscisse [m]', ylab: 'mm', h: 260 }), caption: 'Fléau 1 ; le fléau 2 est symétrique.' });
   para('Chaque coffrage est réglé sur le bout du voussoir précédent juste avant le bétonnage ; le joint suit ce bout rigidement jusqu\'au décoffrage, puis la structure. La contre-flèche compense tout le déplacement vertical postérieur au réglage : poids des voussoirs suivants, câbles, clavages, superstructures, fluage et retrait jusqu\'à la fin du calcul. Non compris : la déformation propre de l\'équipage mobile (à ajouter d\'après sa raideur, fournie par l\'entreprise), les tassements d\'appuis et le gradient thermique.');
-  B.push(...acheveBlocks(out));
-  B.push(...constructionFleauBlocks(out));
-  B.push(...transversalBlocks(out));
-  B.push(...voussoirPileBlocks(out));
+  B.push(...acheveBlocks(out, hint));
+  B.push(...constructionFleauBlocks(out, hint));
+  B.push(...transversalBlocks(out, hint));
+  B.push(...voussoirPileBlocks(out, hint));
+  if (hint && hint('nonverif', 'geo')) B.push({ t: 'p', text: 'Voussoir sur pile et flexion transversale non vérifiés : caisson saisi par ses valeurs.', hint: hint('nonverif', 'geo') });
   h2('Méthode et limites');
   para('Calcul par phases pas à pas (même moteur que pour les poutres rendues continues) : chaque voussoir est une barre avec son béton et sa date de coulage ; le béton frais est porté par l\'équipage au bout du fléau (force et moment) jusqu\'au décoffrage ; les câbles de fléau sont tendus des deux côtés après chaque paire de voussoirs, avec frottement et recul d\'ancrage (§ 5.10.5) ; les clavages réunissent les fléaux sans contrainte. Hauteur et inertie variables par barre (I ∝ h^{5/2}, BT n° 7 § 2.222).');
   para('Limites : ligne moyenne supposée droite (la variation du c.d.g. avec la hauteur n\'est prise en compte que dans les excentrements) ; le calcul par phases suppose des fléaux construits symétriquement, les déséquilibres de construction étant traités à part (moments de déséquilibre ajoutés sur pile) ; flexion longitudinale sous trafic sur le caisson entier, torsion et distorsion traitées dans le cadre transversal, la distortion étant répartie par l\'analogie de la poutre sur appui élastique (diaphragmes sur piles et intermédiaires) ; gradient thermique linéaire seul (approche 1).');
@@ -304,40 +326,44 @@ export function fleauBlocks(out) {
 }
 
 /** Fléaux en construction : moments de déséquilibre sur pile, clouage provisoire, contraintes au VSP. */
-export function constructionFleauBlocks(out) {
+export function constructionFleauBlocks(out, hint = null) {
   const D = out.desequilibre, B = [];
-  if (!D) { if (out.desequilibreErreur) B.push({ t: 'p', text: `Déséquilibre en construction : calcul impossible (${out.desequilibreErreur}).` }); return B; }
+  if (!D) { if (out.desequilibreErreur) B.push({ t: 'p', text: `Déséquilibre en construction : calcul impossible (${out.desequilibreErreur}).`, ...(hint && hint('erreur', 'desequilibreErreur') ? { hint: hint('erreur', 'desequilibreErreur') } : {}) }); return B; }
   const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
   h2('Fléaux en construction : déséquilibres et clouage provisoire');
   table(['Stade', 't [j]', 'Demi-fléau : poids [kN] / longueur [m]', 'DIFF / CLL / WUP / LAG / AI [kN·m]', 'M_d [kN·m] (cas)', 'N [kN]', 'Traction par file [kN]', 'Barres Ø36 par file', 'Cales [kN]', 'σ VSP min / max [MPa]'],
     D.etapes.map(e => [e.k === 0 ? 'VSP' : `voussoir ${e.k}`, F(e.t, 0), `${F(e.W, 0)} / ${F(e.Lh, 1)}`, Object.values(e.M).map(x => F(x, 0)).join(' / '), `${F(e.Md, 0)} (${e.cas})`, F(e.Nv, 0), F(e.T, 0), String(e.nb), F(e.Rc, 0), e.sig ? `${F(e.sig.sMin, 1)} / ${F(e.sig.sMax, 2)}` : '—']));
-  table(['Vérification', 'Valeur', 'Limite', 'Résultat', 'Référence'], D.verifs.map(q => [q.nom, F(q.val, 2), F(q.lim, 2), q.ok ? 'OK' : 'NON', q.ref]));
+  B.push({ t: 'table', head: ['Vérification', 'Valeur', 'Limite', 'Résultat', 'Référence'], rows: D.verifs.map(q => [q.nom, F(q.val, 2), F(q.lim, 2), q.ok ? 'OK' : 'NON', q.ref]),
+    ...(hint ? { hints: D.verifs.map((q, i) => (q.ok ? null : hint('deseq', i))), hintCol: 3 } : {}) });
   para(`Cas de charge par stade (AASHTO, Guide Specifications for Segmental Concrete Bridges § 7.4) : DIFF = 2 % du poids d'un demi-fléau ; CLL = 0,48 kN/m² sur un demi-fléau et 0,24 kN/m² sur l'autre ; WUP = vent ascendant 0,24 kN/m² sur un demi-fléau ; LAG = décalage d'un demi-voussoir au bétonnage ; AI = chute d'un équipage (perte de Q_eq, effet dynamique 2). ELU C1 = 1,35 DIFF + 1,5 (CLL + WUP), C2 = 1,35 (DIFF + LAG) + 1,5 CLL ; accidentel CA = DIFF + CLL + AI. Clouage : deux files de cales à ${F(D.dc, 2)} m d'entraxe, traction T = M_d/d_c − 0,9 N/2 reprise par des barres Ø36 (F_d = ${F(BARRE_36.Fd, 0)} kN) ; contraintes au VSP : état du calcul par phases + DIFF + CLL + WUP (caractéristique).`);
   return B;
 }
 
 /** Caisson : flexion transversale (cadre) et distortion. */
 /** Voussoir sur pile : torsion au diaphragme, appareils sous les âmes, zones d'ancrage. */
-export function voussoirPileBlocks(out) {
+export function voussoirPileBlocks(out, hint = null) {
   const V = out.vsp, B = [];
-  if (!V) { if (out.vspErreur) B.push({ t: 'p', text: `Voussoir sur pile : calcul impossible (${out.vspErreur}).` }); return B; }
+  if (!V) { if (out.vspErreur) B.push({ t: 'p', text: `Voussoir sur pile : calcul impossible (${out.vspErreur}).`, ...(hint && hint('erreur', 'vspErreur') ? { hint: hint('erreur', 'vspErreur') } : {}) }); return B; }
   const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
   const T = V.torsion, D = V.diaphragme, A = V.appareil, Bo = V.bossage, G = V.gousset, cm2 = x => F(x * 1e4, 1);
   h2('Voussoir sur pile : diaphragme, appareils d\'appui, zones d\'ancrage');
-  table(['Élément', 'Effort', 'Armatures', 'Vérification'], [
+  const lignesVsp = [
     ['Torsion au diaphragme', `T_TS = ${F(T.TTS, 0)} kN·m, t_UDL = ${F(T.tU, 1)} kN·m/m (${T.n} voies) ; T_Ed = 1,35 [T_TS + t (${F(T.Lg, 0)} + ${F(T.Ld, 0)})/2] = ${F(T.TEd, 0)} kN·m`, '—', `Ω = ${F(T.bAx, 2)} × ${F(T.hAx, 2)} = ${F(T.Omega, 2)} m², q = T/(2Ω) = ${F(T.q, 1)} kN/m`],
     [`Diaphragme (e_d = ${F(D.ed, 2)} m)`, `cisaillement τ = ${F(D.tau, 2)} MPa ≤ ν f_cd/2 = ${F(D.tauLim, 2)}`, `${cm2(D.AsFace)} cm²/m par face et par direction (calcul ${cm2(D.AsReq / 2)}, minimum ${cm2(D.AsMinFace)})`, D.tau <= D.tauLim ? 'OK' : 'NON'],
     ['Appareil sous âme (pile la plus chargée)', `R_ELU = ${F(A.RELU, 0)} kN, R_ELS = ${F(A.RELS, 0)} kN ; plaque ${F(A.a, 2)} × ${F(A.a, 2)} m (σ_ELS = ${F(A.sigApp, 0)} MPa)`, `frettage : tirant ${F(A.T, 0)} kN, ${cm2(A.As)} cm² dans chaque direction`, `F_Rdu = ${F(A.FRdu, 0)} kN — ${A.RELU <= A.FRdu ? 'OK' : 'NON'}`],
     ...(Bo ? [[`Bossages des câbles de continuité (${Bo.nombre})`, `1,2 P₀ = ${F(1.2 * Bo.P, 0)} kN, plaque ≈ ${F(Bo.a, 2)} m, bossage h = ${F(Bo.h, 2)} m`, `éclatement ${F(Bo.T, 0)} kN : ${cm2(Bo.As)} cm² ; tirants arrière 0,25 × 1,2 P₀ = ${F(Bo.tieBack, 0)} kN : ${cm2(Bo.AsTB)} cm²`, 'frettage local : agrément']] : []),
     [`Ancrages des câbles de fléau (${G.nombre})`, `1,2 P₀ = ${F(1.2 * G.P, 0)} kN, plaque ≈ ${F(G.a, 2)} m, gousset h = ${F(G.h, 2)} m`, `éclatement ${F(G.T, 0)} kN : ${cm2(G.As)} cm² par ancrage`, 'frettage local : agrément'],
-  ]);
+  ];
+  // indications sous les « NON » du diaphragme (ligne 2) et de l'appareil d'appui (ligne 3)
+  B.push({ t: 'table', head: ['Élément', 'Effort', 'Armatures', 'Vérification'], rows: lignesVsp,
+    ...(hint ? { hints: lignesVsp.map((l, i) => (i === 1 && !(D.tau <= D.tauLim) ? hint('vsp', 'diaphragme') : i === 2 && !(A.RELU <= A.FRdu) ? hint('vsp', 'appareil') : null)) } : {}) });
   para('Après déclouage, le caisson repose sur deux appareils par pile, un sous chaque âme ; le diaphragme sur pile bloque la torsion et la distortion. Couple : voies LM1 du côté le plus défavorable, chaque appui reprenant la moitié du couple réparti des travées voisines et le couple du tandem placé sur lui. Diaphragme : panneau en cisaillement sous le flux de Bredt q = T/(2Ω), armatures orthogonales A_s/s = q/f_yd (θ = 45°, EN 1992-1-1 § 6.2.4), minimum 0,1 % par face (§ 9.7). Appareil : plaque indicative pour 20 MPa à l\'ELS (appareil à pot), pression localisée (§ 6.7), diffusion T = ¼ (b − a)/b · R (§ 6.5.3, éq. 6.58). Ancrages : 1,2 P₀ (§ 2.4.2.2 (3)), éclatement T = ¼ (h − a)/h · P (éq. 6.58, § 8.10.3), tirants arrière des bossages 0,25 P (Rogowsky et Marti, VSL 1991). Le trou d\'homme du diaphragme, les déviateurs et la zone locale (frettage du procédé) sont à traiter avec l\'agrément du procédé et le projet d\'exécution.');
   return B;
 }
 
-export function transversalBlocks(out) {
+export function transversalBlocks(out, hint = null) {
   const T = out.transversal, B = [];
-  if (!T) { if (out.transversalErreur) B.push({ t: 'p', text: `Flexion transversale : calcul impossible (${out.transversalErreur}).` }); return B; }
+  if (!T) { if (out.transversalErreur) B.push({ t: 'p', text: `Flexion transversale : calcul impossible (${out.transversalErreur}).`, ...(hint && hint('erreur', 'transversalErreur') ? { hint: hint('erreur', 'transversalErreur') } : {}) }); return B; }
   const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
   h2('Caisson : flexion transversale et distortion (cadre par mètre, section de la clé)');
   table(['Section', 'M_pp [kN·m/m]', 'M_superstr.', 'M_Q max / min', 'M_ELU max / min', 'Épaisseur de calcul [m]', 'A_s face tendue par M > 0 [cm²/m]', 'A_s face tendue par M < 0 [cm²/m]'],
@@ -357,15 +383,15 @@ export function transversalBlocks(out) {
     if (Tb && Tb !== out.transversal) table(['Section', 'M_ELU max / min, cadre par mètre [kN·m/m]', 'A_s M > 0 / M < 0 [cm²/m]', 'M_ELU max / min, distortion répartie', 'A_s M > 0 / M < 0 retenus'],
       out.transversal.sections.map((c, i) => { const b = Tb.sections[i]; return [c.nom, `${F(b.ELUmax, 1)} / ${F(b.ELUmin, 1)}`, `${F(b.AsTendu.pos * 1e4, 1)} / ${F(b.AsTendu.neg * 1e4, 1)}`, `${F(c.ELUmax, 1)} / ${F(c.ELUmin, 1)}`, `${F(c.AsTendu.pos * 1e4, 1)} / ${F(c.AsTendu.neg * 1e4, 1)}`]; }));
     para(`Analogie de la poutre sur appui élastique (Wright, Abdel-Samad et Robinson, ASCE 1968 ; Hambly, Bridge Deck Behaviour, chap. 10) : E I_dw θ'''' + k_D θ = t_D, diaphragmes rigides (θ = 0). k_D vient du cadre ci-dessus sous le chargement de distortion pure (âmes ± T/2b, hourdis ∓ T/2h) ; I_dw du gauchissement des parois fléchies dans leur plan. Le cadre par mètre suppose la distortion reprise sur la seule largeur de répartition l_x = ${F(D.lx, 2)} m ; la rigidité de gauchissement la répartit sur une longueur de l'ordre de π/β, et les diaphragmes la bloquent : la part de distortion des moments de cadre est ramenée à ρ fois sa valeur. Les lignes d'influence du cadre sont corrigées en conséquence (roues : deux couples d'essieu au lieu de la ligne de roue Q/l_x ; UDL : couple réparti sur la travée) et les voies replacées au plus défavorable ; le ferraillage retenu (tableau de flexion transversale ci-dessus) est celui de la distortion répartie, le cadre par mètre étant donné pour comparaison.`);
-  } else if (out.distortionErreur) para(`Distortion : calcul impossible (${out.distortionErreur}).`);
+  } else if (out.distortionErreur) B.push({ t: 'p', text: `Distortion : calcul impossible (${out.distortionErreur}).`, ...(hint && hint('erreur', 'distortionErreur') ? { hint: hint('erreur', 'distortionErreur') } : {}) });
   para(`Cadre fermé suivant les feuillets moyens, chaque cas équilibré par les flux de cisaillement de flexion (V/2 par âme) et de torsion de Bredt (q = T/2Ω) ; la part de distortion est répartie le long du caisson par le gauchissement et les diaphragmes (§ suivant, poutre sur appui élastique). Charges : poids propre, bords ${F(T.gBord, 1)} kN/m, revêtement ${F(T.tRev * 100, 0)} cm ; LM1 sur ${F(T.Lr, 2)} m (${T.NL.n} voies), tandems répartis longitudinalement sur 1,20 + b₀ + 2d (b₀ = ${F(T.b0, 2)} m ; d : distance de la roue à la section) et, dans la travée du hourdis, selon les largeurs participantes du DAfStb Heft 240. Moments positifs : traction de la fibre inférieure des hourdis et de la face extérieure des âmes. Ferraillage : ELU, σ_s à l'ELS caractéristique, w_k ≤ 0,2 mm à l'ELS fréquent, minimums EC2. Diaphragmes à prévoir sur piles et culées (reprise de la torsion et de la distortion aux appuis).`);
   return B;
 }
 
 /** Ouvrage terminé (poutres rendues continues, fléaux) : trafic, thermique, vérifications, réactions. */
-export function acheveBlocks(out) {
+export function acheveBlocks(out, hint = null) {
   const v = out.acheve, B = [];
-  if (!v) { if (out.acheveErreur) B.push({ t: 'p', text: `Ouvrage terminé : calcul impossible (${out.acheveErreur}).` }); return B; }
+  if (!v) { if (out.acheveErreur) B.push({ t: 'p', text: `Ouvrage terminé : calcul impossible (${out.acheveErreur}).`, ...(hint && hint('erreur', 'acheveErreur') ? { hint: hint('erreur', 'acheveErreur') } : {}) }); return B; }
   const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
   const fl = v.type === 'fleau';
   h2('Ouvrage terminé : trafic et gradient thermique');
@@ -379,9 +405,10 @@ export function acheveBlocks(out) {
     v.sections.map((s, i) => ({ s, e: v.elu[i] })).filter((q, i) => i % pas === 0).map(({ s, e }) => [F(s.x, 1), F(s.MGch[1], 0), F(s.Mhyp[1], 0), `${F(s.eM.max, 0)} / ${F(s.eM.min, 0)}`, `${F(s.MT[0], 0)} / ${F(s.MT[1], 0)}`, `${F(e.MEdP, 0)} / ${F(e.MRdP, 0)}`, `${F(e.MEdN, 0)} / ${F(e.MRdN, 0)}`, `${F(e.AsInf * 1e4, 1)} / ${F(e.AsCont * 1e4, 1)}`, `${F(e.VEd0, 0)} (${F(e.VEd, 0)})`, F(e.V.AswS * 1e4, 1)]));
   para('ELU : M_Ed = 1,35 M_charges + M_hyperstatique de la précontrainte (γ_P = 1,0, EN 1992-1-1 § 2.4.2.2 ; obtenu par un second calcul par phases sans câbles) + 1,35 Q + 1,5 × 0,6 T. M_Rd : câbles seuls ; A_s : armatures passives de complément nécessaires (face inférieure en moment positif, face supérieure en moment négatif). Effort tranchant réduit de la composante verticale des câbles et, pour les caissons de hauteur variable, de l\'effet Résal de la membrure inférieure inclinée (§ 6.2.1 (1)) : V_ccd = |M| tan α / z, calculé avec le moment concomitant le plus faible (permanentes à γ = 1,0 et effets hyperstatiques de la précontrainte, sans trafic), car l\'effort tranchant maximal et le moment maximal ne sont pas simultanés.');
   h2('Vérifications de l\'ouvrage terminé');
-  table(['Vérification', 'Valeur', 'Limite', 'x [m]', 'Résultat', 'Référence'], v.verifs.map(q => [q.nom, F(q.val, 2), F(q.lim, 2), F(q.x, 1), q.ok ? 'OK' : 'NON', q.ref]));
+  B.push({ t: 'table', head: ['Vérification', 'Valeur', 'Limite', 'x [m]', 'Résultat', 'Référence'], rows: v.verifs.map(q => [q.nom, F(q.val, 2), F(q.lim, 2), F(q.x, 1), q.ok ? 'OK' : 'NON', q.ref]),
+    ...(hint ? { hints: v.verifs.map((q, i) => (q.ok ? null : hint('acheve', i))), hintCol: 4 } : {}) });
   if (v.hourdis) { h2('Hourdis : flexion locale transversale'); B.push(...localBlocks({ hourdis: v.hourdis, inp: { hd: out.p.forme.hd, local: { c: 0.03 } } })); }
-  else if (v.hourdisErreur) para(`Hourdis : calcul impossible (${v.hourdisErreur}).`);
+  else if (v.hourdisErreur) B.push({ t: 'p', text: `Hourdis : calcul impossible (${v.hourdisErreur}).`, ...(hint && hint('erreur', 'hourdisErreur') ? { hint: hint('erreur', 'hourdisErreur') } : {}) });
   if (v.seismeV) {
     const S = v.seismeV, si = S.site || {};
     h2('Séisme vertical sur le tablier précontraint (EN 1998-2 § 4.1.7(2)P)');
@@ -404,7 +431,7 @@ export function acheveBlocks(out) {
 
 /* ---------------------------------------------------------------------------------------- pont mixte */
 /** Structure achevée du pont mixte : trafic, combinaisons, résistances, stabilité, connexion, fatigue, appuis. */
-export function mixteVerifsBlocks(out) {
+export function mixteVerifsBlocks(out, hint = null) {
   const { p, v } = out, B = [];
   const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
   h2('Structure achevée : actions variables');
@@ -422,7 +449,8 @@ export function mixteVerifsBlocks(out) {
     lignes.map(q => [F(q.x, 1), F(q.MGF, 0), `${F(q.MQmax, 0)} / ${F(q.MQmin, 0)}`, F(Math.abs(q.MT[0]), 0), F(q.MEd, 0), String(q.classe) + (q.eff && q.eff.classe4 ? ` (ρ ${F(q.eff.rho, 2)})` : ''), F(q.signe * q.Mpl, 0), F(q.sEluMax, 0), F(q.sElsMax, 0), F(q.VEd, 0), F(q.Vr.Vb, 0)]));
   para('ELU : 1,35 G + 1,35 (LM1 + trottoirs) + 1,5 × 0,6 T ; ELS caractéristique : G + Q + 0,6 T (EN 1990 A2). Permanentes : calcul par phases à la mise en service et à t∞ (l\'enveloppe des deux est retenue), effets hyperstatiques du retrait compris. Classes 1 et 2 : M_Ed ≤ M_pl,Rd ; classes 3 et 4 : contraintes cumulées par phase, âme efficace en classe 4 (EN 1993-1-5 § 4.4).');
   h2('Vérifications');
-  table(['Vérification', 'Valeur', 'Limite', 'x [m]', 'Résultat', 'Référence'], v.verifs.map(q => [q.nom, F(q.val, 2), F(q.lim, 2), F(q.x, 1), q.ok ? 'OK' : 'NON', q.ref]));
+  B.push({ t: 'table', head: ['Vérification', 'Valeur', 'Limite', 'x [m]', 'Résultat', 'Référence'], rows: v.verifs.map(q => [q.nom, F(q.val, 2), F(q.lim, 2), F(q.x, 1), q.ok ? 'OK' : 'NON', q.ref]),
+    ...(hint ? { hints: v.verifs.map((q, i) => (q.ok ? null : hint('mixte', i))), hintCol: 4 } : {}) });
   const dv = v.sections.filter(q => q.deversement).reduce((a, b) => (!a || b.deversement.sigma / b.deversement.lim > a.deversement.sigma / a.deversement.lim ? b : a), null);
   if (dv) para(`Déversement : berceaux de raideur C_d = ${F(dv.deversement.Cd, 0)} kN/m tous les ${F(v.ac, 1)} m (montants I_v = ${F(v.Iv * 1e8, 0)} cm⁴, entretoises I_q = ${F(v.Iq * 1e8, 0)} cm⁴, EN 1993-2 annexe D.2.4), N_crit = ${F(dv.deversement.Ncr, 0)} kN, λ̄ = ${F(dv.deversement.lam, 2)}, χ = ${F(dv.deversement.chi, 2)} ; compression supposée uniforme (du côté de la sécurité).`);
   if (v.betonnage) {
@@ -447,7 +475,7 @@ export function mixteVerifsBlocks(out) {
     para(`Section la plus endommagée : x = ${F(w.x, 1)} m, D_Ed = ${w.D.toExponential(2).replace('.', ',')} (≤ 1). FLM4 (EN 1991-2 § 4.6.5) : composition « ${fa.trafic === 'longue' ? 'longue distance' : fa.trafic === 'moyenne' ? 'moyenne distance' : 'locale'} », ${F(fa.Nobs, 0)} poids lourds par an sur la voie lente pendant ${fa.ans} ans, charges × ${F(fa.f, 3)} (part de la poutre). Étendue par passage (M_max − M_min) z / I₂ sur la section fissurée (EN 1994-2 § 6.8.5.4) ; courbe S-N des barres droites N* = 10⁶, Δσ_Rsk = 162,5 MPa, k₁ = 5, k₂ = 9, γ_S,fat = 1,15 (EN 1992-1-1 tableau 6.3N) ; règle de Miner (§ 6.8.4, éq. 6.70).`);
   }
   if (v.dalle) { h2('Dalle : flexion locale transversale'); B.push(...localBlocks({ hourdis: v.dalle, inp: { hd: p.hc, local: { c: 0.04 } } })); }
-  else if (v.dalleErreur) para(`Dalle : calcul impossible (${v.dalleErreur}).`);
+  else if (v.dalleErreur) B.push({ t: 'p', text: `Dalle : calcul impossible (${v.dalleErreur}).`, ...(hint && hint('erreur', 'dalleErreur') ? { hint: hint('erreur', 'dalleErreur') } : {}) });
   h2('Connexion (goujons)');
   const g = v.goujons, cx = v.connexion.filter((q, i) => i % pas === 0);
   table(['x [m]', 'v_L,Ed ELU [kN/m]', 'v_L ELS car.', 's ELU [m]', 's ELS [m]', 's fatigue [m]', 'Espacement retenu [m]'], cx.map(q => [F(q.x, 1), F(q.vElu, 0), F(q.vEls, 0), F(Math.min(q.sELU, 9.99), 2), F(Math.min(q.sELS, 9.99), 2), F(Math.min(q.sFat, 9.99), 2), F(q.s, 2)]));
@@ -481,7 +509,7 @@ export function optionsMixte(d, p) {
     alpha: EC_ALPHA[d.alpha || 'recommended'] || EC_ALPHA.recommended, dT: v('mx_dT', 10), ac: v('mx_ac', 6), a: v('mx_a', 6), Iv: v('mx_Iv', 40000) * 1e-8, Iq: v('mx_Iq', 180000) * 1e-8,
     goujons: { d: v('mx_gd', 22) / 1000, h: v('mx_gh', 200) / 1000, n: Math.max(1, Math.round(v('mx_gn', 3))), fu: 450 }, Nobs: v('mx_Nobs', 5e5), qc: v('mx_qc', 1.0), R: v('mx_R', 0), gBord: v('mx_gbord', 8), tRev: v('mx_trev', 0.08), cDalle: v('mx_cdal', 0.04) };
 }
-export function computeMixte(d) {
+export function computeMixte(d, opts = {}) {
   const p = lireBipoutre(d), { modele, reperes } = bipoutre(p), out = { type: 'mixte', p, modele, reperes, r: calculPhasage(modele) };
   try {
     const o = optionsMixte(d, p);
@@ -494,7 +522,7 @@ export function computeMixte(d) {
     // fatigue des armatures de la dalle sur appui (FLM4, Miner)
     const fa = fatigueArmatures(out, out.v, { Nobs: o.Nobs, trafic: d.mx_trafic || 'longue' }); out.v.fatigueArm = fa; out.v.verifs.push(...fa.verifs); out.v.ok = out.v.ok && fa.ok;
     // dalle : flexion locale transversale (plaque sur les poutres, roues EC et F61), ferraillage, poinçonnement
-    try {
+    if (opts.hourdis !== false) try {
       const B = p.largeur, gb = o.gBord, tR = o.tRev, ch = o.chaussee;
       const H = hourdisLocal({ n: p.nPoutres, b1: p.entraxe, W: B, hd: p.hc, bt: p.travee.bfs, eTab: p.hg, L: Math.max(...p.L), roadway: ch, footways: o.trottoirs,
         lines: [{ g: gb, e: -B / 2 + 0.25 }, { g: gb, e: B / 2 - 0.25 }], bands: [{ q: 24 * tR, y1: ch.y1, y2: ch.y2 }], tRev: tR, fck: p.fck, fyk: 500, c: o.cDalle, alphaEC: d.alpha || 'recommended' });
@@ -506,8 +534,8 @@ export function computeMixte(d) {
   return out;
 }
 
-export function mixteBlocks(out) {
-  const { p, modele, reperes: R, r } = out, B = [];
+export function mixteBlocks(out, { reco = null } = {}) {
+  const { p, modele, reperes: R, r } = out, { hint, intro } = indications(reco), B = [...intro];
   const h2 = text => B.push({ t: 'h2', text }), para = text => B.push({ t: 'p', text }), table = (head, rows) => B.push({ t: 'table', head, rows });
   // coefficients d'équivalence (EN 1994-2 § 5.4.2.2 (2)) : retrait avec t₀ = 1 j ; permanentes avec l'âge du béton au
   // chargement, pris à la pose des superstructures (âge moyen des plots), principale charge permanente de la section mixte
@@ -550,8 +578,8 @@ export function mixteBlocks(out) {
   // diagramme des moments de la section mixte
   const diag = k => { const pts = []; R.iAcier.forEach((ia, q) => { const id = R.iDalle[q], bb = modele.barres[ia], x0 = modele.noeuds[bb.i][0], Lb = modele.noeuds[bb.j][0] - x0; for (const xi of [0, 0.5, 1]) pts.push([x0 + xi * Lb, resultante(r.pas[k], [ia, id], xi * Lb).M / 1000]); }); return pts; };
   B.push({ t: 'svg', svg: courbesSVG([{ nom: 'avant superstructures', pts: diag(r.finPhase[iS - 1]) }, { nom: 'après superstructures', pts: diag(debut(iS)), coul: '#2a8f6a' }, { nom: `t = ${F(p.dates.fin)} j`, pts: diag(r.pas.length - 1), coul: '#c8552b' }], { titre: 'Moment de la section mixte (acier + dalle) [MN·m]', xlab: 'abscisse [m]', ylab: 'M [MN·m]', marques: R.x0.map(x => ({ x, nom: '' })) }), caption: 'Moments rapportés au c.d.g. de l’acier de travée ; redistribution par fluage et retrait entre la fin des travaux et la fin du calcul.' });
-  if (out.v) B.push(...mixteVerifsBlocks(out));
-  else if (out.vErreur) para(`Vérifications de la structure achevée impossibles : ${out.vErreur}.`);
+  if (out.v) B.push(...mixteVerifsBlocks(out, hint));
+  else if (out.vErreur) B.push({ t: 'p', text: `Vérifications de la structure achevée impossibles : ${out.vErreur}.`, ...(hint && hint('erreur', 'vErreur') ? { hint: hint('erreur', 'vErreur') } : {}) });
   h2('Méthode et limites');
   para('Calcul par phases pas à pas : acier élastique, béton de chaque plot avec son âge (fluage et retrait EN 1992-1-1), sections mixtes par barres décalées (acier, dalle, armatures), plots activés le lendemain de leur bétonnage. Le retrait est recoupé, sur une travée isostatique, avec la méthode des coefficients d’équivalence n_L de l’EN 1994-2 (ψ_L = 0,55) : sur l’exemple par défaut, le pas à pas donne un effort de la dalle supérieur d’environ 5 % à celui de la méthode n_L (test de non-régression test/mixte.test.js, tolérance 8 %).');
   para('Limites : poutre de rive et sa part de dalle (charges permanentes non réparties entre poutres) ; répartition transversale du trafic par la règle du levier (bipoutre) ou Courbon ; tablier courbe : contraintes du modèle droit amplifiées par les rapports courbe / droit du grillage, flexion latérale des semelles par la formule de la méthode « V-load » ; zones fissurées forfaitaires (15 %) ; fatigue de l\'acier de charpente par la méthode des coefficients λ simplifiée (λ₃ = λ₄ = 1), des armatures de la dalle par FLM4 et la règle de Miner ; voilement des panneaux comprimés sans raidisseurs longitudinaux.');
