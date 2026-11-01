@@ -13,7 +13,9 @@ const walk = d => { for (const f of fs.readdirSync(path.join(root, d), { withFil
 walk('web'); walk('src');
 const map = { imports: Object.fromEntries(files.sort().map(f => [`./${f}`, `./${f}?v=${v}`])) };
 let html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-const block = `<!-- importmap:début (tools/version.mjs) --><script type="importmap">${JSON.stringify(map)}</script><!-- importmap:fin -->`;
+// data-cfasync="false" : Rocket Loader (Cloudflare) ne doit pas différer la carte d'import, sinon elle est ignorée et les
+// modules se chargent sans « ?v= », depuis un cache navigateur long (export manquant d'une ancienne version).
+const block = `<!-- importmap:début (tools/version.mjs) --><script data-cfasync="false" type="importmap">${JSON.stringify(map)}</script><!-- importmap:fin -->`;
 html = /<!-- importmap:début[\s\S]*?importmap:fin -->/.test(html) ? html.replace(/<!-- importmap:début[\s\S]*?importmap:fin -->/, block) : html.replace(/(<script src="\.\/web\/tabs\.js)/, `${block}\n$1`);
 html = html.replace(/\?v=[\d.]+/g, m => m).replace(/(tabs\.js|app\.js)\?v=[\d.]+/g, `$1?v=${v}`);
 html = html.replace(/import\('\.\/web\/app\.js\?v=[\d.]+'\)/, "import('./web/app.js')");
