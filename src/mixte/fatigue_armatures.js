@@ -18,7 +18,7 @@
  */
 import { proprietes, couches } from './section.js';
 import { sectionZone } from './verifs.js';
-import { valeur } from './trafic.js';
+import { valeur } from './poutre_continue.js';
 
 /** Camions équivalents FLM4 : entraxes (m, depuis le premier essieu) et charges d'essieux (kN) ; parts du trafic. */
 export const FLM4 = [

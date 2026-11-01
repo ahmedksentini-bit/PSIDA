@@ -1,7 +1,7 @@
 // Pont mixte, structure achevée : lignes d'influence, répartition, thermique, âme efficace, voilement, goujons — recoupements
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PoutreContinue, enveloppe, repartition, chargesPoutre } from '../src/mixte/trafic.js';
+import { PoutreContinue, enveloppe, repartition, chargesPoutre } from '../src/mixte/poutre_continue.js';
 import { sectionEfficace, cisaillement, verifierMixte } from '../src/mixte/verifs.js';
 import { computeMixte } from '../web/phasage_view.js';
 

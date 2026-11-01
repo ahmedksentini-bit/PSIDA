@@ -4,7 +4,7 @@
  * différés viennent du calcul par phases (src/phasage) ; on y ajoute, sur la structure continue :
  *
  *  - trafic LM1 et trottoirs (EN 1991-2 § 4.3) par lignes d'influence d'une poutre continue d'inertie variable
- *    (src/mixte/trafic.js) ; part d'une poutre préfabriquée : coefficients de répartition de Guyon-Massonnet d'une travée
+ *    (src/mixte/poutre_continue.js) ; part d'une poutre préfabriquée : coefficients de répartition de Guyon-Massonnet d'une travée
  *    de même portée (src/beams), le tablier en caisson portant toutes les voies ;
  *  - gradient thermique linéaire ΔT_M (EN 1991-1-5 § 6.1.4.1, approche 1, tableau 6.1 : poutres en béton 15 / 8 K, caissons
  *    10 / 5 K), effets hyperstatiques de la courbure α ΔT_M / h ;
@@ -25,7 +25,7 @@
  *    et ELU de flexion.
  * Unités : m, kN, kN·m, MPa (traction positive).
  */
-import { PoutreContinue, enveloppe } from '../mixte/trafic.js';
+import { PoutreContinue, enveloppe } from '../mixte/poutre_continue.js';
 import { resultante, calculPhasage } from './phasage.js';
 import { betonEC2 } from './fluage.js';
 import { lm1, notionalLanes, EC_ALPHA } from '../loads_ec.js';
