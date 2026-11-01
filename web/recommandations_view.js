@@ -78,7 +78,7 @@ export function ouvrir(st, { form, onApply, goField, solve }) {
         const champ = a.champ ? ` <span class="small">[« ${esc(a.libelleChamp || libelle(form, a.champ))} » : ${esc(val(a.champ))}]</span>`
           : a.champs ? ` <span class="small">[${Object.keys(a.champs).map(n => `« ${esc(libelle(form, n))} » : ${esc(val(n))}`).join(' ; ')}]</span>` : '';
         h += `<li id="${id}">${esc(a.texte)}${champ}`;
-        if (a.valeur != null && !a.champs) h += ` → <strong>${esc(a.valeur)}</strong>${a.unite ? ' ' + esc(a.unite) : ''}`;
+        if (a.valeur != null && (!a.champs || a.champ)) h += ` → <strong>${esc(a.valeur)}</strong>${a.unite ? ' ' + esc(a.unite) : ''}`;
         if (a.chercher) h += ` <button type="button" class="mini" data-solve="${id}">Calculer</button>`;
         if ((a.champ || a.champs) && a.valeur != null) h += ` <button type="button" class="mini" data-apply="${id}">Appliquer</button>`;
         if (a.champ || a.champs) h += ` <button type="button" class="mini secondary" data-go="${id}">Voir</button>`;
@@ -106,9 +106,10 @@ export function ouvrir(st, { form, onApply, goField, solve }) {
         const r = await solve(a);
         if (r == null) out.textContent = ' aucune valeur ne suffit dans la plage explorée : changer de solution (voir les autres actions).';
         else {
-          a.valeur = r.affiche; a.valeurChamp = r.champ; out.innerHTML = ` → <strong>${esc(r.affiche)}</strong>${a.unite ? ' ' + esc(a.unite) : ''} suffit${r.detail ? ` (${esc(r.detail)})` : ''} `;
-          // r.champs : plusieurs champs écrits ensemble (phasage : précontrainte P et section A_p)
-          if (a.champ) { const b = document.createElement('button'); b.type = 'button'; b.className = 'mini'; b.textContent = 'Appliquer'; b.onclick = () => { if (r.champs) for (const [k, v] of Object.entries(r.champs)) onApply(k, v); else onApply(a.champ, a.valeurChamp); b.textContent = 'Appliqué ✓'; b.disabled = true; }; out.appendChild(b); }
+          // résultat mémorisé sur l'action (r.champs : plusieurs champs écrits ensemble, phasage P et A_p, valeurs de base) :
+          // à la réouverture du panneau, « Appliquer » est reconstruit depuis l'action
+          a.valeur = r.affiche; a.valeurChamp = r.champ; if (r.champs) a.champs = r.champs; out.innerHTML = ` → <strong>${esc(r.affiche)}</strong>${a.unite ? ' ' + esc(a.unite) : ''} suffit${r.detail ? ` (${esc(r.detail)})` : ''} `;
+          if (a.champ) { const b = document.createElement('button'); b.type = 'button'; b.className = 'mini'; b.textContent = 'Appliquer'; b.onclick = () => { if (a.champs) for (const [k, v] of Object.entries(a.champs)) onApply(k, v); else onApply(a.champ, a.valeurChamp); b.textContent = 'Appliqué ✓'; b.disabled = true; }; out.appendChild(b); }
         }
       } catch (e) { out.textContent = ' ' + e.message; }
       t.disabled = false;

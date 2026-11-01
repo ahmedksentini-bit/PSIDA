@@ -277,15 +277,15 @@ function renderStatic(st) {
 // Le bouton d'en-tête suit le calcul courant : celui de l'onglet affiché s'il existe (Cadres et portiques ↔ cadre ;
 // autres onglets ↔ tablier et appuis), sinon le dernier lancé.
 let recoSource = 'tablier', recoCadre = null, cadre = null, recoTimer = null;   // cadre : dernier calcul de l'onglet Cadres
-let recoPhasage = null;   // phasage : { out, data, rec } du dernier calcul de l'onglet Phasage (recherches dans un Worker)
+let recoPhasage = null, recoPhasageAttente = false;   // phasage : { out, data, rec } du dernier calcul (recherches dans un Worker), recherche en cours
 function majReco(st) { if (recoSource === 'tablier') majRecoTablier(st); }
 function majRecoCourant() {
   const ong = T.current();
   if (ong === 'cadres' && cadre && recoCadre) recoSource = 'cadre';
-  else if (ong === 'phasage' && recoPhasage) recoSource = 'phasage';
+  else if (ong === 'phasage' && (recoPhasage || recoPhasageAttente)) recoSource = 'phasage';   // en attente : bouton masqué, pas celui du tablier
   else if (ong !== 'cadres' && state) recoSource = 'tablier';
   if (recoSource === 'cadre' && cadre && recoCadre) majBoutonCadre(cadre, recoCadre.data, recoCadre.rec);
-  else if (recoSource === 'phasage' && recoPhasage) majBoutonPhasage(recoPhasage.out, recoPhasage.rec);
+  else if (recoSource === 'phasage' && (recoPhasage || recoPhasageAttente)) majBoutonPhasage(recoPhasage && recoPhasage.out, recoPhasage && recoPhasage.rec);
   else if (state) majRecoTablier(state);
 }
 window.addEventListener('psida-tab', () => { try { majRecoCourant(); } catch (e) { console.error(e); } });
@@ -849,7 +849,7 @@ $('#btn-cadre-docx').addEventListener('click', async () => {
 // calcul par phases (poutres précontraintes rendues continues)
 let phasage = null;
 const runPhasage = () => {
-  recoPhasage = null;
+  recoPhasage = null; recoPhasageAttente = false;
   try {
     const data = Object.fromEntries(new FormData($('#f')).entries());
     phasage = computePhasage(data);
@@ -863,17 +863,19 @@ $('#btn-phasage').addEventListener('click', runPhasage);
 // recommandations du phasage : recherches par recalcul complet (quelques secondes chacune) dans un Web Worker ; les
 // « NON » reçoivent ensuite l'indication « → à modifier » et le bouton d'en-tête son compteur
 function recoPhasageLancer(p0, data) {
-  if (T.current() === 'phasage') majBoutonPhasage(null);   // compteur périmé jusqu'au résultat de la recherche
+  recoPhasageAttente = true;
+  if (T.current() === 'phasage') { recoSource = 'phasage'; majBoutonPhasage(null); }   // compteur masqué jusqu'au résultat de la recherche
   const enDefaut = p0.type === 'mixte' ? !p0.v || !p0.v.ok : !p0.acheve || !p0.acheve.ok || /NON/.test($('#phasage-tables').textContent);
   if (enDefaut) $('#phasage-tables').insertAdjacentHTML('afterbegin', '<p class="small" id="phasage-reco-attente">Recherche des valeurs qui font passer les vérifications (recalcul complet pour chaque essai, en arrière-plan)…</p>');
   recommanderPhasage(data, { progres: n => { const w = $('#phasage-reco-attente'); if (w) w.textContent = `Recherche des valeurs qui font passer les vérifications : ${n} calcul(s) complet(s)…`; } })
     .then(rec => {
       if (phasage !== p0) return;
+      recoPhasageAttente = false;
       recoPhasage = { out: p0, data, rec }; if (T.current() === 'phasage') recoSource = 'phasage';
       $('#phasage-tables').innerHTML = blocksToHTML(phasageBlocks(p0, { reco: rec }));
       majRecoCourant();
     })
-    .catch(e => { if (e.message === 'abandonné') return; const w = $('#phasage-reco-attente'); if (w) w.textContent = 'Recommandations indisponibles : ' + e.message; });
+    .catch(e => { if (e.message === 'abandonné') return; if (phasage === p0) recoPhasageAttente = false; const w = $('#phasage-reco-attente'); if (w) w.textContent = 'Recommandations indisponibles : ' + e.message; });
 }
 /** Bouton « Calculer » du panneau (recherche laissée faute de temps) : même recherche, dans le Worker. */
 async function solvePhasage(c) {

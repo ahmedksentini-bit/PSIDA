@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { computePhasage, phasageBlocks } from '../web/phasage_view.js';
-import { recommandationsPhasage, verifsPhasage, indicationsParCible, cleCible, chercherPhasage } from '../src/reco/phasage.js';
+import { recommandationsPhasage, verifsPhasage, indicationsParCible, cleCible, chercherPhasage, erreursCalcul } from '../src/reco/phasage.js';
 
 // valeurs par défaut du formulaire (index.html), comme un lien partagé ou un projet enregistré
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8'), DEF = {};
@@ -128,4 +128,51 @@ test('Budget épuisé : la recherche est laissée au bouton « Calculer » (mêm
   assert.ok(a && a.chercher.calcul === 'phasage' && a.valeurChamp == null);
   assert.deepEqual(JSON.parse(JSON.stringify(a.chercher)), a.chercher, 'clonable (Web Worker)');
   assert.equal(chercherPhasage(d, a.chercher).champ, '2');
+});
+
+// ---------------------------------------------------------------------------------------- revue de la PR n° 12
+
+/** Calcul dont l'ouvrage terminé échoue (exception attrapée → acheveErreur, lignes absentes) pour 2 câbles de fléau. */
+const echecSimule = (d, o) => {
+  const r = computePhasage(d, o);
+  if (r.acheve && +d.fl_cn === 2) { delete r.acheve; delete r.vsp; r.acheveErreur = 'échec simulé'; }
+  return r;
+};
+
+test('Revue 1 : un essai dont un calcul requis a échoué n\'est jamais une correction suffisante (recherche et « Calculer »)', () => {
+  const { d, out } = calcule({ ph_type: 'fleau', fl_cn: '1' });
+  assert.deepEqual(erreursCalcul(echecSimule({ ...d, fl_cn: '2' })), ['acheveErreur']);
+  // phases seules (acheve omis volontairement) : pas d'erreur
+  assert.deepEqual(erreursCalcul(computePhasage({ ...d, fl_cn: '2' }, { acheve: false, annexes: false })), []);
+  // sans le contrôle, 2 câbles (phases satisfaites, ouvrage terminé absent) passaient pour une correction suffisante
+  const R = recommandationsPhasage(out, d, { budget, variantes: false, calcul: echecSimule });
+  assert.equal(R.trace[0], 'cables-fleau → fl_cn = 3');
+  assert.notEqual(R.modifs.fl_cn, '2');
+  assert.equal(chercherPhasage(d, { levier: 'cn', famille: 'cables-fleau', base: {} }, { calcul: echecSimule }).champ, '3');
+});
+
+test('Revue 2 : l\'échéance est testée avant chaque essai ; au-delà, recherche laissée à « Calculer »', () => {
+  const d = donnees({ ph_type: 'fleau', fl_cn: '1', fl_crn: '0' }), out = computePhasage(d), appels = [], t0 = Date.now(), b = 1000;
+  const R = recommandationsPhasage(out, d, { budget: b, calcul: (dd, o) => { appels.push(Date.now() - t0); return computePhasage(dd, o); } });
+  assert.ok(R.epuise);
+  // seuls les calculs obligatoires (état d'ensemble, calcul final) peuvent commencer après l'échéance
+  assert.ok(appels.filter(t => t > b).length <= 2, `appels : ${appels.join(', ')}`);
+  assert.ok(R.items.some(i => i.actions.some(a => a.chercher)), 'recherche laissée au bouton « Calculer »');
+});
+
+test('Revue 3 : la synthèse n\'est déclarée réussie que sans aucun échec restant (famille bloquée comprise)', () => {
+  const bloque = (d, o) => { const r = computePhasage(d, o); if (r.acheve) r.acheve.verifs.push({ nom: 'Critère simulé sans levier', val: 1, lim: 0, ok: false, ref: 'test', x: 80 }); return r; };
+  const d = donnees({ ph_type: 'fleau', fl_cn: '1', fl_crn: '0' }), out = bloque(d), R = recommandationsPhasage(out, d, { budget, variantes: false, calcul: bloque });
+  assert.ok(R.bloques.includes('autre'));
+  assert.ok(R.synthese, 'deux paramètres cherchés ensemble');
+  assert.equal(R.synthese.ok, false);
+  const intro = phasageBlocks(out, { reco: R })[0];
+  assert.match(intro.hint.texte, /restent à « NON »/);
+});
+
+test('Revue 4 : « Calculer » renvoie les valeurs de base avec celle du levier', () => {
+  const { d } = calcule({ ph_type: 'fleau', fl_cn: '1' });
+  const r = chercherPhasage(d, { levier: 'cn', famille: 'cables-fleau', base: { fl_ccn: '12' } });
+  assert.equal(r.champs.fl_ccn, '12'); assert.equal(r.champs.fl_cn, r.champ);
+  assert.ok(!non(computePhasage({ ...d, ...r.champs })).some(v => /\b(sup)\)|fibre sup/.test(v.nom)));
 });

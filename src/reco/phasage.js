@@ -137,7 +137,20 @@ export function famille(v, out) {
 /** Familles du pont mixte vérifiées section par section (toutes les sections de la zone, pas seulement la plus sollicitée). */
 const SECTIONNELLE = /^(acier|ame|fatigue)-[at]$/;
 
-/** État d'un calcul : vérifications classées et familles en défaut. */
+/**
+ * Sous-calculs qui ont échoué (exception attrapée par computePhasage / computeMixte) : leurs lignes de vérification
+ * manquent, l'essai ne prouve donc rien. Ces champs ne sont posés que pour un sous-calcul tenté : ceux que les options
+ * d'évaluation omettent volontairement (acheve, hourdis, annexes) n'en produisent pas.
+ */
+export function erreursCalcul(out) {
+  if (!out) return ['calcul'];
+  const E = ['acheveErreur', 'vErreur', 'desequilibreErreur', 'vspErreur', 'transversalErreur', 'distortionErreur'].filter(k => out[k]);
+  if (out.acheve?.hourdisErreur) E.push('hourdisErreur');
+  if (out.v?.dalleErreur) E.push('dalleErreur');
+  return E;
+}
+
+/** État d'un calcul : vérifications classées, familles en défaut, sous-calculs en échec. */
 const ETATS = new WeakMap();
 function etat(out) {
   if (!out) return null;
@@ -150,7 +163,7 @@ function etat(out) {
     if (!(s.VEd <= s.Vr.Vb && (!s.interaction || s.interaction.val <= 1))) ko.add(`ame-${z}`);
     if (!s.fatigue.ok) ko.add(`fatigue-${z}`);
   }
-  const e = { V, ko };
+  const e = { V, ko, erreurs: erreursCalcul(out) };
   ETATS.set(out, e);
   return e;
 }
@@ -303,6 +316,9 @@ function conseils(f, out, d) {
 
 /* ------------------------------------------------------------------------------------------------- recommandations */
 
+/** Échéance du budget atteinte avant un essai (sentinelle interne). */
+const EPUISE = Object.freeze({ epuise: true });
+
 /**
  * Recommandations d'un calcul de l'onglet Phasage. out : résultat de computePhasage ; data : données du formulaire qui
  * l'ont produit ; opts.budget : temps accordé aux recherches [ms] (au-delà, recherche laissée au bouton « Calculer ») ;
@@ -315,20 +331,26 @@ export function recommandationsPhasage(out, data, { budget = 60000, variantes = 
   let nCalc = 0;
   const cache = new Map();
   const dansBudget = () => Date.now() - t0 < budget;
-  /** Calcul avec des données modifiées ; niv = { acheve, hourdis } (ce qui est recalculé). */
-  const essai = (modifs, niv = {}) => {
+  /**
+   * Calcul avec des données modifiées ; niv = { acheve, hourdis } (ce qui est recalculé). L'échéance est testée avant
+   * CHAQUE essai : au-delà, exception EPUISE (la recherche en cours est laissée au bouton « Calculer », ses candidats non
+   * essayés ne comptent pas comme des échecs) ; force : calcul final obligatoire, fait même après l'échéance.
+   */
+  const essai = (modifs, niv = {}, { force = false } = {}) => {
     // flexion locale du hourdis : seulement pour le poinçonnement (seule vérification qui en dépend) et le calcul final
     const opts = { annexes: false, acheve: niv.acheve !== false, hourdis: niv.hourdis === true };
     const cle = JSON.stringify([modifs, opts]);
     if (cache.has(cle)) return cache.get(cle);
+    if (!force && !dansBudget()) throw EPUISE;
     nCalc++; if (progres) try { progres(nCalc); } catch { /* affichage */ }
     let o = null; try { o = calcul({ ...d, ...modifs }, opts); } catch { o = null; }
     cache.set(cle, o);
     return o;
   };
-  const famOk = (o, f) => { const e = etat(o); return !!e && !e.ko.has(f); };
-
-  const E0 = etat(out), V0 = E0.V, C = catalogue(out, d);
+  const E0 = etat(out), V0 = E0.V, C = catalogue(out, d), err0 = new Set(E0.erreurs);
+  // un essai dont un sous-calcul requis a échoué (et qui réussissait au départ) n'est jamais une correction suffisante
+  const valide = o => { const e = etat(o); return !!e && e.erreurs.every(k => err0.has(k)); };
+  const famOk = (o, f) => valide(o) && !etat(o).ko.has(f);
   const valeur = (id, modifs) => { const L = C[id]; return num(modifs[L.champ], L.lire(out, d)); };
 
   // ------------------------------------------------------------------ vérifications non faites
@@ -359,23 +381,26 @@ export function recommandationsPhasage(out, data, { budget = 60000, variantes = 
       if (famOk(cur, f) || bloques.has(f)) continue;
       if (!dansBudget()) { epuise = true; break; }
       let trouve = null;
-      for (const id of leviersFamille(f, cur).filter(k => C[k])) {
-        const L = C[id], x0 = valeur(id, modifs), vals = L.grille(x0), niv = besoins(f);
-        if (!(id in depart)) depart[id] = L.lire(out, d);
-        const v = recherche(vals, x => famOk(essai({ ...modifs, ...L.appliquer(x, d) }, niv), f));
-        if (v != null) { trouve = { id, v }; break; }
-        if (!dansBudget()) { epuise = true; break; }
-      }
-      if (!trouve) { if (!epuise) { bloques.add(f); bloqueA[f] = JSON.stringify(modifs); } continue; }
+      try {
+        for (const id of leviersFamille(f, cur).filter(k => C[k])) {
+          const L = C[id], x0 = valeur(id, modifs), vals = L.grille(x0), niv = besoins(f);
+          if (!(id in depart)) depart[id] = L.lire(out, d);
+          const v = recherche(vals, x => famOk(essai({ ...modifs, ...L.appliquer(x, d) }, niv), f));
+          if (v != null) { trouve = { id, v }; break; }
+        }
+      } catch (e) { if (e !== EPUISE) throw e; epuise = true; break; }
+      if (!trouve) { bloques.add(f); bloqueA[f] = JSON.stringify(modifs); continue; }
       modifs = { ...modifs, ...C[trouve.id].appliquer(trouve.v, d) }; resolu[f] = trouve.id; trace.push(`${f} → ${C[trouve.id].champ} = ${trouve.v}`);
-      cur = essai(modifs, nivTous([...ko0, ...Object.keys(resolu)]));
-      if (!cur) { bloques.add(f); cur = out; delete resolu[f]; break; }
+      // état d'ensemble avec la nouvelle valeur : forcé (la valeur trouvée est gardée même si l'échéance tombe ici)
+      cur = essai(modifs, nivTous([...ko0, ...Object.keys(resolu)]), { force: true });
+      if (!valide(cur)) { bloques.add(f); bloqueA[f] = JSON.stringify(modifs); cur = out; delete resolu[f]; break; }
     }
   }
   // descente : chaque paramètre ramené au minimum qui garde toutes les familles satisfaites (la montée dépend de l'ordre)
   const ids = [...new Set(Object.values(resolu))];
-  const tousOk = o => { const e = etat(o); return !!e && [...e.ko].every(f => bloques.has(f)); };
-  if (ids.length > 1 && cur && tousOk(cur)) {
+  // critère de la descente : les familles bloquées (sans valeur suffisante) n'empêchent pas de réduire les autres
+  const tousOk = o => valide(o) && [...etat(o).ko].every(f => bloques.has(f));
+  if (ids.length > 1 && cur && tousOk(cur)) try {
     for (let passe = 0; passe < 2 && dansBudget(); passe++) {
       let change = false;
       for (const id of ids) {
@@ -388,10 +413,11 @@ export function recommandationsPhasage(out, data, { budget = 60000, variantes = 
       }
       if (!change) break;
     }
-  }
-  // calcul complet avec l'ensemble des valeurs retenues : chaque recommandation dit si sa vérification passe
-  const fin = Object.keys(modifs).length ? essai(modifs, { acheve: true, hourdis: true }) : out;
-  const finEtat = etat(fin), lect = lecteur(out), ini = k => num(d[k], lect[k] ? lect[k]() : NaN);
+  } catch (e) { if (e !== EPUISE) throw e; epuise = true; /* descente interrompue : les valeurs atteintes restent valables */ }
+  // calcul complet avec l'ensemble des valeurs retenues (obligatoire, même après l'échéance) : chaque recommandation dit
+  // si sa vérification passe
+  const fin = Object.keys(modifs).length ? essai(modifs, { acheve: true, hourdis: true }, { force: true }) : out;
+  const finEtat = valide(fin) ? etat(fin) : null, lect = lecteur(out), ini = k => num(d[k], lect[k] ? lect[k]() : NaN);
   const decChamp = Object.fromEntries(Object.values(C).map(L => [L.champ, L.dec])), decs = k => decChamp[k] ?? 1;
   const ensemble = Object.keys(modifs).map(k => `${minus(LIB_PHASAGE[k] || k)} ${fx(ini(k), decs(k))} → ${fx(+modifs[k], decs(k))}`).join(' ; ');
   const bouges = ids.filter(id => Math.abs(valeur(id, modifs) - C[id].lire(out, d)) > 1e-9);
@@ -403,8 +429,10 @@ export function recommandationsPhasage(out, data, { budget = 60000, variantes = 
     for (const id of autres) {
       const L = C[id], x0 = L.lire(out, d), vals = L.grille(x0);
       if (!vals.length) continue;
+      if (variantes && !dansBudget()) epuise = true;
       if (!variantes || !dansBudget()) { variante[`${f}|${id}`] = { chercher: { champ: L.champ, min: L.sens === 'haut' ? vals[0] : vals[vals.length - 1], max: L.sens === 'haut' ? vals[vals.length - 1] : vals[0], pas: L.pas, vers: L.sens, depart: vals[0], calcul: 'phasage', base: {}, famille: f, levier: id } }; continue; }
-      variante[`${f}|${id}`] = { v: recherche(vals, x => famOk(essai(L.appliquer(x, d), besoins(f)), f)) };
+      try { variante[`${f}|${id}`] = { v: recherche(vals, x => famOk(essai(L.appliquer(x, d), besoins(f)), f)) }; }
+      catch (e) { if (e !== EPUISE) throw e; epuise = true; variante[`${f}|${id}`] = { chercher: { champ: L.champ, min: L.sens === 'haut' ? vals[0] : vals[vals.length - 1], max: L.sens === 'haut' ? vals[vals.length - 1] : vals[0], pas: L.pas, vers: L.sens, depart: vals[0], calcul: 'phasage', base: {}, famille: f, levier: id } }; }
     }
   }
 
@@ -419,7 +447,8 @@ export function recommandationsPhasage(out, data, { budget = 60000, variantes = 
       const champsL = Object.keys(L.appliquer(vNew, d)), extra = champsL.filter(k => k !== L.champ).map(k => `${LIB_PHASAGE[k] || k} ${fx(ini(k), decs(k))} → ${fx(+modifs[k], decs(k))}`);
       const autres = Object.keys(modifs).filter(k => !champsL.includes(k)), propres = Object.fromEntries(champsL.map(k => [k, modifs[k]]));
       // la valeur suffit-elle seule (familles indépendantes : armatures et goujons…) ? recalcul, le plus souvent déjà en cache
-      const seule = autres.length > 0 && dansBudget() && famOk(essai(propres, besoins(f)), f);
+      let seule = false;
+      try { seule = autres.length > 0 && famOk(essai(propres, besoins(f)), f); } catch (e) { if (e !== EPUISE) throw e; }
       const ens = autres.length > 0 && !seule, champs = ens ? { ...modifs } : propres;
       const lib = (LIB_PHASAGE[L.champ] || L.champ), avec = autres.map(k => `${minus(LIB_PHASAGE[k] || k)} ${fx(+modifs[k], decs(k))}`).join(', ');
       const multi = champsL.length > 1 || ens;
@@ -456,7 +485,8 @@ export function recommandationsPhasage(out, data, { budget = 60000, variantes = 
     const ou = v.type === 'phase' ? ` (${v.partie}, fibre ${v.fibre}, x = ${fx(v.x, 1)} m, à ${fx(v.t, 0)} j, âge ${fx(v.age, 0)} j)` : v.x != null && Number.isFinite(v.x) ? ` (x = ${fx(v.x, 1)} m)` : '';
     items.push({ domaine: domaine(sous), lieu: lieu(f), verification: v.nom, constat: `${fx(v.val)} pour une limite de ${fx(v.lim)}${ou}`, regle: v.ref || '', actions: acts, cibles, famille: f });
   }
-  const synthese = bouges.length > 1 ? { texte: 'Valeurs cherchées ensemble pour faire passer les vérifications', champs: { ...modifs }, ok: !!finEtat && [...finEtat.ko].every(f => bloques.has(f)) } : null;
+  // drapeau présenté à l'utilisateur : AUCUNE vérification en défaut avec le jeu complet (les familles bloquées comptent)
+  const synthese = bouges.length > 1 ? { texte: 'Valeurs cherchées ensemble pour faire passer les vérifications', champs: { ...modifs }, ok: !!finEtat && finEtat.ko.size === 0 } : null;
   return { items, synthese, modifs, bloques: [...bloques], trace, calculs: nCalc, duree: Date.now() - t0, epuise };
 }
 
@@ -494,10 +524,13 @@ function dichotomie(vals, ok) {
 export function chercherPhasage(data, c, { calcul = computePhasage } = {}) {
   const out = calcul(data, { annexes: false }), C = catalogue(out, data), L = C[c.levier];
   if (!L) return null;
-  const vals = L.grille(L.lire(out, data));
-  const v = recherche(vals, x => { try { const o = calcul({ ...data, ...(c.base || {}), ...L.appliquer(x, data) }, { annexes: false, hourdis: c.famille === 'poinc' }); const e = etat(o); return !!e && !e.ko.has(c.famille); } catch { return false; } });
+  const base = c.base || {}, err0 = new Set(erreursCalcul(out)), vals = L.grille(L.lire(out, data));
+  const v = recherche(vals, x => {
+    try { const o = calcul({ ...data, ...base, ...L.appliquer(x, data) }, { annexes: false, hourdis: c.famille === 'poinc' }); const e = etat(o); return !!e && e.erreurs.every(k => err0.has(k)) && !e.ko.has(c.famille); } catch { return false; }
+  });
   if (v == null) return null;
-  const champs = L.appliquer(v, data);
+  // les essais comprenaient les valeurs de base (cherchées avant l'échéance) : « Appliquer » doit les écrire aussi
+  const champs = { ...base, ...L.appliquer(v, data) };
   return { champ: champs[L.champ], affiche: fx(v, L.dec), champs };
 }
 
