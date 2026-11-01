@@ -19,8 +19,9 @@ import { aideConception, rechercheEpaisseur } from '../src/conception.js';
 import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations } from '../src/bearings.js';
 import { chevetresEC } from '../src/chevetre.js';
 import { renderPlaque } from './plaque_view.js';
-import { majBouton as majRecoTablier, majBoutonCadre, ouvrir as ouvrirReco } from './recommandations_view.js';
+import { majBouton as majRecoTablier, majBoutonCadre, majBoutonPoutres, ouvrir as ouvrirReco } from './recommandations_view.js';
 import { recommandationsCadre } from '../src/reco/cadre.js';
+import { recommandationsPoutres, evaluerPoutres } from '../src/reco/poutres.js';
 import { initNivellement } from './nivellement_view.js';
 import { initTrace, planSVG as planTrace } from './trace_view.js';
 import { Axe } from '../src/geom/axe.js';
@@ -277,11 +278,14 @@ function renderStatic(st) {
 // autres onglets ↔ tablier et appuis), sinon le dernier lancé.
 let recoSource = 'tablier', recoCadre = null, cadre = null, recoTimer = null;   // cadre : dernier calcul de l'onglet Cadres
 function majReco(st) { if (recoSource === 'tablier') majRecoTablier(st); }
+let recoPoutres = null;   // { out, data, rec } : dernier calcul de l'onglet Ponts à poutres et ses recommandations
 function majRecoCourant() {
   const ong = T.current();
   if (ong === 'cadres' && cadre && recoCadre) recoSource = 'cadre';
-  else if (ong !== 'cadres' && state) recoSource = 'tablier';
+  else if (ong === 'poutres' && recoPoutres) recoSource = 'poutres';
+  else if (ong !== 'cadres' && ong !== 'poutres' && state) recoSource = 'tablier';
   if (recoSource === 'cadre' && cadre && recoCadre) majBoutonCadre(cadre, recoCadre.data, recoCadre.rec);
+  else if (recoSource === 'poutres' && recoPoutres) majBoutonPoutres(recoPoutres.out, recoPoutres.rec);
   else if (state) majRecoTablier(state);
 }
 window.addEventListener('psida-tab', () => { try { majRecoCourant(); } catch (e) { console.error(e); } });
@@ -316,6 +320,10 @@ async function solveReco(a) {
         await new Promise(r => setTimeout(r, 0));
         return !!c.verifie(computeCadre(parseCadre({ ...Object.fromEntries(new FormData(f).entries()), ...(c.base || {}), [c.champ]: String(v) })));
       }
+      if (c.calcul === 'poutres') {   // ponts à poutres : chaîne des poutres (hourdis seulement si la vérification le demande)
+        await new Promise(r => setTimeout(r, 0));
+        return !!c.verifie(evaluerPoutres({ ...formSnapshot(f), ...(c.base || {}), [c.champ]: String(v) }, { local: !!c.local }));
+      }
       const p = parseForm(f);
       if (c.calcul === 'appuis') {
         const sup = computeSupports({ p, deck: base.deck, perm: base.perm, f61: base.f61, ec: base.ec, bearings: base.bearings, psidp: base.psidp, thermal: base.thermal, rail: base.rail, railAppuis: base.railAppuis }, p.supports);
@@ -328,11 +336,12 @@ async function solveReco(a) {
   };
   const v = await dichotomie(vals, essai);
   if (v == null) return null;
-  return { champ: String(v), affiche: String(v).replace('.', ','), detail: c.calcul === 'complet' || c.calcul === 'cadre' ? 'calcul complet relancé pour chaque essai' : 'calcul des appuis relancé pour chaque essai' };
+  return { champ: String(v), affiche: String(v).replace('.', ','), detail: c.calcul === 'complet' || c.calcul === 'cadre' ? 'calcul complet relancé pour chaque essai' : c.calcul === 'poutres' ? 'calcul des poutres relancé pour chaque essai' : 'calcul des appuis relancé pour chaque essai' };
 }
 document.addEventListener('change', ev => { if (ev.target && ev.target.id === 'supports-ref' && state && state.supports) { state._recoRef = ev.target.value === 'F61' ? 'BAEL' : 'EC'; majReco(state); } });
 $('#btn-reco').addEventListener('click', () => {
   if (recoSource === 'cadre' && cadre && recoCadre) ouvrirReco(cadre, { form: $('#f'), onApply: setField, goField, solve: solveReco });
+  else if (recoSource === 'poutres' && recoPoutres) ouvrirReco(recoPoutres.out, { form: $('#f'), onApply: setField, goField, solve: solveReco });
   else if (state) ouvrirReco(state, { form: $('#f'), onApply: setField, goField, solve: solveReco });
 });
 
@@ -930,11 +939,31 @@ $('#f').addEventListener('change', scheduleCadre);
 let poutres = null;
 $('#btn-poutres').addEventListener('click', () => {
   try {
-    poutres = computePoutres(parsePoutres(formSnapshot($('#f'))));
+    const data = formSnapshot($('#f'));
+    poutres = computePoutres(parsePoutres(data));
     $('#poutres-tables').innerHTML = blocksToHTML(beamsBlocks(poutres));
     renderPoutresPlans(poutres);
     $('#card-poutres').hidden = false; $('#poutres-empty').hidden = true; $('#error').textContent = '';
+    // recommandations : recherches par recalcul des poutres (quelques secondes, la main est rendue entre deux essais), après
+    // l'affichage des résultats ; les « NON » reçoivent ensuite l'indication « → à modifier » et le bouton d'en-tête son compteur
+    const p0 = poutres;
+    recoPoutres = null;
+    $('#poutres-tables').insertAdjacentHTML('afterbegin', '<p class="small" id="poutres-reco-attente">Recherche des valeurs qui font passer les vérifications…</p>');
+    recommandationsPoutres(p0, data, { annule: () => poutres !== p0, onProgress: n => { const w = $('#poutres-reco-attente'); if (w) w.textContent = `Recherche des valeurs qui font passer les vérifications… (${n} calcul${n > 1 ? 's' : ''} des poutres)`; } })
+      .then(rec => {
+        if (poutres !== p0) return;
+        recoPoutres = { out: p0, data, rec }; recoSource = 'poutres';
+        $('#poutres-tables').innerHTML = blocksToHTML(beamsBlocks(p0, { reco: rec }));
+        majBoutonPoutres(p0, rec);
+      })
+      .catch(e => { if (poutres !== p0) return; const w = $('#poutres-reco-attente'); if (w) w.textContent = 'Recommandations indisponibles : ' + e.message; });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
+});
+// indications « → à modifier » sous les NON : montrer le champ, ou écrire la valeur et recalculer le pont à poutres
+$('#poutres-tables').addEventListener('click', ev => {
+  const go = ev.target.closest('[data-reco-go]'), ap = ev.target.closest('[data-reco-apply]');
+  if (go) { ev.preventDefault(); goField(go.dataset.recoGo); return; }
+  if (ap) { ev.preventDefault(); for (const [k, v] of Object.entries(JSON.parse(ap.dataset.recoApply))) setField(k, v); $('#btn-poutres').click(); $('#card-poutres').scrollIntoView({ block: 'start' }); }
 });
 $('#btn-poutres-note').addEventListener('click', () => {
   if (!poutres) $('#btn-poutres').click(); if (!poutres) return;

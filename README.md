@@ -631,3 +631,17 @@ radier, piédroits et voiles cherchées ensemble (montée puis descente, jeu loc
 largeur des semelles du PIPO, profondeur d'assise, hauteur intérieure (gabarit), radier ou remblai (flottaison), biais,
 modèle de sol. Quand aucune épaisseur ne suffit (effort tranchant sans armatures notamment), la recommandation le dit et
 renvoie aux armatures d'effort tranchant ou à un changement de conception. Test : test/reco_cadre.test.js.
+Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
+PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à
+compléter » — contraintes ELS et de construction ou de transfert, contrainte initiale σ_pm0, ELU de flexion, effort
+tranchant (blochet et section courante), séisme vertical, alertes de tracé des câbles ou des torons, flexion et effort
+tranchant des poutres BA, contraintes de la vérification simplifiée BP, poinçonnement du hourdis, déformations sous rail —
+reçoit l'indication « → à modifier » (donnée du formulaire, valeur qui suffit, « Appliquer et recalculer ») ; le bouton
+« Recommandations » suit l'onglet affiché et détaille le constat, la règle (référence du moteur : EN 1992-1-1 et 1992-2,
+BPEL 91, EN 1998-2, EN 1990 A2, guide Sétra VIPP 1996, dossier PRAD 73) et les autres solutions. Les valeurs sont
+cherchées par recalcul des poutres (dichotomie, chaîne VIPP / PRAD complète, Guyon-Massonnet gardé en cache, hourdis
+recalculé seulement pour le poinçonnement, calcul complet sous rail) : nombre de câbles ou de torons, unité, 2e famille,
+torons supérieurs, f_ck, hauteur, âme et blochet, σ_p0, géométrie du tracé (filtrée par les alertes du moteur, sans
+calcul), P∞ et e₀, b₀ des poutres BA, épaisseur du hourdis. Les paramètres liés sont cherchés ensemble par point fixe puis
+ramenés au minimum (exemple : PRAD de 33 m à 20 torons → 37 torons, 3 torons supérieurs, C50), et la valeur proposée
+pour une vérification est signalée quand elle en fait tomber une autre. Test : test/reco_poutres.test.js.

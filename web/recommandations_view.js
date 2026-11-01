@@ -32,6 +32,12 @@ export function majBoutonCadre(out, data, rec = null) {
   maj(out, () => rec || recommandationsCadre(out, data));
   return dernier;
 }
+/** Même chose pour l'onglet « Ponts à poutres » : out = résultat de computePoutres, rec = recommandationsPoutres (déjà calculé). */
+export function majBoutonPoutres(out, rec) {
+  if (!out || !rec) { const b = document.getElementById('btn-reco'); if (b) b.hidden = true; return null; }
+  maj(out, () => rec);
+  return dernier;
+}
 function maj(cle, calc) {
   const b = document.getElementById('btn-reco');
   if (!b) return;
