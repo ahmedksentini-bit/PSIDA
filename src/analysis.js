@@ -38,6 +38,19 @@ function permutations(arr) {
   return out;
 }
 
+/**
+ * Permutations distinctes par leurs trois premiers éléments (au-delà de la 3e voie, les voies sont identiques) : triplets
+ * ordonnés distincts, suivis des autres éléments dans l'ordre croissant. Même résultat, dans le même ordre, que le
+ * filtrage des permutations complètes par leur préfixe, sans les n! permutations ni la recherche quadratique (8 voies
+ * conventionnelles d'une chaussée de 24 m : 336 arrangements au lieu de 40 320 permutations filtrées en O(n!²)).
+ */
+function permutationsPrefixe3(arr) {
+  if (arr.length <= 3) return permutations(arr);
+  const out = [];
+  for (const a of arr) for (const b of arr) { if (b === a) continue; for (const c of arr) { if (c === a || c === b) continue; out.push([a, b, c, ...arr.filter(v => v !== a && v !== b && v !== c)]); } }
+  return out;
+}
+
 /** Positions d'un bloc de largeur w glissant dans [y1, y2] par pas ≤ step (bornes incluses). */
 function slidePositions(y1, y2, w, step = 0.5) {
   const free = y2 - y1 - w;
@@ -453,9 +466,7 @@ export class SlabDeck {
     const out = [];
     const slots = Array.from({ length: nLanes }, (_, i) => i);
     // permutations utiles : seules les 3 premières voies diffèrent (au-delà, voies identiques)
-    const perms = nLanes <= 3 ? permutations(slots) : permutations(slots).filter((p, i, arr) => {
-      const key = p.slice(0, 3).join(','); return arr.findIndex(q => q.slice(0, 3).join(',') === key) === i;
-    });
+    const perms = permutationsPrefixe3(slots);
     for (const s of slidePositions(y1, y2, nLanes * wl, this.laneStep)) {
       const phys = slots.map(i => ({ e1: s + i * wl, e2: s + (i + 1) * wl }));
       const rest = [{ e1: y1, e2: s }, { e1: s + nLanes * wl, e2: y2 }].filter(r => r.e2 - r.e1 > 1e-6);

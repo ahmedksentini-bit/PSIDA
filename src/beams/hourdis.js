@@ -54,7 +54,7 @@ export function hourdisLocal(p) {
   const surTable = y => ys0.some(yk => Math.abs(y - yk) < bt / 2 - 1e-9);
   const appuis = [];
   for (const x of xsF) for (const yk of ys0) appuis.push({ x, y: yk, k: Infinity });
-  const P = new PlaqueEF({ xs: xsF, ys, D: (x, y) => Dd(surTable(y) ? hd + (p.eTab || 0.15) : hd), nu, appuis });
+  const P = new PlaqueEF({ xs: xsF, ys, D: (x, y) => Dd(surTable(y) ? hd + (p.eTab || 0.15) : hd), nu, appuis, ordre: 'court' }); // numérotation le long de x (plus court) : bande réduite
   const i0 = P.plusProche(xsF, x0);
 
   // cibles : mi-portée de chaque panneau (m_y > 0) et nu des tables (m_y < 0)
@@ -92,10 +92,12 @@ export function hourdisLocal(p) {
     const s = c.signe, eta = c.eta, pick = ([a, w]) => (s > 0 ? a : w), better = (u, v) => (s > 0 ? Math.max(u, v) : Math.min(u, v));
     const G = mG.my[P.idx(i0, c.j)];
     // TS : tandem 1 seul, ou tandems 1 et 2 voisins (axes ≥ 2,50 m)
+    // valeurs du second tandem calculées une fois par position (et non pour chaque position du premier)
     let TS = 0;
+    const t2v = Q2 ? posY(2.4, 0.25).map(y2 => [y2, pick(tandem(eta, y2, Q2))]) : [];
     for (const y1 of posY(2.4)) {
       const t1 = pick(tandem(eta, y1, Q1)); TS = better(TS, t1);
-      if (Q2) for (const y2 of posY(2.4, 0.25)) if (Math.abs(y2 - y1) >= 2.5 - 1e-9) TS = better(TS, t1 + pick(tandem(eta, y2, Q2)));
+      for (const [y2, t2] of t2v) if (Math.abs(y2 - y1) >= 2.5 - 1e-9) TS = better(TS, t1 + t2);
     }
     // UDL sur les parties défavorables (voie 1 au plus défavorable : majorant 9 kN/m² sur 3 m, 2,5 ailleurs)
     let UDL = 0;
@@ -110,13 +112,15 @@ export function hourdisLocal(p) {
       const cl = p.classe || classePont(Lr), nv = voiesF61(Lr).nv, a = diff(0.25);
       const camion = (yc, nf) => { let best = -Infinity, worst = Infinity; for (const xa of [[x0 - 0.75, x0 + 0.75], [x0, x0 + 1.5]]) { let v = 0; for (const x of xa) for (const dy of [-1, 1]) v += 60 * patch(eta, x, yc + dy, a, a); best = Math.max(best, v); worst = Math.min(worst, v); } return [best, worst]; };
       let Bc = 0, nfB = 1;
+      const c2v = nv >= 2 ? posY(2.5, 0.25).map(y2 => [y2, pick(camion(y2))]) : [];
       for (const y1 of posY(2.5, 0.1)) {
         const c1 = pick(camion(y1)); const bc1 = BC.bc[cl][0]; if (s * c1 * bc1 > s * Bc) { Bc = c1 * bc1; nfB = 1; }
-        for (const y2 of posY(2.5, 0.25)) if (Math.abs(y2 - y1) >= 2.5 - 1e-9 && nv >= 2) { const v = (c1 + pick(camion(y2))) * BC.bc[cl][1]; if (s * v > s * Bc) { Bc = v; nfB = 2; } }
+        for (const [y2, c2] of c2v) if (Math.abs(y2 - y1) >= 2.5 - 1e-9) { const v = (c1 + c2) * BC.bc[cl][1]; if (s * v > s * Bc) { Bc = v; nfB = 2; } }
       }
       const at = [diff(0.25), diff(0.6)], tand = yc => { let best = -Infinity, worst = Infinity; for (const xa of [[x0 - 0.675, x0 + 0.675], [x0, x0 + 1.35]]) { let v = 0; for (const x of xa) for (const dy of [-1, 1]) v += 80 * patch(eta, x, yc + dy, at[0], at[1]); best = Math.max(best, v); worst = Math.min(worst, v); } return [best, worst]; };
       let Bt = 0; const btc = BT.bt[cl];
-      if (btc) for (const y1 of posY(2.6, 0.1)) { const t1 = pick(tand(y1)); Bt = better(Bt, t1 * btc); for (const y2 of posY(2.6, 0.25)) if (Math.abs(y2 - y1) >= 3 - 1e-9) Bt = better(Bt, (t1 + pick(tand(y2))) * btc); }
+      const bt2 = btc ? posY(2.6, 0.25).map(y2 => [y2, pick(tand(y2))]) : [];
+      if (btc) for (const y1 of posY(2.6, 0.1)) { const t1 = pick(tand(y1)); Bt = better(Bt, t1 * btc); for (const [y2, t2] of bt2) if (Math.abs(y2 - y1) >= 3 - 1e-9) Bt = better(Bt, (t1 + t2) * btc); }
       let Br = 0; for (const y of posY(0.6, 0.1)) Br = better(Br, 100 * patch(eta, x0, y, diff(0.3), diff(0.6)));
       let Mc = 0;
       if ((p.mil || 'Mc120') !== 'aucune') { const q = MC120.P / 2 / (MC120.trackLength * MC120.trackWidth); for (const y of posY(MC120.trackSpacing + MC120.trackWidth, 0.1)) { let v = 0; for (const dy of [-MC120.trackSpacing / 2, MC120.trackSpacing / 2]) { const yy = y + dy; for (let u = -0.5; u <= 0.5 + 1e-9; u += 0.25) for (let xx = -3.05; xx <= 3.05 + 1e-9; xx += 0.305) v += q * 0.25 * 0.305 * etaAt(eta, x0 + xx, yy + u); } Mc = better(Mc, v); } }

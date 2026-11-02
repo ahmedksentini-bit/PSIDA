@@ -68,16 +68,23 @@ function matB(T, xi, eta) {
 export class PlaqueEF {
   /**
    * @param {object} o { xs : abscisses s de la grille, ys, D:(x,y)=>number, nu, appuis:[{x,y,k}] (x = abscisse le long de
-   *   l'axe du point d'appui ; ressorts verticaux kN/m ; k = Infinity → très raide), psi [gr] (biais, défaut 100) }
+   *   l'axe du point d'appui ; ressorts verticaux kN/m ; k = Infinity → très raide), psi [gr] (biais, défaut 100),
+   *   ordre ('court' : nœuds numérotés le long de la plus courte des deux directions — largeur de bande et coût de la
+   *   factorisation réduits pour les plaques larges ; les résultats se lisent alors par idx(i, j), iOf(p), jOf(p)) }
    */
-  constructor({ xs, ys, D, nu = 0.2, appuis = [], psi = 100, geo = null }) {
+  constructor({ xs, ys, D, nu = 0.2, appuis = [], psi = 100, geo = null, ordre = null }) {
     // geo (ouvrage courbe) : { pt(s, y) → [x, y], J(s, y) = 1 − κ y (rapport des aires), theta(s) angle de la tangente } ;
     // les moments sont alors exprimés dans le repère local (tangente, normale) de l'axe
     this.geo = geo;
     this.xs = xs; this.ys = ys; this.nu = nu; this.psi = psi;
     this.cot = Math.abs(psi - 100) < 1e-9 ? 0 : 1 / Math.tan(psi * Math.PI / 200);
     this.nx = xs.length; this.ny = ys.length; this.n = this.nx * this.ny; this.ndof = 3 * this.n;
-    this.idx = (i, j) => i * this.ny + j;
+    // numérotation : par défaut i·ny + j (bande ≈ 3 ny) ; « court » : j·nx + i si nx < ny (bande ≈ 3 nx)
+    const swap = ordre === 'court' && this.nx < this.ny, nx0 = this.nx, ny0 = this.ny;
+    this.swap = swap;
+    this.idx = swap ? (i, j) => j * nx0 + i : (i, j) => i * ny0 + j;
+    this.iOf = swap ? p => p % nx0 : p => Math.floor(p / ny0);
+    this.jOf = swap ? p => Math.floor(p / nx0) : p => p % ny0;
     this.X = (i, j) => xs[i] + ys[j] * this.cot;
     this.Pt = (i, j) => (geo ? geo.pt(xs[i], ys[j]) : [this.X(i, j), ys[j]]);
     this.Dn = new Float64Array(this.n);
@@ -112,7 +119,7 @@ export class PlaqueEF {
   }
   Db(D) { const nu = this.nu; return [[D, D * nu, 0], [D * nu, D, 0], [0, 0, D * (1 - nu) / 2]]; }
   assembler() {
-    const K = new BandSPD(this.ndof, 3 * (this.ny + 2));
+    const K = new BandSPD(this.ndof, 3 * ((this.swap ? this.nx : this.ny) + 2));
     for (const t of this.T) {
       const Db = this.Db(t.D), ke = Array.from({ length: 9 }, () => new Float64Array(9));
       for (const [xi, eta] of GAUSS) {
@@ -186,14 +193,14 @@ export class PlaqueEF {
       }
     }
     if (this.geo) for (let p = 0; p < n; p++) {   // repère local de l'axe (tangente, normale)
-      const th = this.geo.theta(this.xs[Math.floor(p / this.ny)]), c = Math.cos(th), sn = Math.sin(th), a = out.mx[p], b = out.my[p], t = out.mxy[p];
+      const th = this.geo.theta(this.xs[this.iOf(p)]), c = Math.cos(th), sn = Math.sin(th), a = out.mx[p], b = out.my[p], t = out.mxy[p];
       out.mx[p] = c * c * a + sn * sn * b + 2 * c * sn * t; out.my[p] = sn * sn * a + c * c * b - 2 * c * sn * t; out.mxy[p] = -c * sn * a + c * sn * b + (c * c - sn * sn) * t;
     }
     for (let p = 0; p < n; p++) if (this.bordY(p)) out.my[p] = 0;   // bord libre y = cte : m_y = 0 (m_n nul)
     return out;
   }
   /** Nœud sur un bord libre y = ±b. */
-  bordY(p) { const j = p % this.ny; return j === 0 || j === this.ny - 1; }
+  bordY(p) { const j = this.jOf(p); return j === 0 || j === this.ny - 1; }
   /**
    * Vecteur c (3n) tel que la grandeur au nœud (i, j) vaille cᵀu. g : 'mx', 'my', 'mxy' ou combinaison linéaire
    * { mx: a, my: b, mxy: c } (moments dans la direction des armatures).
