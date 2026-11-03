@@ -13,10 +13,13 @@
 export const EC_ALPHA = {
   /** Valeurs recommandées de l'EN (pays sans annexe nationale, ex. Tunisie) : toutes = 1. */
   recommended: { label: 'EN 1991-2 valeurs recommandées (α = 1)', aQ: [1, 1, 1], aq1: 1, aq2: 1, aqr: 1 },
-  /** NF EN 1991-2/NA — 1ère classe de trafic (trafic lourd international). À vérifier sur l'annexe. */
-  FR1: { label: 'NF EN 1991-2/NA classe 1', aQ: [1, 1, 1], aq1: 1, aq2: 1.2, aqr: 1.2 },
-  /** NF EN 1991-2/NA — 2ème classe de trafic (ouvrages courants). À vérifier sur l'annexe. */
-  FR2: { label: 'NF EN 1991-2/NA classe 2', aQ: [0.9, 0.8, 0.8], aq1: 0.7, aq2: 1.0, aqr: 1.0 },
+  // NF EN 1991-2/NA (mars 2008), clause 4.3.2(3) NOTES 1 et 2 : deux classes de trafic pour les ouvrages neufs sans
+  // limitation de tonnage (la « 3e classe » de certains supports de cours vient des projets antérieurs à l'annexe) ;
+  // clause 4.3.3(2) : βQ = 0,80 pour le modèle LM2, quelle que soit la classe.
+  /** 1ère classe : véhicules lourds nombreux (activités utilitaires lourdes, trafic international), ouvrages larges urbains. */
+  FR1: { label: 'NF EN 1991-2/NA classe 1', aQ: [1, 1, 1], aq1: 1, aq2: 1.2, aqr: 1.2, betaQ: 0.8 },
+  /** 2e classe : compositions de trafic les plus courantes. */
+  FR2: { label: 'NF EN 1991-2/NA classe 2', aQ: [0.9, 0.8, 0.8], aq1: 0.7, aq2: 1.0, aqr: 1.0, betaQ: 0.8 },
 };
 
 /**
@@ -56,10 +59,10 @@ export const TS_GEOM = { axleSpacing: 1.2, wheelTrack: 2.0, contact: { x: 0.4, y
 
 /**
  * Modèle LM2 (§4.3.3) : essieu isolé 400·βQ kN, roues au pas de 2,00 m, impact 0,35 (transv.) × 0,60 (long.).
- * βQ = αQ1 (valeur recommandée).
+ * βQ : 0,80 avec l'annexe nationale française (clause 4.3.3(2)) ; à défaut, βQ = αQ1 (valeur recommandée de l'EN).
  */
 export function lm2(alpha = EC_ALPHA.recommended) {
-  const beta = alpha.aQ[0];
+  const beta = alpha.betaQ ?? alpha.aQ[0];
   return { Q: 400 * beta, wheelTrack: 2.0, contact: { x: 0.6, y: 0.35 } };
 }
 
