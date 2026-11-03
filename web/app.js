@@ -198,7 +198,7 @@ function caseLoads(st, id) {
       // valeurs APRÈS coefficients α (classe de trafic) : q = αq·qk (kN/m²), Q = αQ·Qk par essieu ; valeur fréquente ψ1
       const nb = (v) => (+v.toFixed(2)).toString().replace('.', ','), fr1 = id === 'LM1f';
       const qTxt = `${nb((fr1 ? 0.40 : 1) * ln.q)} kN/m²`, qDet = ln.q !== ln.qk || fr1 ? ` = ${fr1 ? '0,40 × ' : ''}${nb(ln.q / ln.qk)} × ${nb(ln.qk)}` : '';
-      const QTxt = `TS ${nb((fr1 ? 0.75 : 1) * ln.Q)} kN/essieu`, QDet = ln.Q !== ln.Qk || fr1 ? ` = ${fr1 ? '0,75 × ' : ''}${nb(ln.Q / ln.Qk)} × ${nb(ln.Qk)}` : '';
+      const QTxt = `TS ${nb((fr1 ? 0.75 : 1) * ln.Q)} kN/essieu (2 roues de ${nb((fr1 ? 0.75 : 1) * ln.Q / 2)} kN)`, QDet = ln.Q !== ln.Qk || fr1 ? ` = ${fr1 ? '0,75 × ' : ''}${nb(ln.Q / ln.Qk)} × ${nb(ln.Qk)}` : '';
       if (id !== 'TS' && id !== 'gr3' && ln.q > 0) out.push({ kind: 'band', e1, e2, label: `voie ${ln.i} : ${qTxt}${qDet}` });
       if (id !== 'UDL' && id !== 'gr3' && ln.Q > 0) { out.push({ kind: 'wheel', e: e - 1 }); out.push({ kind: 'wheel', e: e + 1 }); out.push({ kind: 'text', e, label: QTxt + QDet }); }
     });
@@ -601,7 +601,7 @@ const FORM_UI = enhanceForm($('#f')); // saisie valeur par valeur des champs mul
 const NIV = initNivellement($('#f'), () => state);
 const TRACE = initTrace($('#f'), { setField });
 // manuel d'utilisation : PDF publié avec le site (docs/manuel), paramètre de version pour ne pas servir un ancien PDF en cache
-const MANUEL = { version: '0.99.9', url: 'docs/manuel/PSIDA_Manuel.pdf' };
+const MANUEL = { version: '0.99.10', url: 'docs/manuel/PSIDA_Manuel.pdf' };
 $('#btn-manuel').addEventListener('click', () => window.open(`${MANUEL.url}?v=${MANUEL.version}`, '_blank', 'noopener'));
 $('#f').addEventListener('change', ev => { if (ev.target.name === 'niv_actif') NIV.refresh(); });
 applyHelp($('#f'), $('#help-list'));
@@ -655,7 +655,7 @@ async function saveProject() {
   const form = $('#f');
   const spans = String(form.spans.value || '').split(/[,;\s]+/).filter(Boolean).join('-');
   const name = projName || `projet-psida-${spans || 'ouvrage'}.json`;
-  const file = { format: PROJ_FORMAT, version: '0.99.9', date: new Date().toISOString(), data: formSnapshot(form) };
+  const file = { format: PROJ_FORMAT, version: '0.99.10', date: new Date().toISOString(), data: formSnapshot(form) };
   if (ec8Data) file.ec8 = ec8Data;
   const txt = JSON.stringify(file, null, 1);
   if (window.showSaveFilePicker) { // Chrome, Edge : choix du nom et du dossier
@@ -747,7 +747,7 @@ $('#btn-report').addEventListener('click', async () => {
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
     // pont-dalle sous rail : la note imprimable est la note ferroviaire (le rapport routier suppose LM1 et le Fascicule 61)
-    const html = state.rail ? noteToHTML(await makeNote()) : await buildReport({ ...state, version: '0.99.9', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = state.rail ? noteToHTML(await makeNote()) : await buildReport({ ...state, version: '0.99.10', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -784,8 +784,8 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  if (state.rail) return buildNoteRail({ ...state, version: '0.99.9' }, { figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
-  return buildNote({ ...state, version: '0.99.9', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  if (state.rail) return buildNoteRail({ ...state, version: '0.99.10' }, { figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.99.10', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -848,7 +848,7 @@ $('#cadre-tables').addEventListener('click', ev => {
 initCadrePlans(() => cadre);
 $('#btn-cadre-note').addEventListener('click', () => {
   if (!cadre) runCadre(); if (!cadre) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.99.9' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.99.10' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-cadre.html'; aEl.click(); }
 });
@@ -856,7 +856,7 @@ $('#btn-cadre-docx').addEventListener('click', async () => {
   if (!cadre) runCadre(); if (!cadre) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.99.9' })), docx);
+    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.99.10' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = `note-cadre-${cadre.inp.geom.nom || 'ouvrage'}.docx`; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -949,7 +949,7 @@ initPoutresPlans(() => poutres);
 initParcours();
 $('#btn-phasage-note').addEventListener('click', () => {
   if (!phasage) runPhasage(); if (!phasage) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.99.9' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.99.10' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-phasage.html'; aEl.click(); }
 });
@@ -957,7 +957,7 @@ $('#btn-phasage-docx').addEventListener('click', async () => {
   if (!phasage) runPhasage(); if (!phasage) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.99.9' })), docx);
+    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.99.10' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = 'note-phasage.docx'; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -1010,7 +1010,7 @@ $('#poutres-tables').addEventListener('click', ev => {
 });
 $('#btn-poutres-note').addEventListener('click', () => {
   if (!poutres) $('#btn-poutres').click(); if (!poutres) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(poutresNote(poutres, { version: '0.99.9' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(poutresNote(poutres, { version: '0.99.10' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-pont-poutres.html'; aEl.click(); }
 });
@@ -1018,7 +1018,7 @@ $('#btn-poutres-docx').addEventListener('click', async () => {
   if (!poutres) $('#btn-poutres').click(); if (!poutres) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(poutresNote(poutres, { version: '0.99.9' })), docx);
+    const blob = await noteToDocx(await svgToImg(poutresNote(poutres, { version: '0.99.10' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = 'note-pont-poutres.docx'; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -1058,7 +1058,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.99.9', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.99.10', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));
