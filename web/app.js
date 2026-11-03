@@ -58,6 +58,7 @@ import { cadreBlocks, cadreNote } from './cadre_view.js';
 import { parseCadre, computeCadre } from '../src/cadre/run.js';
 import { lireCadre, coupeCadreSVG, planCadreSVG, syntheseCadreHTML, AIDE_CADRE } from './cadre_schema.js';
 import { parseDDR, ddrHTML } from './ddr_view.js';
+import { watchDeclutter } from './declutter.js';
 
 const $ = s => document.querySelector(s);
 
@@ -199,35 +200,37 @@ function caseLoads(st, id) {
       // valeurs APRÈS coefficients α (classe de trafic) : q = αq·qk (kN/m²), Q = αQ·Qk par essieu ; valeur fréquente ψ1
       const fr1 = id === 'LM1f';
       const qTxt = `${nb((fr1 ? 0.40 : 1) * ln.q)} kN/m²`, qDet = ln.q !== ln.qk || fr1 ? ` = ${fr1 ? '0,40 × ' : ''}${nb(ln.q / ln.qk)} × ${nb(ln.qk)}` : '';
-      const QTxt = `TS ${nb((fr1 ? 0.75 : 1) * ln.Q)} kN/essieu (2 roues de ${nb((fr1 ? 0.75 : 1) * ln.Q / 2)} kN)`, QDet = ln.Q !== ln.Qk || fr1 ? ` = ${fr1 ? '0,75 × ' : ''}${nb(ln.Q / ln.Qk)} × ${nb(ln.Qk)}` : '';
+      const QTxt = `TS ${nb((fr1 ? 0.75 : 1) * ln.Q)} kN = 2 × ${nb((fr1 ? 0.75 : 1) * ln.Q / 2)}`, QDet = ln.Q !== ln.Qk || fr1 ? ` (${fr1 ? '0,75 × ' : ''}${nb(ln.Q / ln.Qk)} × ${nb(ln.Qk)})` : '';
       if (id !== 'TS' && id !== 'gr3' && ln.q > 0) out.push({ kind: 'band', e1, e2, label: `voie ${ln.i} : ${qTxt}${qDet}` });
       if (id !== 'UDL' && id !== 'gr3' && ln.Q > 0) { out.push({ kind: 'wheel', e: e - 1 }); out.push({ kind: 'wheel', e: e + 1 }); out.push({ kind: 'text', e, label: QTxt + QDet }); }
     });
+    if (id !== 'UDL' && id !== 'gr3') out.push({ kind: 'caption', label: `Tandem TS : charge par essieu = 2 roues (0,40 × 0,40 m, entraxe 2,00 m, essieux à 1,20 m)${id === 'LM1f' ? ' ; valeur fréquente 0,75 TS + 0,40 UDL' : ''} ; UDL en kN/m² après coefficients α (classe de trafic).` });
     if (id !== 'TS' && id !== 'gr3' && nl.wr > 0) out.push({ kind: 'band', e1: y1 + nl.n * nl.wl, e2: y2, label: `résiduel ${nb((id === 'LM1f' ? 0.40 : 1) * m1.qr)} kN/m²` });
     if (id === 'gr1a' || id === 'gr3') for (const fw of deck.g.footways || []) out.push({ kind: 'band', e1: fw.y1, e2: fw.y2, label: id === 'gr3' ? '5 kN/m²' : '3 kN/m²', color: '#2a8f6a' });
   } else if (id === 'gr1b') {
     // LM2 : essieu 400·βQ kN (βQ = 0,80 avec l'annexe nationale française, sinon αQ1), roues 0,35 × 0,60 m
     const a = ec.alpha || {}, bQ = a.betaQ ?? (a.aQ ? a.aQ[0] : 1), Q = 400 * bQ;
     const e = y1 + 1 + 0.175; out.push({ kind: 'wheel', e: e - 1, w: 0.35 }); out.push({ kind: 'wheel', e: e + 1, w: 0.35 });
-    out.push({ kind: 'text', e, label: `LM2 ${nb(Q)} kN/essieu (2 roues de ${nb(Q / 2)} kN, 0,35 × 0,60 m)${bQ !== 1 ? ` = ${nb(bQ)} × 400` : ''}` });
+    out.push({ kind: 'text', e, label: `LM2 ${nb(Q)} kN = 2 × ${nb(Q / 2)}${bQ !== 1 ? ` (${nb(bQ)} × 400)` : ''}` });
+    out.push({ kind: 'caption', label: `LM2 : essieu isolé de 400·βQ kN (βQ = ${nb(bQ)}${a.betaQ != null ? ', NF EN 1991-2/NA 4.3.3(2)' : ''}), 2 roues de 0,35 × 0,60 m à 2,00 m ; position la plus défavorable sur toute la chaussée.` });
   } else if (id === 'A') {
     // A(l) = 2,3 + 360/(l + 12) ; q = a1 · a2 · A(l), a1 selon la classe et le nombre de voies chargées, a2 = v0/v
     const L = Math.max(...deck.spans), c = chargeA(L, { classe: f61.classe, nVoiesChargees: f61.nv, v: f61.v });
     for (let i = 0; i < f61.nv; i++) { const yc1 = y1 + (f61.Lr - f61.Lc) / 2; out.push({ kind: 'band', e1: yc1 + i * f61.v, e2: yc1 + (i + 1) * f61.v, label: `voie ${i + 1}` }); }
-    out.push({ kind: 'text', e: (y1 + y2) / 2, label: `A(l) : q = a1·a2·A(l) ; ${f61.nv} voie${f61.nv > 1 ? 's' : ''} chargée${f61.nv > 1 ? 's' : ''}, a1 = ${nb(c.a1)}, a2 = ${nb(c.a2)} — ex. l = ${nb(L)} m : A = ${nb(c.A)}, q = ${nb(c.q)} kN/m²` });
+    out.push({ kind: 'caption', e: (y1 + y2) / 2, label: `A(l) : q = a1·a2·A(l) ; ${f61.nv} voie${f61.nv > 1 ? 's' : ''} chargée${f61.nv > 1 ? 's' : ''}, a1 = ${nb(c.a1)}, a2 = ${nb(c.a2)} — ex. l = ${nb(L)} m : A = ${nb(c.A)}, q = ${nb(c.q)} kN/m²` });
   } else if (id === 'Bc' || id === 'Bt') {
     const yc1 = y1 + (f61.Lr - f61.Lc) / 2, nf = id === 'Bt' ? Math.min(f61.nv, 2) : Math.min(f61.nv, 5);
     for (let i = 0; i < nf; i++) { const e = yc1 + 2.5 * i + 1.25; out.push({ kind: 'band', e1: e - 1.25, e2: e + 1.25, label: `file ${i + 1}`, opacity: 0.12 }); out.push({ kind: 'wheel', e: e - 1, w: 0.25 }); out.push({ kind: 'wheel', e: e + 1, w: 0.25 }); }
     const dl = id === 'Bt' ? f61.deltaBt : f61.deltaBc, dTxt = dl?.length ? ` ; δ = ${dl.map((v) => nb(v)).join(' / ')} (travées)` : '';
-    if (id === 'Bc') { const bc = BC.bc[f61.classe][nf - 1]; out.push({ kind: 'text', e: (y1 + y2) / 2, label: `Bc × bc = ${nb(bc)} (${nf} file${nf > 1 ? 's' : ''}, classe ${f61.classe}) : essieux 2 × ${nb(120 * bc)} + ${nb(60 * bc)} kN par camion (roues ${nb(60 * bc)} / ${nb(30 * bc)} kN)${dTxt}` }); }
-    else { const bt = BT.bt[f61.classe]; out.push({ kind: 'text', e: (y1 + y2) / 2, label: `Bt × bt = ${nb(bt)} (classe ${f61.classe}) : 2 essieux de ${nb(160 * bt)} kN par tandem (roues ${nb(80 * bt)} kN)${dTxt}` }); }
+    if (id === 'Bc') { const bc = BC.bc[f61.classe][nf - 1]; out.push({ kind: 'caption', e: (y1 + y2) / 2, label: `Bc × bc = ${nb(bc)} (${nf} file${nf > 1 ? 's' : ''}, classe ${f61.classe}) : essieux 2 × ${nb(120 * bc)} + ${nb(60 * bc)} kN par camion (roues ${nb(60 * bc)} / ${nb(30 * bc)} kN)${dTxt}` }); }
+    else { const bt = BT.bt[f61.classe]; out.push({ kind: 'caption', e: (y1 + y2) / 2, label: `Bt × bt = ${nb(bt)} (classe ${f61.classe}) : 2 essieux de ${nb(160 * bt)} kN par tandem (roues ${nb(80 * bt)} kN)${dTxt}` }); }
   } else if (id === 'Mc120') {
     const e = (y1 + y2) / 2, h = MC120.trackSpacing / 2;
     out.push({ kind: 'band', e1: e - h - 0.5, e2: e - h + 0.5, label: 'chenille' }); out.push({ kind: 'band', e1: e + h - 0.5, e2: e + h + 0.5, label: 'chenille' });
-    out.push({ kind: 'text', e, label: `Mc120 : ${nb(MC120.P)} kN, 2 chenilles de ${nb(MC120.P / 2)} kN sur ${nb(MC120.trackLength)} × ${nb(MC120.trackWidth)} m (${nb(MC120.qTrack)} kN/m)${f61.deltaMc?.length ? ` ; δ = ${f61.deltaMc.map((v) => nb(v)).join(' / ')}` : ''}` });
+    out.push({ kind: 'caption', e, label: `Mc120 : ${nb(MC120.P)} kN, 2 chenilles de ${nb(MC120.P / 2)} kN sur ${nb(MC120.trackLength)} × ${nb(MC120.trackWidth)} m (${nb(MC120.qTrack)} kN/m)${f61.deltaMc?.length ? ` ; δ = ${f61.deltaMc.map((v) => nb(v)).join(' / ')}` : ''}` });
   } else if (id === 'D240') {
     const e = (y1 + y2) / 2; out.push({ kind: 'band', e1: e - D240.width / 2, e2: e + D240.width / 2, label: 'D240 — 3,20 m' });
-    out.push({ kind: 'text', e, label: `D240 : ${nb(D240.P)} kN sur ${nb(D240.width)} × ${nb(D240.length)} m (${nb(D240.q)} kN/m, ${nb(D240.P / D240.width / D240.length)} kN/m²), sans majoration dynamique` });
+    out.push({ kind: 'caption', e, label: `D240 : ${nb(D240.P)} kN sur ${nb(D240.width)} × ${nb(D240.length)} m (${nb(D240.q)} kN/m, ${nb(D240.P / D240.width / D240.length)} kN/m²), sans majoration dynamique` });
   } else if (id === 'trott') {
     for (const fw of deck.g.footways || []) out.push({ kind: 'band', e1: fw.y1, e2: fw.y2, label: `${nb(TROTTOIR.q)} kN/m²`, color: '#2a8f6a' });
   }
@@ -613,7 +616,7 @@ const FORM_UI = enhanceForm($('#f')); // saisie valeur par valeur des champs mul
 const NIV = initNivellement($('#f'), () => state);
 const TRACE = initTrace($('#f'), { setField });
 // manuel d'utilisation : PDF publié avec le site (docs/manuel), paramètre de version pour ne pas servir un ancien PDF en cache
-const MANUEL = { version: '0.99.12', url: 'docs/manuel/PSIDA_Manuel.pdf' };
+const MANUEL = { version: '0.99.13', url: 'docs/manuel/PSIDA_Manuel.pdf' };
 $('#btn-manuel').addEventListener('click', () => window.open(`${MANUEL.url}?v=${MANUEL.version}`, '_blank', 'noopener'));
 $('#f').addEventListener('change', ev => { if (ev.target.name === 'niv_actif') NIV.refresh(); });
 applyHelp($('#f'), $('#help-list'));
@@ -667,7 +670,7 @@ async function saveProject() {
   const form = $('#f');
   const spans = String(form.spans.value || '').split(/[,;\s]+/).filter(Boolean).join('-');
   const name = projName || `projet-psida-${spans || 'ouvrage'}.json`;
-  const file = { format: PROJ_FORMAT, version: '0.99.12', date: new Date().toISOString(), data: formSnapshot(form) };
+  const file = { format: PROJ_FORMAT, version: '0.99.13', date: new Date().toISOString(), data: formSnapshot(form) };
   if (ec8Data) file.ec8 = ec8Data;
   const txt = JSON.stringify(file, null, 1);
   if (window.showSaveFilePicker) { // Chrome, Edge : choix du nom et du dossier
@@ -759,7 +762,7 @@ $('#btn-report').addEventListener('click', async () => {
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
     // pont-dalle sous rail : la note imprimable est la note ferroviaire (le rapport routier suppose LM1 et le Fascicule 61)
-    const html = state.rail ? noteToHTML(await makeNote()) : await buildReport({ ...state, version: '0.99.12', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = state.rail ? noteToHTML(await makeNote()) : await buildReport({ ...state, version: '0.99.13', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -796,8 +799,8 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  if (state.rail) return buildNoteRail({ ...state, version: '0.99.12' }, { figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
-  return buildNote({ ...state, version: '0.99.12', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  if (state.rail) return buildNoteRail({ ...state, version: '0.99.13' }, { figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.99.13', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -860,7 +863,7 @@ $('#cadre-tables').addEventListener('click', ev => {
 initCadrePlans(() => cadre);
 $('#btn-cadre-note').addEventListener('click', () => {
   if (!cadre) runCadre(); if (!cadre) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.99.12' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.99.13' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-cadre.html'; aEl.click(); }
 });
@@ -868,7 +871,7 @@ $('#btn-cadre-docx').addEventListener('click', async () => {
   if (!cadre) runCadre(); if (!cadre) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.99.12' })), docx);
+    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.99.13' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = `note-cadre-${cadre.inp.geom.nom || 'ouvrage'}.docx`; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -961,7 +964,7 @@ initPoutresPlans(() => poutres);
 initParcours();
 $('#btn-phasage-note').addEventListener('click', () => {
   if (!phasage) runPhasage(); if (!phasage) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.99.12' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.99.13' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-phasage.html'; aEl.click(); }
 });
@@ -969,7 +972,7 @@ $('#btn-phasage-docx').addEventListener('click', async () => {
   if (!phasage) runPhasage(); if (!phasage) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.99.12' })), docx);
+    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.99.13' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = 'note-phasage.docx'; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -1022,7 +1025,7 @@ $('#poutres-tables').addEventListener('click', ev => {
 });
 $('#btn-poutres-note').addEventListener('click', () => {
   if (!poutres) $('#btn-poutres').click(); if (!poutres) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(poutresNote(poutres, { version: '0.99.12' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(poutresNote(poutres, { version: '0.99.13' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-pont-poutres.html'; aEl.click(); }
 });
@@ -1030,7 +1033,7 @@ $('#btn-poutres-docx').addEventListener('click', async () => {
   if (!poutres) $('#btn-poutres').click(); if (!poutres) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(poutresNote(poutres, { version: '0.99.12' })), docx);
+    const blob = await noteToDocx(await svgToImg(poutresNote(poutres, { version: '0.99.13' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = 'note-pont-poutres.docx'; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -1070,7 +1073,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.99.12', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.99.13', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));
@@ -1203,3 +1206,4 @@ $('#btn-ec8-apply').addEventListener('click', () => {
   goTab('appuis');
 });
 ec8Status();
+watchDeclutter(); // aucun texte de schéma SVG ne doit en chevaucher un autre (web/declutter.js)
