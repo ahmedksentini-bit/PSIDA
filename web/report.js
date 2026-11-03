@@ -100,7 +100,7 @@ export async function buildReport(st) {
 
   // 5. Trafic
   h += `<h2>5. Charges d'exploitation (valeurs caractéristiques)</h2><h3>5.1 Eurocodes — EN 1991-2</h3>`;
-  for (const [t, r] of [['LM1 – TS', ec.TS], ['LM1 – UDL', ec.UDL], ['gr1a = TS + UDL + trottoirs 3 kN/m²', ec.gr1a], ['gr1b = LM2', ec.gr1b], ['gr3 = trottoirs 5 kN/m²', ec.gr3]]) h += tableCase(deck, keys, r, t);
+  for (const [t, r] of [['LM1 – TS', ec.TS], ['LM1 – UDL', ec.UDL], ['LM1 (TS et UDL dans la même disposition)', ec.LM1], ...(ec.LM1f ? [['LM1 fréquent (0,75 TS + 0,40 UDL)', ec.LM1f]] : []), ['gr1a = LM1 + trottoirs 3 kN/m²', ec.gr1a], ['gr1b = LM2', ec.gr1b], ['gr3 = trottoirs 5 kN/m²', ec.gr3]]) h += tableCase(deck, keys, r, t);
   h += `<h3>5.2 Fascicule 61 titre II (δ inclus pour B et Mc)</h3>`;
   for (const [t, r] of [['A(l)', f61.A], ['Bc', f61.Bc], ...(f61.Bt ? [['Bt', f61.Bt]] : []), ['Mc120', f61.Mc120], ['D240', f61.D240], ['Trottoirs 1,5 kN/m²', f61.trottoir]].filter(([, r]) => r)) h += tableCase(deck, keys, r, t);
   h += figs.M + figs.V + figs.R;

@@ -35,7 +35,12 @@ const zeros2 = (nS, nY) => Array.from({ length: nS }, () => new Array(nY).fill(0
  * @param {{thermal?:object, settle?:object, k?:object}} opt résultats de deck.thermal() / deck.settlements()
  * @returns {{ELU:{max,min}, CAR:{max,min}, FREQ:{max,min}, QP:{max,min}}} tableaux [s][iy]
  */
+// LM1 évalué d'un bloc (TS et UDL d'une même voie dans le même arrangement transversal, ec.LM1 et ec.LM1f) : utilisé
+// quand il est fourni et que les ψ du trafic sont ceux de l'EN 1990 A2 (0,75 / 0,40) ; sinon somme des enveloppes TS et UDL
+// (majorante : les positions les plus défavorables du tandem et de l'UDL peuvent alors différer).
+const lm1Bloc = (ec, k) => !!(ec.LM1 && ec.LM1f && k.psi0.TS === 0.75 && k.psi1.TS === 0.75 && k.psi0.UDL === 0.4 && k.psi1.UDL === 0.4);
 export function combineEC(perm, ec, { thermal = null, settle = null, k = EC_COMBI } = {}) {
+  const bloc = lm1Bloc(ec, k);
   const Gmax = perm.mxMax || perm.mx, Gmin = perm.mxMin || perm.mx;
   const nS = Gmax.length, nY = Gmax[0].length;
   const T = thermal ? thermal : { mxMax: zeros2(nS, nY), mxMin: zeros2(nS, nY) };
@@ -50,8 +55,9 @@ export function combineEC(perm, ec, { thermal = null, settle = null, k = EC_COMB
         const sel = which === 'max' ? Math.max : Math.min, g = which === 'max' ? gM : gm, i = which === 'max' ? 0 : 1;
         const ts = v(ec.TS, which), udl = v(ec.UDL, which), fw = v(ec.footway, which), lm2 = v(ec.gr1b, which), g3 = v(ec.gr3, which);
         const t = v(T, which), ta = v(Ta, which);
-        const q1 = ts + udl + fw, q1psi0 = k.psi0.TS * ts + k.psi0.UDL * udl + k.psi0.footway * fw;
-        const q1psi1 = k.psi1.TS * ts + k.psi1.UDL * udl + k.psi1.footway * fw;
+        const lm = bloc ? v(ec.LM1, which) : ts + udl, lmf = bloc ? v(ec.LM1f, which) : null;
+        const q1 = lm + fw, q1psi0 = bloc ? lmf + k.psi0.footway * fw : k.psi0.TS * ts + k.psi0.UDL * udl + k.psi0.footway * fw;
+        const q1psi1 = bloc ? lmf + k.psi1.footway * fw : k.psi1.TS * ts + k.psi1.UDL * udl + k.psi1.footway * fw;
         const qCar = sel(q1, lm2, g3, 0);
         r.ELU[i].push((which === 'max' ? gPlus(g, k.gammaG, k.gammaGfav) : gMinus(g, k.gammaG, k.gammaGfav)) + k.gammaQ * qCar);
         r.CAR[i].push(g + k.rho0 * ta + sel(t + q1psi0, k.psi0T * t + q1, lm2, k.psi0T * t + g3, 0));
@@ -93,10 +99,12 @@ export function combineBAEL(perm, f61, { thermal = null, settle = null, k = BAEL
 
 /** Combinaisons sur les efforts de poutre entière (M, V, R) — Eurocode. */
 export function combineBeamEC(perm, ec, { thermal = null, settle = null, k = EC_COMBI } = {}) {
+  const bloc = lm1Bloc(ec, k);
   const mk = (key, perMax, perMin) => {
     const n = perMax.length;
     const q = i => ({
-      ts: [ec.TS[key + 'max'][i], ec.TS[key + 'min'][i]], udl: [ec.UDL[key + 'max'][i], ec.UDL[key + 'min'][i]], fw: [ec.footway[key + 'max'][i], ec.footway[key + 'min'][i]],
+      ts: [ec.TS[key + 'max'][i], ec.TS[key + 'min'][i]], udl: [ec.UDL[key + 'max'][i], ec.UDL[key + 'min'][i]],
+      lm: bloc ? [ec.LM1[key + 'max'][i], ec.LM1[key + 'min'][i]] : null, lmf: bloc ? [ec.LM1f[key + 'max'][i], ec.LM1f[key + 'min'][i]] : null, fw: [ec.footway[key + 'max'][i], ec.footway[key + 'min'][i]],
       lm2: [ec.gr1b[key + 'max'][i], ec.gr1b[key + 'min'][i]], g3: [ec.gr3[key + 'max'][i], ec.gr3[key + 'min'][i]],
       t: thermal ? [thermal[key + 'max'][i], thermal[key + 'min'][i]] : [0, 0], ta: settle ? [settle[key + 'max'][i], settle[key + 'min'][i]] : [0, 0],
     });
@@ -105,7 +113,9 @@ export function combineBeamEC(perm, ec, { thermal = null, settle = null, k = EC_
       const c = q(i);
       for (const [j, which] of [[0, 'max'], [1, 'min']]) {
         const sel = which === 'max' ? Math.max : Math.min, g = which === 'max' ? perMax[i] : perMin[i];
-        const q1 = c.ts[j] + c.udl[j] + c.fw[j], q1p0 = k.psi0.TS * c.ts[j] + k.psi0.UDL * c.udl[j] + k.psi0.footway * c.fw[j], q1p1 = k.psi1.TS * c.ts[j] + k.psi1.UDL * c.udl[j] + k.psi1.footway * c.fw[j];
+        const q1 = (bloc ? c.lm[j] : c.ts[j] + c.udl[j]) + c.fw[j];
+        const q1p0 = bloc ? c.lmf[j] + k.psi0.footway * c.fw[j] : k.psi0.TS * c.ts[j] + k.psi0.UDL * c.udl[j] + k.psi0.footway * c.fw[j];
+        const q1p1 = bloc ? c.lmf[j] + k.psi1.footway * c.fw[j] : k.psi1.TS * c.ts[j] + k.psi1.UDL * c.udl[j] + k.psi1.footway * c.fw[j];
         out['ELU' + which].push((which === 'max' ? gPlus(g, k.gammaG, k.gammaGfav) : gMinus(g, k.gammaG, k.gammaGfav)) + k.gammaQ * sel(q1, c.lm2[j], c.g3[j], 0));
         out['CAR' + which].push(g + k.rho0 * c.ta[j] + sel(c.t[j] + q1p0, k.psi0T * c.t[j] + q1, c.lm2[j], k.psi0T * c.t[j] + c.g3[j], 0));
         out['FREQ' + which].push(g + sel(k.psi1T * c.t[j], k.psi2T * c.t[j] + q1p1, k.psi1.LM2 * c.lm2[j], 0));

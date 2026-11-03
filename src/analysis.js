@@ -59,6 +59,15 @@ function slidePositions(y1, y2, w, step = 0.5) {
   return Array.from({ length: n + 1 }, (_, i) => y1 + free * i / n);
 }
 
+// Mise à l'échelle d'une enveloppe de file ({max, min, partsMax?, partsMin?}) par un coefficient positif.
+function scaleOne(e, w) {
+  if (!e) return e;
+  return { ...e, max: e.max * w, min: e.min * w, ...(e.partsMax ? { partsMax: e.partsMax.map((v) => v * w) } : {}), ...(e.partsMin ? { partsMin: e.partsMin.map((v) => v * w) } : {}) };
+}
+function scaleEnv(env, w) {
+  return { ...env, M: env.M.map((e) => scaleOne(e, w)), V: env.V.map((e) => scaleOne(e, w)), T: env.T.map((e) => scaleOne(e, w)), R: env.R.map((e) => scaleOne(e, w)) };
+}
+
 export class SlabDeck {
   /**
    * @param {object} g
@@ -331,10 +340,14 @@ export class SlabDeck {
       const zB = () => this.beam.x0.map(() => PL.M.bandes.bandes.map(() => 0));
       const extra = PL ? { myMax: z2(), myMin: z2(), mxyMax: z2(), mxyMin: z2(), RappMax: this.beam.x0.map(() => new Array(PL.M.nb).fill(0)), RappMin: this.beam.x0.map(() => new Array(PL.M.nb).fill(0)), BmyMax: zB(), BmyMin: zB(), BmxyMax: zB(), BmxyMin: zB() } : null;
       for (const f of files) {
-        const env = this._beamEnvelopes(f);
+        // pondération de la file (f.w, ψ d'une combinaison) : enveloppes calculées à charge unité de pondération puis
+        // multipliées, de sorte que le cache des enveloppes par file reste commun aux valeurs caractéristique et fréquente
+        const w = f.w ?? 1;
+        const env = w === 1 ? this._beamEnvelopes(f) : scaleEnv(this._beamEnvelopes(f), w);
         if (PL) {
           // plaque : m_x, m_y, m_xy de la file aux sections × fibres, réactions par appareil
-          const pe = PL.enveloppesFile(f, il => { this._pasEnv = PL.pas; try { return this._envOf(f, il); } finally { this._pasEnv = null; } }, this._sig(f));
+          const pe0 = PL.enveloppesFile(f, il => { this._pasEnv = PL.pas; try { return this._envOf(f, il); } finally { this._pasEnv = null; } }, this._sig(f));
+          const pe = w === 1 ? pe0 : pe0.map((e) => scaleOne(e, w));
           const val = (e, s, mom) => {
             if (perSpan && e.partsMax && e.partsMin) {
               const sd = (parts, fac) => parts.reduce((a, v, j) => a + dSp[j] * (fac ? mF[j] : 1) * v, 0);
@@ -504,18 +517,22 @@ export class SlabDeck {
       arrTS.push(filesTS); arrUDL.push(filesUDL);
     }
     const TS = this.evaluateArrangements(arrTS), UDL = this.evaluateArrangements(arrUDL);
+    // LM1 = tandem et UDL d'une même voie, à la même position transversale, dans chaque arrangement (pratique CHAMOA :
+    // une seule charge LM1, coefficient KTRANS propre à chaque valeur) ; valeur fréquente ψ1 : 0,75 TS + 0,40 UDL
+    const both = (wTS, wU) => arrTS.map((a, k) => [...a.map((f) => ({ ...f, w: wTS })), ...arrUDL[k].map((f) => ({ ...f, w: wU }))]);
+    const LM1c = this.evaluateArrangements(both(1, 1)), LM1f = this.evaluateArrangements(both(0.75, 0.40));
     const fw = q => (this.g.footways || []).map(f => ({ label: 'Trottoir', kind: 'udl', q: q * (f.y2 - f.y1), tracks: [{ e1: f.y1, e2: f.y2, share: 1 }] }));
     const footway3 = this.evaluateCase(fw(FOOTWAY.qfkCombi));
     const gr3 = this.evaluateCase(fw(FOOTWAY.qfk));
-    const LM1 = SlabDeck.sum([TS, UDL]);
-    const gr1a = SlabDeck.sum([TS, UDL, footway3]);
+    const LM1 = LM1c;
+    const gr1a = SlabDeck.sum([LM1c, footway3]);
     const l2 = lm2(alpha);
     const posLM2 = slidePositions(y1 + 1 + l2.contact.y / 2, y2 - 1 - l2.contact.y / 2, 0, this.laneStep);
     const gr1b = this.evaluateArrangements(posLM2.map(e => [{
       label: 'LM2', kind: 'axles', axles: [{ d: 0, P: l2.Q }],
       tracks: [{ e1: e - 1, e2: e - 1, share: 0.5 }, { e1: e + 1, e2: e + 1, share: 0.5 }],
     }]));
-    return { lanes: nl, lm1: m1, alpha, nArrangements: arrangements.length, TS, UDL, LM1, footway: footway3, gr1a, gr1b, gr3 };
+    return { lanes: nl, lm1: m1, alpha, nArrangements: arrangements.length, TS, UDL, LM1, LM1f, footway: footway3, gr1a, gr1b, gr3 };
   }
 
   // ---------------------------------------------------------------------------
