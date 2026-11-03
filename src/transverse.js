@@ -187,7 +187,9 @@ export class TransverseModel {
     }
     const fw = q => [(deck.g.footways || []).map((f, i) => ({ key: `bd|${f.y1.toFixed(3)}|${f.y2.toFixed(3)}`, patches: this.bandPatches(j, f.y1, f.y2), coef: q }))];
     const arrLM2 = slidePositions(y1 + 1 + l2.contact.y / 2, y2 - 1 - l2.contact.y / 2, 0, deck.laneStep).map(e => [{ key: `lm2|${e.toFixed(3)}`, patches: this.axlePatches(j, e, l2.contact.x, l2.contact.y, 2), coef: l2.Q }]);
-    return { TS: this.envelope(j, arrTS), UDL: this.envelope(j, arrUDL), footway: this.envelope(j, fw(FOOTWAY.qfkCombi)), gr3: this.envelope(j, fw(FOOTWAY.qfk)), gr1b: this.envelope(j, arrLM2), lanes: nl };
+    // LM1 : tandem et UDL d'une même voie dans le même arrangement (caractéristique, et fréquent 0,75 TS + 0,40 UDL)
+    const both = (wTS, wU) => arrTS.map((a, k) => [...a.map((c) => ({ ...c, coef: c.coef * wTS })), ...arrUDL[k].map((c) => ({ ...c, coef: c.coef * wU }))]);
+    return { TS: this.envelope(j, arrTS), UDL: this.envelope(j, arrUDL), LM1: this.envelope(j, both(1, 1)), LM1f: this.envelope(j, both(0.75, 0.40)), footway: this.envelope(j, fw(FOOTWAY.qfkCombi)), gr3: this.envelope(j, fw(FOOTWAY.qfk)), gr1b: this.envelope(j, arrLM2), lanes: nl };
   }
 
   /** Cas Fascicule 61 par travée : A(l) (voies fixes, sous-ensembles), Bc, Bt, Mc120, D240, trottoirs ; δ inclus. */

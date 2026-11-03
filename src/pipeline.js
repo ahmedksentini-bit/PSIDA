@@ -366,7 +366,7 @@ export function compute(p) {
   }
   const cases = [
     { id: 'TS', label: 'LM1 – TS', res: ec.TS, ref: 'EC' }, { id: 'UDL', label: 'LM1 – UDL', res: ec.UDL, ref: 'EC' },
-    { id: 'LM1', label: 'LM1 (TS + UDL)', res: ec.LM1, ref: 'EC' }, { id: 'gr1a', label: 'gr1a (LM1 + trottoirs 3 kN/m²)', res: ec.gr1a, ref: 'EC' },
+    { id: 'LM1', label: 'LM1 (TS + UDL)', res: ec.LM1, ref: 'EC' }, ...(ec.LM1f ? [{ id: 'LM1f', label: 'LM1 fréquent (0,75 TS + 0,40 UDL)', res: ec.LM1f, ref: 'EC' }] : []), { id: 'gr1a', label: 'gr1a (LM1 + trottoirs 3 kN/m²)', res: ec.gr1a, ref: 'EC' },
     { id: 'gr1b', label: 'gr1b (LM2)', res: ec.gr1b, ref: 'EC' }, { id: 'gr3', label: 'gr3 (trottoirs 5 kN/m²)', res: ec.gr3, ref: 'EC' },
     { id: 'A', label: 'A(l)', res: f61.A, ref: 'F61' }, { id: 'Bc', label: 'Bc (δ inclus)', res: f61.Bc, ref: 'F61' },
     ...(f61.Bt ? [{ id: 'Bt', label: 'Bt (δ inclus)', res: f61.Bt, ref: 'F61' }] : []),

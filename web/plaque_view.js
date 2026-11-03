@@ -4,6 +4,7 @@
  */
 import { permanentPlaque } from '../src/plate/deck.js';
 import { CONFIG, theme } from './plots.js';
+import { plot } from './plotvalues.js';
 
 const f0 = v => (Number.isFinite(v) ? v.toFixed(0) : '–'), f2 = v => (Number.isFinite(v) ? v.toFixed(2) : '–'), cm = v => (v * 1e4).toFixed(1);
 
@@ -34,7 +35,7 @@ function carte(div, M, champ, { titre, unite, echelle = 1, symetrique = false })
     { type: 'scatter', mode: 'markers', x: P.appuis.map(a => sx[a.i] + ys[a.j] * cot), y: P.appuis.map(a => ys[a.j]), marker: { symbol: 'square', size: 7, color: ink, line: { color: '#fff', width: 1 } }, name: 'appareils', hovertemplate: 'appareil<extra></extra>' }];
   const layout = { title: { text: titre, font: { size: 14 } }, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: ink, size: 12 }, margin: { l: 55, r: 10, t: 40, b: 45 },
     xaxis: { title: { text: 'x [m]' }, gridcolor: grid }, yaxis: { title: { text: 'y [m]' }, gridcolor: grid, scaleanchor: 'x', scaleratio: 1 }, showlegend: false, height: Math.max(260, 120 + 520 * (2 * deck.b) / (xs[xs.length - 1] - xs[0])) };
-  Plotly.newPlot(div, data, layout, CONFIG);
+  plot(div, data, layout, CONFIG);
 }
 
 /** Interpolation bilinéaire du champ nodal sur la grille (s, y) de la plaque ; null hors dalle. */
@@ -68,7 +69,7 @@ function carteCourbe(div, M, champ, { titre, unite, echelle = 1, symetrique = fa
     { type: 'scatter', mode: 'markers', x: ap.map(p => p[0] - O[0]), y: ap.map(p => p[1] - O[1]), marker: { symbol: 'square', size: 7, color: ink, line: { color: '#fff', width: 1 } }, name: 'appareils', hovertemplate: 'appareil<extra></extra>' }];
   const layout = { title: { text: titre + ' — vue en plan', font: { size: 14 } }, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: ink, size: 12 }, margin: { l: 55, r: 10, t: 40, b: 45 },
     xaxis: { title: { text: 'X [m]' }, gridcolor: grid, range: [X0 - O[0] - 1, X1 - O[0] + 1], constrain: 'domain' }, yaxis: { title: { text: 'Y [m]' }, gridcolor: grid, range: [Y0 - O[1] - 1, Y1 - O[1] + 1], scaleanchor: 'x', scaleratio: 1, constrain: 'domain' }, showlegend: false, height: Math.max(300, 120 + 760 * (Y1 - Y0 + 2) / (X1 - X0 + 2)) };
-  Plotly.newPlot(div, data, layout, CONFIG);
+  plot(div, data, layout, CONFIG);
 }
 
 export function renderPlaque(st) {

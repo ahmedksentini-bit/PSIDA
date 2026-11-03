@@ -3,6 +3,7 @@
  * lignes d'influence, surface m_x(x, y). Plotly est chargé globalement par index.html.
  */
 import { tableK } from '../src/guyon.js';
+import { plot } from './plotvalues.js';
 
 const PALETTE = ['#0b5fa5', '#c8552b', '#2a8f6a', '#8a4fb8', '#b8860b', '#d1335b', '#3b8ea5', '#6b6b6b', '#a65c2a', '#4e7a1e'];
 
@@ -44,7 +45,7 @@ export function envelopePlot(div, deck, perm, cases, { invert = false } = {}) {
   const layout = baseLayout('Enveloppes des moments fléchissants — poutre entière [kN·m]' + (invert ? ' — convention CHAMOA (+ = fibre supérieure tendue)' : ' (+ = fibre inférieure tendue)'), 'x [m]', 'M [kN·m]');
   // appuis
   layout.shapes = deck.beam.x0.map(x => ({ type: 'line', x0: x, x1: x, y0: 0, y1: 1, yref: 'paper', line: { color: theme().grid, width: 1, dash: 'dash' } }));
-  Plotly.newPlot(div, data, layout, CONFIG);
+  plot(div, data, layout, CONFIG);
 }
 
 export function shearPlot(div, deck, perm, cases) {
@@ -57,15 +58,17 @@ export function shearPlot(div, deck, perm, cases) {
   });
   const layout = baseLayout('Enveloppes des efforts tranchants — poutre entière [kN]', 'x [m]', 'V [kN]');
   layout.shapes = deck.beam.x0.map(x => ({ type: 'line', x0: x, x1: x, y0: 0, y1: 1, yref: 'paper', line: { color: theme().grid, width: 1, dash: 'dash' } }));
-  Plotly.newPlot(div, data, layout, CONFIG);
+  plot(div, data, layout, CONFIG);
 }
 
 export function reactionPlot(div, deck, perm, cases) {
   const labels = deck.beam.x0.map((_, i) => i === 0 ? 'C0' : i === deck.beam.n ? 'C' + deck.beam.n : 'P' + i);
   const data = [{ x: labels, y: perm.R, name: 'Permanent', type: 'bar', marker: { color: '#6b6b6b' } }];
   cases.forEach((c, i) => data.push({ x: labels, y: c.res.Rmax, name: c.label + ' max', type: 'bar', marker: { color: PALETTE[i % PALETTE.length] } }));
+  // valeur inscrite sur chaque barre
+  for (const t of data) Object.assign(t, { texttemplate: '%{y:.0f}', textposition: 'outside', textfont: { size: 10 }, cliponaxis: false });
   const layout = baseLayout('Réactions d\'appui [kN]', 'Appui', 'R [kN]', { barmode: 'group', hovermode: 'closest' });
-  Plotly.newPlot(div, data, layout, CONFIG);
+  plot(div, data, layout, CONFIG);
 }
 
 /** Famille de courbes K(y) pour e = 0, b/4, b/2, 3b/4, b (travée j). */
@@ -77,7 +80,7 @@ export function kPlot(div, deck, j = 0) {
   const data = T.map((row, i) => ({ x: ys, y: row, name: `e = ${es[i].toFixed(2)} m (${['0', 'b/4', 'b/2', '3b/4', 'b'][i]})`, mode: 'lines', line: { color: PALETTE[i], width: 1.8 } }));
   const layout = baseLayout(`Coefficients K de Guyon-Massonnet — travée ${j + 1}, θ = ${(b / L).toFixed(3)}, ν = ${deck.nu}, α = ${deck.alphaTorsion}`, 'y [m]', 'K');
   layout.shapes = [{ type: 'line', x0: -b, x1: b, y0: 1, y1: 1, line: { color: theme().grid, width: 1, dash: 'dash' } }];
-  Plotly.newPlot(div, data, layout, CONFIG);
+  plot(div, data, layout, CONFIG);
 }
 
 /** m_x(y) aux sections clés : permanent et un cas de trafic (max et min). */
@@ -90,7 +93,7 @@ export function transversePlot(div, deck, keys, perm, caseRes, caseLabel) {
     data.push({ x: deck.ys, y: perm.mx[k.idx], name: `${k.label} — permanent`, mode: 'lines', line: { color: col, width: 1, dash: 'dash' }, showlegend: false, visible: 'legendonly' });
   });
   const layout = baseLayout(`Moments longitudinaux par mètre m_x(y) — ${caseLabel} [kN·m/m]`, 'y [m]', 'm_x [kN·m/m]', { hovermode: 'closest' });
-  Plotly.newPlot(div, data, layout, CONFIG);
+  plot(div, data, layout, CONFIG);
 }
 
 /** Facteur de répartition f(y) = m_x(y)/(M/2b) aux sections clés (à comparer aux KTRANS de CHAMOA). */
@@ -98,7 +101,7 @@ export function factorPlot(div, deck, keys, factors, caseLabel) {
   const data = keys.map((k, i) => ({ x: deck.ys, y: (k.kind === 'support' ? factors.fMin : factors.fMax)[k.idx], name: `${k.label} (K = ${factors.K[k.idx].toFixed(3)})`, mode: 'lines+markers', line: { color: PALETTE[i % PALETTE.length] }, marker: { size: 5 } }));
   const layout = baseLayout(`Facteur de répartition transversale f(y) = m_x(y) / (M / 2b) — ${caseLabel}`, 'y [m]', 'f', { hovermode: 'closest' });
   layout.shapes = [{ type: 'line', x0: -deck.b, x1: deck.b, y0: 1, y1: 1, line: { color: theme().grid, width: 1, dash: 'dash' } }];
-  Plotly.newPlot(div, data, layout, CONFIG);
+  plot(div, data, layout, CONFIG);
 }
 
 /** Lignes d'influence de M (section), V⁻/V⁺ et réaction d'un appui. */
@@ -117,7 +120,7 @@ export function influencePlot(div, deck, secIdx, supIdx) {
   layout.margin = { ...layout.margin, r: 70 };
   layout.shapes = [{ type: 'line', x0: sec.x, x1: sec.x, y0: 0, y1: 1, yref: 'paper', line: { color: PALETTE[0], width: 1, dash: 'dash' } },
     ...bm.x0.map(x => ({ type: 'line', x0: x, x1: x, y0: 0, y1: 1, yref: 'paper', line: { color: theme().grid, width: 1, dash: 'dot' } }))];
-  Plotly.newPlot(div, data, layout, CONFIG);
+  plot(div, data, layout, CONFIG);
 }
 
 /** Surface m_x(x, y) d'un cas (max ou min). */
@@ -131,7 +134,7 @@ export function surfacePlot(div, deck, res, which = 'mxMax', title = '') {
     margin: { l: 0, r: 0, t: 40, b: 0 }, height: 420,
     scene: { xaxis: { title: 'x [m]', gridcolor: grid }, yaxis: { title: 'y [m]', gridcolor: grid }, zaxis: { title: 'm_x [kN·m/m]', gridcolor: grid }, aspectmode: 'manual', aspectratio: { x: 2, y: 1, z: 0.6 } },
   };
-  Plotly.newPlot(div, data, layout, CONFIG);
+  plot(div, data, layout, CONFIG);
 }
 
 /** Diagramme de ferraillage longitudinal A_s(x) [cm²/m] : enveloppes inférieure et supérieure sur la largeur. */
@@ -144,7 +147,7 @@ export function asPlot(div, deck, design, label) {
   ];
   const layout = baseLayout(`Ferraillage longitudinal par mètre — ${label} [cm²/m]`, 'x [m]', 'A_s [cm²/m] (sup. vers le bas)');
   layout.shapes = deck.beam.x0.map(x => ({ type: 'line', x0: x, x1: x, y0: 0, y1: 1, yref: 'paper', line: { color: theme().grid, width: 1, dash: 'dash' } }));
-  Plotly.newPlot(div, data, layout, CONFIG);
+  plot(div, data, layout, CONFIG);
 }
 
 /** Moments transversaux m_y(y) d'une travée : permanent, cas de trafic choisis, enveloppe combinée. */
@@ -160,7 +163,7 @@ export function myPlot(div, deck, trans, j, extra = []) {
   });
   extra.forEach((e, i) => data.push({ x: ys, y: e.y, name: e.name, mode: 'lines', line: { color: PALETTE[(items.length + i) % PALETTE.length], width: 2.5, dash: 'dash' } }));
   const layout = baseLayout(`Moments transversaux m_y(y) — travée ${j + 1} (dalle isostatique équivalente L_eq = ${sp.L.toFixed(2)} m, x = L_eq/2, ν = ${deck.nu}) [kN·m/m]`, 'y [m]', 'm_y [kN·m/m]', { hovermode: 'closest' });
-  Plotly.newPlot(div, data, layout, CONFIG);
+  plot(div, data, layout, CONFIG);
 }
 
 /** Abaque d'épaisseur PSI.DA du guide SETRA 1989 (numérisé) avec le point du projet. */
@@ -184,6 +187,6 @@ export function abaquePlot(div, spans, ab, k = 1, abaques) {
     if (k < 1) data.push({ x: [ab.thetaL], y: [ab.h25 * k], name: `Projet × ${k}`, mode: 'markers', marker: { size: 10, symbol: 'diamond-open', color: '#000' } });
     xTitle = 'travée de rive θℓ [m]'; title = `Abaque PSI.DA à ${n === 3 ? '3' : '4'} travées (guide SETRA 1989, p. ${n === 3 ? '66' : '67'}, B25)`;
   }
-  Plotly.newPlot(div, data, baseLayout(title, xTitle, 'épaisseur h [m]', { hovermode: 'closest', legend: { orientation: 'v', x: 1.02, y: 1 }, margin: { l: 60, r: 120, t: 40, b: 50 } }), CONFIG);
+  plot(div, data, baseLayout(title, xTitle, 'épaisseur h [m]', { hovermode: 'closest', legend: { orientation: 'v', x: 1.02, y: 1 }, margin: { l: 60, r: 120, t: 40, b: 50 } }), CONFIG);
 }
 export { theme, baseLayout, PALETTE };

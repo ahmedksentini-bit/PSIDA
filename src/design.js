@@ -253,7 +253,7 @@ export function designTransverseEC(deck, trans, longEC, opt = {}) {
     const groupes = opt.rail.groupes.map((G, k) => ({ gamma: G.gamma, psi0: G.psi0, psi1: G.psi1, res: asCase(spans, sp => sp.rail.groupes[k].env) }));
     comb = combineRail(perm, groupes, { thermal, settle });
   } else {
-    const ec = { TS: asCase(spans, sp => sp.ec.TS), UDL: asCase(spans, sp => sp.ec.UDL), footway: asCase(spans, sp => sp.ec.footway), gr1b: asCase(spans, sp => sp.ec.gr1b), gr3: asCase(spans, sp => sp.ec.gr3) };
+    const ec = { TS: asCase(spans, sp => sp.ec.TS), UDL: asCase(spans, sp => sp.ec.UDL), ...(spans.every(sp => sp.ec.LM1 && sp.ec.LM1f) ? { LM1: asCase(spans, sp => sp.ec.LM1), LM1f: asCase(spans, sp => sp.ec.LM1f) } : {}), footway: asCase(spans, sp => sp.ec.footway), gr1b: asCase(spans, sp => sp.ec.gr1b), gr3: asCase(spans, sp => sp.ec.gr3) };
     comb = combineEC(perm, ec, { thermal, settle });
   }
   const mins = minimumSteel(sec, mat, { kSlab: opt.kSlab ?? 1.2 });

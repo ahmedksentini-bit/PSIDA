@@ -93,7 +93,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
   table(['Charge permanente', 'q nominale [kN/m]', 'k min', 'k max', 'q min / q max [kN/m]'],
     files.map(f => [f.label, F2(f.q), F2(f.kmin), F2(f.kmax), `${F2(f.q * f.kmin)} / ${F2(f.q * f.kmax)}`]));
   if (isF) para(`Surcharges réglementaires (Fascicule 61 titre II) : pont de ${f61.classe}ʳᵉ classe, largeur chargeable L_c = ${F2(f61.Lc)} m, ${f61.nv} voie(s) de ${F2(f61.v)} m ; systèmes A(l), Bc, Bt${f61.Bt ? '' : ' (non applicable)'}, Mc120, D240 et trottoirs (1,5 kN/m², charge locale 4,5 kN/m² en flexion transversale).`);
-  else para(`Charges de trafic (EN 1991-2) : ${ec.lanes.n} voie(s) conventionnelle(s) de ${F2(ec.lanes.wl)} m (aire résiduelle ${F2(ec.lanes.wr)} m), ${ec.alpha.label} ; LM1 (TS + UDL), LM2, trottoirs (gr1a 3 kN/m², gr3 5 kN/m²).`);
+  else para(`Charges de trafic (EN 1991-2) : ${ec.lanes.n} voie(s) conventionnelle(s) de ${F2(ec.lanes.wl)} m (aire résiduelle ${F2(ec.lanes.wr)} m), ${ec.alpha.label} ; LM1 (tandem TS et UDL d'une même voie placés ensemble dans chaque disposition transversale, enveloppe prise sur la charge LM1 complète comme dans CHAMOA ; valeur fréquente 0,75 TS + 0,40 UDL évaluée de même), LM2, trottoirs (gr1a 3 kN/m², gr3 5 kN/m²).`);
   if (thermal) para(`Gradient thermique ${p.dT[0]} / ${p.dT[1]} °C ; tassements aléatoires ${F1(p.delta * 100)} cm (module différé E/(1 + ${p.phiFluage})).`);
 
   // ---------------------------------------------------------------------------------------------------------- 2
@@ -137,7 +137,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
   // ---------------------------------------------------------------------------------------------------------- 5
   h1('Coefficients de répartition transversale', 5);
   const cases = isF ? [['Trottoirs', f61.trottoir], ['A(l)', f61.A], ['Bc', f61.Bc], ['Bt', f61.Bt], ['Mc120', f61.Mc120]]
-    : [['TS', ec.TS], ['UDL', ec.UDL], ['LM1', ec.LM1], ['LM2', ec.gr1b], ['Trottoirs gr3', ec.gr3]];
+    : [['TS', ec.TS], ['UDL', ec.UDL], ['LM1', ec.LM1], ...(ec.LM1f ? [['LM1 fréquent', ec.LM1f]] : []), ['LM2', ec.gr1b], ['Trottoirs gr3', ec.gr3]];
   const Kspan = (res, j) => { if (!res) return null; const K = deck.transverseFactors(res).K; return Math.max(...sectionRows(deck, j).filter(r => r.fr > 0.15 && r.fr < 0.85).map(r => K[r.idx])); };
   table(['Travée', ...cases.map(c => c[0])], deck.spans.map((_, j) => [String(j + 1), ...cases.map(([, r]) => (r ? F3(Kspan(r, j)) : '—'))]));
   comment(isF ? 'Coefficient de la fibre la plus sollicitée, rapport du moment par mètre m_x(y) au moment moyen M/2b (Guyon-Massonnet, premier harmonique). Chaque charge reçoit le coefficient et le δ de la travée qui la porte (convention PSIDA.EL) ; bc et a1 sont inclus dans les charges.' : 'Facteur K = max_y m_x(y)/(M/2b), équivalent du KTRANS de CHAMOA ; la L_eq de la section est utilisée (moyenne des deux travées sur appui).');

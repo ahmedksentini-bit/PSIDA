@@ -62,6 +62,15 @@ test('CHAMOA ch.4 — LM1 classe 2 : moment de poutre, facteur de répartition K
   assert.ok(f.fMax[T1][4] > 1.05 && f.fMax[T1][4] < 1.1804, 'facteur fibre d\'axe travée 1 entre 1,05 et 1,18');
   // symétrie
   f.fMax[T1].forEach((v, i) => assert.ok(Math.abs(v - f.fMax[T1][8 - i]) < 1e-6, 'symétrie'));
+  // LM1 évalué d'un bloc (TS et UDL de la même voie dans le même arrangement) ; valeur fréquente 0,75 TS + 0,40 UDL :
+  // CHAMOA, LM1 FREQ, KTRANS 1,37905 (travées 1 et 4) et 1,32205 (travées 2 et 3), un coefficient par valeur
+  assert.ok(ec.LM1f, 'LM1 fréquent évalué');
+  const ff = deck.transverseFactors(ec.LM1f);
+  // travée 1 : le K caractéristique est déjà 2 % sous CHAMOA (1,328 / 1,358, hypothèse H4 de répartition) ; l'écart
+  // se retrouve sur la valeur fréquente (1,334 / 1,379)
+  rel(ff.K[T1], 1.37905, 0.04, 'KTRANS fréquent travée 1');
+  rel(ff.K[P1], 1.32205, 0.02, 'KTRANS fréquent P1');
+  assert.ok(ff.K[T1] > f.K[T1], 'K fréquent > K caractéristique (le TS pèse davantage)');
 });
 
 test('CHAMOA ch.4 — gradient thermique, tassements aléatoires, kmin/kmax et ELS caractéristique à P1', () => {

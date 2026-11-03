@@ -3,6 +3,7 @@
  * coupes transversales (en travée et sur appui), nomenclature et métré, graphique A_s mis en place / requis.
  */
 import { areaOf, massPerM } from '../src/rebar.js';
+import { plot } from './plotvalues.js';
 
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const fr = (v, d = 2) => Number(v).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: d });
@@ -147,7 +148,7 @@ export function providedPlot(div, deck, plan) {
     { x: xs, y: cm(plan.check.map(r => -r.provTop)), name: 'sup. mis en place', mode: 'lines', line: { color: '#c8552b', width: 3, shape: 'hv' }, fill: 'tozeroy', fillcolor: 'rgba(200,85,43,0.10)' },
   ];
   const cs = getComputedStyle(document.documentElement), ink = cs.getPropertyValue('--ink').trim() || '#1d2433', grid = cs.getPropertyValue('--line').trim() || '#d9dee7';
-  Plotly.newPlot(div, data, { title: { text: 'A_s mis en place et requis [cm²/m] (supérieur vers le bas)', font: { size: 14 } }, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: ink, size: 12 },
+  plot(div, data, { title: { text: 'A_s mis en place et requis [cm²/m] (supérieur vers le bas)', font: { size: 14 } }, paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { color: ink, size: 12 },
     margin: { l: 60, r: 20, t: 40, b: 50 }, xaxis: { title: { text: 'x [m]' }, gridcolor: grid }, yaxis: { title: { text: 'A_s [cm²/m]' }, gridcolor: grid }, legend: { orientation: 'h', y: -0.25 }, hovermode: 'x unified',
     shapes: deck.beam.x0.map(x => ({ type: 'line', x0: x, x1: x, y0: 0, y1: 1, yref: 'paper', line: { color: grid, width: 1, dash: 'dash' } })) }, { responsive: true, displaylogo: false });
 }
