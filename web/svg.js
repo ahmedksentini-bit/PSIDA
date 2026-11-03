@@ -89,6 +89,7 @@ export function crossSectionSVG({ deck, loads = [], title = 'Coupe transversale'
   // charges du cas (roues, bandes)
   for (const ld of loads) {
     const c = ld.color || 'var(--acc, #0b5fa5)';
+    if (ld.kind === 'text') { s += `<text x="${sy(ld.e)}" y="${yTop - 54}" text-anchor="middle" font-weight="600" fill="${c}">${esc(ld.label)}</text>`; continue; }
     if (ld.kind === 'wheel') {
       const X = sy(ld.e), w = Math.max(8, (ld.w || 0.4) * scale);
       s += `<rect x="${X - w / 2}" y="${yTop - 22}" width="${w}" height="12" fill="${c}" opacity="0.9"/>`;
