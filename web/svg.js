@@ -58,12 +58,56 @@ export function elevationSVG(deck, keys) {
  */
 export function crossSectionSVG({ deck, loads = [], title = 'Coupe transversale', note = '', rail = null }) {
   const b = deck.b, h = deck.h;
-  const W = 1000, H = 300, m = { l: 50, r: 50 };
+  const W = 1000, m = { l: 50, r: 50 };
   const sy = y => m.l + (y + b) / (2 * b) * (W - m.l - m.r);
   const scale = (W - m.l - m.r) / (2 * b);
   const hPx = Math.max(16, Math.min(60, h * scale));
-  const yTop = 150;
   const { y1, y2 } = deck.g.roadway;
+  const fr = v => f2(v).replace('.', ',');
+
+  // ── placement des libellés sans chevauchement ──
+  // Chaque libellé occupe un intervalle horizontal sur un « étage » (14 px) ; il prend le plus bas étage libre à
+  // partir de son étage préféré. Les flèches (roues, charges linéiques) sont des obstacles : un texte ne les traverse
+  // pas. Les libellés longs (récapitulatifs) passent sous la coupe, en légende.
+  const LH = 14, wOf = (t, bold) => (bold ? 7.0 : 6.4) * [...t].length + 8;
+  const occ = []; // occ[lev] = [[x0, x1], …]
+  const free = (lev, a, z) => !(occ[lev] || []).some(([p, q]) => a < q && z > p);
+  const take = (lev, a, z) => { (occ[lev] = occ[lev] || []).push([a, z]); };
+  const clampX = (x, w) => Math.min(Math.max(x, 4 + w / 2), W - 4 - w / 2);
+  const place = (x, w, pref, maxLev = 12) => { const X = clampX(x, w); let lev = pref; while (lev < maxLev && !free(lev, X - w / 2, X + w / 2)) lev++; take(lev, X - w / 2, X + w / 2); return { X, lev }; };
+  const items = [], shafts = [], captions = [];
+  // roues : leur flèche occupe l'étage 0 (texte de base à yTop − 38 couvre la hampe yTop − 44 … − 24)
+  for (const ld of loads) if (ld.kind === 'wheel') { const X = sy(ld.e); take(0, X - 3, X + 3); }
+  // charges permanentes linéiques : libellé À CÔTÉ du sommet de sa hampe (côté extérieur du tablier), hampe du
+  // sommet du libellé jusqu'au tablier. Une hampe occupe les étages 0 … L de son libellé : un autre libellé ne la
+  // traverse qu'au-dessus (d'où l'escalier quand plusieurs charges sont voisines).
+  const lineLoads = [...(deck.g.lines || [])].map((l) => ({ l, x: sy(l.e) }));
+  const order = [...lineLoads.filter((q) => q.x < W / 2).sort((p, q) => p.x - q.x), ...lineLoads.filter((q) => q.x >= W / 2).sort((p, q) => q.x - p.x)];
+  for (const { l, x } of order) {
+    const txt = `${l.label ? l.label + ' ' : ''}${fr(l.g)} kN/m`, w = wOf(txt) - 4;
+    const out = x < W / 2 ? -1 : 1, fits = (d) => (d < 0 ? x - 5 - w >= 2 : x + 5 + w <= W - 2);
+    const side = fits(out) ? out : -out;
+    const a0 = side < 0 ? x - 5 - w : x + 5, z0 = a0 + w;
+    let lev = 0; while (lev < 12 && !free(lev, a0, z0)) lev++;
+    take(lev, a0, z0);
+    for (let k = 0; k <= lev; k++) take(k, x - 3, x + 3);
+    items.push({ kind: 'line', x, X: side < 0 ? z0 : a0, anchor: side < 0 ? 'end' : 'start', lev, txt, color: 'var(--warn, #9a5b00)' });
+  }
+  // libellés des bandes (voies, files, chenilles…) puis libellés de charges (TS, LM2) au-dessus des roues
+  for (const ld of loads) if (ld.kind === 'band' && ld.label) { const w = wOf(ld.label); const r = place((sy(ld.e1) + sy(ld.e2)) / 2, w, 0); items.push({ kind: 'band', X: r.X, lev: r.lev, txt: ld.label, color: ld.color || 'var(--acc, #0b5fa5)' }); }
+  for (const ld of loads) if (ld.kind === 'text') {
+    const w = wOf(ld.label, true);
+    if (ld.caption || w > W - 20) { captions.push(ld.label); continue; }
+    const r = place(sy(ld.e), w, 1); items.push({ kind: 'text', X: r.X, lev: r.lev, txt: ld.label, color: ld.color || 'var(--acc, #0b5fa5)', bold: true });
+  }
+  for (const ld of loads) if (ld.kind === 'caption') captions.push(ld.label);
+  const maxLev = items.reduce((a, it) => Math.max(a, it.lev), 0);
+  const top0 = note ? 52 : 34; // sous le titre et la note
+  const yTop = Math.max(150, top0 + 38 + LH * maxLev + 14);
+  const yLab = lev => yTop - 38 - LH * lev;
+  const yAx0 = yTop + hPx + 26;
+  const H = yAx0 + 44 + (captions.length ? 16 * captions.length + 4 : 0);
+
   let s = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, sans-serif" font-size="12" fill="currentColor" role="img" aria-label="${esc(title)}">`;
   s += `<text x="${m.l}" y="22" font-weight="600">${esc(title)}</text>`;
   if (note) s += `<text x="${m.l}" y="40" opacity="0.75">${esc(note)}</text>`;
@@ -75,33 +119,26 @@ export function crossSectionSVG({ deck, loads = [], title = 'Coupe transversale'
   if (!rail) s += `<rect x="${sy(y1)}" y="${yTop - 4}" width="${sy(y2) - sy(y1)}" height="4" fill="var(--road, #4d5566)"/>`;
   // dalle
   s += `<rect x="${sy(-b)}" y="${yTop}" width="${sy(b) - sy(-b)}" height="${hPx}" fill="var(--slab, #9aa5b8)" stroke="currentColor" stroke-width="1.2"/>`;
-  // charges permanentes linéiques (flèches)
-  // libellés étagés quand des charges voisines se chevaucheraient (≈ 6,5 px par caractère en corps 12)
-  const lastEnd = [];
-  for (const l of [...(deck.g.lines || [])].sort((p, q) => p.e - q.e)) {
-    const X = sy(l.e), txt = `${l.label ? l.label + ' ' : ''}${f2(l.g)} kN/m`, w = 6.5 * txt.length;
-    let lev = 0; while (lev < 3 && lastEnd[lev] !== undefined && X - w / 2 < lastEnd[lev] + 6) lev++;
-    lastEnd[lev] = X + w / 2;
-    const yl = yTop - 52 - 14 * lev;
-    s += `<line x1="${X}" y1="${yl + 4}" x2="${X}" y2="${yTop - 14}" stroke="var(--warn, #9a5b00)" stroke-width="1.6" marker-end="url(#arr)"/>`;
-    s += `<text x="${X}" y="${yl}" text-anchor="middle" fill="var(--warn, #9a5b00)">${esc(txt)}</text>`;
-  }
-  // charges du cas (roues, bandes)
+  // bandes et roues du cas
   for (const ld of loads) {
     const c = ld.color || 'var(--acc, #0b5fa5)';
-    if (ld.kind === 'text') { s += `<text x="${sy(ld.e)}" y="${yTop - 54}" text-anchor="middle" font-weight="600" fill="${c}">${esc(ld.label)}</text>`; continue; }
     if (ld.kind === 'wheel') {
       const X = sy(ld.e), w = Math.max(8, (ld.w || 0.4) * scale);
       s += `<rect x="${X - w / 2}" y="${yTop - 22}" width="${w}" height="12" fill="${c}" opacity="0.9"/>`;
       s += `<line x1="${X}" y1="${yTop - 44}" x2="${X}" y2="${yTop - 24}" stroke="${c}" stroke-width="1.4" marker-end="url(#arr)"/>`;
-    } else {
+    } else if (ld.kind === 'band') {
       const X1 = sy(ld.e1), X2 = sy(ld.e2);
       s += `<rect x="${X1}" y="${yTop - 34}" width="${X2 - X1}" height="22" fill="${c}" opacity="${ld.opacity || 0.25}" stroke="${c}" stroke-width="0.8"/>`;
-      if (ld.label) s += `<text x="${(X1 + X2) / 2}" y="${yTop - 38}" text-anchor="middle" fill="${c}">${esc(ld.label)}</text>`;
     }
   }
+  // libellés placés, flèches des charges linéiques
+  for (const it of items) {
+    const y = yLab(it.lev);
+    if (it.kind === 'line') s += `<line x1="${it.x}" y1="${y - 9}" x2="${it.x}" y2="${yTop - 14}" stroke="${it.color}" stroke-width="1.6" marker-end="url(#arr)"/>`;
+    s += `<text x="${it.X}" y="${y}" text-anchor="${it.anchor || 'middle'}"${it.bold ? ' font-weight="600"' : ''} fill="${it.color}">${esc(it.txt)}</text>`;
+  }
   // ordonnées de calcul
-  const yAx = yTop + hPx + 26;
+  const yAx = yAx0;
   s += `<line x1="${sy(-b)}" y1="${yAx}" x2="${sy(b)}" y2="${yAx}" stroke="currentColor" stroke-width="0.8"/>`;
   for (const y of deck.ys) {
     const X = sy(y);
@@ -109,6 +146,7 @@ export function crossSectionSVG({ deck, loads = [], title = 'Coupe transversale'
     s += `<text x="${X}" y="${yAx + 18}" text-anchor="middle">${f2(y)}</text>`;
   }
   s += `<text x="${sy(0)}" y="${yAx + 36}" text-anchor="middle" opacity="0.75">y [m] — largeur 2b = ${f2(2 * b)} m, ${rail ? `${rail.nV} voie${rail.nV > 1 ? 's' : ''} ferrée${rail.nV > 1 ? 's' : ''} (axes y = ${rail.voies.map(f2).join(' et ')} m)` : `chaussée ${f2(y2 - y1)} m`}</text>`;
+  captions.forEach((t, k) => { s += `<text x="${m.l}" y="${yAx + 56 + 16 * k}" fill="var(--acc, #0b5fa5)">${esc(t)}</text>`; });
   s += `<defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>`;
   s += `</svg>`;
   return s;
