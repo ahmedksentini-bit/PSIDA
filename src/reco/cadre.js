@@ -76,6 +76,13 @@ export function recommandationsCadre(out, data, { budget = 4000 } = {}) {
     return { valeur: dichotomie(vals, v => { const o = essai({ ...base, [champ]: str(v) }); return !!o && verifie(o); }) };
   };
 
+  // ------------------------------------------------------------------ durabilité (classe de béton, enrobage nominal)
+  const Dd = out.durab;
+  if (Dd && !Dd.okBeton) items.push({ domaine: 'Durabilité', lieu: 'Cadre', verification: 'Classe de béton minimale', constat: `C${Dd.fck} < ${Dd.classeMin} (${Dd.critique})`, regle: 'EN 1992-1-1 tableau E.1N, NF EN 206/CN',
+    actions: [{ texte: `Béton ${Dd.classeMin} au moins`, champ: 'cf_fc28', unite: 'MPa', valeur: String(Dd.fckMin), valeurChamp: String(Dd.fckMin) }], cibles: [{ type: 'durab', k: 'beton' }] });
+  if (Dd && !Dd.okEnrobage) items.push({ domaine: 'Durabilité', lieu: 'Cadre', verification: 'Enrobage nominal', constat: `${Math.round(Dd.enrobage)} mm < c_nom = ${Dd.cnom} mm (S${Dd.S}, ${Dd.expos.join(', ')})`, regle: 'EN 1992-1-1 § 4.4.1, tableaux 4.3N et 4.4N',
+    actions: [{ texte: `Enrobage au nu ${(Dd.cnom / 1000).toFixed(3).replace('.', ',')} m`, champ: 'cf_enrob', unite: 'm', valeur: (Dd.cnom / 1000).toFixed(3).replace('.', ','), valeurChamp: (Dd.cnom / 1000).toFixed(3) }], cibles: [{ type: 'durab', k: 'enrobage' }] });
+
   // ------------------------------------------------------------------ sections (flexion, effort tranchant, fissuration, barres)
   const fams = FAMILLES.filter(f => out.blocs.some(r => r.sections.some(s => f.test(s.barre) && s.echec)));
   const presentes = FAMILLES.filter(f => out.blocs.some(r => r.sections.some(s => f.test(s.barre))));

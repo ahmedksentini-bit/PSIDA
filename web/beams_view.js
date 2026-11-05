@@ -2,6 +2,8 @@
 import { MENTION, PARAMETRES_REFERENTIEL } from '../src/loads_rail.js';
 import { deformationsBlocks } from './rail_deformations_view.js';
 import { indicationsParCible, cleCible, texteChamps } from '../src/reco/poutres.js';
+import { durabiliteLignes } from '../src/plans/poutres_ba.js';
+import { texteDurabilite } from '../src/durabilite.js';
 const F = (v, n = 1) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: n, maximumFractionDigits: n }));
 const F0 = v => F(v, 0), F1 = v => F(v, 1), F2 = v => F(v, 2), F3 = v => F(v, 3);
 const CM = v => (v === null || v === undefined || !Number.isFinite(v) ? '—' : F(v * 1e4, 1));
@@ -301,6 +303,7 @@ export function beamsBlocks(r, { reco = null } = {}) {
         ok(q.cisaillementBAEL.ok && q.ELS.BAEL.okC && q.ELS.EC.okC && q.ULS.BAEL.As != null && q.ULS.EC.As != null)])), { small: true, ...hints(r.appuis.flatMap(a => a.beams.map(q => ({ a, q }))), x => (x.q.cisaillementBAEL.ok && x.q.ELS.BAEL.okC && x.q.ELS.EC.okC && x.q.ULS.BAEL.As != null && x.q.ULS.EC.As != null ? null : hint({ si: x.a.i, type: 'BAappui', k: x.q.k }))) });
     comment(`Poutre continue d'inertie constante (dossier Sétra PSI-BA 77 : ouvrage coulé sur cintre), répartition transversale ${inp.courbon ? `de Courbon (entretoises intermédiaires infiniment rigides : R_k = P (1/n + e y_k/Σ y²))` : 'de Guyon-Massonnet par travée (portées de Guyon tirées des portées équivalentes de la poutre continue)'}. Sur appui : combinaisons des moments négatifs (BAEL : 1,35 G + min[1,605 (A ou B + trottoirs) ; 1,35 (Mc120 + trottoirs)] ; EC : 1,35 G + 1,35 min(gr1a ; gr1b)), réduites au nu de l'entretoise d'appui de ${F2(inp.tePile ?? 0.5)} m (|M| − V e/2, PSI-BA) ; section rectangulaire comprimée en partie basse (largeur max(talon ; gousset)), armatures supérieures réparties dans le hourdis ; ELS en section fissurée (n = 15). Gousset nécessaire : max(V_u/(τ̄_u d) ; largeur pour σ_bc ≤ 0,6 f_c28). Les épaisseurs des goussets sont à reporter dans le champ « gousset d'appui » (dossier PSI-BA : même épaisseur pour toutes les poutres d'un appui, rallonger les goussets).`);
   }
+  B.push(...durabiliteBlocks(r, hint));
   B.push(...indiquerHourdis(localBlocks(r), hint));
   h2('Réactions caractéristiques par ligne d\'appui (pour l\'onglet Appuis et fondations)');
   table(['Ligne', 'G', 'A(l)', 'Bc (δ appui)', 'Mc120 (δ appui)', 'Trottoirs', 'TS', 'UDL'], r.lines.map((l, i) => [i === 0 || i === r.lines.length - 1 ? `Culée C${i}` : `Pile P${i}`, F0(l.G), F0(l.A), F0(l.Bc), F0(l.Mc120), F0(l.trott), F0(l.TS), F0(l.UDL)]));
@@ -377,6 +380,7 @@ function beamsBlocksRail(r, { reco = null } = {}) {
     }
   }
   for (const [si, s] of r.spans.entries()) if (s.rail.deformations) B.push(...indiquerDefo(deformationsBlocks(s.rail.deformations, { travee: `travée de ${F2(s.L)} m` }), s.rail.deformations, si, hint));
+  B.push(...durabiliteBlocks(r, hint));
   B.push(...indiquerHourdis(localBlocks(r), hint));
   h2('Réactions caractéristiques par ligne d\'appui (transmises aux appuis)');
   table(['Ligne', 'G', 'G min', 'LM71 × α, une voie (sans Φ)', 'Φ', ...(P.sw2 ? ['SW/2, une voie (sans Φ)'] : []), 'Trafic, toutes voies, Φ inclus'],
@@ -408,4 +412,13 @@ export function poutresNote(r, { version = '' } = {}) {
       { t: 'ref', text: 'Fascicule 61 titre II ; BPEL 91 révisé 99 (classe II) ; BAEL 91. Guyon (1946), Massonnet (1950) : répartition transversale ; Sétra, programme PONTYPE / PAP.' },
       { t: 'ref', text: 'Z. P. Bažant (1972) ; A. Ghali, R. Favre, M. Elbadry, Concrete Structures: Stresses and Deformations (2012) — calcul pas à pas des effets différés.' }],
   };
+}
+
+function durabiliteBlocks(r, hint) {
+  const L = durabiliteLignes(r); if (!L) return [];
+  const B = [{ t: 'h2', text: 'Durabilité et enrobage (EN 1992-1-1 § 4.4.1)' }];
+  const hs = L.rows.map(q => (q.ok || !hint ? null : hint({ type: 'durab', k: q.k })));
+  B.push({ t: 'table', head: ['Vérification', 'Projet', 'Exigence', 'Résultat'], rows: L.rows.map(q => [...q.cells, q.ok ? 'OK' : 'NON']), small: true, ...(hs.some(Boolean) ? { hints: hs } : {}) });
+  B.push({ t: 'p', text: texteDurabilite(L.Dd) + ' Les plans des poutres BA prennent c_nom au nu des cadres ; la hauteur utile du calcul doit couvrir les lits réellement dessinés.', cls: 'small' });
+  return B;
 }

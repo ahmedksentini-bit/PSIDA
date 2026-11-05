@@ -527,6 +527,13 @@ Contrôle sur la note « appuis et fondations » de d'un pont-dalle précontrain
 - **Hourdis** : transversales sur toute la largeur n b₁, longitudinales de répartition en deux nappes. **Entretoises d'about** : barres du vérinage (retours 15 φ), cadres HA10. **Entretoises intermédiaires** : E1 (retours max(0,30 m ; H/3)), E2 (retours 0,20 m), E3, E4 du plan de ferraillage.
 - **Cohérence** : la feuille de ferraillage reprend les masses du bordereau (une poutre et son hourdis sur b₁).
 
+## 1 septdecies novies. Durabilité et enrobage (v0.99.24, `test/durabilite.test.js`)
+
+- **Classe de béton minimale** : la plus exigeante des classes d'exposition saisies ; EN 1992-1-1 annexe E, tableau E.1N (indicatif) ou NF EN 206/CN (France, 50 ans : XC1–XC2 C20/25 ; XC3, XC4, XD1, XF1, XF2 C25/30 ; XD2, XS1, XS2, XF3, XF4, XA1 C30/37 ; XD3, XS3, XA2 C35/45 ; XA3 C40/50).
+- **Classe structurale** (tableau 4.3N, valeurs recommandées) : S4 ; +2 pour 100 ans ; −1 si le béton atteint le seuil de la colonne (C30/37, C35/45, C40/50, C45/55) ; −1 pour la dalle (géométrie de dalle) ; bornée à S1–S6. **c_min,dur** du tableau 4.4N (béton armé), c_min = max(φ ; c_min,dur ; 10 mm), **c_nom = c_min + 10 mm**. Les classes XF et XA ne jouent que sur la classe de béton.
+- **Vérifications** : dalle — enrobage à l'axe c − Ø_long/2 ≥ c_nom (recommandation : c à l'axe) ; cadres — enrobage au nu ≥ c_nom ; poutres — classe de béton, c_nom des cadres (Ø12) appliqué aux plans BA (au moins 3 cm), et centre de gravité des lits inférieurs dessinés ≤ enrobage à l'axe du calcul (sinon hauteur utile surestimée). L'exemple PSI-BA (enrobage 10 cm, lits HA32 dans 0,38 m) sort NON : la note PSI-BA retient d'ailleurs d = 0,77 m (19 cm).
+- **Non traité** : enrobage des armatures de précontrainte (§ 4.4.1.2 (3) : gaines), hourdis des poutres et appuis (champ d'enrobage propre aux appuis), Δc_dur additionnels.
+
 ## 1 octodecies. Textes relus (v0.36)
 
 - **Guide Sétra 2007** (appareils en élastomère fretté) : voir 1 sexdecies ; exemple du § 4.2 reproduit.

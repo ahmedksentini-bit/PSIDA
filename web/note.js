@@ -18,6 +18,7 @@ import { seismicBlocks, texToText } from './seismic_note.js';
 import { ddrBlocks } from './ddr_view.js';
 import { psidpBlocks } from './psidp_view.js';
 import { deckFigures, supportSchema, distributionChart, pileProfileCharts, footingPressureChart, svgBlock } from './note_figures.js';
+import { texteDurabilite } from '../src/durabilite.js';
 
 /** Gradient thermique retenu (saisi, ou EN 1991-1-5 automatique). */
 const dTtxt = p => (p.dTauto ? `gradient thermique EN 1991-1-5 (tableaux 6.1 et 6.2, dalle béton, revêtement ${(p.dTauto.t * 100).toFixed(0)} mm : k_sur = ${p.dTauto.kHeat.toFixed(2).replace('.', ',')} / ${p.dTauto.kCool.toFixed(2).replace('.', ',')}) ${String(p.dT[0]).replace('.', ',')} / ${String(p.dT[1]).replace('.', ',')} °C pour les Eurocodes, ${p.dT61[0]} / ${p.dT61[1]} °C pour le Fascicule 61` : `gradient thermique ${p.dT[0]} / ${p.dT[1]} °C`);
@@ -91,6 +92,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
     ['f_ctm [MPa]', F2(dz.mat.fctm), 'E_s [MPa]', '200 000'],
     ['E_cm [MPa]', F0(dz.mat.Ecm), 'ouverture des fissures w_k [mm]', F2(p.mat.wkMax || 0.3)],
   ]);
+  if (st.durab) para(texteDurabilite(st.durab, { enrobage: st.durab.enrobage, objet: 'aciers longitudinaux (c − Ø/2)' }) + (st.durab.okBeton && st.durab.okEnrobage ? ' Vérifié.' : ` NON vérifié : ${[st.durab.okBeton ? '' : `béton ${st.durab.classeMin} au moins`, st.durab.okEnrobage ? '' : `enrobage à l'axe c ≥ ${F3(st.durab.cAxeMin)} m`].filter(Boolean).join(' ; ')}.`));
   h2('Charges');
   const files = deck.permanentFiles();
   table(['Charge permanente', 'q nominale [kN/m]', 'k min', 'k max', 'q min / q max [kN/m]'],

@@ -657,6 +657,18 @@ export async function recommandationsPoutres(out, data, { budget = 45000, onProg
     items.push({ domaine: 'Hourdis', lieu: 'Hourdis', verification: 'Poinçonnement sous la roue du tandem', constat: `V_Ed = ${fx(P.VEd, 0)} > V_Rd,c = ${fx(P.VRdc, 0)} kN (d = ${fx(P.d, 3)} m, v_Rd,c = ${fx(P.vRdc, 3)} MPa)`,
       regle: 'EN 1992-1-1 § 6.4.4', actions: a, cibles: [{ type: 'poinc' }] });
   }
+  // durabilité : classe de béton, centre de gravité des lits des plans BA (hauteur utile)
+  if (out.durab) {
+    const { durabiliteLignes } = await import('../plans/poutres_ba.js');
+    const L = durabiliteLignes(out);
+    for (const q of (L ? L.rows : []).filter(x => !x.ok)) {
+      if (q.k === 'beton') items.push({ domaine: 'Durabilité', lieu: 'Poutres', verification: 'Classe de béton minimale', constat: `C${out.durab.fck} < ${out.durab.classeMin} (${out.durab.critique})`, regle: 'EN 1992-1-1 tableau E.1N, NF EN 206/CN', cibles: [{ type: 'durab', k: 'beton' }],
+        actions: [{ texte: `Béton ${out.durab.classeMin} au moins`, champ: 'pt_fck', unite: 'MPa', valeur: String(out.durab.fckMin), valeurChamp: String(out.durab.fckMin), court: 'Béton des poutres f_ck', actuel: String(out.durab.fck) }] });
+      if (q.k === 'yG') { const v = (Math.ceil(q.yG * 100) / 100 + 0.01).toFixed(2);
+        items.push({ domaine: 'Durabilité', lieu: 'Poutres BA', verification: 'Hauteur utile du calcul et lits dessinés', constat: `lits inférieurs à ${fx(q.yG * 100, 1)} cm du fond pour un enrobage à l'axe de ${fx(out.inp.cover * 100, 1)} cm`, regle: 'EN 1992-1-1 § 4.4.1 et 8.2 (c_nom, espacement des barres)', cibles: [{ type: 'durab', k: 'yG' }],
+          actions: [{ texte: `Porter l'enrobage à l'axe du calcul à ${v.replace('.', ',')} m (puis relancer : les lits peuvent changer)`, champ: 'pt_cover', unite: 'm', valeur: v.replace('.', ','), valeurChamp: v, court: 'Poutres BA : enrobage à l\'axe', actuel: fx(out.inp.cover) }] }); }
+    }
+  }
   // entretoises intermédiaires (Courbon) : épaisseur nécessaire calculée directement (cisaillement, bielles)
   const EI = out.entInt;
   if (EI && !EI.erreur && !EI.ok) {

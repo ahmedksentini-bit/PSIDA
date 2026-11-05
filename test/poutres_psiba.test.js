@@ -139,3 +139,19 @@ test('PSI-BA : nomenclature et façonnage (ISO 4066) — mêmes barres et mêmes
   assert.deepEqual(F.valide().problemes, []); assert.ok(!F.deborde);
   near(F.nomenclature.R.masse, N.lignes.reduce((s, l) => s + l.masse, 0), 1e-9, 'récapitulatif');
 });
+
+test('PSI-BA : durabilité — plans à c_nom au nu des cadres, lits dessinés et hauteur utile du calcul', async () => {
+  const { donneesBA, durabiliteLignes } = await import('../src/plans/poutres_ba.js');
+  const r4 = computePoutres(parsePoutres({ ...DP, pt_entInt: '1, 2, 2, 1' })), D = donneesBA(r4);
+  assert.equal(r4.durab.cnom, 50); near(D.c, 0.05, 1e-9, 'enrobage des cadres des plans');
+  // XC4, 100 ans, cadres Ø12 : c_nom = 50 mm ; lits HA32 dans une âme de 0,38 m : le centre de gravité dépasse l'enrobage à
+  // l'axe de 10 cm du calcul (la note PSI-BA prend d = 0,77 m, soit 19 cm)
+  assert.ok(D.yG > 0.15 && !D.okYG);
+  const L = durabiliteLignes(r4); assert.equal(L.rows.find(q => q.k === 'yG').ok, false);
+  const { recommandationsPoutres } = await import('../src/reco/poutres.js');
+  const rec = await recommandationsPoutres(r4, { ...DP, pt_entInt: '1, 2, 2, 1' }, { budget: 0 });
+  const a = rec.items.find(i => i.domaine === 'Durabilité').actions[0];
+  assert.equal(a.champ, 'pt_cover'); assert.ok(+a.valeurChamp >= D.yG);
+  const tab = beamsBlocks(r4, { reco: rec }).find(b => b.t === 'table' && b.rows[0] && b.rows[0][0] === 'Classe de résistance du béton');
+  tab.rows.forEach((row, i) => assert.equal(!!tab.hints[i], row[3] === 'NON'));
+});

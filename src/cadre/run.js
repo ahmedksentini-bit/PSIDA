@@ -6,6 +6,7 @@ import { calculPicf, calculPicfBlocs } from './picf.js';
 import { epaisseurPicf } from './details.js';
 import { solDepuisProfil } from './solProfil.js';
 import { portanceCadre } from './portance.js';
+import { durabilite } from '../durabilite.js';
 
 const num = (v, d = null) => { if (v === undefined || v === null || String(v).trim() === '') return d; const x = Number(String(v).replace(',', '.')); return Number.isFinite(x) ? x : d; };
 
@@ -27,6 +28,7 @@ export function parseCadre(d) {
     systemes: { Al: true, Bc: true, Bt: true, Mc120: d.cf_mc120 !== 'non' },
     sol: d.cf_sol === 'rigide' ? 'rigide' : 'winkler', esol: num(d.cf_esol, 0), nature: d.cf_nature || 'argile', etat: d.cf_etat || 'normal',
     hEau: num(d.cf_hEau, 0), hNappe: num(d.cf_hNappe, 0), largeurChargeable: num(d.cf_lch, 0),
+    expoDur: d.cf_expoDur || 'XC4', vieDur: num(d.cf_vie, 100), refDur: d.cf_refDur === 'CN' ? 'CN' : 'EC2',
   };
   const opts = {
     ouvert, usage: { franchie: d.cf_franchie || 'eau', portee: d.cf_portee || 'route' },
@@ -70,6 +72,16 @@ function ajouterPortance(r, opts) {
 
 /** Calcul : un PICF de plus de trois cellules est découpé en blocs monolithiques ; un PIPO est calculé d'un seul tenant. */
 export function computeCadre(inp) {
+  const r = computeCadre0(inp);
+  // durabilité (EN 1992-1-1 § 4.4.1) : classe de béton, enrobage au nu des aciers comparé à c_nom (Ø0 des aciers principaux)
+  try {
+    const h = inp.hyp, D = durabilite({ expo: h.expoDur, fck: h.fc28, phi: (h.phi0 ?? 0.016) * 1000, vie: h.vieDur, ref: h.refDur });
+    r.durab = { ...D, enrobage: h.enrobage * 1000, okEnrobage: h.enrobage * 1000 >= D.cnom - 1e-6 };
+  } catch (e) { r.durab = null; }
+  return r;
+}
+
+function computeCadre0(inp) {
   if (inp.type === 'picf') { const r = calculPicfBlocs(inp.geom, inp.hyp, inp.opts); if (r.split.refus) throw new Error(r.split.refus); r.blocs.forEach(b => ajouterPortance(b, inp.opts)); return { ...r, inp }; }
   return { blocs: [ajouterPortance(calculPicf(inp.geom, inp.hyp, inp.opts), inp.opts)], split: null, inp };
 }
