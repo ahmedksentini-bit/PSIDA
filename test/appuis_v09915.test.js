@@ -43,9 +43,9 @@ test('Appareils : réactions par appareil imposées vérifiées avec les déplac
   const st = compute(parseData({ ...formDefaults(), ap_brgReac: 'C0: 900 150 ; 3000 1200' }));
   const L = st.supports.lines, b1 = L[1].EC.brg, I = b1.imposed;
   assert.equal(I.max, 3000); assert.equal(I.min, 1200);
-  assert.ok(I.psida.max > 0 && I.rows.length === 2 && I.slide);
-  const env = b1.rows.filter(r => !r.minimal).reduce((m, r) => Math.max(m, r.alpha), 0);
-  assert.ok(Math.abs(I.rows[0].alpha - env) < 1e-12, 'rotation : enveloppe PSIDA');
+  const mx = b1.rows.filter(r => !r.minimal);
+  assert.ok(I.psida.max > 0 && I.rows.length === mx.length + 1 && I.slide);
+  for (const [k, r] of mx.entries()) assert.ok(I.rows[k].Fz === 3000 && I.rows[k].alpha === r.alpha && I.rows[k].vSlow === r.vSlow && I.rows[k].Hx === r.Hx, 'combinaisons concomitantes PSIDA');
   // réaction démesurée : non conforme, proposition plus grande vérifiant aussi la réaction imposée
   assert.equal(L[0].EC.brg.imposed.max, 900, 'préfixe « C0: » accepté');
   assert.equal(L[2].EC.brg.imposed, undefined, 'ligne sans entrée : réactions PSIDA seules');
