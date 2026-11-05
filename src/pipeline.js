@@ -5,7 +5,7 @@
  */
 import { designPSIDP, psidpDeflections, transversePrestress } from './psidp/index.js';
 import { SlabDeck } from './analysis.js';
-import { EC_ALPHA } from './loads_ec.js';
+import { EC_ALPHA, gradientEN1991_1_5 } from './loads_ec.js';
 import { designEC, designBAEL, designTransverseEC, designTransverseBAEL, designSingleActionEC, designRailEC } from './design.js';
 import { ALPHAS } from './loads_rail.js';
 import { deformationsRail, ecmDynamique } from './rail_deformations.js';
@@ -116,7 +116,11 @@ function parseData00(d) {
     // ouvrage courbe : la plaque est obligatoire (Guyon-Massonnet suppose un tablier droit)
     methodeTablier: d.methodeTablier === 'plaque' || lireTrace(d.trace) ? 'plaque' : 'guyon',
     alpha: d.alpha, nRetenue: +d.nRetenue, classe: d.classe.trim() ? +d.classe : null, mil: d.mil || 'Mc120+D240', chamoaSign: !!d.chamoaSign,
-    withTherm: !!d.withTherm, dT: nums(d.dT), E: +EIv[0] || 34000, I: EIv[1] ? +EIv[1] : null, delta: +d.delta, phiFluage: +d.phiFluage,
+    withTherm: !!d.withTherm,
+    // gradient thermique : valeurs saisies, sinon EN 1991-1-5 (tableaux 6.1 et 6.2, dalle béton, k_sur selon le revêtement)
+    // pour les calculs Eurocodes et 12 / −6 °C (règle française antérieure, BPEL) pour le Fascicule 61
+    ...(() => { const u = nums(d.dT); if (u.length >= 2) return { dT: u.slice(0, 2), dT61: u.slice(0, 2), dTauto: null };
+      const g = gradientEN1991_1_5(Number.isFinite(+d.tRev) && String(d.tRev ?? '').trim() !== '' ? +d.tRev : 0.08); return { dT: [g.heat, g.cool], dT61: [12, -6], dTauto: g }; })(), E: +EIv[0] || 34000, I: EIv[1] ? +EIv[1] : null, delta: +d.delta, phiFluage: +d.phiFluage,
     tassProb: String(d.tassProb || '').trim() ? nums(d.tassProb).map(v => v / 1000) : null,
     mat: { fck: +d.fck, fyk: +d.fyk, fc28: +d.fck, fe: +d.fyk, c: +d.cover, phi: +d.phi / 1000, phiT: +(d.phiT || 16) / 1000, wkMax: +d.wk, fissuration: d.fiss, tRev: +d.tRev },
     extra: parseExtra(d),
@@ -318,13 +322,16 @@ export function compute(p) {
   const ec = deck.eurocode({ alpha: EC_ALPHA[p.alpha] });
   const f61 = deck.fascicule61({ nRetenue: p.nRetenue, classe: p.classe, mil: p.mil });
   const thermal = p.withTherm ? deck.thermal({ dTheat: p.dT[0], dTcool: p.dT[1], E: p.E, I: p.I }) : null;
+  // Fascicule 61 / BAEL / BPEL : gradient 12 / −6 °C sauf valeurs saisies
+  const same61 = !p.dT61 || (p.dT61[0] === p.dT[0] && p.dT61[1] === p.dT[1]);
+  const thermal61 = !p.withTherm ? null : same61 ? thermal : deck.thermal({ dTheat: p.dT61[0], dTcool: p.dT61[1], E: p.E, I: p.I });
   const settle = p.withTherm ? deck.settlements({ delta: p.delta, E: p.E, I: p.I, phi: p.phiFluage, prob: p.tassProb }) : null;
   // plaque : dimensionnement sur les moments de Wood-Armer (m_x ± |m_xy|, m_y ± |m_xy|)
   const PL = deck.plaque;
   const permD = PL ? woodArmer(perm) : perm, ecD = PL ? woodArmerTous(ec) : ec, f61D = PL ? woodArmerTous(f61) : f61;
   const design = {
     EC: designEC(deck, permD, ecD, { ...p.mat, thermal, settle }),
-    F61: designBAEL(deck, permD, f61D, { ...p.mat, thermal, settle }),
+    F61: designBAEL(deck, permD, f61D, { ...p.mat, thermal: thermal61, settle }),
   };
   // plaque : pointes de moment au droit des appareils des piles reprises par des renforts locaux (annexe 4 § 7)
   if (PL) { renfortsAppareils(deck, design.EC); renfortsAppareils(deck, design.F61); }
@@ -334,7 +341,7 @@ export function compute(p) {
   const trans = PL ? transversalPlaque(deck, permD, ecD, f61D, transG) : transG;
   // Fascicule 61 / BAEL : pratique SETRA — dalle droite équivalente au biais mécanique (PSI-DA 68, PSIDA.EL, PSIDP.EL) et,
   // en fissuration peu nuisible, ELU avec ν = 0 (béton fissuré) ; l'Eurocode suit CHAMOA (pas de transformation, ν de la dalle)
-  const runF = nu => new TransverseModel(deck, { tRev: p.mat.tRev, nHarm: 15, I: p.I, nu, skewEquivalent: true }).run({ alpha: EC_ALPHA[p.alpha], f61opt: { nRetenue: p.nRetenue, classe: p.classe, mil: p.mil }, thermal, settle });
+  const runF = nu => new TransverseModel(deck, { tRev: p.mat.tRev, nHarm: 15, I: p.I, nu, skewEquivalent: true }).run({ alpha: EC_ALPHA[p.alpha], f61opt: { nRetenue: p.nRetenue, classe: p.classe, mil: p.mil }, thermal: thermal61, settle });
   const skewed = (p.concept.psi || 100) < 100;
   const transF = skewed && !PL ? runF(deck.nu) : trans;
   const transELU = !PL && p.mat.fissuration === 'peu nuisible' && deck.nu > 0 ? runF(0) : null;
@@ -406,7 +413,7 @@ export function compute(p) {
   let psidp = null, psidpError = null;
   if (p.bp && p.bp.actif) {
     try {
-      psidp = designPSIDP({ deck, perm, f61, ec, thermal, settle, beamF61: design.F61.beam, beamEC: design.EC.beam, fc28: p.mat.fck }, p.bp);
+      psidp = designPSIDP({ deck, perm, f61, ec, thermal: p.bp && p.bp.reg === 'EC2' ? thermal : thermal61, settle, beamF61: design.F61.beam, beamEC: design.EC.beam, fc28: p.mat.fck }, p.bp);
       psidp.defl = psidpDeflections(psidp);
       const model = new TransverseModel(deck, { tRev: p.mat.tRev, nHarm: 15, I: p.I, skewEquivalent: true });
       psidp.trans = transversePrestress(psidp, { deck, model, transDesign: transDesign.F61, mat: { ...p.mat, phiLong: p.mat.phi } });
@@ -414,7 +421,7 @@ export function compute(p) {
   }
   let supports = null, supportsError = null;
   try { supports = computeSupports({ p, deck, perm, f61, ec, bearings, psidp, thermal }, p.supports); } catch (e) { supportsError = e.message; }
-  return { psidp, psidpError, supports, supportsError, rebar, rebarError, p, deck, keys, perm, ec, f61, cases, thermal, settle, design, trans, transG, transF, transELU, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
+  return { psidp, psidpError, supports, supportsError, rebar, rebarError, p, deck, keys, perm, ec, f61, cases, thermal, thermal61, settle, design, trans, transG, transF, transELU, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
 }
 
 /**

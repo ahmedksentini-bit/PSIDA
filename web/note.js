@@ -19,6 +19,9 @@ import { ddrBlocks } from './ddr_view.js';
 import { psidpBlocks } from './psidp_view.js';
 import { deckFigures, supportSchema, distributionChart, pileProfileCharts, footingPressureChart, svgBlock } from './note_figures.js';
 
+/** Gradient thermique retenu (saisi, ou EN 1991-1-5 automatique). */
+const dTtxt = p => (p.dTauto ? `gradient thermique EN 1991-1-5 (tableaux 6.1 et 6.2, dalle béton, revêtement ${(p.dTauto.t * 100).toFixed(0)} mm : k_sur = ${p.dTauto.kHeat.toFixed(2).replace('.', ',')} / ${p.dTauto.kCool.toFixed(2).replace('.', ',')}) ${String(p.dT[0]).replace('.', ',')} / ${String(p.dT[1]).replace('.', ',')} °C pour les Eurocodes, ${p.dT61[0]} / ${p.dT61[1]} °C pour le Fascicule 61` : `gradient thermique ${p.dT[0]} / ${p.dT[1]} °C`);
+
 const F = (v, n = 1) => (v === null || v === undefined || !isFinite(v) ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: n, maximumFractionDigits: n }));
 const F0 = v => F(v, 0), F1 = v => F(v, 1), F2 = v => F(v, 2), F3 = v => F(v, 3);
 const CM = v => F(v * 1e4, 1);
@@ -94,7 +97,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
     files.map(f => [f.label, F2(f.q), F2(f.kmin), F2(f.kmax), `${F2(f.q * f.kmin)} / ${F2(f.q * f.kmax)}`]));
   if (isF) para(`Surcharges réglementaires (Fascicule 61 titre II) : pont de ${f61.classe}ʳᵉ classe, largeur chargeable L_c = ${F2(f61.Lc)} m, ${f61.nv} voie(s) de ${F2(f61.v)} m ; systèmes A(l), Bc, Bt${f61.Bt ? '' : ' (non applicable)'}, Mc120, D240 et trottoirs (1,5 kN/m², charge locale 4,5 kN/m² en flexion transversale).`);
   else para(`Charges de trafic (EN 1991-2) : ${ec.lanes.n} voie(s) conventionnelle(s) de ${F2(ec.lanes.wl)} m (aire résiduelle ${F2(ec.lanes.wr)} m), ${ec.alpha.label} ; LM1 (tandem TS et UDL d'une même voie placés ensemble dans chaque disposition transversale, enveloppe prise sur la charge LM1 complète comme dans CHAMOA ; valeur fréquente 0,75 TS + 0,40 UDL évaluée de même), LM2, trottoirs (gr1a 3 kN/m², gr3 5 kN/m²).`);
-  if (thermal) para(`Gradient thermique ${p.dT[0]} / ${p.dT[1]} °C ; tassements aléatoires ${F1(p.delta * 100)} cm (module différé E/(1 + ${p.phiFluage})).`);
+  if (thermal) para(`${dTtxt(p).replace(/^g/, 'G')} ; tassements aléatoires ${F1(p.delta * 100)} cm (module différé E/(1 + ${p.phiFluage})).`);
 
   // ---------------------------------------------------------------------------------------------------------- 2
   h1('Caractéristiques et lignes d\'influence', 2);

@@ -11,6 +11,9 @@ import { seismicBlocks } from './seismic_note.js';
 import { ddrBlocks } from './ddr_view.js';
 import { katexHead } from './note.js';
 
+/** Gradient thermique retenu (saisi, ou EN 1991-1-5 automatique). */
+const dTtxt = p => (p.dTauto ? `gradient thermique EN 1991-1-5 (tableaux 6.1 et 6.2, dalle béton, revêtement ${(p.dTauto.t * 100).toFixed(0)} mm : k_sur = ${p.dTauto.kHeat.toFixed(2).replace('.', ',')} / ${p.dTauto.kCool.toFixed(2).replace('.', ',')}) ${String(p.dT[0]).replace('.', ',')} / ${String(p.dT[1]).replace('.', ',')} °C pour les Eurocodes, ${p.dT61[0]} / ${p.dT61[1]} °C pour le Fascicule 61` : `gradient thermique ${p.dT[0]} / ${p.dT[1]} °C`);
+
 const cm = v => (v * 1e4).toFixed(1);
 const f0 = v => v.toFixed(0), f1 = v => v.toFixed(1), f3 = v => v.toFixed(3);
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -64,7 +67,7 @@ export async function buildReport(st) {
 <b>Géométrie</b> : ${deck.spans.length} travée(s) de ${deck.spans.join(' / ')} m${(g.overhangs || [0, 0]).some(v => v > 0) ? ', abouts ' + g.overhangs.join(' / ') + ' m' : ''} ; dalle de largeur 2b = ${2 * deck.b} m, épaisseur h = ${deck.h} m (aire ${deck.area.toFixed(3)} m²${g.chamfer ? ', chanfreins : hauteur au bord ' + g.chamfer.hEdge + ' m, joue ' + g.chamfer.joue + ' m' : ''}) ; chaussée y ∈ [${g.roadway.y1} ; ${g.roadway.y2}] m${(g.footways || []).length ? ' ; trottoirs ' + g.footways.map(f => `[${f.y1} ; ${f.y2}]`).join(', ') : ''}.<br>
 <b>Charges permanentes</b> : béton ${deck.gammaC} kN/m³ ; ${(g.lines || []).map(l => `${l.g} kN/m en y = ${l.e}${l.kmin !== 1 || l.kmax !== 1 ? ` (k ${l.kmin}/${l.kmax})` : ''}`).join(' ; ') || 'pas de charge linéaire'} ; ${(g.bands || []).map(b => `${b.q} kN/m² sur [${b.y1} ; ${b.y2}]${b.kmin !== 1 || b.kmax !== 1 ? ` (k ${b.kmin}/${b.kmax})` : ''}`).join(' ; ') || 'pas de charge surfacique'} ; g total = ${f1(perm.gTotal)} kN/m.<br>
 <b>Trafic</b> : Eurocode ${ec.alpha.label}, ${ec.lanes.n} voie(s) de ${ec.lanes.wl.toFixed(2)} m (aire résiduelle ${ec.lanes.wr.toFixed(2)} m) ; Fascicule 61 classe ${f61.classe}, L_c = ${f61.Lc.toFixed(2)} m, ${f61.nv} voie(s) de ${f61.v.toFixed(2)} m.<br>
-<b>Autres actions</b> : ${thermal ? `gradient thermique ${p.dT[0]} / ${p.dT[1]} °C (EI = ${(thermal.EI / 1e6).toFixed(3)}·10⁶ kN·m²), tassements aléatoires δ = ${p.delta} m (module différé E/(1+${p.phiFluage}))` : 'sans température ni tassements'}.<br>
+<b>Autres actions</b> : ${thermal ? `${dTtxt(p)} (EI = ${(thermal.EI / 1e6).toFixed(3)}·10⁶ kN·m²), tassements aléatoires δ = ${p.delta} m (module différé E/(1+${p.phiFluage}))` : 'sans température ni tassements'}.<br>
 <b>Matériaux</b> : C${dEC.mat.fck}/${dEC.mat.fck + 10} (fcd ${f1(dEC.mat.fcd)} MPa, fctm ${dEC.mat.fctm.toFixed(2)} MPa, Ecm ${f0(dEC.mat.Ecm)} MPa), B${dEC.mat.fyk} (fyd ${f0(dEC.mat.fyd)} MPa) ; BAEL : fc28 = ${dB.mat.fc28} MPa, fe = ${dB.mat.fe} MPa, fissuration ${dB.mat.fissuration} ; enrobage à l'axe c = ${p.mat.c} m, φ = ${p.mat.phi * 1000} / ${p.mat.phiT * 1000} mm, wk ≤ ${p.mat.wkMax} mm, revêtement ${p.mat.tRev} m.<br>
 <b>Modèle</b> : poutre continue à EI constant (lignes d'influence sur 100 positions par travée) ; répartition transversale de Guyon-Massonnet recalculée (dalle isotrope, ν = ${deck.nu}, α = ${deck.alphaTorsion}), θ = b/L_eq avec L_eq = distance entre points de moment nul de la travée seule chargée ; arrangements transversaux balayés par pas de ${deck.laneStep} m.
 </div>`;

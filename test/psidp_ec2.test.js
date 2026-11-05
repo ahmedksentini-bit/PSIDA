@@ -87,3 +87,23 @@ test('Note EC6 — pertes différées EN 1992-1-1 (5.46), hyperstatique, contrai
   const B = psidpBlocks(dp), txt = JSON.stringify(B);
   assert.ok(txt.includes('EN 1992-1-1 § 5.10.2.2') && txt.includes('spline cubique') && txt.includes('6.2.2'));
 });
+
+test('EN 1991-1-5 : gradient thermique automatique (tableaux 6.1 et 6.2, dalle béton) ; Fascicule 61 : 12 / −6 °C', async () => {
+  const { gradientEN1991_1_5 } = await import('../src/loads_ec.js');
+  assert.deepEqual([gradientEN1991_1_5(0.05).heat, gradientEN1991_1_5(0.05).cool], [15, -8]);
+  assert.deepEqual([gradientEN1991_1_5(0.10).heat, gradientEN1991_1_5(0.10).cool], [10.5, -8]);
+  assert.deepEqual([gradientEN1991_1_5(0).heat, gradientEN1991_1_5(0).cool], [12, -8.8]);
+  const p = parseData({ ...formDefaults(), dT: '', tRev: '0.08' });
+  assert.deepEqual(p.dT, [12.3, -8]); assert.deepEqual(p.dT61, [12, -6]);
+  const q = parseData({ ...formDefaults(), dT: '10, -5' });
+  assert.deepEqual(q.dT, [10, -5]); assert.deepEqual(q.dT61, [10, -5]); assert.equal(q.dTauto, null);
+});
+
+test('EN 1992-1-1 § 5.10.3 (2) : σ_pm0 ≤ min(0,75 f_pk ; 0,85 f_p0,1k), tension à l\'ancrage ajustée si laissée vide', () => {
+  // note EC6 : la « contrainte finale » SCIA (après pertes instantanées) atteint 1 425 MPa > 1 394 MPa
+  const st = compute(parseData(EC6()));
+  near(st.psidp.sigPm0.max, 1424.9, 0.5, 'σ_pm0 de la note'); assert.equal(st.psidp.sigPm0.ok, false); near(st.psidp.sigPm0.lim, 1394, 1e-9, 'limite');
+  // tension à l'ancrage laissée vide : PSIDA l'abaisse sous σ_p,max = 1 476 MPa jusqu'à respecter la limite
+  const st2 = compute(parseData({ ...EC6(), bp_sigx: '', bp_sigma0: '' }));
+  assert.ok(st2.psidp.sigPm0.ok && st2.psidp.sigPm0.ajuste && st2.psidp.sigma0 < 1476 && st2.psidp.sigPm0.max <= 1394 + 1e-6);
+});

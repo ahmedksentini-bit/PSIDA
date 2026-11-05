@@ -469,6 +469,12 @@ BAEL 91 ou EN 1992-1-1, blocs monolithiques), recoupé sur 2 104 grandeurs de BV
 ferroviaire (EN 1991-2 : LM71, SW/0, SW/2, Φ2/Φ3 réduit pour la couverture, surcharge sur remblai) ; voie franchie route
 ou voie ferrée (gabarit, choc EN 1991-1-7 en situation accidentelle) ; portique ouvert sur appuis encastrés ou articulés
 avec enveloppe des réactions ; note HTML et Word ; avant-propos et chapitre 27 du manuel.
+v0.99.22 : deux défauts relevés dans les notes d'autoroute corrigés aussi dans PSIDA. Gradient thermique : laissé vide, il
+suit l'EN 1991-1-5 (tableaux 6.1 et 6.2, dalle béton : 15 / 8 °C × k_sur selon l'épaisseur du revêtement, soit 12,3 / −8 °C
+pour 8 cm) dans les calculs Eurocodes, et reste à 12 / −6 °C pour le Fascicule 61 (BAEL, BPEL) ; valeurs saisies : les
+mêmes partout. Dalle précontrainte en EN 1992 : contrôle de σ_pm0 ≤ min(0,75 f_pk ; 0,85 f_p0,1k) après pertes instantanées
+(§ 5.10.3 (2)) et de σ_p0 ≤ min(0,8 f_pk ; 0,9 f_p0,1k) (§ 5.10.2.1) ; tension à l'ancrage laissée vide : abaissée
+automatiquement jusqu'à respecter la limite ; recommandation si une tension saisie la dépasse.
 v0.99.21 : plans des poutres BA — entretoises intermédiaires dessinées (PSI-BA 77, pièce V § 1.1 et 1.7) : coffrage
 (coupe transversale au droit d'une entretoise, entretoises également espacées dans l'élévation, cotes, béton et coffrage
 dans les quantités) ; ferraillage (coupe B-B : aciers inférieurs ancrés par courbure dans les poutres de rive, aciers
