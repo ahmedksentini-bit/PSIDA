@@ -13,6 +13,7 @@ import { parseDesignation } from '../bearings.js';
 import { chaineVIPP, DEFAUTS_VIPP } from './vipp.js';
 import { hourdisLocal } from './hourdis.js';
 import { entretoiseVerinage } from './entretoise.js';
+import { entretoiseIntermediaire } from './entretoise_int.js';
 import { spectreVerticalDuFormulaire } from '../seisme_vertical.js';
 import { deformationsRail, ecmDynamique } from '../rail_deformations.js';
 
@@ -68,7 +69,10 @@ export function parsePoutres(d) {
     fiss: d.pt_fiss || 'prej', regBA: d.pt_regBA === 'EC' ? 'EC' : 'BAEL',
     // travées continues coulées sur cintre (poutres BA, dossier Sétra PSI-BA 77) ; entretoises intermédiaires : méthode de
     // Courbon ; goussets d'appui (âme épaissie au droit des appuis intermédiaires) ; épaisseur des entretoises sur pile
-    continu: d.pt_continu === 'oui' && (d.pt_type || 'BP') === 'BA', courbon: Math.round(v('pt_entInt', 0)) > 0, nEntInt: Math.round(v('pt_entInt', 0)),
+    continu: d.pt_continu === 'oui' && (d.pt_type || 'BP') === 'BA', // entretoises intermédiaires : un nombre pour toutes les travées ou une liste par travée (« 1, 2, 2, 1 »)
+    ...(() => { const l = nums(String(d.pt_entInt ?? '0')).map(x => Math.max(0, Math.round(x))), sp = nums(d.pt_spans), nE = sp.map((_, j) => l[Math.min(j, l.length - 1)] ?? 0);
+      return { courbon: nE.some(x => x > 0), nEntInt: nE }; })(),
+    beInt: v('pt_beInt', 0.25),
     bGousset: v('pt_bgous', null), lGousset: v('pt_lgous', null), tePile: v('pt_tePile', 0.50),
     // stabilité latérale en phase de pose (src/beams/deversement.js) : points de levage, appareil provisoire, dévers
     pose: { a: v('pt_levA', null), hLev: v('pt_levH', 0.20), appareil: parseDesignation(d.pt_devApp || '300x400x3(10+3)'), devers: v('pt_devers', 0) / 100, about: d.pt_type === 'PRAD' ? v('pr_about', 0.30) : v('pt_about', 0.40), balayage: v('pt_balay', null) },
@@ -116,8 +120,8 @@ export function computePoutres(inp) {
     });
     return { L: S.L, theta: S.gp.theta, alpha: S.gp.alpha, Lguyon: S.gp.Lguyon, classe: S.f61.classe, deltaB: S.f61.deltaBc[0], deltaC: S.f61.deltaMc?.[0], skew: S.skew, deversement: deversementDe(beams, S.L, inp), gp: S.gp, f61info: { G: S.f61.G?.[0], nv: S.f61.nv, v: S.f61.v, Lc: S.f61.Lc, Lr: S.f61.Lr }, beams };
   });
-  const { hourdis, entretoise } = localEtEntretoise(inp, bd, spans, sec);
-  return { inp, sec, spans, lines: inp.rail ? lineReactionsRail(bd, inp.rail) : lineReactions(bd), appareils: appareilsPoutres(bd, inp), bd, hourdis, entretoise, rail: !!inp.rail };
+  const { hourdis, entretoise, entInt } = localEtEntretoise(inp, bd, spans, sec);
+  return { inp, sec, spans, lines: inp.rail ? lineReactionsRail(bd, inp.rail) : lineReactions(bd), appareils: appareilsPoutres(bd, inp), bd, hourdis, entretoise, entInt, rail: !!inp.rail };
 }
 
 /** Hourdis (flexion locale) et entretoises d'about (vérinage) de la travée la plus longue. */
@@ -141,7 +145,28 @@ function localEtEntretoise(inp, bd, spans, sec) {
     entretoise = entretoiseVerinage({ ys: bd.ys, RG: sp.beams.map(b => b.V0.G ?? 0), dv: L0.dv, verinsRive: L0.verinsRive, he: Math.max(hp - 0.10, 0.5), te: L0.te, hd: inp.hd, fck: inp.fck, fyk: inp.fyk });
     entretoise.L = sp.L;
   }
-  return { hourdis, entretoise };
+  return { hourdis, entretoise, entInt: entretoisesIntermediaires(inp, bd, sec) };
+}
+
+/**
+ * Entretoises intermédiaires (poutres BA, méthode de Courbon) : l'entretoise la plus sollicitée est celle de la travée où
+ * elles sont le plus espacées (PSI-BA 77, pièce IV § 7.1) ; δ du système B et de Mc120 de cette travée.
+ */
+function entretoisesIntermediaires(inp, bd, sec) {
+  if (!inp.courbon || inp.type !== 'BA' || inp.rail || inp.n < 2) return null;
+  try {
+    const nE = inp.nEntInt, cand = inp.spans.map((L, j) => ({ j, L, lam: nE[j] > 0 ? L / (nE[j] + 1) : 0 })).filter(q => q.lam > 0);
+    const g = cand.reduce((a, q) => (q.lam > a.lam + 1e-9 ? q : a));
+    const S = bd.continu ? bd.bySpan.get('continu') : bd.bySpan.get(+g.L.toFixed(3)), jf = bd.continu ? g.j : 0;
+    const parts = inp.beam.parts, H = sec.H || (parts ? parts.reduce((a, q) => a + q.h, 0) + inp.hd : 1);
+    const xs = [inp.roadway.y1, inp.roadway.y2, ...inp.footways.flatMap(f => [f.y1, f.y2]), ...inp.lines.map(l => l.e), ...inp.bands.flatMap(b => [b.y1, b.y2])];
+    const edges = [Math.min(...xs, bd.ys[0]), Math.max(...xs, bd.ys[bd.ys.length - 1])];
+    const r = entretoiseIntermediaire({ ys: bd.ys, roadway: inp.roadway, footways: inp.footways, lines: inp.lines, bands: inp.bands, edges, lam: g.lam, L: g.L, travee: g.j,
+      deltaB: S.f61.deltaBc[jf], deltaMc: S.f61.deltaMc?.[jf], classe: S.f61.classe, nRetenue: inp.nRetenue, mil: inp.mil, alphaEC: inp.alphaEC,
+      b0: inp.beInt ?? 0.25, H, hd: inp.hd, cover: inp.cover, fck: inp.fck, fyk: inp.fyk, fiss: inp.fiss, b1: inp.b1, bAme: parts ? parts[0].b : inp.b0 });
+    r.nEnt = nE[g.j];
+    return r;
+  } catch (e) { return { erreur: e.message }; }
 }
 
 /** Combinaisons des moments négatifs (sur appuis) d'une poutre, aux mêmes règles que beamCombinations (enveloppes Mmin). */
@@ -237,8 +262,8 @@ function computePoutresContinu(inp, bd) {
     for (const b of S.beams) { const RG = b.G.Rmax[i], RQ = Math.max(b.gr1a ? b.gr1a.Rmax[i] : 0, b.gr1b ? b.gr1b.Rmax[i] : 0); if (RG + RQ > car) { car = RG + RQ; kmax = b.k; } elu = Math.max(elu, 1.35 * (RG + RQ)); gmin = Math.min(gmin, b.G.Rmin ? b.G.Rmin[i] : RG); }
     return { i, car, elu, gmin, poutre: kmax }; }) };
   app.texte = app.lignes.map(l => `${Math.round(l.elu)} ${Math.round(l.gmin)}`).join(' ; ');
-  const { hourdis, entretoise } = localEtEntretoise(inp, bd, spans, sec);
-  return { inp, sec, spans, appuis, continu: true, lines, appareils: app, bd, hourdis, entretoise, rail: false,
+  const { hourdis, entretoise, entInt } = localEtEntretoise(inp, bd, spans, sec);
+  return { inp, sec, spans, appuis, continu: true, lines, appareils: app, bd, hourdis, entretoise, entInt, rail: false,
     enveloppe: S.beams.map(b => { const cp = beamCombinations(b), cn = beamCombinationsNeg(b); return { k: b.k, x: secs.map(q => q.x), ELU_max: cp.ELU_F61, ELU_min: cn.ELU_F61, ELU_EC_max: cp.ELU_EC, ELU_EC_min: cn.ELU_EC }; }) };
 }
 

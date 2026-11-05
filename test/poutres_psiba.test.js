@@ -28,7 +28,7 @@ test('PSI-BA : tablier continu, Courbon, moments négatifs de A(l) et réduction
   // Bc excentré : la poutre de rive reçoit plus que le tiers
   assert.ok(r.spans[1].beams[0].eta.Bc > 1.1);
   // moments sur piles de A(l), poutre 1 : note −70,61 / −79,30 / −74,58 t·m (A(l) par arrangement de travées chargées)
-  [-70.608, -79.301, -74.583].forEach((m, k) => near(r.appuis[k].beams[0].Mcomp.A / T, m, 0.07, `M_A appui ${k + 2}`));
+  [-70.608, -79.301, -74.583].forEach((m, k) => near(r.appuis[k].beams[0].Mcomp.A / 10, m, 0.04, `M_A appui ${k + 2}`));   // 1 t = 10 kN (Fascicule 61)
   // l'appui 3 (entre les deux grandes travées) est le plus sollicité, comme dans la note
   const g = r.appuis.map(a => Math.max(a.beams[0].goussetNecessaire, a.beams[0].compressionNecessaire));
   assert.ok(g[1] > g[0] && g[1] > g[2], `goussets nécessaires ${g}`);
@@ -51,4 +51,45 @@ test('PSI-BA : note (tableau des appuis, enveloppe) et plans avec armatures sup�
   // gousset suffisant : toutes les vérifications sur appui passent
   const r2 = computePoutres(parsePoutres({ ...DP, pt_bgous: '1.00' }));
   assert.ok(r2.appuis.every(a => a.beams.every(q => q.cisaillementBAEL.ok && q.ELS.BAEL.okC && q.ELS.EC.okC)));
+});
+
+// (charges de trafic : 1 t = 10 kN dans la note, comme dans le Fascicule 61)
+const T10 = 10;
+// entretoises intermédiaires : note PSI-BA, travée 4 (1 entretoise, λ = 7,225 m), « coefficients longitudinaux » et efforts
+// par système (t, t·m, δ compris) au droit de la poutre de rive (y = −4,00) et à −3,75 / −3,50 m du centre
+test('PSI-BA : entretoises intermédiaires — coefficients longitudinaux et efforts par système (Courbon)', async () => {
+  const { coefficientsLongitudinaux } = await import('../src/beams/entretoise_int.js');
+  const c = coefficientsLongitudinaux(7.225);
+  // hors δ : Bc 14,708/1,187 = 12,39 t par file ; Mc120 102,511 t pour deux chenilles = 86,8 t hors δ ; A(l) λ = 7,225 m ; trottoirs 3,251 t
+  near(c.Bc / T10, 14.708 / 1.1866, 0.005, 'Bc hors δ'); near(2 * c.Mc / T10, 102.511 / 1.181, 0.01, 'Mc120 hors δ'); near(c.trott / T10, 3.251, 0.02, 'trottoirs');
+  const r4 = computePoutres(parsePoutres({ ...DP, pt_entInt: '1, 2, 2, 1', pt_beInt: '0.38' })), E = r4.entInt;
+  assert.ok(E && !E.erreur && E.travee === 3 && Math.abs(E.lam - 7.225) < 1e-9, 'travée 4, entretoises les plus espacées');
+  const V = E.tranchants.find(q => q.poutre === 0), M = y => E.moments.find(q => Math.abs(q.y - y) < 1e-6);
+  // PSIDA : δ un peu plus fort (poids du tablier pris sur la section des poutres), poutres de rive et centrale de même inertie
+  for (const [o, ref, nom] of [[V.F61.Bc.max, 31.10, 'V Bc'], [V.F61.Bt.max, 35.71, 'V Bt'], [V.F61.Mc120.max, 54.76, 'V Mc120'], [V.F61.A.max, 26.10, 'V A(l)'],
+    [M(-3.5).F61.Bc.max, 15.55, 'M(−3,50) Bc'], [M(-3.5).F61.Mc120.max, 25.43, 'M(−3,50) Mc120'], [M(-3.5).F61.Bt.max, 17.66, 'M(−3,50) Bt'], [M(-3.5).F61.A.max, 12.72, 'M(−3,50) A(l)'],
+    [M(-3.75).F61.Bc.max, 7.78, 'M(−3,75) Bc'], [M(-3.75).F61.Mc120.max, 13.57, 'M(−3,75) Mc120']]) near(o / T10, ref, 0.07, nom);
+  // moment au droit de la poutre centrale : note 55,39 t·m (G + max Q) ; maximum vers −1,75 m (note 66,47 t·m avec G = −5,5 t·m environ)
+  near(M(0).max.PSIBA / T10, 55.39, 0.02, 'M(0) G + max Q');
+  const yMax = E.moments.reduce((a, q) => (q.max.PSIBA > a.max.PSIBA ? q : a)).y;
+  assert.ok(yMax <= -1 && yMax >= -2.25, `section du moment maximal ${yMax}`);
+  // dimensionnement : 0,38 m suffit (épaisseur optimisée de la note : 0,38 m) ; 0,30 m ne passe pas en BAEL et reçoit une indication
+  assert.ok(E.ok && E.BAEL.inf.As > 0 && E.BAEL.barresInf && E.BAEL.suspente > 0);
+  const r3 = computePoutres(parsePoutres({ ...DP, pt_entInt: '1, 2, 2, 1', pt_beInt: '0.30' }));
+  assert.ok(!r3.entInt.ok && r3.entInt.bNec > 0.30 && r3.entInt.bNec < 0.38);
+  const { recommandationsPoutres } = await import('../src/reco/poutres.js');
+  const rec = await recommandationsPoutres(r3, { ...DP, pt_entInt: '1, 2, 2, 1', pt_beInt: '0.30' }, { budget: 0 });
+  const it = rec.items.find(i => i.domaine === 'Entretoises intermédiaires'), a = it.actions[0];
+  assert.equal(a.champ, 'pt_beInt');
+  assert.ok(computePoutres(parsePoutres({ ...DP, pt_entInt: '1, 2, 2, 1', pt_beInt: a.valeurChamp })).entInt.ok, 'l\'épaisseur proposée suffit');
+  const tab = beamsBlocks(r3, { reco: rec }).find(b => b.t === 'table' && b.head[0] === 'Entretoise intermédiaire — vérification');
+  tab.rows.forEach((row, i) => assert.equal(!!tab.hints[i], row[row.length - 1] === 'NON'));
+});
+
+test('Entretoises intermédiaires en travée indépendante, sans entretoise : pas de calcul', () => {
+  const D1 = { ...DP, pt_spans: '15', pt_continu: 'non', pt_entInt: '1' }, r1 = computePoutres(parsePoutres(D1));
+  assert.ok(r1.entInt && !r1.entInt.erreur && Math.abs(r1.entInt.lam - 7.5) < 1e-9 && r1.entInt.moments.length > 10);
+  // symétrie de l'enveloppe (tablier symétrique)
+  const m = r1.entInt.moments; near(m[0].max.ELU_F61 + 1, m[m.length - 1].max.ELU_F61 + 1, 0.01, 'symétrie');
+  assert.equal(computePoutres(parsePoutres({ ...D1, pt_entInt: '0' })).entInt, null);
 });
