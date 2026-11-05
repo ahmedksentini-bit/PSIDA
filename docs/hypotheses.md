@@ -534,6 +534,12 @@ Contrôle sur la note « appuis et fondations » de d'un pont-dalle précontrain
 - **Vérifications** : dalle — enrobage à l'axe c − Ø_long/2 ≥ c_nom (recommandation : c à l'axe) ; cadres — enrobage au nu ≥ c_nom ; poutres — classe de béton, c_nom des cadres (Ø12) appliqué aux plans BA (au moins 3 cm), et centre de gravité des lits inférieurs dessinés ≤ enrobage à l'axe du calcul (sinon hauteur utile surestimée). L'exemple PSI-BA (enrobage 10 cm, lits HA32 dans 0,38 m) sort NON : la note PSI-BA retient d'ailleurs d = 0,77 m (19 cm).
 - **Non traité** : enrobage des armatures de précontrainte (§ 4.4.1.2 (3) : gaines), hourdis des poutres et appuis (champ d'enrobage propre aux appuis), Δc_dur additionnels.
 
+## 1 septdecies decies. Séisme non calculé et anti-cheminement (v0.99.25, `test/durabilite.test.js`)
+
+- **Séisme** : case « Séisme » non cochée, zone de sismicité 2 à 5 et catégorie d'importance II à IV → alerte dans la note des appuis et recommandation (arrêté du 26/10/2011, art. 3 et 4 ; zone 1 ou catégorie I : non soumis). Ailleurs qu'en France, la zone et la catégorie saisies doivent traduire le règlement local.
+- **Anti-cheminement** : appareil en élastomère fretté dont le non-glissement n'est pas vérifié (F_xy > μ_e F_z) → à fixer (NF EN 1337-3 § 5.3.3.6). Dispositif (taquets en béton armé ou plaques à ergots) pour tout l'effort horizontal, frottement négligé : F_Ed = 1,35 F_xy max des combinaisons de glissement ; aciers de couture A_s ≥ F_Ed/(μ f_yd), μ = 0,7 (EN 1992-1-1 § 6.2.5, interface rugueuse, cohésion négligée), 4 HA16 au moins ; surface d'appui ≥ F_Ed/f_cd (§ 6.7). Jeu de quelques millimètres pour la distorsion. Le dessin du taquet n'est pas fait.
+- **Enrobage par défaut** du pont-dalle : 5,5 cm à l'axe (c_nom 45 mm, S5, + Ø20/2).
+
 ## 1 octodecies. Textes relus (v0.36)
 
 - **Guide Sétra 2007** (appareils en élastomère fretté) : voir 1 sexdecies ; exemple du § 4.2 reproduit.

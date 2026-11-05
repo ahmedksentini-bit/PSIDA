@@ -469,6 +469,11 @@ BAEL 91 ou EN 1992-1-1, blocs monolithiques), recoupé sur 2 104 grandeurs de BV
 ferroviaire (EN 1991-2 : LM71, SW/0, SW/2, Φ2/Φ3 réduit pour la couverture, surcharge sur remblai) ; voie franchie route
 ou voie ferrée (gabarit, choc EN 1991-1-7 en situation accidentelle) ; portique ouvert sur appuis encastrés ou articulés
 avec enveloppe des réactions ; note HTML et Word ; avant-propos et chapitre 27 du manuel.
+v0.99.25 : séisme et anti-cheminement. Appuis : alerte et recommandation quand la combinaison sismique n'est pas cochée
+alors que le pont y est soumis (zone 2 à 5, catégorie II à IV : arrêté du 26 octobre 2011, art. 3 et 4). Appareils en
+élastomère fretté qui ne vérifient pas le non-glissement : dispositif anti-cheminement dimensionné (NF EN 1337-3 § 5.3.3.6 :
+appareil à fixer ; F_Ed = 1,35 F_xy sans frottement, aciers de couture des taquets F_Ed/(0,7 f_yd), surface d'appui
+F_Ed/f_cd). Pont-dalle : enrobage à l'axe par défaut porté de 3 à 5,5 cm (c_nom = 45 mm en XC4, 100 ans, + Ø/2).
 v0.99.24 : durabilité (EN 1992-1-1 § 4.4.1, src/durabilite.js) : classes d'exposition, durée d'utilisation et référentiel
 (EN 1992-1-1 annexe E ou NF EN 206/CN) pour le pont-dalle, les ponts à poutres et les cadres ; classe de béton minimale,
 classe structurale (tableau 4.3N), c_min,dur (tableau 4.4N) et c_nom ; vérification de l'enrobage (dalle : à l'axe − Ø/2 ;

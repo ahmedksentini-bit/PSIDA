@@ -45,7 +45,8 @@ const ex4 = { nom: 'Exemple 4 — Pont-dalle précontraint courbe et biais', dxf
 
 export const EXEMPLES = [ex1, ex2, ex3, ex4];
 // enrobage à l'axe de 5,5 cm : c_nom = 45 mm (XC4, 100 ans, dalle S5) + Ø20/2 (EN 1992-1-1 § 4.4.1)
-export const donnees = ex => ({ ...formDefaults(), cover: '0.055', ...ex.data });
+// exemples hors zone sismique (zone 1 : pont non soumis, arrêté du 26/10/2011) — sinon PSIDA réclame la combinaison sismique
+export const donnees = ex => ({ ...formDefaults(), cover: '0.055', ap_zone: '1', ...ex.data });
 
 if (process.argv[1] && process.argv[1].endsWith('exemples.mjs')) {
   EXEMPLES.forEach((ex, k) => {

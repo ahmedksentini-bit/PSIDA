@@ -27,8 +27,8 @@ test('Tableaux 4.3N / 4.4N / E.1N et NF EN 206/CN', () => {
 
 test('Applications : dalle (enrobage à l\'axe), cadre (au nu), poutres BA (plans à c_nom, lits et hauteur utile)', async () => {
   const { parseData, compute } = await import('../src/pipeline.js');
-  const st = compute(parseData({ ...formDefaults() }));
-  // dalle par défaut : c = 3 cm à l'axe, Ø20 → 20 mm au nu < c_nom = 45 mm (S5) : signalé, recommandation 5,5 cm à l'axe
+  const st = compute(parseData({ ...formDefaults(), cover: '0.03' }));
+  // dalle à c = 3 cm à l'axe (ancienne valeur par défaut), Ø20 → 20 mm au nu < c_nom = 45 mm (S5) : signalé, recommandation 5,5 cm à l'axe
   assert.equal(st.durab.okEnrobage, false); assert.equal(st.durab.cnom, 45);
   const { reglesTablier } = await import('../src/reco/tablier.js');
   const it = reglesTablier.flatMap(f => f(st)).find(i => /Durabilité/.test(i.verification));
@@ -41,4 +41,22 @@ test('Applications : dalle (enrobage à l\'axe), cadre (au nu), poutres BA (plan
   const rec = recommandationsCadre(o, { ...formDefaults(), cf_fc28: '25', cf_enrob: '0.045', cf_expoDur: 'XC4/XA2' }, { budget: 0 });
   const tab = cadreBlocks(o, { reco: rec }).find(b => b.t === 'table' && b.rows[0] && b.rows[0][0] === 'Classe de résistance du béton');
   tab.rows.forEach((row, i) => assert.equal(!!tab.hints[i], row[3] === 'NON'));
+});
+
+test('Séisme non coché en zone 2 à 5, catégorie II à IV : alerte et recommandation ; zone 1 : rien', async () => {
+  const { parseData, compute } = await import('../src/pipeline.js');
+  const { recommandations } = await import('../src/recommandations.js');
+  const st = compute(parseData({ ...formDefaults(), cover: '0.055' }));
+  assert.deepEqual([st.supports.alerteSeisme.zone, st.supports.alerteSeisme.categorie], [3, 'III']);
+  assert.ok(recommandations(st).items.some(i => i.verification === 'Combinaison sismique'));
+  const st1 = compute(parseData({ ...formDefaults(), cover: '0.055', ap_zone: '1' }));
+  assert.equal(st1.supports.alerteSeisme, null);
+});
+
+test('Anti-cheminement : F_Ed = 1,35 F_xy, coutures A_s = F_Ed/(0,7 f_yd), surface F_Ed/f_cd', async () => {
+  const { antiCheminement } = await import('../src/supports/bearings1337.js');
+  const a = antiCheminement({ Fxy: 200, fck: 30, fyk: 500 });
+  assert.ok(Math.abs(a.FEd - 270) < 1e-9);
+  assert.ok(Math.abs(a.As - 270 / (0.7 * 500 / 1.15 * 1000)) < 1e-12);   // 8,87 cm²
+  assert.equal(a.nHA16, 5); assert.ok(Math.abs(a.Acontact - 270 / 20000) < 1e-12);
 });

@@ -98,3 +98,14 @@ export function verifyBearing1337(bd, combos, slide, o = {}) {
   const ok = rows.every(r => r.ok || r.indicatif) && (!sl || (sl.okGlissement && sl.okPerm));
   return { g, rows, slide: sl, ok, worst: { epsT: worst('epsT'), epsQ: worst('epsQ'), sig: worst('sig') }, minRot };
 }
+
+/**
+ * Dispositif anti-cheminement d'un appareil qui ne vérifie pas le non-glissement (NF EN 1337-3 § 5.3.3.6 : appareil à fixer) :
+ * taquets en béton armé (ou plaques à ergots) pour tout l'effort horizontal, frottement négligé : F_Ed = 1,35 F_xy ;
+ * aciers de couture A_s ≥ F_Ed / (μ f_yd), μ = 0,7 (interface rugueuse, EN 1992-1-1 § 6.2.5, cohésion négligée) ;
+ * surface d'appui A ≥ F_Ed / f_cd (§ 6.7). Fxy [kN] ; fck, fyk [MPa] ; A_s [m²], A [m²].
+ */
+export function antiCheminement({ Fxy, fck = 30, fyk = 500 }) {
+  const FEd = 1.35 * Fxy, fyd = fyk / 1.15, fcd = fck / 1.5, As = FEd / (0.7 * fyd * 1000);
+  return { Fxy, FEd, As, nHA16: Math.max(4, Math.ceil(As / 2.011e-4 - 1e-9)), Acontact: FEd / (fcd * 1000), mu: 0.7, fyd, fcd };
+}
