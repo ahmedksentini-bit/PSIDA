@@ -488,6 +488,10 @@ Contrôle sur la note « appuis et fondations » de d'un pont-dalle précontrain
 - **Poutres BA, ELS et effort tranchant BAEL** : A_s calculée sur la section en T fissurée (n = 15) pour que σ_s = σ̄_s, contrôle de σ_bc ≤ 0,6 f_c28 (BAEL) ou 0,6 f_ck (EC2, σ_s ≤ 0,8 f_yk) ; ELS au moment de mi-travée (combinaisons BAEL / Fascicule 61 et EN 1990 caractéristique) ; V_u BAEL à l'appui avec les efforts tranchants par poutre de PSIDA (poutre de rive : max(Guyon-Massonnet ; bras de levier)) ; armatures droites, k = 1.
 - **Déversement en phase de pose** (méthode de Mast, PCI) : excentricité initiale ⅔ L/960 + 6 mm ; fissuration au coin de la table avec f_ctm(t) (prudent par rapport au module de rupture de Mast) ; FS_c ≥ 1,0, FS_f et FS_r ≥ 1,5 ; poutre posée : deux appareils provisoires, raideur de rotation NF EN 1337-3 ; contraintes de levage avec poids × (1 ± 0,15) (hypothèse PSIDA) ; vent et transport non examinés ; critère (5.40b) de l'EN 1992-1-1 § 5.9 donné en complément.
 
+## 1 septdecies quater. Plans des tabliers à poutres BA (v0.99.18, `test/poutres_ba_note.test.js`)
+
+- Poutre détaillée : la plus sollicitée de la plus longue travée (section retenue max(ELU ; ELS) du règlement choisi). Barres HA20 à HA40, le plus petit diamètre tenant en trois lits au plus dans le talon (espacement ≥ max(φ ; 25 mm), enrobage 3 cm au cadre). Épure d'arrêt (PSI-BA 77, V.1.3) : section nécessaire A_s M(x + 0,8 h)/M(L/2) (enveloppe ELU de la poutre), lits arrêtés du haut vers le bas à l'abscisse théorique moins l_s (BAEL A.6.1,23 ou EN 1992-1-1 § 8.4.4) ; lit inférieur filant, relevé au-delà de l'appui. Armatures d'âme : diamètre et brins fixés par la zone d'appui, espacement variable par zones (BAEL A.5.1 avec τ_u(x) ∝ V_Ed(x), ou EN 1992-1-1 § 6.2.3). Hourdis : nappes du calcul de flexion locale, répartition ≥ A_s/4. Plan de principe : façonnage (crochets, recouvrements) à établir.
+
 ## 1 octodecies. Textes relus (v0.36)
 
 - **Guide Sétra 2007** (appareils en élastomère fretté) : voir 1 sexdecies ; exemple du § 4.2 reproduit.

@@ -65,7 +65,7 @@ export function parsePoutres(d) {
     type: d.pt_type || 'BP', fck: v('pt_fck', 35), fyk: v('pt_fyk', 500), b0: v('pt_b0', 0.25), cover: v('pt_cover', 0.12),
     P: v('pt_P', 0), e0: v('pt_e0', -1.46), fpr: v('pt_sp', 1100),
     biais: Math.min(100, Math.max(1, v('pt_biais', 100))),
-    fiss: d.pt_fiss || 'prej',
+    fiss: d.pt_fiss || 'prej', regBA: d.pt_regBA === 'EC' ? 'EC' : 'BAEL',
     // stabilité latérale en phase de pose (src/beams/deversement.js) : points de levage, appareil provisoire, dévers
     pose: { a: v('pt_levA', null), hLev: v('pt_levH', 0.20), appareil: parseDesignation(d.pt_devApp || '300x400x3(10+3)'), devers: v('pt_devers', 0) / 100, about: d.pt_type === 'PRAD' ? v('pr_about', 0.30) : v('pt_about', 0.40), balayage: v('pt_balay', null) },
   };

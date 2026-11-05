@@ -50,3 +50,22 @@ test('note BA 15 m : armatures à l\'ELS (fissuration préjudiciable) et effort 
   assert.ok(rive.BA.cisaillementBAEL.Vu > 1.3 * 69.2 * T, 'V_u de rive PSIDA (bras de levier) nettement supérieur');
   assert.ok(beamsBlocks(r).some(b => b.t === 'table' && b.head.some(h => /A_s ELS BAEL/.test(h))));
 });
+
+test('note BA 15 m : plans de coffrage et de ferraillage (PSI-BA 77 pièce V), feuilles valides', async () => {
+  const { donneesBA, planCoffrageBA, planFerraillageBA, barresInferieures, longueurScellement } = await import('../src/plans/poutres_ba.js');
+  const { feuilleDXF } = await import('../src/plans/dxf.js');
+  const D = donneesBA(r, { code: 'BAEL' });
+  assert.equal(D.b.k, 0, 'poutre de rive la plus sollicitée');
+  assert.ok(D.bars.Asx >= D.As - 1e-12, 'section mise en place ≥ section retenue');
+  assert.ok(D.bars.lits[0].filant && D.bars.lits.every(l => l.n <= D.bars.lits[0].n));
+  // ancrage BAEL A.6.1,23 : l_s = φ f_e/(4 × 0,6 × 1,5² × f_t28) = 30,9 φ pour f_e 400, f_c28 30
+  assert.ok(Math.abs(longueurScellement({ phi: 32, fck: 30, fyk: 400 }) - 0.032 * 400 / (4 * 0.6 * 2.25 * 2.4)) < 1e-12);
+  // un lit arrêté avant l'appui : arrêt ≥ 0 et longueur < portée
+  const arr = D.bars.lits.filter(l => !l.filant);
+  for (const l of arr) assert.ok(l.x0 > 0 && l.L < D.sp.L);
+  assert.ok(D.zones.length >= 2 && D.zones[0].s <= D.zones.at(-1).s, 'étriers resserrés à l\'appui');
+  for (const fn of [planCoffrageBA, planFerraillageBA]) { const F = fn(D, { numero: 'X' }); assert.deepEqual(F.valide().problemes, []); assert.ok(feuilleDXF(F).length > 1000); }
+  // épure : section unique au milieu, un seul lit → filant
+  const b1 = barresInferieures({ As: 2 * Math.PI * 0.016 ** 2 / 4, parts: [{ b: 0.4, h: 0.2 }], L: 10, profil: x => x * (10 - x), h: 1, fck: 30, fyk: 400 });
+  assert.equal(b1.lits.length, 1); assert.ok(b1.lits[0].filant);
+});
