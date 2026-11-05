@@ -91,8 +91,12 @@ export function cadreBlocks(out, { reco = null } = {}) {
 
     h3('Charges et coefficients');
     table(['Grandeur', 'Valeur'], [
-      r.rail ? ['Coefficient dynamique Φ (avant / après réduction de couverture) ; L_Φ [m]', `${F3(r.rail.phiBrut)} / ${F3(r.rail.phi)} ; ${F(r.rail.LPhi)}`] : ['Coefficient dynamique δ_B (systèmes B) / δ_Mc', `${F3(r.deltaB)} / ${F3(r.deltaMc)}`],
-      ...(r.rail ? [['Largeur de diffusion transversale ; élargissement longitudinal [m]', `${F(r.rail.bt)} ; ${F(r.rail.sL)}`]] : [['Poids pris en compte pour δ (ouvrage + remblai) [t]', F1(r.poids)]]),
+      r.rail ? ['Coefficient dynamique Φ (avant / après réduction de couverture) ; L_Φ [m]', `${F3(r.rail.phiBrut)} / ${F3(r.rail.phi)} ; ${F(r.rail.LPhi)}`]
+        : r.routeEC ? ['Voies conventionnelles (EN 1991-2) ; demi-élargissement de diffusion d [m] ; empreinte d\'une roue TS [m]', `${r.routeEC.voies.n} × ${F(r.routeEC.voies.wl)} m ; ${F3(r.routeEC.d)} ; ${F(r.routeEC.bx)} × ${F(r.routeEC.by)}`]
+        : ['Coefficient dynamique δ_B (systèmes B) / δ_Mc', `${F3(r.deltaB)} / ${F3(r.deltaMc)}`],
+      ...(r.rail ? [['Largeur de diffusion transversale ; élargissement longitudinal [m]', `${F(r.rail.bt)} ; ${F(r.rail.sL)}`]]
+        : r.routeEC ? [['TS diffusé (une roue) / UDL voie 1 [t/m²] ; β_Q (LM2)', `${F3(r.routeEC.qTS)} / ${F3(r.routeEC.qUDL)} ; ${F(r.routeEC.betaQ)}`]]
+        : [['Poids pris en compte pour δ (ouvrage + remblai) [t]', F1(r.poids)]]),
       ['Alourdissement de Marston K', F3(r.marstonK)],
       ['Poussée K₀ max / min ; surcharge sur remblai [t/m²]', `${F(h.K0max)} / ${F(h.K0min)} ; ${F(r.psrem)}`],
     ]);
@@ -100,6 +104,8 @@ export function cadreBlocks(out, { reco = null } = {}) {
       r.derivations.map(d => [d.sys, d.empreinte, F3(d.s), d.U ? `${F3(d.U)} × ${F3(d.V)}` : '—', F3(d.qBrute), F3(d.delta), F(d.coef), F3(d.q), Number.isFinite(d.couverture) ? F(d.couverture) : '∞']), { small: true });
     comment(inp.opts.usage.portee === 'rail'
       ? 'Charges ferroviaires de l\'EN 1991-2 (LM71, SW/0, SW/2) déplacées le long de l\'ouvrage ; voir les hypothèses de diffusion ci-dessous.'
+      : inp.opts.usage.portee === 'routeEC'
+      ? 'Charges routières de l\'EN 1991-2 : LM1 (tandems TS + UDL, gr1a), LM2 (gr1b) et, en option, Mc120 (gr5) ; diffusion à 30° dans le remblai et 45° dans la traverse (4.9.1, 4.3.6) ; bande de 1 m la plus chargée (empreintes superposées) appliquée au calcul par mètre linéaire, sans répartition transversale (hypothèse enveloppe par rapport à un modèle de plaque) ; groupe d\'essieux balayé le long de la traverse ; γ_Q = 1,35 (ELU), 1,00 (ELS).'
       : 'Fascicule 61 titre II : δ = 1 + 0,4/(1 + 0,2 L) + 0,6/(1 + 4 G/S) ; diffusion à travers le remblai 1,5 H + e (BAEL A.3.2,5, programme PICF-EL) ; A(l) recalculée pour chaque longueur chargée ; une empreinte plus courte que la portée est balayée le long de la travée.');
 
     h3('Cas de charge élémentaires (non pondérés)');
@@ -170,7 +176,7 @@ export function cadreNote(out, { version = '' } = {}) {
   const ouvert = out.inp.type === 'pipo', g = out.inp.geom;
   return {
     title: `Note de calcul — ${ouvert ? 'portique ouvert (PIPO)' : 'cadre fermé (PICF)'}${g.nom ? ' ' + g.nom : ''}`,
-    meta: `PSIDA ${version} — module cadres et portiques (portage du moteur BVTrace, programme SETRA PICF-EL, Fascicule 61 titre II, BAEL 91 / EN 1992-1-1${out.inp.opts.usage.portee === 'rail' ? ', EN 1991-2 section 6' : ''})`,
+    meta: `PSIDA ${version} — module cadres et portiques (portage du moteur BVTrace, programme SETRA PICF-EL, ${out.inp.opts.usage.portee === 'routeEC' ? 'EN 1991-2 (LM1, LM2)' : 'Fascicule 61 titre II'}, BAEL 91 / EN 1992-1-1${out.inp.opts.usage.portee === 'rail' ? ', EN 1991-2 section 6' : ''})`,
     blocks: [{ t: 'h1', text: '1. Calcul de structure' }, ...cadreBlocks(out),
       { t: 'h1', text: '2. Références' },
       { t: 'ref', text: 'SETRA, Programme de calcul PICF-EL — guide d\'emploi (déc. 1991, 2ᵉ éd. juillet 1992) : combinaisons, effet Marston (annexe 4), module ESOL (annexe 2), biais (annexe 5).' },

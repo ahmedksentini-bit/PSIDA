@@ -214,12 +214,16 @@ export function parseSupports(d) {
     found: { type: d.ap_found || 'superficielle', pileType: d.ap_pieu || 'fore-boue', B: v('ap_B', null), Bauto: String(d.ap_B ?? '').trim() === '', hs: v('ap_hs', 1), De: v('ap_De', 1), pileD: v('ap_pileD', 0.8), nPile: v('ap_nPile', 3), nFiles: v('ap_nFiles', 2), sPile: v('ap_sPile', 2.4), Lpile: v('ap_Lpile', 15),
       incl: nums(d.ap_incl || ''), tete: d.ap_tete || 'encastre', pied: d.ap_pied || 'libre', secondOrdre: !!d.ap_pieuSO,
       remblai: { h: v('ap_remH', 0), gamma: v('ap_gamma', 20), Ka: v('ap_remKa', 0.33), EM: v('ap_remEM', 5), alpha: 0.5, pf: v('ap_remPf', 0.3) },
-      fn: { actif: !!d.ap_fn, h: v('ap_fnH', null), h2: v('ap_fnH2', null) } },
+      fn: { actif: !!d.ap_fn, h: v('ap_fnH', null), h2: v('ap_fnH2', null) },
+      // massif en gros béton sous la semelle superficielle : hauteur, débord de chaque côté (défaut h/2), f_ck
+      gb: (() => { const h = v('ap_gbH', 0); return { h: h > 0 ? h : 0, deb: v('ap_gbDeb', h / 2), fck: v('ap_gbFck', 15), gamma: v('ap_gbGamma', 23) }; })() },
     soil: { profiles: parseProfiles(d.ap_profil), assign: String(d.ap_profAssign || '').split(/[,;\s]+/).filter(Boolean), classe: d.ap_soil || 'sable-B', ple: v('ap_ple', 1), EM: v('ap_EM', 10), alpha: v('ap_alpha', 0.5), phi: v('ap_phi', 30), gamma: v('ap_gamma', 20), q: v('ap_q', 10), kSus: v('ap_kSus', 0.5) },
     mat: { fck: v('ap_fck', +d.fck || 25), fyk: v('ap_fyk', +d.fyk || 400), c: v('ap_c', 0.05) },
     eps: { TLD: v('ap_TLD', 3e-4), TCD: v('ap_TCD', 1e-4) },
     bossage: { debord: v('ap_bosDeb', null), fck: v('ap_bosFck', null) ?? undefined },
     epsPSIDP: (d.ap_epsPSIDP ?? 'oui') !== 'non',
+    // réactions par appareil imposées (modèle aux éléments finis) : « F_z,max ELU  F_z,min » [kN] par ligne d'appui, séparées par « ; »
+    brgReac: String(d.ap_brgReac ?? '').split(';').map(t => { const n = nums(t.replace(/^\s*[A-Za-z]+\d*\s*:/, '')).filter(Number.isFinite); return n.length ? { max: n[0], min: n.length > 1 ? n[1] : null } : null; }),
     joint: { debut: ['debut', 'deux'].includes(d.ap_joint), fin: ['fin', 'deux'].includes(d.ap_joint), rG: v('ap_jointG', 1), rQ: v('ap_jointQ', 1), rH: v('ap_jointH', 1) },
     // plan de nivellement : listes par ligne d'appui séparées par « ; » (valeur vide = donnée générale)
     niv: { actif: d.niv_actif === 'on' || d.niv_actif === true, hBos: v('niv_hBos', 0.10), ...Object.fromEntries(['zCh', 'zTN', 'zDS', 'zSS', 'zPP', 'zPHE', 'zLit', 'type', 'B'].map(k => [k, String(d['niv_' + k] ?? '').split(';').map(t => t.trim())])) },

@@ -23,6 +23,7 @@ import * as S from './sections.js';
 import * as Hy from './hydro.js';
 import * as D from './details.js';
 import * as Rail from './rail.js';
+import * as RouteEC from './routeEC.js';
 import * as Sis from './seisme.js';
 
 const fr = (x, d = 2) => (isFinite(x) ? x.toFixed(d).replace('.', ',') : String(x));
@@ -290,7 +291,10 @@ export function calculPicf(geomIn, hypIn = {}, opts = {}) {
   const gB = geom.gaucheExt ? svB : 0, gH = geom.gaucheExt ? svH : 0, drB = geom.droiteExt ? svB : 0, drH = geom.droiteExt ? svH : 0;
   const rail = portee === 'rail' ? Rail.chargesFerroviaires(geom, g, opts.rail || {}, !!ouvert) : null;
   if (rail) notes.push(...rail.notes);
-  const fournisseur = rail ? rail.fournisseur : opts.chargesExploitation;
+  // route portée sous charges de l'EN 1991-2 (LM1, LM2, Mc120 en option)
+  const routeEC = portee === 'routeEC' ? RouteEC.chargesRoutieresEC(geom, g, opts.routeEC || {}, h, poids) : null;
+  if (routeEC) notes.push(...routeEC.notes);
+  const fournisseur = rail ? rail.fournisseur : routeEC ? routeEC.fournisseur : opts.chargesExploitation;
   const qs = rail ? rail.psrem : Math.max(0, h.psrem), sG = geom.gaucheExt ? qs : 0, sD = geom.droiteExt ? qs : 0;
   const pMax = C.poussee(n, h.K0max * (gB + sG), h.K0max * (gH + sG), h.K0max * (drB + sD), h.K0max * (drH + sD));
   const pMin = C.poussee(n, h.K0min * gB, h.K0min * gH, h.K0min * drB, h.K0min * drH);
@@ -298,7 +302,7 @@ export function calculPicf(geomIn, hypIn = {}, opts = {}) {
   // Systèmes d'exploitation routiers (Fascicule 61), sauf si une extension fournit les siens.
   const bc = F61.diffuser(F61.EMPREINTES.Bc, geom.Hr, geom.et), bt = F61.diffuser(F61.EMPREINTES.Bt, geom.Hr, geom.et), mc = F61.diffuserChenille(F61.EMPREINTES.Mc120, geom.Hr, geom.et);
   const qBc = bc.q * h.bc * dB, qBt = bt.q * h.bt * dB, qMc = mc.q * dMc, porteeRef = C.portee(g, 0);
-  const derivations = rail ? [...rail.derivations] : [];
+  const derivations = rail ? [...rail.derivations] : routeEC ? [...routeEC.derivations] : [];
   if (!fournisseur) {
     derivations.push({ sys: 'A(l)', empreinte: `charge répartie, a₁ = ${fr(h.a1)} et a₂ = ${fr(h.a2)}`, H: geom.Hr, e: geom.et, pente: 0, s: 0, U: 0, V: 0, qBrute: F61.alBase(largeur), delta: 1, coef: h.a1 * h.a2, q: F61.al(largeur, h.a1, h.a2), portee: porteeRef, couverture: Infinity });
     for (const [sys, p, d, delta, coef, q] of [['Bc', F61.EMPREINTES.Bc, bc, dB, h.bc, qBc], ['Bt', F61.EMPREINTES.Bt, bt, dB, h.bt, qBt], ['Mc120', F61.EMPREINTES.Mc120, mc, dMc, 1, qMc]])
@@ -419,7 +423,7 @@ export function calculPicf(geomIn, hypIn = {}, opts = {}) {
   }
   const res = {
     geom, h, cadre: g, combos, frames, cas, effets, sections, deltaB: dB, deltaMc: dMc, poids, marstonK: mars.K, marstonNote: mars.message,
-    derivations, balayages, alertes, reserves: [], psrem: qs, ouvert, franchie, portee, sisme, rail: rail ? { phi: rail.phi, phiBrut: rail.phiBrut, LPhi: rail.LPhi, bt: rail.bt, sL: rail.sL } : null,
+    derivations, balayages, alertes, reserves: [], psrem: qs, ouvert, franchie, portee, sisme, rail: rail ? { phi: rail.phi, phiBrut: rail.phiBrut, LPhi: rail.LPhi, bt: rail.bt, sL: rail.sL } : null, routeEC: routeEC ? { d: routeEC.d, bx: routeEC.bxTS, by: routeEC.byTS, qTS: routeEC.qTSmax, qUDL: routeEC.qUDL1, voies: routeEC.voies, betaQ: routeEC.betaQ } : null,
     metre: D.avantMetre(g, geom.H, geom.L, sections), propositions: proposerEpaisseurs(h, sections),
   };
 
