@@ -111,3 +111,31 @@ test('PSI-BA : plans — entretoises intermédiaires dessinées (coffrage, coupe
   // aciers inférieurs dessinés : au moins A_s, ancrage compris
   assert.ok(EI.inf.As >= Math.max(EI.Q.inf.As, EI.Q.ancrage) - 1e-12);
 });
+
+test('PSI-BA : nomenclature et façonnage (ISO 4066) — mêmes barres et mêmes masses que les plans', async () => {
+  const { donneesBA, planFerraillageBA, retourLit } = await import('../src/plans/poutres_ba.js');
+  const { nomenclatureBA, planNomenclatureBA } = await import('../src/plans/nomenclature_ba.js');
+  const { longueurCoupe, rayonCintrage } = await import('../src/plans/bordereau.js');
+  const r4 = computePoutres(parsePoutres({ ...DP, pt_entInt: '1, 2, 2, 1', pt_beInt: '0.38' })), D = donneesBA(r4), N = nomenclatureBA(D);
+  // lit inférieur filant : relevé de max(10 φ ; 0,25 m), découpé en pièces de 12 m au plus (pièces d'extrémité code 11)
+  const l1 = N.lignes.filter(l => /^lit 1 /.test(l.desig));
+  assert.ok(l1.length >= 1 && l1.every(l => l.L <= 12000 + 1e-9));
+  assert.equal(l1[0].B, Math.round(retourLit(D.bars.phi) * 1000 / 5) * 5);
+  // nombres : lits × poutres
+  const lit = D.bars.lits[1], l2 = N.lignes.filter(l => /^lit 2 /.test(l.desig)), nb2 = l2.reduce((s, l) => s + l.nombre, 0);
+  assert.ok(nb2 >= lit.n * 3 && nb2 % (lit.n * 3) === 0, `lit 2 : ${nb2} pièces pour ${lit.n} barres × 3 poutres`);
+  // longueurs de coupe ISO 4066 : cadre 51 = 2 (A + B + C) − 2,5 r − 5 d, arrondie aux 25 mm supérieurs
+  const cad = N.lignes.find(l => /^cadres d'âme/.test(l.desig));
+  assert.equal(cad.L, Math.ceil((2 * (cad.A + cad.B + cad.C) - 2.5 * rayonCintrage(cad.phi) - 5 * cad.phi) / 25 - 1e-9) * 25);
+  assert.equal(cad.L, Math.ceil(longueurCoupe('51', cad, cad.phi) / 25 - 1e-9) * 25);
+  // entretoises intermédiaires : E1 à E4 présentes ; masses par élément
+  for (const e of ['E1', 'E2', 'E3', 'E4']) assert.ok(N.lignes.some(l => l.desig.startsWith(e)), e);
+  assert.ok(N.parElement.poutre > 0 && N.parElement.hourdis > 0 && N.parElement.intermediaire > 0);
+  // la feuille de ferraillage reprend les masses du bordereau (une poutre et son hourdis)
+  const Fe = planFerraillageBA(D, {}), tq = Fe.tableaux.find(t => /BORDEREAU BA-FAC-01/.test(t.titre));
+  const tot = +tq.lignes.find(l => l[0] === 'Total')[1].replace(/\s/g, '');
+  near(tot, (N.parElement.poutre + N.parElement.hourdis) / 3, 0.002, 'masse par poutre et hourdis');
+  const F = planNomenclatureBA(D, {});
+  assert.deepEqual(F.valide().problemes, []); assert.ok(!F.deborde);
+  near(F.nomenclature.R.masse, N.lignes.reduce((s, l) => s + l.masse, 0), 1e-9, 'récapitulatif');
+});

@@ -19,6 +19,7 @@
 import { Vue } from './dessin.js';
 import { composer } from './mise_en_page.js';
 import { couperNote } from './appuis.js';
+import { nomenclatureBA } from './nomenclature_ba.js';
 
 const fr = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : '—');
 const milliers = x => Math.round(x).toLocaleString('fr-FR').replace(/[  ]/g, ' ');
@@ -76,6 +77,23 @@ export function barresInferieures({ As, parts, cover = 0.03, phiT = 10, L, a = 0
   }
   lits[0].x0 = -a + cover; lits[0].L = L + 2 * (a - cover); lits[0].filant = true;   // lit inférieur filant, ancré au-delà de l'appui
   return { phi, n, nl, lits, As, Asx: n * aire(phi), ls, decal, bt, e };
+}
+
+/** Retour relevé des lits filants au-delà de l'appui : 10 φ, 25 cm au moins (ancrage par retour à 90°). */
+export const retourLit = phi => Math.max(0.25, 10 * phi / 1000);
+
+/** Nappes du hourdis : transversales inférieure et supérieure (flexion locale), répartition longitudinale ≥ A_s/4. */
+export function nappesHourdis(D) {
+  const inp = D.inp, Hd = D.hourdis && !D.hourdis.erreur ? D.hourdis : null;
+  const ni = Hd && Hd.inf ? nappeBA(Hd.inf.As) : nappeBA(0.0012 * inp.hd), ns = Hd && Hd.sup ? nappeBA(Hd.sup.As) : nappeBA(0.0012 * inp.hd);
+  const rep = nappeBA(Math.max(aire(ni.phi) / ni.s / 4, 0.0008 * inp.hd));   // répartition longitudinale ≥ A_s/4 (BAEL A.8.2,41)
+  return { ni, ns, rep };
+}
+
+/** Âme et talon : largeurs, hauteur du talon (cadres distincts d'âme et de talon si le talon est plus large). */
+export function ameTalon(D) {
+  const parts = D.parts, bt = parts[0].b, b0 = parts.length > 1 ? Math.min(...parts.map(q => q.b)) : bt;
+  return { bt, b0, ht: parts[0].h, talon: bt > b0 + 1e-6 };
 }
 
 /** Étriers (cadre + étriers) : brins, diamètre et espacement pour A_t/s_t (m²/m), s ≤ s_max, arrondi à 5 cm. */
@@ -155,7 +173,7 @@ function entretoisesInt(r, sp, parts, H, code) {
 }
 
 /** Coupe de la poutre (rectangles empilés centrés) avec sa largeur de hourdis b₁. */
-function vuePoutre(D, { titre, armatures = null, echelle = 20 }) {
+export function vuePoutre(D, { titre, armatures = null, echelle = 20 }) {
   const V = new Vue(titre, { echelle }), { parts, hp, inp } = D;
   let y = 0;
   const pts = [];
@@ -225,7 +243,7 @@ function vueElevation(D, { barres = false } = {}) {
   if (barres) {
     bars.lits.forEach((l, k) => {
       const x0 = a + l.x0, x1 = x0 + l.L, y = l.y;
-      V.poly('ACIERS', l.filant ? [[x0, y + 0.25], [x0, y], [x1, y], [x1, y + 0.25]] : [[x0, y], [x1, y]]);
+      const rt = retourLit(bars.phi); V.poly('ACIERS', l.filant ? [[x0, y + rt], [x0, y], [x1, y], [x1, y + rt]] : [[x0, y], [x1, y]]);
       V.repere([x1 + 0.45 + 0.35 * k, y + 0.12 * k], k + 1, [x1 - 0.05, y]);
       if (!l.filant) V.coteH([a, 0], [x0, 0], -0.35 - 0.25 * k, fr(l.x0));
     });
@@ -250,7 +268,7 @@ function vueElevation(D, { barres = false } = {}) {
 }
 
 /** Longueurs des barres de l'entretoise intermédiaire (ancrages par courbure dans les poutres de rive, retours de 10 φ). */
-function barresEntretoise(D) {
+export function barresEntretoise(D) {
   const EI = D.entInt, inp = D.inp, n = inp.n, Lt = (n - 1) * inp.b1, c = 0.03, H = D.H, retInf = Math.max(0.30, H / 3), retSup = 0.20;
   const Linf = Lt + EI.bw - 2 * c - 0.04 + 2 * retInf, Lsup = Lt + EI.bw - 2 * c + 2 * retSup;
   const he = D.hp - EI.zInf, per = 2 * (EI.b - 2 * c) + 2 * (he + inp.hd - 2 * c) + 0.2, nEt = Math.ceil((n - 1) * (inp.b1 - EI.bw) / EI.et.s) + (n - 1);
@@ -265,7 +283,7 @@ function barresEntretoise(D) {
 }
 
 /** Coupe B-B : entretoise intermédiaire vue dans son plan (poutres coupées), armatures. */
-function vueEntretoise(D) {
+export function vueEntretoise(D) {
   const EI = D.entInt, { inp, parts, hp, H } = D, n = inp.n, b1 = inp.b1, W = n * b1, ys = Array.from({ length: n }, (_, k) => -W / 2 + b1 * (k + 0.5)), c = 0.03;
   const V = new Vue('COUPE B-B : FERRAILLAGE D\'UNE ENTRETOISE INTERMÉDIAIRE', { echelle: 50 });
   const yL = ys[0] - b1 / 2, yR = ys[n - 1] + b1 / 2;
@@ -305,7 +323,7 @@ export function planCoffrageBA(D, cartouche = {}, { nom = 'TABLIER À POUTRES BA
     '3. Goussets des poutres de rive et ailes du talon du côté intérieur de l\'ouvrage (dossier Sétra PSI-BA 77, pièce V.1.1).',
     '4. Épaississement de l\'âme près des appuis (gousset d\'appui) si la contrainte de cisaillement l\'exige : voir la note de calcul.',
     ...(EI ? [`4 bis. Entretoises intermédiaires : ${EI.nE} dans la travée, également espacées (${fr(D.sp.L / (EI.nE + 1))} m), épaisseur ${fr(EI.b)} m, niveau inférieur ${EI.zInf > 0 ? 'au-dessus des ailes du talon' : 'à l\'intrados des poutres'} (PSI-BA V.1.1) ; coupe B-B au plan BA-FER-01.`] : []),
-    '5. Ferraillage : plan BA-FER-01 ; équipements (corniches, trottoirs, étanchéité) : plans du tablier.']);
+    '5. Ferraillage : plan BA-FER-01, nomenclature et façonnage : plan BA-FAC-01 ; équipements (corniches, trottoirs, étanchéité) : plans du tablier.']);
   const hq = (tq.lignes.length + 2) * 6, hn = N.length * 2.1 * 1.6;
   const F = composer({ titre: `${nom} — COFFRAGE`, cartouche, rangees: [[ct], [el], [cp]],
     groupes: [{ vues: [ct], cible: 50, min: 20 }, { vues: [el], cible: 100, min: 50 }, { vues: [cp], cible: 20, min: 10 }],
@@ -326,14 +344,13 @@ export function nappeBA(As) {
 
 export function planFerraillageBA(D, cartouche = {}, { nom = 'TABLIER À POUTRES BA' } = {}) {
   const { inp, sp, parts, hp, H, a, bars, zones, code } = D, L = sp.L, Lp = L + 2 * a, c = 0.03, bt = parts[0].b, b0 = parts.length > 1 ? Math.min(...parts.map(q => q.b)) : bt;
-  const Hd = D.hourdis && !D.hourdis.erreur ? D.hourdis : null;
-  const ni = Hd && Hd.inf ? nappeBA(Hd.inf.As) : nappeBA(0.0012 * inp.hd), ns = Hd && Hd.sup ? nappeBA(Hd.sup.As) : nappeBA(0.0012 * inp.hd);
-  const rep = nappeBA(Math.max(aire(ni.phi) / ni.s / 4, 0.0008 * inp.hd));   // répartition longitudinale ≥ A_s/4 (BAEL A.8.2,41)
+  const { ni, ns, rep } = nappesHourdis(D), AT = ameTalon(D);
   const E = D.entretoise, z0 = zones[0] || { phi: 10, s: 0.2, brins: 2 };
   const cp = vuePoutre(D, { titre: 'COUPE A-A : FERRAILLAGE DE LA POUTRE (MI-TRAVÉE)', armatures: V => {
     const ph = bars.phi / 1000, pt = z0.phi / 1000;
-    // cadre suivant le talon et l'âme jusqu'au hourdis
-    V.poly('ACIERS', [[-b0 / 2 + c, hp + inp.hd - c], [-b0 / 2 + c, parts[0].h], [-bt / 2 + c, parts[0].h - 0.02], [-bt / 2 + c, c], [bt / 2 - c, c], [bt / 2 - c, parts[0].h - 0.02], [b0 / 2 - c, parts[0].h], [b0 / 2 - c, hp + inp.hd - c]], true);
+    // cadre d'âme jusqu'au hourdis ; cadre de talon distinct si le talon est plus large que l'âme
+    V.poly('ACIERS', [[-b0 / 2 + c, c + (AT.talon ? 0.008 : 0)], [b0 / 2 - c, c + (AT.talon ? 0.008 : 0)], [b0 / 2 - c, hp + inp.hd - c], [-b0 / 2 + c, hp + inp.hd - c]], true);
+    if (AT.talon) V.poly('ACIERS', [[-bt / 2 + c, c], [bt / 2 - c, c], [bt / 2 - c, AT.ht - c], [-bt / 2 + c, AT.ht - c]], true);
     if (z0.brins === 4) V.poly('ACIERS', [[-bt / 4 + c, c + 0.01], [-bt / 4 + c, hp + inp.hd - c - 0.01], [bt / 4 - c, hp + inp.hd - c - 0.01], [bt / 4 - c, c + 0.01]], true);
     bars.lits.forEach(l => { for (let k = 0; k < l.n; k++) V.cercle('ACIERS_COUPES', [-bt / 2 + c + pt + ph / 2 + k * (l.n > 1 ? (bt - 2 * c - 2 * pt - ph) / (l.n - 1) : 0), l.y], ph / 2, true); });
     // nappes du hourdis (sections transversales vues en coupe longitudinale : barres de répartition)
@@ -348,10 +365,9 @@ export function planFerraillageBA(D, cartouche = {}, { nom = 'TABLIER À POUTRES
   } });
   const el = vueElevation(D, { barres: true }), EI = D.entInt, ce = EI ? vueEntretoise(D) : null, BE = EI ? barresEntretoise(D) : null;
   // nomenclature simplifiée des barres d'une poutre
-  const lignesB = bars.lits.map((l, k) => [String(k + 1), `${l.n} HA${bars.phi}`, fr(l.L + (l.filant && k === 0 ? 0.5 : 0), 2), l.filant ? (k === 0 ? 'filant, crochets relevés' : 'filant') : `arrêt à ${fr(l.x0)} m de l'appui`, milliers(l.n * (l.L + (k === 0 ? 0.5 : 0)) * kgm(bars.phi))]);
-  const nEt = zones.reduce((s, z) => s + 2 * (z.x1 - z.x0) / z.s, 0) + 2 * a / 0.15, per = 2 * (hp + inp.hd - 2 * c) + 2 * (bt - 2 * c);
-  const mEt = nEt * per * kgm(z0.phi) * (z0.brins === 4 ? 1.8 : 1), nPeau = 2 * Math.max(0, Math.floor((hp - parts[0].h - 0.15) / 0.25));
-  lignesB.push([String(bars.nl + 1), `${z0.brins === 4 ? 'cadre + étrier' : 'cadre'} HA${z0.phi}`, fr(2 * (hp + inp.hd - 2 * c) + 2 * (bt - 2 * c), 2), 'zones ci-dessous', '—'],
+  const rt = retourLit(bars.phi), NB = nomenclatureBA(D), nP = NB.n;
+  const lignesB = bars.lits.map((l, k) => [String(k + 1), `${l.n} HA${bars.phi}`, fr(l.L + (l.filant ? 2 * rt : 0), 2), l.filant ? `filant, relevé de ${fr(rt)} m au-delà des appuis` : `arrêt à ${fr(l.x0)} m de l'appui`, milliers(l.n * (l.L + (l.filant ? 2 * rt : 0)) * kgm(bars.phi))]);
+  lignesB.push([String(bars.nl + 1), `${AT.talon ? 'cadres d\'âme et de talon' : 'cadre'}${z0.brins === 4 ? ' + étrier' : ''} HA${z0.phi}`, fr(2 * (hp + inp.hd - 2 * c) + 2 * (b0 - 2 * c), 2), 'zones ci-dessous', '—'],
     [String(bars.nl + 2), `HA${ns.phi} / ${fr(ns.s * 100, 1)}`, fr(inp.b1, 2), 'hourdis, nappe supérieure transversale', '—'],
     [String(bars.nl + 3), `HA${ni.phi} / ${fr(ni.s * 100, 1)}`, fr(inp.b1, 2), 'hourdis, nappe inférieure transversale', '—'],
     [String(bars.nl + 4), 'HA12 / 25', fr(Lp, 2), 'armatures de peau (2 faces)', '—']);
@@ -359,11 +375,12 @@ export function planFerraillageBA(D, cartouche = {}, { nom = 'TABLIER À POUTRES
   const tb = { titre: 'BARRES PRINCIPALES (UNE POUTRE)', cols: [{ t: 'Rep.', w: 10, a: 'c' }, { t: 'Barres', w: 22, a: 'c' }, { t: 'L [m]', w: 16, a: 'd' }, { t: 'Disposition', w: 52, a: 'g' }, { t: 'kg', w: 16, a: 'd' }], lignes: lignesB };
   const tz = { titre: 'ZONES D\'ÉTRIERS (DEPUIS L\'AXE D\'APPUI, SYMÉTRIQUE)', cols: [{ t: 'De [m]', w: 18, a: 'd' }, { t: 'À [m]', w: 18, a: 'd' }, { t: 'A_t/s_t [cm²/m]', w: 28, a: 'd' }, { t: 'Armatures d\'âme', w: 52, a: 'c' }],
     lignes: zones.map(z => [fr(z.x0), fr(z.x1), fr(z.AtSt * 1e4, 1), `${z.brins === 4 ? 'cadre + étrier' : 'cadre'} HA${z.phi} / ${fr(z.s * 100, 0)} cm`]) };
-  const mHourdis = inp.b1 * Lp * (aire(ni.phi) / ni.s + aire(ns.phi) / ns.s) * 7850 * 1.1 + inp.b1 * Lp * 2 * aire(rep.phi) / rep.s * 7850;
-  const mB = bars.lits.reduce((s, l, k) => s + l.n * (l.L + (k === 0 ? 0.5 : 0)) * kgm(bars.phi), 0) + (D.superieures || []).reduce((s2, q) => s2 + q.groupes.reduce((s3, g) => s3 + g.n * g.L * kgm(q.phi), 0), 0), mPeau = nPeau * Lp * kgm(12), mMont = 2 * Lp * kgm(16);
-  const tot = mB + mEt + mPeau + mMont + mHourdis, vol = (parts.reduce((s, q) => s + q.b * q.h, 0) + inp.b1 * inp.hd) * Lp;
-  const tq = { titre: 'ARMATURES (ESTIMATION, UNE POUTRE ET SON HOURDIS)', cols: [{ t: 'Poste', w: 70, a: 'g' }, { t: 'Masse [kg]', w: 26, a: 'd' }],
-    lignes: [[D.superieures && D.superieures.length ? 'Barres principales (inférieures et supérieures sur appuis)' : 'Barres principales inférieures', milliers(mB)], ['Cadres et étriers', milliers(mEt)], ['Armatures de peau et de montage', milliers(mPeau + mMont)], ['Hourdis (largeur b₁)', milliers(mHourdis)], ['Total', milliers(tot)], ['Ratio', `${fr(tot / vol, 0)} kg/m³`]] };
+  // masses : bordereau de façonnage (plan BA-FAC-01), par poutre ; hourdis sur la largeur b₁
+  const mEl = re => NB.lignes.filter(l => l.element === 'poutre' && re.test(l.desig)).reduce((t, l) => t + l.masse, 0) / nP;
+  const mB = mEl(/^(lit|S\d)/), mEt = mEl(/^(cadres|étriers)/), mPM = mEl(/^(peau|montage)/), mHourdis = NB.parElement.hourdis / nP;
+  const tot = mB + mEt + mPM + mHourdis, vol = (parts.reduce((s, q) => s + q.b * q.h, 0) + inp.b1 * inp.hd) * Lp;
+  const tq = { titre: 'ARMATURES (BORDEREAU BA-FAC-01, UNE POUTRE ET SON HOURDIS)', cols: [{ t: 'Poste', w: 70, a: 'g' }, { t: 'Masse [kg]', w: 26, a: 'd' }],
+    lignes: [[D.superieures && D.superieures.length ? 'Barres principales (inférieures et supérieures sur appuis)' : 'Barres principales inférieures', milliers(mB)], ['Cadres et étriers', milliers(mEt)], ['Armatures de peau et de montage', milliers(mPM)], ['Hourdis (largeur b₁)', milliers(mHourdis)], ['Total', milliers(tot)], ['Ratio', `${fr(tot / vol, 0)} kg/m³`]] };
   const tI = EI ? { titre: `ENTRETOISE INTERMÉDIAIRE (UNE ; ${EI.nE} DANS LA TRAVÉE)`, cols: [{ t: 'Rep.', w: 10, a: 'c' }, { t: 'Barres', w: 30, a: 'c' }, { t: 'L [m]', w: 14, a: 'd' }, { t: 'Disposition', w: 58, a: 'g' }, { t: 'kg', w: 14, a: 'd' }],
     lignes: [...BE.lignes.map(l => [l.rep, l.bar, fr(l.L, 2), l.disp, milliers(l.kg)]), ['', '', '', 'Total (une entretoise et ses suspentes)', milliers(BE.masse)]] } : null;
   const te = E ? [['Entretoise d\'about', `inf. ${fr(E.AsInf * 1e4, 1)} cm² ; sup. ${fr(E.AsSup * 1e4, 1)} cm² ; étriers ${fr(E.etriers.AswS * 1e4, 1)} cm²/m`]] : [];
@@ -373,7 +390,7 @@ export function planFerraillageBA(D, cartouche = {}, { nom = 'TABLIER À POUTRES
     `2. Épure d'arrêt (dossier Sétra PSI-BA 77, V.1.3 et V.3) : courbe des sections nécessaires décalée de 0,8 h = ${fr(bars.decal)} m vers l'appui, barres prolongées de l_s = ${fr(bars.ls)} m (${code === 'EC' ? 'EN 1992-1-1 § 8.4.4' : 'BAEL A.6.1,23, τ_su = 0,6 ψ_s² f_tj'}) ; lit inférieur filant, relevé et ancré au-delà de l'appui.`,
     `3. Armatures d'âme : ${code === 'EC' ? 'EN 1992-1-1 § 6.2.3' : 'BAEL 91 A.5.1 (A_t/(b₀ s_t) ≥ γ_s(τ_u − 0,3 f_t28)/(0,9 f_e), ≥ 0,4 MPa/f_e)'} ; espacement ≤ ${fr(code === 'EC' ? Math.min(0.75 * D.d, 0.4) : Math.min(0.9 * D.d, 0.4))} m ; deux cadres rapprochés au droit des appareils d'appui.`,
     `4. Hourdis : nappes transversales du calcul de flexion locale (onglet Tablier à poutres), répartition longitudinale HA${rep.phi} / ${fr(rep.s * 100, 1)} cm (≥ A_s/4) ; jonction hourdis-poutre (PSI-BA V.1.6) : les cadres des poutres montent dans le hourdis.`,
-    `5. Enrobage ${fr(c * 100, 0)} cm ; acier HA f_e = ${inp.fyk} MPa ; béton C${inp.fck}. Plan de principe : le façonnage détaillé (crochets, recouvrements) reste à établir.`,
+    `5. Enrobage ${fr(c * 100, 0)} cm ; acier HA f_e = ${inp.fyk} MPa ; béton C${inp.fck}. Façonnage (codes de forme, mandrins, crochets, recouvrements) : bordereau BA-FAC-01.`,
     ...(EI ? [`${D.superieures && D.superieures.length ? 7 : 6}. Entretoises intermédiaires (coupe B-B ; PSI-BA V.1.7) : méthode de Courbon, entretoise la plus sollicitée (travée ${EI.E.travee + 1}) ; A_inf = ${fr(EI.Q.inf.As * 1e4, 1)} cm² (≥ ancrage V_u/f_su = ${fr(EI.Q.ancrage * 1e4, 1)} cm²), ancrée par courbure au-delà du nu des poutres de rive, ligaturée (poussée au vide) ; aciers supérieurs continus d'une poutre de rive à l'autre ; suspentes : la réaction de l'entretoise (V_u = ${fr(EI.Q.Vu, 0)} kN) est remontée dans la poutre par ${EI.nSusp} cadres HA12 répartis de part et d'autre de l'entretoise.`] : []),
     ...(D.superieures && D.superieures.length ? [`6. Travées continues : armatures supérieures sur appuis (PSI-BA V.1.4) en deux groupes, arrêtés où la section nécessaire A_sup M(x)/M(appui) ne dépasse plus la section restante plus celle des armatures longitudinales du hourdis (${fr(D.superieures[0].Ah * 1e4, 1)} cm² sur b₁), prolongés de 0,8 h + l_s, bornés aux travées adjacentes ; recouvrements des armatures inférieures sur appui.`] : [])]);
   const hb = (tb.lignes.length + 2) * 6, hz = (tz.lignes.length + 2) * 6, hq = (tq.lignes.length + 2) * 6, he2 = tE ? (tE.lignes.length + 2) * 6 + 6 : 0, hi = tI ? (tI.lignes.length + 2) * 6 + 6 : 0, hn = N.length * 2.1 * 1.6, wcol = 128;

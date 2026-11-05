@@ -65,6 +65,7 @@ test('note BA 15 m : plans de coffrage et de ferraillage (PSI-BA 77 pièce V), f
   for (const l of arr) assert.ok(l.x0 > 0 && l.L < D.sp.L);
   assert.ok(D.zones.length >= 2 && D.zones[0].s <= D.zones.at(-1).s, 'étriers resserrés à l\'appui');
   for (const fn of [planCoffrageBA, planFerraillageBA]) { const F = fn(D, { numero: 'X' }); assert.deepEqual(F.valide().problemes, []); assert.ok(feuilleDXF(F).length > 1000); }
+  { const { planNomenclatureBA } = await import('../src/plans/nomenclature_ba.js'); const F = planNomenclatureBA(D, { numero: 'X' }); assert.deepEqual(F.valide().problemes, []); assert.ok(!F.deborde && feuilleDXF(F).length > 1000 && F.nomenclature.R.masse > 0); }
   // épure : section unique au milieu, un seul lit → filant
   const b1 = barresInferieures({ As: 2 * Math.PI * 0.016 ** 2 / 4, parts: [{ b: 0.4, h: 0.2 }], L: 10, profil: x => x * (10 - x), h: 1, fck: 30, fyk: 400 });
   assert.equal(b1.lits.length, 1); assert.ok(b1.lits[0].filant);
