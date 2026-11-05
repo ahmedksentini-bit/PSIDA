@@ -4,8 +4,12 @@
  */
 import { beamDeck, beamCombinations, beamCombinationsRail, beamSection } from './index.js';
 import { parseRail } from '../pipeline.js';
-import { tBeamULS, prestressCheck, lineReactions, lineReactionsRail, etriersEC2 } from './design.js';
+import { tBeamULS, tBeamSLS, limitesELS, etriersBAEL, prestressCheck, lineReactions, lineReactionsRail, etriersEC2 } from './design.js';
 import { FORME_VIPP, sectionVIPP } from './vipp_section.js';
+import { kgPoutre } from './biais.js';
+import { deversementPoutre, inertieVerticale } from './deversement.js';
+import { betonEC2 } from '../phasage/fluage.js';
+import { parseDesignation } from '../bearings.js';
 import { chaineVIPP, DEFAUTS_VIPP } from './vipp.js';
 import { hourdisLocal } from './hourdis.js';
 import { entretoiseVerinage } from './entretoise.js';
@@ -60,6 +64,10 @@ export function parsePoutres(d) {
     nRetenue: v('pt_ret', 0), mil: d.pt_mil || 'Mc120', alphaEC: d.alpha || 'recommended',
     type: d.pt_type || 'BP', fck: v('pt_fck', 35), fyk: v('pt_fyk', 500), b0: v('pt_b0', 0.25), cover: v('pt_cover', 0.12),
     P: v('pt_P', 0), e0: v('pt_e0', -1.46), fpr: v('pt_sp', 1100),
+    biais: Math.min(100, Math.max(1, v('pt_biais', 100))),
+    fiss: d.pt_fiss || 'prej',
+    // stabilité latérale en phase de pose (src/beams/deversement.js) : points de levage, appareil provisoire, dévers
+    pose: { a: v('pt_levA', null), hLev: v('pt_levH', 0.20), appareil: parseDesignation(d.pt_devApp || '300x400x3(10+3)'), devers: v('pt_devers', 0) / 100, about: d.pt_type === 'PRAD' ? v('pr_about', 0.30) : v('pt_about', 0.40), balayage: v('pt_balay', null) },
   };
 }
 
@@ -68,6 +76,13 @@ export function computePoutres(inp) {
     // section VIPP : poutre + hourdis de largeur b₁ pour la répartition transversale (coefficient d'équivalence 1)
     const S = sectionVIPP(inp.vipp.forme, { b1: inp.b1, hd: inp.hd });
     inp = { ...inp, beam: { ...S.comp, v: S.comp.v, vp: S.comp.vp }, vippSection: S };
+  }
+  // K_g de la poutre seule (biais, AASHTO LRFD § 4.6.2.2.1) : dimensions VIPP, rectangles empilés, sinon I de la section
+  // composée (section par valeurs : approximation, K_g légèrement surestimé, F_V légèrement sous-estimé)
+  if (inp.biais < 100) {
+    if (inp.vippSection) { const S = inp.vippSection; inp = { ...inp, Kg: kgPoutre({ Ib: S.poutre.I, Ab: S.poutre.A, eg: S.hourdis.e, fckP: inp.vipp.beton.fckP, fckH: inp.vipp.beton.fckH }).Kg, KgSource: 'source : dimensions de la poutre' }; }
+    else if (inp.beam.parts) { const B = beamSection({ parts: inp.beam.parts }); inp = { ...inp, Kg: B.I + B.A * (B.H + inp.hd / 2 - B.vp) ** 2, KgSource: 'source : rectangles de la poutre' }; }
+    else inp = { ...inp, Kg: inp.beam.I, KgSource: 'approximation : I de la section composée, section par valeurs' };
   }
   const bd = beamDeck(inp);
   const sec = bd.sec, H = sec.H || inp.beam.H || 2, v = sec.v ?? inp.beam.v, vp = sec.vp ?? inp.beam.vp;
@@ -83,14 +98,7 @@ export function computePoutres(inp) {
       if ((inp.type === 'BP' || inp.type === 'PRAD') && inp.geo === 'dims') {
         out.vipp = chaineVIPP({ ...inp.vipp, b1: inp.b1, hd: inp.hd, gExtra: 0 }, S.L, b, { elsF61: c.ELS_F61, eluF61: c.ELU_F61 });
       } else if (inp.type === 'BA') {
-        out.BA = { BAEL: tBeamULS({ M: MuF, beff: inp.b1, hf: inp.hd, b0: inp.b0, d, fck: inp.fck, fyk: inp.fyk, code: 'BAEL' }), EC: tBeamULS({ M: MuE, beff: inp.b1, hf: inp.hd, b0: inp.b0, d, fck: inp.fck, fyk: inp.fyk, code: 'EC' }) };
-        // le long de la travée : armatures inférieures (ELU, enveloppe EC / F61) et étriers (EC2 § 6.2.3), z = 0,9 d
-        const secs = S.deck.beam.sections, half = secs.filter(q => q.x <= S.L / 2 + 1e-9);
-        out.BA.travee = half.map((q, i) => {
-          const VEd = 1.35 * Math.abs(b.G.Vmax?.[i] ?? 0) + 1.35 * Math.max(Math.abs(b.gr1a?.Vmax?.[i] ?? 0), Math.abs(b.gr1b?.Vmax?.[i] ?? 0));
-          const As = tBeamULS({ M: Math.max(c.ELU_EC[i], c.ELU_F61[i]), beff: inp.b1, hf: inp.hd, b0: inp.b0, d, fck: inp.fck, fyk: inp.fyk, code: 'EC' });
-          return { x: q.x, MEd: Math.max(c.ELU_EC[i], c.ELU_F61[i]), As: As.As, VEd, V: etriersEC2({ VEd, bw: inp.b0, z: 0.9 * d, fck: inp.fck, fyk: inp.fyk }) };
-        });
+        out.BA = calculPoutreBA({ b, c, S, inp, d });
       } else {
         const Gm = b.G.Mmin[mid], base = { A: sec.A, I: sec.I, v, vp, P: inp.P, e0: inp.e0, Mmin: Gm, fck: inp.fck };
         // BPEL classe II : combinaison rare (ELS Fascicule 61) ; EC2 : décompression sous quasi-permanente (ψ₂ = 0 : G seul),
@@ -101,7 +109,7 @@ export function computePoutres(inp) {
       }
       return out;
     });
-    return { L: S.L, theta: S.gp.theta, alpha: S.gp.alpha, Lguyon: S.gp.Lguyon, classe: S.f61.classe, deltaB: S.f61.deltaBc[0], deltaC: S.f61.deltaMc?.[0], beams };
+    return { L: S.L, theta: S.gp.theta, alpha: S.gp.alpha, Lguyon: S.gp.Lguyon, classe: S.f61.classe, deltaB: S.f61.deltaBc[0], deltaC: S.f61.deltaMc?.[0], skew: S.skew, deversement: deversementDe(beams, S.L, inp), gp: S.gp, f61info: { G: S.f61.G?.[0], nv: S.f61.nv, v: S.f61.v, Lc: S.f61.Lc, Lr: S.f61.Lr }, beams };
   });
   // hourdis (flexion locale) et entretoises d'about (vérinage) : sections connues par leurs dimensions ou leurs rectangles
   // (sous rail : charges des traverses diffusées dans le ballast, coefficient dynamique du hourdis, tableau 6.2 cas 4.1)
@@ -122,7 +130,83 @@ export function computePoutres(inp) {
     entretoise = entretoiseVerinage({ ys: bd.ys, RG: sp.beams.map(b => b.V0.G ?? 0), dv: L0.dv, verinsRive: L0.verinsRive, he: Math.max(hp - 0.10, 0.5), te: L0.te, hd: inp.hd, fck: inp.fck, fyk: inp.fyk });
     entretoise.L = sp.L;
   }
-  return { inp, sec, spans, lines: inp.rail ? lineReactionsRail(bd, inp.rail) : lineReactions(bd), bd, hourdis, entretoise, rail: !!inp.rail };
+  return { inp, sec, spans, lines: inp.rail ? lineReactionsRail(bd, inp.rail) : lineReactions(bd), appareils: appareilsPoutres(bd, inp), bd, hourdis, entretoise, rail: !!inp.rail };
+}
+
+/**
+ * Poutre en béton armé : armatures à l'ELU (BAEL et EC2, enveloppe des combinaisons), le long de la demi-travée
+ * (armatures inférieures et étriers EC2), à l'ELS à mi-travée (section en T fissurée) et effort tranchant BAEL à l'appui.
+ * Partagé par l'onglet et par les recherches des recommandations (src/reco/poutres.js).
+ */
+export function calculPoutreBA({ b, c, S, inp, d }) {
+  const MuF = Math.max(...c.ELU_F61), MuE = Math.max(...c.ELU_EC), mid = S.deck.beam.sectionIndex(0, 0.5), x0 = S.deck.beam.sectionIndex(0, 0);
+  const T = { beff: inp.b1, hf: inp.hd, b0: inp.b0, d };
+  const BA = { BAEL: tBeamULS({ M: MuF, ...T, fck: inp.fck, fyk: inp.fyk, code: 'BAEL' }), EC: tBeamULS({ M: MuE, ...T, fck: inp.fck, fyk: inp.fyk, code: 'EC' }) };
+  // le long de la travée : armatures inférieures (ELU, enveloppe EC / F61) et étriers (EC2 § 6.2.3), z = 0,9 d
+  const secs = S.deck.beam.sections, half = secs.filter(q => q.x <= S.L / 2 + 1e-9);
+  BA.travee = half.map((q, i) => {
+    const VEd = 1.35 * Math.abs(b.G.Vmax?.[i] ?? 0) + 1.35 * Math.max(Math.abs(b.gr1a?.Vmax?.[i] ?? 0), Math.abs(b.gr1b?.Vmax?.[i] ?? 0));
+    const As = tBeamULS({ M: Math.max(c.ELU_EC[i], c.ELU_F61[i]), ...T, fck: inp.fck, fyk: inp.fyk, code: 'EC' });
+    return { x: q.x, MEd: Math.max(c.ELU_EC[i], c.ELU_F61[i]), As: As.As, VEd, V: etriersEC2({ VEd, bw: inp.b0, z: 0.9 * d, fck: inp.fck, fyk: inp.fyk }) };
+  });
+  // ELS (souvent déterminant en fissuration préjudiciable) : moment de service à mi-travée, section en T fissurée
+  const lB = limitesELS({ code: 'BAEL', fck: inp.fck, fyk: inp.fyk, fiss: inp.fiss }), lE = limitesELS({ code: 'EC', fck: inp.fck, fyk: inp.fyk });
+  const sB = tBeamSLS({ M: c.ELS_F61[mid], ...T, sigS: lB.sigS, sigC: lB.sigC }), sE = tBeamSLS({ M: c.ELS_EC[mid], ...T, sigS: lE.sigS, sigC: lE.sigC });
+  BA.ELS = { BAEL: { ...sB, Mser: c.ELS_F61[mid], lim: lB }, EC: { ...sE, Mser: c.ELS_EC[mid], lim: lE } };
+  BA.retenu = { BAEL: Math.max(BA.BAEL.As ?? 0, sB.As), EC: Math.max(BA.EC.As ?? 0, sE.As) };
+  // effort tranchant à l'appui, BAEL 91 A.5.1 : V_u = 1,35 V_G + max[1,605 (A ou B + trottoirs) ; 1,35 (Mc120 + trottoirs)]
+  const V = id => (b[id] && b[id].Vmax ? b[id].Vmax[x0] : 0), Vu = 1.35 * V('G') + Math.max(1.605 * (Math.max(V('A'), V('Bc'), V('Bt')) + V('trott')), 1.35 * (Math.max(V('Mc120'), V('D240')) + V('trott')));
+  BA.cisaillementBAEL = { Vu, ...etriersBAEL({ Vu, b0: inp.b0, d, fc28: inp.fck, fe: inp.fyk, fiss: inp.fiss }) };
+  return BA;
+}
+
+/**
+ * Déversement en phase de pose d'une poutre VIPP ou PRAD (poutres identiques : première poutre), au levage (précontrainte de
+ * 1re famille ou après relâchement des torons, béton à t₁) et posée sur ses appareils avant le hourdis.
+ */
+function deversementDe(beams, L, inp) {
+  const v = beams[0] && beams[0].vipp; if (!v || !inp.vippSection) return null;
+  try {
+    const S = v.S || inp.vippSection, Pt = S.poutre, f = inp.vipp.forme, B = inp.vipp.beton, t1 = inp.vipp.dates.t1 + (B.decalage || 0);
+    const bP = betonEC2({ fck: B.fckP, ciment: B.cimP });
+    const fam1 = v.pertes.filter(q => q.famille === 1), P = fam1.reduce((s, q) => s + (v.prad ? q.Pinst : q.PapresTension), 0);
+    const ym = P > 0 ? fam1.reduce((s, q) => s + (v.prad ? q.Pinst : q.PapresTension) * q.ym, 0) / P : Pt.yG;
+    // about (points de levage) : force après frottement et recul à l'ancrage, câbles à leur ordonnée d'ancrage
+    // PRAD : torons dont la force est établie au point de levage (groupes gainés au-delà exclus, force appliquée dès x_Deb)
+    const po0 = inp.pose || {}, aLev = po0.a ?? Math.min(1.0, 0.05 * (L + 2 * (po0.about ?? 0.40)));
+    const fa = q => (v.prad ? ((v.trace.cab[q.ic].xDeb ?? 0) <= aLev + 1e-9 ? q.Pinst : 0) : Math.min(q.Pabout, q.PapresTension * q.Pabout / Math.max(q.Pinst, 1e-9)));
+    const Pa = fam1.reduce((s, q) => s + fa(q), 0);
+    const ya = Pa > 0 ? fam1.reduce((s, q) => s + fa(q) * (v.prad ? q.ym : q.ya), 0) / Pa : Pt.yG;
+    const po = inp.pose || {}, ap = po.appareil;
+    const Lp = L + 2 * (po.about ?? 0.40);   // longueur de la poutre ≈ portée + 2 abouts
+    const r = deversementPoutre({ L: Lp, w: v.charges.wP, A: Pt.A, I: Pt.I, Iy: inertieVerticale(Pt.contour.pts), vs: Pt.vs, vi: Pt.vi, bt: f.bt, P, e: Pt.yG - ym, Pa, ea: Pt.yG - ya,
+      fckT: bP.fckT(t1), fctmT: bP.fctmT(t1), E: bP.E(t1), a: po.a ?? undefined, hLev: po.hLev, balayage: po.balayage ?? undefined, devers: po.devers, about: po.about,
+      appareil: ap ? { a: ap.bd.b / 1000, b: ap.bd.a / 1000, n: ap.n, t: ap.bd.t / 1000, h: (ap.n * (ap.bd.t + ap.bd.ts) + ap.bd.ts) / 1000 } : null });
+    return { ...r, t1, P, appareil: ap ? `${ap.bd.a}×${ap.bd.b}×${ap.n}(${ap.bd.t}+${ap.bd.ts})` : null };
+  } catch (e) { return { erreur: e.message }; }
+}
+
+/**
+ * Réaction de l'appareil le plus chargé de chaque ligne (un appareil par poutre et par extrémité de travée ; travées
+ * indépendantes : les appareils des deux travées d'une pile sont distincts) : poutre la plus chargée, biais compris
+ * (F_V des poutres de rive). Eurocodes : caractéristique G + max(gr1a ; gr1b), ELU 1,35 G + 1,35 max(gr1a ; gr1b),
+ * minimum G (permanentes minimales). Rend aussi le texte du champ « réactions imposées » de l'onglet Appuis.
+ */
+function appareilsPoutres(bd, inp) {
+  if (inp.rail) return null;
+  const spans = bd.spans, S = L => bd.bySpan.get(+L.toFixed(3)), out = [];
+  for (let i = 0; i <= spans.length; i++) {
+    const ends = [[i - 1, 1], [i, 0]].filter(([j]) => j >= 0 && j < spans.length);
+    let car = 0, elu = 0, gmin = Infinity, kmax = null;
+    for (const [j, e] of ends) for (const b of S(spans[j]).beams) {
+      const RG = b.G.Rmax[e], RQ = Math.max(b.gr1a ? b.gr1a.Rmax[e] : 0, b.gr1b ? b.gr1b.Rmax[e] : 0);
+      if (RG + RQ > car) { car = RG + RQ; kmax = b.k; }
+      elu = Math.max(elu, 1.35 * RG + 1.35 * RQ);
+      gmin = Math.min(gmin, b.G.Rmin ? b.G.Rmin[e] : RG);
+    }
+    out.push({ i, car, elu, gmin, poutre: kmax });
+  }
+  return { lignes: out, texte: out.map(l => `${Math.round(l.elu)} ${Math.round(l.gmin)}`).join(' ; ') };
 }
 
 /**
@@ -156,7 +240,7 @@ function traveeRail(S, inp, sec, H, v, vp) {
     }
     return out;
   });
-  return { L: S.L, theta: S.gp.theta, alpha: S.gp.alpha, Lguyon: S.gp.Lguyon, classe: null, deltaB: null, deltaC: null, beams,
+  return { L: S.L, theta: S.gp.theta, alpha: S.gp.alpha, Lguyon: S.gp.Lguyon, classe: null, deltaB: null, deltaC: null, skew: S.skew, beams,
     rail: { params: R.params, voies: R.voies, nV: R.nV, LPhi: R.LPhi, dyn: R.dyn, phi: R.phi, couverture: R.couverture, diffusion: R.diffusion, ecc: R.ecc,
       groupes: groupes.map(G => ({ id: G.id, ref: G.ref, label: G.label, gamma: G.gamma, psi0: G.psi0, psi1: G.psi1, psi2: G.psi2, nArr: G.nArr })),
       horizontal: R.horizontal, avert: R.avert, deformations: deformationsPoutresRail(S, inp, sec) } };
