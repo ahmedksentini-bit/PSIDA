@@ -469,6 +469,16 @@ BAEL 91 ou EN 1992-1-1, blocs monolithiques), recoupé sur 2 104 grandeurs de BV
 ferroviaire (EN 1991-2 : LM71, SW/0, SW/2, Φ2/Φ3 réduit pour la couverture, surcharge sur remblai) ; voie franchie route
 ou voie ferrée (gabarit, choc EN 1991-1-7 en situation accidentelle) ; portique ouvert sur appuis encastrés ou articulés
 avec enveloppe des réactions ; note HTML et Word ; avant-propos et chapitre 27 du manuel.
+v0.99.19 : poutres BA à travées continues (2 à 6 travées coulées sur cintre, case « travées continues » de l'onglet Tablier à
+poutres), d'après le dossier Sétra PSI-BA 77 : poutre continue d'inertie constante (lignes d'influence de src/beam.js),
+répartition transversale de Guyon-Massonnet sur les portées équivalentes ou méthode de Courbon dès qu'il y a des
+entretoises intermédiaires ; enveloppe des moments le long du tablier ; sur appuis : moments négatifs (BAEL
+1,35 G + min[1,605 (A ou B + trottoirs) ; 1,35 Mc120] et EC 1,35 G + 1,35 min(gr1a ; gr1b)), réduction au nu de
+l'entretoise |M| − V·e/2, section rectangulaire comprimée en bas (talon ou gousset), cisaillement BAEL, largeur de
+gousset nécessaire (τu et σbc ≤ 0,6 f_ck aux ELS BAEL et EC) ; recommandation sur la largeur du gousset ; plans : armatures
+supérieures sur appuis en deux groupes arrêtés par épure (décalage 0,8 h + l_s). Recalé sur l'exemple à 4 travées de la note
+PSI-BA 77 (test/poutres_psiba.test.js) : moments sur piles des charges permanentes exacts, de A(l) à 7 % près. Limites :
+inertie constante (goussets non pris dans la raideur), entretoises intermédiaires non dimensionnées.
 v0.99.18 : plans des tabliers à poutres BA (src/plans/poutres_ba.js, carte « Plans » de l'onglet Tablier à poutres) — coffrage
 (coupe transversale du tablier, élévation de la poutre, coupe, quantités) et ferraillage (épure d'arrêt des barres inférieures :
 courbe des sections décalée de 0,8 h et prolongée de l_s, lit inférieur filant ; zones de cadres et étriers ; nappes du hourdis ;
