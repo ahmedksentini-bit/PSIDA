@@ -469,6 +469,11 @@ BAEL 91 ou EN 1992-1-1, blocs monolithiques), recoupé sur 2 104 grandeurs de BV
 ferroviaire (EN 1991-2 : LM71, SW/0, SW/2, Φ2/Φ3 réduit pour la couverture, surcharge sur remblai) ; voie franchie route
 ou voie ferrée (gabarit, choc EN 1991-1-7 en situation accidentelle) ; portique ouvert sur appuis encastrés ou articulés
 avec enveloppe des réactions ; note HTML et Word ; avant-propos et chapitre 27 du manuel.
+v0.99.18 : plans des tabliers à poutres BA (src/plans/poutres_ba.js, carte « Plans » de l'onglet Tablier à poutres) — coffrage
+(coupe transversale du tablier, élévation de la poutre, coupe, quantités) et ferraillage (épure d'arrêt des barres inférieures :
+courbe des sections décalée de 0,8 h et prolongée de l_s, lit inférieur filant ; zones de cadres et étriers ; nappes du hourdis ;
+entretoises d'about ; tableau des barres et masses), d'après le dossier Sétra PSI-BA 77, pièce V ; règlement des sections au
+choix (BAEL 91 ou EN 1992-1-1) ; aperçu, DXF et PDF.
 v0.99.17 : ponts à poutres — biais (src/beams/biais.js) : effort tranchant et réactions des poutres de rive à l'angle obtus
 majorés par F_V de l'AASHTO LRFD § 4.6.2.2.3c, réaction de l'appareil le plus chargé par ligne (reportable dans les réactions
 imposées de l'onglet Appuis) ; diagrammes M_Ed / M_Rd et V_Ed / V_pd / V_Rd,max le long de la poutre ; stabilité latérale en
