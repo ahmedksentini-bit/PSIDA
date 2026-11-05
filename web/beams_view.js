@@ -79,6 +79,32 @@ export function localBlocks(r) {
       [[`${E.appuis.length} (à ${F2(E.dv)} m des axes)`, F0(E.verin), F0(E.Mpos), F0(E.Mneg), F0(E.Vmax), F(E.AsInf * 1e4, 1), F(E.AsSup * 1e4, 1), F(E.etriers.AswS * 1e4, 1), etriers(E.etriers.AswS, E.d)]]);
     comment(`Entretoise de ${F2(E.he)} m × ${F2(E.te)} m (travée de ${F2(E.L)} m) : poutre continue sur les vérins, chargée par les réactions des poutres sous charges permanentes (1,35 G, trafic interrompu pendant le vérinage) et son poids propre ; flexion ELU (EN 1992-1-1, α_cc = 0,85), minimum § 9.2.1.1, étriers § 6.2.3. Guide Sétra VIPP § 2.2.4 : deux entretoises d'about, indispensables au vérinage.`);
   }
+  const EI = r.entInt;
+  if (EI && EI.erreur) para(`Entretoises intermédiaires : calcul impossible (${EI.erreur}).`);
+  else if (EI) {
+    const ys = r.bd.ys, y0 = ys[0], c = EI.coefLong, code = inp.regBA === 'EC' ? 'EC' : 'BAEL', D = EI[code];
+    h2(`Entretoises intermédiaires — méthode de Courbon (dossier Sétra PSI-BA 77, pièce IV § 7)`);
+    para(`Entretoise la plus sollicitée : travée ${EI.travee + 1} (${F2(EI.L)} m, ${EI.nEnt} entretoise(s) intermédiaire(s), entraxe λ = ${F3(EI.lam)} m). Section ${F2(EI.b0)} × ${F2(EI.H)} m (hauteur des poutres), table de compression : hourdis de ${F2(EI.hd)} m.`);
+    table(['Système', 'Bc (une file)', 'Bt (une file de roues)', 'Br', 'Mc120 (une chenille)', 'A(l) [kN/m par m]', 'Trottoirs [kN/m par m]'],
+      [['Charge reportée sur l\'entretoise [kN]', F1(c.Bc * c.deltaB), F1(c.Bt * c.deltaB), F1(c.Br * c.deltaB), F1(c.Mc * c.deltaMc), F1(EI.coefA), F1(c.trott)]], { small: true });
+    comment(`Coefficients longitudinaux (PSI-BA § 7.2.1) : une charge à la distance x de l'entretoise, entre les entretoises voisines, agit comme une charge directement appliquée affectée de (1 − |x|/λ). Bc : roue arrière au droit de l'entretoise, les autres roues des deux camions dans les intervalles voisins ; Bt et Br au droit de l'entretoise ; chenille Mc120 centrée ; A(l) et trottoirs (4,5 kN/m², charge locale) sur une bande de 1 m ; δ_B = ${F3(c.deltaB)}, δ_Mc = ${F3(c.deltaMc)} (travée ${EI.travee + 1}). Coefficient transversal : poutres réagissant sur l'entretoise indéformable, R_k = P (1/n + e y_k/Σ y²), charges déplacées par pas de 0,05 m (Bc : files accolées, roue à 0,25 m du bord de la chaussée chargeable ; bc et bt du Fascicule 61 selon le nombre de files).`);
+    const sel = EI.moments.filter((q, i) => i % 2 === 0 || ys.some(y => Math.abs(y - q.y) < 1e-6)), Z = x => F0(Math.abs(x) < 0.5 ? 0 : x);
+    table(['y [m]', 'G', 'Bc', 'Bt', 'Br', 'Mc120', 'A(l)', 'Trottoirs', 'Car. G + max Q (PSI-BA)', 'M_u F61 max / min', 'M_Ed EC max / min'],
+      sel.map(q => [F2(q.y), Z(q.G.nom), Z(q.F61.Bc.max), Z(q.F61.Bt.max), Z(q.F61.Br.max), Z(q.F61.Mc120.max), Z(q.F61.A.max), `${Z(q.F61.trott.max)} / ${Z(q.F61.trott.min)}`, `${Z(q.max.PSIBA)} / ${Z(q.min.PSIBA)}`,
+        `${Z(q.max.ELU_F61)} / ${Z(q.min.ELU_F61)}`, `${Z(q.max.ELU_EC)} / ${Z(q.min.ELU_EC)}`]), { small: true });
+    B.push({ t: 'svg', svg: courbesX([{ nom: 'M_u max (F61)', pts: EI.moments.map(q => [q.y - y0, q.max.ELU_F61]), c: '#c8552b' }, { nom: 'M_u min (F61)', pts: EI.moments.map(q => [q.y - y0, q.min.ELU_F61]), c: '#1f5fa8' },
+      { nom: 'M_Ed max (EC)', pts: EI.moments.map(q => [q.y - y0, q.max.ELU_EC]), c: '#c8552b', dash: true }, { nom: 'M_Ed min (EC)', pts: EI.moments.map(q => [q.y - y0, q.min.ELU_EC]), c: '#1f5fa8', dash: true }],
+      { titre: 'Entretoise intermédiaire — enveloppe des moments ELU', unite: 'kN·m', xlab: 'distance à l\'axe de la poutre de rive gauche [m]' }), caption: 'Moments fléchissants dans l\'entretoise (positif : fibre inférieure tendue), Fascicule 61 / BAEL et Eurocodes.' });
+    table(['Section', 'G', 'Bc', 'Bt', 'Mc120', 'A(l)', 'V_u F61 [kN]', 'V_Ed EC [kN]'],
+      EI.tranchants.map(q => [`poutre ${q.poutre + 1}, côté ${q.cote}`, F0(q.G.nom), F0(Math.max(q.F61.Bc.max, -q.F61.Bc.min)), F0(Math.max(q.F61.Bt.max, -q.F61.Bt.min)), F0(Math.max(q.F61.Mc120.max, -q.F61.Mc120.min)), F0(Math.max(q.F61.A.max, -q.F61.A.min)),
+        F0(Math.max(Math.abs(q.max.ELU_F61), Math.abs(q.min.ELU_F61))), F0(Math.max(Math.abs(q.max.ELU_EC), Math.abs(q.min.ELU_EC)))]), { small: true });
+    const bar = x => (x ? `${x.n} HA${x.phi}${x.lits > 1 ? ` (${x.lits} lits)` : ''}` : '—');
+    const ligne = (Q, nom) => [nom, `${F0(Q.Mpos)} / ${F0(Q.Mneg)}`, `${CM(Q.inf.As)} → ${bar(Q.barresInf)}`, `${CM(Q.sup.As)} → ${bar(Q.barresSup)}`, F0(Q.Vu),
+      Q.code === 'BAEL' ? `τ_u = ${F2(Q.V.tau)} ${Q.V.ok ? '≤' : '>'} ${F2(Q.V.tauLim)} MPa` : `V_Rd,max = ${F0(Q.V.VRdmax)} kN${Q.V.ok ? '' : ' < V_Ed'} (cot θ = ${F2(Q.V.cot)})`, `${CM(Q.V.AtSt ?? Q.V.AswS)} → ${etriers(Q.V.AtSt ?? Q.V.AswS, EI.d)}`, CM(Q.ancrage), `${CM(Q.suspente)} (${Q.suspente2HA12} cadres 2 HA12)`, F2(Q.bNec), Q.ok ? 'OK' : 'NON'];
+    table(['Entretoise intermédiaire — vérification', 'M_u + / − [kN·m]', 'A inf. [cm²] → barres', 'A sup. [cm²] → barres', 'V_u [kN]', 'Bielles', 'Étriers A_t/s [cm²/m]', 'Ancrage des aciers inf. [cm²]', 'Suspentes par poutre [cm²]', 'Épaisseur nécessaire [m]', 'Résultat'],
+      [ligne(EI.BAEL, 'BAEL 91 / Fascicule 61'), ligne(EI.EC, 'EN 1992-1-1 / EN 1991-2')], { small: true });
+    comment(`Règlement des plans : ${code === 'EC' ? 'EN 1992-1-1' : 'BAEL 91'}. Flexion : section en T, table b = ${F2(EI.beffB)} m (BAEL A.4.1,3 et PSI-BA : b₀ + 2 × 1/10 de la portée entre poutres de rive, ≤ ½ intervalle entre entretoises) ou b_eff = ${F2(EI.beffE)} m (EN 1992-1-1 § 5.3.2.1, l₀ = 0,85 b₁), d = ${F3(EI.d)} m (lit au-dessus des armatures des poutres) ; moments négatifs (au droit des poutres intérieures) : aciers supérieurs sous les nappes du hourdis, d = ${F3(EI.dSup)} m ; ELS en section fissurée (n = 15). Combinaisons : BAEL 1,35 G + max[1,605 (A ou B + trottoirs) ; 1,35 (Mc120 + trottoirs)], ELS G + max[1,2 (A ou B + trottoirs) ; Mc120 + trottoirs] ; EC 1,35 G + 1,35 max(gr1a ; gr1b). Ancrage par courbure au-delà du nu des poutres de rive : A ≥ V_u/f_su (BAEL A.5.1,312 ; PSI-BA V.1.7.1), F = V_Ed cot θ/2 (EN 1992-1-1 § 9.2.1.4). Suspentes : la réaction de l'entretoise, appliquée en partie basse, est remontée en zone comprimée de la poutre par des étriers (A ≥ V_u/f_su, Fascicule 61 titre VI art. 38, EN 1992-1-1 § 9.2.5), à répartir de part et d'autre de l'entretoise. Charges permanentes : superstructures sur λ et poids propre de l'entretoise (le hourdis descend dans les poutres par les panneaux de dalle). Aciers supérieurs continus d'une poutre de rive à l'autre (porte-étriers).`);
+  }
   return B;
 }
 
@@ -187,6 +213,7 @@ function indiquerDefo(B, D, si, hint) {
 /** Indication du poinçonnement du hourdis (paragraphe de localBlocks). */
 function indiquerHourdis(B, hint) {
   if (hint) for (const b of B) if (b.t === 'p' && /^Poinçonnement sous une roue/.test(b.text) && /: NON\.$/.test(b.text)) b.hint = hint({ type: 'poinc' });
+  if (hint) for (const b of B) if (b.t === 'table' && b.head[0] === 'Entretoise intermédiaire — vérification') b.hints = b.rows.map(row => (row[row.length - 1] === 'NON' ? hint({ type: 'entInt' }) : null));
   return B;
 }
 

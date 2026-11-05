@@ -43,7 +43,7 @@ const grille = (min, max, pas) => { const o = []; for (let v = min; v <= max + 1
 export const LIB_POUTRES = {
   pt_nc: 'Nombre de câbles par poutre', pt_n2: 'Câbles de 2e famille', pt_unite: 'Unité de précontrainte', pt_parlit: 'Câbles par lit',
   pt_cbas: 'Axe du lit inférieur', pt_ev: 'Entraxe vertical des lits', pt_yah: 'Ancrage le plus haut', pt_sp0: 'σ_p0 à la mise en tension',
-  pt_hp: 'Hauteur de la poutre h_p', pt_bgous: 'Gousset d\'appui : épaisseur d\'âme sur appui intermédiaire', pt_bta: 'Largeur du talon', pt_b0v: 'Épaisseur d\'âme b₀', pt_b0a: 'Âme sur appui (blochet)', pt_Lb: 'Longueur du blochet',
+  pt_hp: 'Hauteur de la poutre h_p', pt_bgous: 'Gousset d\'appui : épaisseur d\'âme sur appui intermédiaire', pt_beInt: 'Épaisseur des entretoises intermédiaires', pt_bta: 'Largeur du talon', pt_b0v: 'Épaisseur d\'âme b₀', pt_b0a: 'Âme sur appui (blochet)', pt_Lb: 'Longueur du blochet',
   pt_fck: 'f_ck des poutres', pt_fckh: 'f_ck du hourdis', pt_hd: 'Épaisseur du hourdis', pt_t1: 'Âge à la mise en tension (1re famille) ou au relâchement',
   pr_nt: 'Nombre de torons par poutre', pr_nsup: 'Torons supérieurs', pr_e: 'Entraxe des torons', pr_cbas: 'Axe du lit inférieur des torons',
   pr_g1n: 'Groupe gainé 1 : torons', pr_g1L: 'Groupe gainé 1 : longueur', pr_g2n: 'Groupe gainé 2 : torons', pr_g2L: 'Groupe gainé 2 : longueur', pr_hetuv: 'Durée de l\'étuvage',
@@ -656,6 +656,18 @@ export async function recommandationsPoutres(out, data, { budget = 45000, onProg
     }
     items.push({ domaine: 'Hourdis', lieu: 'Hourdis', verification: 'Poinçonnement sous la roue du tandem', constat: `V_Ed = ${fx(P.VEd, 0)} > V_Rd,c = ${fx(P.VRdc, 0)} kN (d = ${fx(P.d, 3)} m, v_Rd,c = ${fx(P.vRdc, 3)} MPa)`,
       regle: 'EN 1992-1-1 § 6.4.4', actions: a, cibles: [{ type: 'poinc' }] });
+  }
+  // entretoises intermédiaires (Courbon) : épaisseur nécessaire calculée directement (cisaillement, bielles)
+  const EI = out.entInt;
+  if (EI && !EI.erreur && !EI.ok) {
+    const Q = !EI.BAEL.ok ? EI.BAEL : EI.EC, act = Math.round(EI.b0 * 100) / 100, cible = Math.max(Math.ceil((EI.bNec + 1e-6) / 0.05) * 0.05, act + 0.05);
+    const flex = Q.inf.As == null || Q.sup.As == null;
+    const constat = flex ? `section insuffisante en flexion (${Q.inf.As == null ? Q.inf.ULS.mode : Q.sup.ULS.mode})`
+      : Q.code === 'BAEL' ? `τ_u = ${fx(Q.V.tau)} > ${fx(Q.V.tauLim)} MPa (V_u = ${fx(Q.Vu, 0)} kN, b₀ = ${fx(EI.b0)} m)` : `V_Ed = ${fx(Q.Vu, 0)} > V_Rd,max = ${fx(Q.V.VRdmax, 0)} kN (b₀ = ${fx(EI.b0)} m)`;
+    const v = (flex ? act + 0.10 : cible).toFixed(2);
+    items.push({ domaine: 'Entretoises intermédiaires', lieu: `travée ${EI.travee + 1}`, verification: 'Entretoise intermédiaire (Courbon) : flexion et effort tranchant', constat,
+      regle: 'Dossier Sétra PSI-BA 77, pièce V § 1.7 ; BAEL 91 A.5.1,21 ; EN 1992-1-1 § 6.2.3', cibles: [{ type: 'entInt' }],
+      actions: [{ texte: `Augmenter : ${min1(LIB_POUTRES.pt_beInt)} de ${fx(act)} à ${v.replace('.', ',')} m${flex ? '' : ' (épaisseur nécessaire calculée)'}`, champ: 'pt_beInt', unite: 'm', valeur: v.replace('.', ','), valeurChamp: v, court: LIB_POUTRES.pt_beInt, actuel: fx(act) }] });
   }
   const synthese = ensemble && items.length ? { texte: 'Valeurs cherchées ensemble pour que toutes les vérifications des poutres passent', champs: { ...ensemble } } : null;
   return { items, synthese, ensemble, jointOk, bloque: bloque && bloque.cle, horsBudget, calculs: nCalc, calculsEnsemble, duree: maintenant() - t0 };
