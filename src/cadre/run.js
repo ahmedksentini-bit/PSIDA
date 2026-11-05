@@ -30,6 +30,7 @@ export function parseCadre(d) {
   };
   const opts = {
     ouvert, usage: { franchie: d.cf_franchie || 'eau', portee: d.cf_portee || 'route' },
+    routeEC: { alpha: d.cf_ecAlpha || 'FR2', angle: num(d.cf_ecAngle, 30), sens: d.cf_ecSens === 'axe' ? 'axe' : 'portee', lm2: d.cf_ecLm2 !== 'non', mc120: d.cf_ecMc === 'oui', ecartRoues: num(d.cf_ecEcart, 1.0) },
     rail: { alpha: num(d.cf_alpha, 1.0), entretien: d.cf_entretien === 'soigne' ? 'soigne' : 'normal', longueurTraverse: num(d.cf_ltrav, 2.6), ballast: num(d.cf_ballast, 0.30), sw0: d.cf_sw0 !== 'non', sw2: d.cf_sw2 === 'oui', LPhi: num(d.cf_LPhi, 0) },
     gabarit: { hauteur: num(d.cf_gabH, 0), largeur: num(d.cf_gabL, 0), epaisseurChaussee: num(d.cf_ech, null) ?? undefined },
     choc: { F: num(d.cf_chocF, null) ?? undefined, beff: num(d.cf_chocBeff, 0) },

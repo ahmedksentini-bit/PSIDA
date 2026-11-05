@@ -155,6 +155,14 @@ PSIDP-EL 84-1, règles BPEL 91 révisé 99 (classe II) ; charges du Fascicule 61
 - Tête d'appui : pression localisée sous les appareils (BAEL A.8.4 ou EN 1992-1-1 § 6.7), frettage, partie de voile en console (BAEL annexe E.6).
 - Dalle précontrainte : les réactions hyperstatiques de précontrainte et le raccourcissement (élastique, fluage, retrait) du calcul PSI-DP passent aux appuis.
 - Contrôle sur une note d'appuis réelle (pont-dalle précontraint) : `test/bearings1337.test.js`.
+- Réactions par appareil imposées (note d'un modèle aux éléments finis, « F_z,max ELU  F_z,min » par ligne) : vérification
+  NF EN 1337-3 complémentaire avec l'enveloppe PSIDA des déplacements, efforts horizontaux et rotations ; vérification seule
+  (choix des appareils et répartition des efforts inchangés), appareil standard proposé s'il échoue.
+- Massif en gros béton sous les semelles superficielles : portance, glissement, excentrement et tassement à la base du
+  massif (B + 2 d, L + 2 d, D_e + h), poids et moment H h ajoutés ; contact semelle / massif en béton non armé
+  (EN 1992-1-1 § 12) et glissement béton sur béton.
+- Souffle des joints de chaussée : le plus grand du souffle de service 2 v_T + v_RF et du souffle sismique retenu par le
+  moteur Pont EC8 (EN 1998-2 § 2.3.6.3) quand le séisme est calculé.
 - Compléments : gradient thermique dans les réactions des appareils, fiche minimale des pieux par état limite, voile d'épaisseur variable, pile de joint (pile double), excentricités du second ordre dans les pieux (option).
 
 ## Calcul sismique — Pont EC8 intégré (`ec8/`, `web/ec8/`)
@@ -461,6 +469,9 @@ BAEL 91 ou EN 1992-1-1, blocs monolithiques), recoupé sur 2 104 grandeurs de BV
 ferroviaire (EN 1991-2 : LM71, SW/0, SW/2, Φ2/Φ3 réduit pour la couverture, surcharge sur remblai) ; voie franchie route
 ou voie ferrée (gabarit, choc EN 1991-1-7 en situation accidentelle) ; portique ouvert sur appuis encastrés ou articulés
 avec enveloppe des réactions ; note HTML et Word ; avant-propos et chapitre 27 du manuel.
+v0.99.15 : voie portée routière Eurocode des cadres (src/cadre/routeEC.js) — LM1 (TS + UDL, α_Q, α_q de l'annexe
+nationale, voies conventionnelles), LM2 (β_Q) et Mc120 optionnel, diffusion à 30° dans le remblai et la dalle, bande de
+1 m la plus chargée, positions balayées, γ_Q = 1,35 à l'ELU (test/cadre_ec.test.js, calé sur une note SCIA d'un PICF).
 v0.80 : séisme des cadres et portiques (src/cadre/seisme.js), Eurocode 8, q = 1 — action a_g·S (zones de l'arrêté 2011
 ou saisie directe) ; approche A inertie + poussée dynamique d'ouvrage rigide (NF EN 1998-5, 7.3.2.2 et annexe E.9),
 approche B distorsion imposée par le terrain (Wang 1993, Penzien 2000, FHWA-NHI-10-034 § 13.5 ; G réduit selon

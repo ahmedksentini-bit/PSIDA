@@ -50,8 +50,8 @@ export function seismicActions(st, sp, hGG, spLigne = null) {
   // action du site pour les efforts propres des culées (a_g, S, S_T) ; `site` reste réservé aux zone, catégorie et sol
   const actionSite = { ag: a.ag, S: a.S, ST: a.ST ?? 1, g: projet.options?.g ?? 9.81 };
   // repos d'appui (EN 1998-2 6.6.4) : culées, et piles d'un tablier à travées indépendantes
-  let repos = null;
-  try { const v = EC8.verifierAppuis(projet, a, m, r); repos = v.repos.map(q => ({ ...q, etat: (v.criteres.find(c => c.id === `${q.id}_repos`) || {}).etat })); } catch { repos = null; }
+  let repos = null, joints = null;
+  try { const v = EC8.verifierAppuis(projet, a, m, r); repos = v.repos.map(q => ({ ...q, etat: (v.criteres.find(c => c.id === `${q.id}_repos`) || {}).etat })); joints = v.joints || null; } catch { repos = null; }
   // méthode demandée par le projet (caissons construits par encorbellements : multimodale) ; sans demande, mode fondamental
   // dans son domaine (masse des piles < 20 %, tablier rigide L/B ≤ 4 : EN 1998-2 4.2.2.2-4.2.2.3), multimodale sinon
   const choix = EC8.methodeRetenue(projet, r);
@@ -59,13 +59,13 @@ export function seismicActions(st, sp, hGG, spLigne = null) {
     const mm = EC8.multimodale(projet, a, m, r), efforts = EC8.exporterEfforts(projet, a, r, { multimodale: mm }, 'multimodale');
     const T1 = d => (mm.comparaison.find(c => c.direction === d) || {}).T1 ?? 0;
     const F = d => efforts.appuis.reduce((s, ap) => s + Math.abs(d === 'x' ? ap.cas[0].Fx : ap.cas[1].Fy), 0);
-    return { projet, problemes, efforts, repos, actionSite, methode: 'multimodale', motifMethode: choix.motif, T: { x: T1('x'), y: T1('y') }, F: { x: F('x'), y: F('y') }, M: r.M, conditions: r.conditions };
+    return { projet, problemes, efforts, repos, joints, actionSite, methode: 'multimodale', motifMethode: choix.motif, T: { x: T1('x'), y: T1('y') }, F: { x: F('x'), y: F('y') }, M: r.M, conditions: r.conditions };
   }
   // effort total = somme des efforts reçus par les appuis (comme l'onglet « Calcul sismique ») : en travées indépendantes, les
   // modes sont combinés appui par appui (SRSS / CQC), et la somme des combinaisons dépasse un peu la combinaison du total
   const efforts = EC8.exporterEfforts(projet, a, r);
   const F = d => efforts.appuis.reduce((s, ap) => s + Math.abs(d === 'x' ? ap.cas[0].Fx : ap.cas[1].Fy), 0);
-  return { projet, problemes, repos, efforts, actionSite, methode: projet.tablier.continuite === 'isostatique' ? 'travees_independantes' : 'mode_fondamental', T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T }, F: { x: F('x'), y: F('y') }, Fglobal: { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 }, M: r.M, conditions: r.conditions };
+  return { projet, problemes, repos, joints, efforts, actionSite, methode: projet.tablier.continuite === 'isostatique' ? 'travees_independantes' : 'mode_fondamental', T: { x: r.directions.x.lbdp.T, y: r.directions.y.lbdp.T }, F: { x: F('x'), y: F('y') }, Fglobal: { x: r.directions.x.ubdp.F * 1000, y: r.directions.y.ubdp.F * 1000 }, M: r.M, conditions: r.conditions };
 }
 
 /** Action sismique du site (a_g, S, S_T) pour les efforts propres des culées quand les efforts viennent de l'onglet. */
@@ -691,6 +691,36 @@ function calculAppuis(st, input = {}) {
       }
       proposal ||= enSeul;
     }
+    // réactions par appareil imposées (note de calcul d'un modèle aux éléments finis, appareil le plus chargé) : F_z,max ELU
+    // et F_z,min (permanentes seules) substituées aux réactions PSIDA, avec les déplacements, rotations et efforts horizontaux
+    // PSIDA des combinaisons concomitantes (enveloppe : combinaison maximale la plus défavorable en rotation et en distorsion)
+    const imp = sp.brgReac && sp.brgReac[i] ? sp.brgReac[i] : null;
+    if (imp && imp.max > 0) {
+      const mx = combos.filter(c => !c.minimal), cMin = combos.filter(c => c.minimal && !c.indicatif);
+      const env = mx.reduce((m, c) => ({ vSlow: Math.max(m.vSlow, c.vSlow), Hx: Math.max(m.Hx, c.Hx || 0), alpha: Math.max(m.alpha, c.alpha) }), { vSlow: 0, Hx: 0, alpha: 0 });
+      const Nmin = imp.min != null && imp.min > 0 ? imp.min : null;
+      const ci = [{ label: 'ELU réaction imposée (max)', Fz: imp.max, ...env }];
+      if (Nmin != null) ci.push({ label: 'réaction imposée (min)', Fz: Nmin, vSlow: cMin.length ? cMin[0].vSlow : vRF + vT, Hx: 0, alpha: cMin.length ? cMin[0].alpha : aG + a0, minimal: true });
+      const si = Nmin != null ? slides.map(sl0 => ({ ...sl0, FzMin: Nmin, FzGmin: Nmin, label: `${sl0.label} — F_z,min imposée` })) : [];
+      const ri = verifyBearing1337(bd, ci, null), sli = si.map(sl0 => ({ ...verifyBearing1337(bd, [], sl0).slide, label: sl0.label }));
+      const sw = sli.reduce((m, x) => (!m || x.Fxy / Math.max(x.R, 1e-12) > m.Fxy / Math.max(m.R, 1e-12) ? x : m), null);
+      res.imposed = { max: imp.max, min: Nmin, rows: ri.rows, slide: sw, psida: { max: Math.max(...mx.map(c => c.Fz)), min: cMin.length ? Math.min(...cMin.map(c => c.Fz)) : null },
+        ok: ri.rows.every(r => r.ok || r.indicatif) && (!sw || (sw.okGlissement && sw.okPerm)) };
+      // vérification seule : les réactions imposées ne modifient ni le choix automatique des appareils ni la répartition
+      // des efforts horizontaux ; appareil non conforme → plus petit appareil standard vérifiant à la fois les combinaisons
+      // PSIDA et les réactions imposées (indicatif)
+      if (!res.imposed.ok) {
+        const cands = [];
+        for (const s0 of STANDARD_BEARINGS) for (const n of s0.ns) cands.push({ s0, n, area: s0.a * s0.b, T: n * s0.t });
+        cands.sort((p, q) => p.area - q.area || p.T - q.T);
+        for (const c of cands) {
+          const bdc = { a: c.s0.a / 1000, b: c.s0.b / 1000, n: c.n, t: c.s0.t / 1000, ts: c.s0.ts / 1000 };
+          if (!verifyBearing1337(bdc, [...combos, ...ci], null).rows.every(r => r.ok || r.indicatif)) continue;
+          if (![...slides, ...si].every(sl0 => { const x = verifyBearing1337(bdc, [], sl0).slide; return x.okGlissement && x.okPerm; })) continue;
+          res.imposed.proposal = { label: designation(c.s0, c.n), bd: bdc }; break;
+        }
+      }
+    }
     return { proposal, ...res, label: sel.label || `${sel.bd.a}×${sel.bd.b}×${sel.n}(${sel.bd.t}+${sel.bd.ts})`, nb, vRF, vT, aG, a0, RF, Pmax: hypMax[i], Pmin: hypMin[i], Ntheta: th ? { max: NtMax, min: NtMin } : null };
   };
 
@@ -875,10 +905,31 @@ function calculAppuis(st, input = {}) {
         if (f.crue) { r.eY = Math.abs(f.My) / f.V; r.eYok = r.eY <= Lf / 6; r.excOk = r.excOk && r.eYok; }
         return r;
       });
+      // Massif en gros béton sous la semelle (substitution du sol médiocre) : semelle posée sur le massif, massif de hauteur h_gb
+      // débordant de d_gb de chaque côté (B' = B + 2 d_gb, L' = L + 2 d_gb), base à D + h_gb. Portance, glissement et
+      // excentrement vérifiés à la base du massif (NF P 94-261 / F62 inchangés) avec le poids du massif (γ = 23 kN/m³, pondéré
+      // comme les autres poids propres, déjaugé sous la crue) et le moment M + H h_gb ; contact semelle / massif : contrainte
+      // de référence de Meyerhof V/((B − 2e) L) ≤ f_cd,pl = α_cc,pl f_ck/γ_c (EN 1992-1-1 § 12.3.1 et 12.6.5, α_cc,pl = 0,8 ;
+      // γ_c = 1,5, 1,2 en accidentel) et glissement béton coulé contre béton H ≤ μ V, μ = 0,6 (EN 1992-1-1 § 6.2.5, surface
+      // lisse). Diffusion dans le massif non vérifiée (débord ≤ h_gb/2 conseillé, pas de traction dans le béton non armé).
+      const GB = sp.found.gb && sp.found.gb.h > 0 ? sp.found.gb : null;
+      const gbDims = B => ({ B: B + 2 * GB.deb, L: Lf + 2 * GB.deb, D: F.De + GB.h, W: GB.gamma * (B + 2 * GB.deb) * (Lf + 2 * GB.deb) * GB.h });
+      const checksGB = (B, fd) => { const m = gbDims(B); return fd.map(f => {
+        const g = f.ls === 'ELU' && !f.vide && !f.gFav ? gU : 1, Hs = f.Hx ?? f.H;
+        const V = f.V + g * m.W - (f.crue ? 10 * m.W / GB.gamma : 0), M = f.M + Hs * GB.h;
+        const r = { ...f, V, M, ...shallowFooting({ code, B: m.B, L: m.L, D: m.D, De: m.D, V, H: f.H, M, ls: f.ls, profile, phi: soil.phi, gamma: soil.gamma, dAff: f.crue ? dAff : 0 }) };
+        if (f.crue) { r.eY = Math.abs(f.My + (f.Hy || 0) * GB.h) / V; r.eYok = r.eY <= m.L / 6; r.excOk = r.excOk && r.eYok; }
+        return r;
+      }); };
+      const contactGB = (B, fd) => fd.filter(f => f.ls === 'ELU' || f.ls === 'ACC').map(f => {
+        const e = Math.abs(f.M) / f.V, Bp = B - 2 * e, gc = f.ls === 'ACC' ? 1.2 : 1.5, fcd = 0.8 * GB.fck / gc;
+        const sig = Bp > 0 ? f.V / (Bp * Lf) / 1000 : Infinity;
+        return { label: f.label, ls: f.ls, V: f.V, H: f.H, e, Bp, sig, fcd, ratio: sig / fcd, mu: 0.6, ratioH: f.H / (0.6 * f.V) };
+      });
       // largeur de semelle : donnée, ou dimensionnée (1er calcul, B vide) — plus petite largeur vérifiant toutes les combinaisons
       let F = Fl, Bdim = false;
       if (Fl.type === 'superficielle' && sp.found.Bauto && !sp.found.Bligne && !(niv.parLigne[i] && niv.parLigne[i].found && niv.parLigne[i].found.B > 0)) {
-        const vaut = B => checksDe(B, fdDe(25 * B * Lf * Fl.hs, B)).every(k => Number.isFinite(k.ratioV) && k.ratioV <= 1 + 1e-9 && (k.ratioH ?? 0) <= 1 + 1e-9 && k.excOk);
+        const vaut = B => { const fdB = fdDe(25 * B * Lf * Fl.hs, B); return (GB ? checksGB : checksDe)(B, fdB).every(k => Number.isFinite(k.ratioV) && k.ratioV <= 1 + 1e-9 && (k.ratioH ?? 0) <= 1 + 1e-9 && k.excOk) && (!GB || contactGB(B, fdB).every(k => k.ratio <= 1 + 1e-9)); };
         let B = Math.max(1.5, Math.ceil((bWall + 0.5) / 0.25 - 1e-9) * 0.25);
         while (B < 12 - 1e-9 && !vaut(B)) B += 0.25;
         F = { ...Fl, B: Math.round(B * 100) / 100 }; Bdim = true;
@@ -886,21 +937,27 @@ function calculAppuis(st, input = {}) {
       const Wsem = 25 * F.B * Lf * F.hs, fd = fdDe(Wsem, F.B);
       let found;
       if (F.type === 'superficielle') {
-        const checks = checksDe(F.B, fd);
+        const checks = GB ? checksGB(F.B, fd) : checksDe(F.B, fd);
         const eluMax = fd.filter(f => f.ls === 'ELU').reduce((a, f) => (f.V * (1 + 3 * Math.abs(f.M) / f.V / F.B) > a.Nn ? { f, Nn: f.V * (1 + 3 * Math.abs(f.M) / f.V / F.B) } : a), { Nn: 0 });
         const d = F.hs - c - 0.01, fsu = fyk / 1.15;
         const eMax = Math.max(...fd.map(f => Math.abs(f.M) / f.V));
-        found = { type: 'superficielle', B: F.B, Bauto: Bdim, L: Lf, hs: F.hs, W: Wsem, checks, scour: wl ? { dAff, De: F.De, ok: F.De > dAff } : null, worstV: Math.max(...checks.map(k => k.ratioV)), worstH: Math.max(...checks.map(k => k.ratioH)), excOk: checks.every(k => k.excOk),
+        found = { type: 'superficielle', B: F.B, Bauto: Bdim, L: Lf, hs: F.hs, W: Wsem, checks, scour: wl ? { dAff, De: GB ? F.De + GB.h : F.De, ok: (GB ? F.De + GB.h : F.De) > dAff } : null, worstV: Math.max(...checks.map(k => k.ratioV)), worstH: Math.max(...checks.map(k => k.ratioH)), excOk: checks.every(k => k.excOk),
           bielles: { dOk: d >= (F.B - bWall) / 4, eOk: eMax <= F.B / 6, eMax, N: eluMax.Nn, label: eluMax.f ? eluMax.f.label : '', d, b: bWall, As: footingStrutTie({ N: eluMax.Nn, B: F.B, b: bWall, d, fsu }) } };
         // méthode des consoles (e > B/6 ou semelle trop mince pour les bielles) : combinaison ELU donnant le plus grand moment en S₁
         found.console = fd.filter(f => f.ls === 'ELU').map(f => ({ label: f.label, V: f.V, M: f.M, ...footingCantilever({ V: f.V, M: f.M, B: F.B, L: Lf, b: bWall, d, fsu }) })).reduce((a, r) => (!a || r.M1 > a.M1 ? r : a), null);
+        if (GB) {
+          const m = gbDims(F.B), ct = contactGB(F.B, fd);
+          found.gb = { h: GB.h, deb: GB.deb, fck: GB.fck, gamma: GB.gamma, B: m.B, L: m.L, D: m.D, W: m.W, contact: ct,
+            ratio: Math.max(...ct.map(k => k.ratio)), ratioH: Math.max(...ct.map(k => k.ratioH)), debOk: GB.deb <= GB.h / 2 + 1e-9 };
+        }
         found.AsMin = 0.0012 * F.hs * Lf;
         found.method = found.bielles.dOk && found.bielles.eOk ? 'bielles' : 'console';
         found.AsLong = Math.max(found.method === 'bielles' ? found.bielles.As : found.console.As, found.AsMin);
         // tassement sous charges quasi permanentes : part soutenue des combinaisons ELS (hors crue)
         try {
           const qp = fd.filter(f => f.ls !== 'ELU' && f.ls !== 'ACC' && !f.crue).reduce((a, f) => (f.V - f.inst.V > a.V ? { V: f.V - f.inst.V, M: f.M - f.inst.M } : a), { V: 0, M: 0 });
-          found.settle = footingSettlement({ profile, B: F.B, L: Lf, D: F.De, Vqp: qp.V, Mqp: Math.abs(qp.M), gamma: soil.gamma, code });
+          const mg = GB ? gbDims(F.B) : null;
+          found.settle = mg ? footingSettlement({ profile, B: mg.B, L: mg.L, D: mg.D, Vqp: qp.V + mg.W, Mqp: Math.abs(qp.M), gamma: soil.gamma, code }) : footingSettlement({ profile, B: F.B, L: Lf, D: F.De, Vqp: qp.V, Mqp: Math.abs(qp.M), gamma: soil.gamma, code });
         } catch (e) { found.settle = { error: e.message }; }
         // sens transversal : semelle filante sous voile → aciers de répartition ≥ 1/4 des aciers principaux (par m) ;
         // sous colonnes → poutre renversée sur les colonnes chargée par la réaction du sol uniforme

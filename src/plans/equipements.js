@@ -135,14 +135,23 @@ export function cotesBas(G) {
   return [1, -1];
 }
 
-/** Souffle des joints aux culées : allongement v_T, raccourcissement v_T + v_RF → W = 2 v_T + v_RF (ELS, Eurocodes). */
+/**
+ * Souffle des joints aux culées : allongement v_T, raccourcissement v_T + v_RF → W = 2 v_T + v_RF (ELS, Eurocodes ; v_RF :
+ * retrait, fluage et raccourcissement de précontrainte). Calcul sismique actif (EN 1998-2, 2.3.6.3 ; guide Sétra « Ponts en
+ * zone sismique », Pont EC8) : souffle sismique retenu par le moteur EC8 (catégorie III : 2 d_E + 2 d_T + d_G si d_E ≤ 2 cm,
+ * sinon souffle de service + 0,4 × souffle sismique) — le souffle retenu est le plus grand des deux.
+ */
 export function souffleJoints(st, eq) {
   const L = st.supports && st.supports.lines, n = st.deck.beam.x0.length;
-  return [0, n - 1].map(i => {
+  const sis = st.supports && st.supports.seisme && Array.isArray(st.supports.seisme.joints) ? st.supports.seisme.joints : null;
+  return [0, n - 1].map((i, k) => {
     const brg = L && L[i] && (L[i].EC || L[i].BAEL) ? (L[i].EC || L[i].BAEL).brg : null;
     const vT = brg ? brg.vT : null, vRF = brg ? brg.vRF : null;
-    const Wc = vT != null ? 2 * vT + vRF : null, W = eq.jointW > 0 ? eq.jointW / 1000 : Wc;
-    return { i, vT, vRF, Wcalc: Wc, W, type: eq.jointType || familleJoint(W) };
+    const Ws = vT != null ? 2 * vT + vRF : null;
+    const js = sis && sis.length ? (k === 0 ? sis[0] : sis[sis.length - 1]) : null;
+    const We = js && Number.isFinite(js.souffleRetenu) ? js.souffleRetenu : null;
+    const Wc = Ws != null || We != null ? Math.max(Ws ?? 0, We ?? 0) : null, W = eq.jointW > 0 ? eq.jointW / 1000 : Wc;
+    return { i, vT, vRF, Wservice: Ws, Wseisme: We, regleSeisme: js ? js.regle : null, dE: js ? js.dE : null, Wcalc: Wc, W, gouverne: We != null && Ws != null ? (We > Ws ? 'séisme' : 'service') : We != null ? 'séisme' : 'service', type: eq.jointType || familleJoint(W) };
   });
 }
 /** Famille de joint selon le souffle (Cerema 2016, § 1.3.2). */
@@ -356,7 +365,7 @@ function vueDetailJoint(G, st, eq, J) {
   v.ligne('EQUIPEMENTS', [X(-a), zt + G.tRev - 0.12], [X(-a), zt - 0.12]); v.ligne('EQUIPEMENTS', [X(xg), zt + G.tRev - 0.12], [X(xg), zt - 0.12]);
   v.coteH([X(xg), zt - h - 0.4], [X(-a), zt - h], zt - h - 0.65, `${fr(W * 1000, 0)} mm`);
   v.texte('TEXTES', [X(-a - W / 2), zt + G.tRev + 0.35], `Joint : ${J.type}`, { h: 2.5, ancre: 'c' });
-  v.texte('TEXTES', [X(-a - W / 2), zt + G.tRev + 0.20], `souffle ${J.Wcalc != null ? fr(J.Wcalc * 1000, 0) + ' mm calculé' : 'à calculer'}${eq.jointW > 0 ? ', ' + fr(eq.jointW, 0) + ' mm retenu' : ''}`, { h: 2.2, ancre: 'c' });
+  v.texte('TEXTES', [X(-a - W / 2), zt + G.tRev + 0.20], `souffle ${J.Wcalc != null ? fr(J.Wcalc * 1000, 0) + ' mm calculé' + (J.Wseisme != null && J.gouverne === 'séisme' ? ' (séisme)' : '') : 'à calculer'}${eq.jointW > 0 ? ', ' + fr(eq.jointW, 0) + ' mm retenu' : ''}`, { h: 2.2, ancre: 'c' });
   v.texte('TEXTES', [X(0.6), zt - h / 2], 'tablier', { h: 2.4, ancre: 'c' });
   v.texte('TEXTES', [X(xg - 0.15), zt - h - 0.2], 'garde-grève', { h: 2.2, ancre: 'c', angle: 90 });
   return v;

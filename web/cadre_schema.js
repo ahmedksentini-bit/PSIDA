@@ -56,7 +56,7 @@ export function coupeCadreSVG(lu) {
   const Hpx = Zs(zBot) + 18 + 26 + 46;
   let s = head(W, Hpx, 'Coupe transversale du cadre');
   s += T_(m.l, 20, `COUPE TRANSVERSALE — ${ouvert ? 'PORTIQUE OUVERT (PIPO)' : 'CADRE FERMÉ (PICF)'} À ${n} CELLULE${n > 1 ? 'S' : ''}`, 'start', 'font-weight="700" font-size="13"');
-  s += T_(m.l, 38, `Voie portée : ${rail ? 'voie ferrée (EN 1991-2)' : 'route (Fascicule 61)'} — voie franchie : ${fr_ === 'eau' ? 'écoulement' : fr_ === 'route' ? 'route' : 'voie ferrée'} ; dimensions intérieures, dessin à l'échelle (remblai et terrain figurés).`, 'start', 'font-size="11"');
+  s += T_(m.l, 38, `Voie portée : ${rail ? 'voie ferrée (EN 1991-2)' : o.usage.portee === 'routeEC' ? 'route (EN 1991-2)' : 'route (Fascicule 61)'} — voie franchie : ${fr_ === 'eau' ? 'écoulement' : fr_ === 'route' ? 'route' : 'voie ferrée'} ; dimensions intérieures, dessin à l'échelle (remblai et terrain figurés).`, 'start', 'font-size="11"');
   // terrain naturel et remblai
   const xg = X(xMin), xd = X(xMax), yS = Zs(zSurf), yFond = Zs(zBot);
   s += K('cf_Hr cf_rhoR', `<rect x="${xg}" y="${yS}" width="${xd - xg}" height="${yFond - yS}" fill="url(#cfRem)" stroke="none"/>${L_(xg, yS, xd, yS, MED, `stroke="${TERRE}"`)}`);
@@ -91,7 +91,7 @@ export function coupeCadreSVG(lu) {
     v += L_(xv0 + 18, yb - hb - 8, xv1 - 18, yb - hb - 8, BOLD) + T_(xv1 + 6, yb - hb - 4, 'voie ferrée : LM71, SW/0', 'start', 'font-size="11"');
     s += K('cf_portee cf_alpha cf_ballast cf_ltrav', v);
   } else {
-    s += K('cf_portee cf_classe cf_bc cf_bt cf_a1 cf_a2 cf_mc120', `<rect x="${xv0}" y="${yS - 5}" width="${xv1 - xv0}" height="5" fill="#444"/>${T_(xv1 + 6, yS, 'chaussée : A(l), Bc, Bt, Mc120', 'start', 'font-size="11"')}`);
+    s += K('cf_portee cf_classe cf_bc cf_bt cf_a1 cf_a2 cf_mc120', `<rect x="${xv0}" y="${yS - 5}" width="${xv1 - xv0}" height="5" fill="#444"/>${T_(xv1 + 6, yS, o.usage.portee === 'routeEC' ? 'chaussée : LM1 (TS + UDL), LM2' : 'chaussée : A(l), Bc, Bt, Mc120', 'start', 'font-size="11"')}`);
   }
   // poussée des terres sur les piédroits extérieurs
   const kp = Math.min(60, 22 + 6 * geom.H);
@@ -192,7 +192,7 @@ export function syntheseCadreHTML(lu) {
 export const AIDE_CADRE = {
   cf_type: 'Cadre fermé (PICF, dalot) : traverse, radier et piédroits monolithiques. Portique ouvert (PIPO) : sans radier, piédroits sur semelles.',
   cf_appui: 'Liaison des pieds des piédroits avec leurs semelles : encastrement (cas courant) ou articulation.',
-  cf_portee: 'Voie portée par l\'ouvrage, sur le remblai : route (charges du Fascicule 61) ou voie ferrée (EN 1991-2).',
+  cf_portee: 'Voie portée par l\'ouvrage, sur le remblai : route (charges du Fascicule 61 ou de l\'EN 1991-2, LM1 / LM2) ou voie ferrée (EN 1991-2).',
   cf_franchie: 'Ce qui passe dans l\'ouvrage : écoulement (situations hydrauliques), route ou voie ferrée (gabarit et choc sur les piédroits).',
   cf_n: 'Nombre de cellules (ouvertures). Au-delà de 3, le cadre est découpé en blocs monolithiques séparés par des joints secs.',
   cf_B: 'Ouverture intérieure d\'une cellule, entre nus des piédroits [m].',
@@ -212,6 +212,12 @@ export const AIDE_CADRE = {
   cf_hEau: 'Hauteur d\'eau dans l\'ouvrage [m] (cas « en eau »).',
   cf_hNappe: 'Niveau de la nappe extérieure au-dessus de la face supérieure du radier (fil d\'eau) [m] ; la sous-pression s\'exerce sous le radier, sous h + e_r d\'eau ; le cas « vide sous nappe haute » inverse la flexion du radier.',
   cf_lch: 'Largeur chargeable de la voie portée sur l\'ouvrage [m] (Fascicule 61, art. 2.1) : fixe le nombre de voies, donc S, poids des essieux B plaçables, dans le coefficient de majoration dynamique ; vide = longueur de l\'ouvrage (majorant).',
+  cf_ecAlpha: 'Coefficients d\'ajustement α_Q, α_q du LM1 et β_Q du LM2 (EN 1991-2, 4.3.2 et 4.3.3) : annexe nationale française classe 1 ou 2, ou valeurs recommandées (α = 1).',
+  cf_ecSens: 'Sens de circulation sur l\'ouvrage : parallèle à la portée de la traverse (route qui franchit l\'ouvrage, cas courant : les voies se juxtaposent le long de l\'axe) ou parallèle à l\'axe de l\'ouvrage (les voies se juxtaposent le long de la portée).',
+  cf_ecAngle: 'Angle de diffusion des charges concentrées dans le remblai, sur la verticale (EN 1991-2, 4.9.1 (1) NOTE 2 : 30° pour un remblai correctement compacté) ; 45° dans la traverse jusqu\'à son feuillet moyen (4.3.6).',
+  cf_ecEcart: 'Distance entre les roues de deux tandems de voies voisines (1,00 m quand les tandems sont centrés dans leurs voies de 3 m ; l\'EN 1991-2 admet 0,50 m pour les vérifications locales).',
+  cf_ecLm2: 'Modèle de charge 2 (essieu unique β_Q · 400 kN, groupe gr1b), examiné seul.',
+  cf_ecMc: 'Véhicule militaire Mc120 (groupe gr5) avec l\'empreinte et le coefficient dynamique du Fascicule 61, si le marché le prévoit.',
   cf_gabH: 'Hauteur libre exigée au-dessus de la chaussée ou de la plateforme de la voie franchie [m].',
   cf_chocF: 'Force de choc perpendiculaire au piédroit [kN] : route, EN 1991-1-7 tableau 4.1 (500 kN autoroute ou route principale) ; voie ferrée, à fixer par le gestionnaire.',
   cf_sis: 'Calcul sismique Eurocode 8 (q = 1) : inertie et poussée dynamique, et distorsion imposée par le terrain.',
