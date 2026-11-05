@@ -469,6 +469,12 @@ BAEL 91 ou EN 1992-1-1, blocs monolithiques), recoupé sur 2 104 grandeurs de BV
 ferroviaire (EN 1991-2 : LM71, SW/0, SW/2, Φ2/Φ3 réduit pour la couverture, surcharge sur remblai) ; voie franchie route
 ou voie ferrée (gabarit, choc EN 1991-1-7 en situation accidentelle) ; portique ouvert sur appuis encastrés ou articulés
 avec enveloppe des réactions ; note HTML et Word ; avant-propos et chapitre 27 du manuel.
+v0.99.23 : poutres BA — nomenclature et façonnage des armatures (plan BA-FAC-01, src/plans/nomenclature_ba.js) : bordereau
+ISO 4066 d'une travée (codes 00, 11, 21, 51, croquis, cotes hors tout, longueurs de coupe, mandrins EN 1992-1-1 § 8.3), pièces
+de 12 m au plus avec recouvrements l₀ (§ 8.7.3), récapitulatif par diamètre : lits inférieurs (filants relevés de 10 φ,
+25 cm au moins), armatures supérieures sur appuis, cadres d'âme et de talon, étriers, peau, montage, hourdis, entretoises
+d'about et intermédiaires (E1 à E4) ; coupe A-A repérée. Le plan de ferraillage dessine des cadres d'âme et de talon
+distincts et reprend les masses du bordereau.
 v0.99.22 : deux défauts relevés dans les notes d'autoroute corrigés aussi dans PSIDA. Gradient thermique : laissé vide, il
 suit l'EN 1991-1-5 (tableaux 6.1 et 6.2, dalle béton : 15 / 8 °C × k_sur selon l'épaisseur du revêtement, soit 12,3 / −8 °C
 pour 8 cm) dans les calculs Eurocodes, et reste à 12 / −6 °C pour le Fascicule 61 (BAEL, BPEL) ; valeurs saisies : les

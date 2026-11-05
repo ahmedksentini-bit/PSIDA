@@ -7,6 +7,7 @@ import { planCoffrageVIPP, planCablageVIPP, planFerraillageVIPP } from '../src/p
 import { planNomenclatureVIPP } from '../src/plans/nomenclature_vipp.js';
 import { planToronsPRAD } from '../src/plans/prad.js';
 import { donneesBA, planCoffrageBA, planFerraillageBA } from '../src/plans/poutres_ba.js';
+import { planNomenclatureBA } from '../src/plans/nomenclature_ba.js';
 import { feuilleSVG } from '../src/plans/svg.js';
 import { feuilleDXF, octetsCp1252 } from '../src/plans/dxf.js';
 import { cartouche } from './plans_view.js';
@@ -21,7 +22,7 @@ export function poutreVIPP(r) {
   if (!sp.beams[0].vipp) return null;
   return sp.beams.reduce((a, b) => (b.vipp.elu.at(-1).MEd > a.vipp.elu.at(-1).MEd ? b : a)).vipp;
 }
-const PLANS_BA = [{ k: 'cof', titre: 'Coffrage du tablier', num: 'BA-COF-01', f: planCoffrageBA }, { k: 'fer', titre: 'Ferraillage de la poutre et du hourdis', num: 'BA-FER-01', f: planFerraillageBA }];
+const PLANS_BA = [{ k: 'cof', titre: 'Coffrage du tablier', num: 'BA-COF-01', f: planCoffrageBA }, { k: 'fer', titre: 'Ferraillage de la poutre et du hourdis', num: 'BA-FER-01', f: planFerraillageBA }, { k: 'fac', titre: 'Nomenclature et façonnage des armatures', num: 'BA-FAC-01', f: planNomenclatureBA }];
 /** Sujet des plans : poutre VIPP / PRAD, ou données du tablier BA (règlement choisi dans le formulaire). */
 export function sujetPlans(r) {
   const v = poutreVIPP(r); if (v) return v;
