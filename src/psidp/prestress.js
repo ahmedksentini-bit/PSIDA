@@ -57,6 +57,49 @@ export function cableGeometry(spans, segs) {
   };
 }
 
+/**
+ * Câble moyen défini par une table de points (x, z) — tracé lu sur une note (SCIA, tableau de coordonnées) : spline cubique
+ * naturelle passant par les points, x global depuis le premier appui, z vers le haut depuis la fibre moyenne. Les points
+ * hors de [0 ; L_tot] (ancrages au-delà de l'axe d'about) servent à la spline mais ne sont pas évalués.
+ */
+export function cablePoints(spans, pts) {
+  const x0 = [0]; spans.forEach(L => x0.push(x0[x0.length - 1] + L));
+  const P = [...pts].map(([x, z]) => [+x, +z]).filter(([x, z]) => Number.isFinite(x) && Number.isFinite(z)).sort((a, b) => a[0] - b[0]);
+  const X = [], Z = [];
+  for (const [x, z] of P) { if (X.length && Math.abs(x - X[X.length - 1]) < 1e-9) { Z[Z.length - 1] = z; continue; } X.push(x); Z.push(z); }
+  if (X.length < 3) throw new Error('Câble par points : au moins trois points (x, z) sont requis.');
+  if (X[0] > 1e-6 || X[X.length - 1] < x0[x0.length - 1] - 1e-6) throw new Error(`Câble par points : la table doit couvrir l'ouvrage de 0 à ${x0[x0.length - 1].toFixed(2)} m.`);
+  // spline naturelle : moments M_k (z'' aux nœuds)
+  const n = X.length, h = X.slice(1).map((x, k) => x - X[k]), M = new Array(n).fill(0);
+  if (n > 2) {
+    const a = [], b = [], c = [], d = [];
+    for (let k = 1; k < n - 1; k++) { a.push(h[k - 1]); b.push(2 * (h[k - 1] + h[k])); c.push(h[k]); d.push(6 * ((Z[k + 1] - Z[k]) / h[k] - (Z[k] - Z[k - 1]) / h[k - 1])); }
+    const m = b.length, cp = new Array(m), dp = new Array(m);
+    for (let i = 0; i < m; i++) { const den = b[i] - (i ? a[i] * cp[i - 1] : 0); cp[i] = c[i] / den; dp[i] = (d[i] - (i ? a[i] * dp[i - 1] : 0)) / den; }
+    for (let i = m - 1; i >= 0; i--) M[i + 1] = dp[i] - (i + 1 < m ? cp[i] * M[i + 2] : 0);
+  }
+  const seg = x => { let k = 0; while (k < n - 2 && x > X[k + 1]) k++; return k; };
+  const z = x => { const k = seg(x), t1 = X[k + 1] - x, t0 = x - X[k], hk = h[k]; return M[k] * t1 ** 3 / (6 * hk) + M[k + 1] * t0 ** 3 / (6 * hk) + (Z[k] / hk - M[k] * hk / 6) * t1 + (Z[k + 1] / hk - M[k + 1] * hk / 6) * t0; };
+  const slope = x => { const k = seg(x), t1 = X[k + 1] - x, t0 = x - X[k], hk = h[k]; return -M[k] * t1 * t1 / (2 * hk) + M[k + 1] * t0 * t0 / (2 * hk) - (Z[k] / hk - M[k] * hk / 6) + (Z[k + 1] / hk - M[k + 1] * hk / 6); };
+  const curv = x => { const k = seg(x), t1 = X[k + 1] - x, t0 = x - X[k], hk = h[k]; return (M[k] * t1 + M[k + 1] * t0) / hk; };
+  return {
+    x0, Ltot: x0[x0.length - 1], z, slope, curv, points: X.map((x, k) => [x, Z[k]]),
+    span: x => { let j = 0; while (j < spans.length - 1 && x > x0[j + 1] + 1e-9) j++; return j; },
+    checks() { let Rmin = Infinity; for (let k = 0; k < n; k++) if (X[k] >= -1e-9 && X[k] <= x0[x0.length - 1] + 1e-9 && Math.abs(M[k]) > 1e-12) Rmin = Math.min(Rmin, 1 / Math.abs(M[k])); return { Rmin, gaps: [] }; },
+  };
+}
+
+/**
+ * Relaxation à long terme EN 1992-1-1 § 3.3.2 (7) : Δσ_pr/σ_pi = k₁ ρ₁₀₀₀ e^(k₂ μ) (t/1000)^(0,75(1 − μ)) 10⁻⁵, μ = σ_pi/f_pk,
+ * classe 1 (3.28 : 5,39 ; 6,7), classe 2 — basse relaxation (3.29 : 0,66 ; 9,1), classe 3 — barres (3.30 : 1,98 ; 8) ;
+ * t = 500 000 h par défaut (§ 3.3.2 (8)). Nulle pour μ < 0,5 (EN 1992-1-1 annexe D, remarque). Même unité que σ.
+ */
+export function relaxationEC2(sigma, { fpk, rho1000 = 2.5, cls = 2, t = 500000 }) {
+  const mu = sigma / fpk; if (!(mu > 0.5)) return 0;
+  const [k1, k2] = cls === 1 ? [5.39, 6.7] : cls === 3 ? [1.98, 8] : [0.66, 9.1];
+  return sigma * k1 * rho1000 * Math.exp(k2 * mu) * Math.pow(t / 1000, 0.75 * (1 - mu)) * 1e-5;
+}
+
 /** Moments hyperstatiques sur appuis X_i (i = 1 … n−1) et M_hyp(x) linéaire, pour un moment isostatique M0(x) = F z. */
 export function hyperstatic(spans, xs, M0) {
   const n = spans.length, x0 = [0]; spans.forEach(L => x0.push(x0[x0.length - 1] + L));
@@ -98,7 +141,7 @@ export function hyperstatic(spans, xs, M0) {
 export function prestress(p) {
   const { spans, sec, cable: cb, mat } = p;
   const nPer = Math.max(10, Math.round((p.nPerSpan || 100) / 10) * 10);
-  const geo = cableGeometry(spans, cb.segs), Lt = geo.Ltot;
+  const geo = cb.points ? cablePoints(spans, cb.points) : cableGeometry(spans, cb.segs), Lt = geo.Ltot;
   const xs = [], tenth = [];
   geo.x0.slice(0, -1).forEach((x, j) => { for (let k = 0; k < nPer; k++) { xs.push(x + spans[j] * k / nPer); if (k % (nPer / 10) === 0) tenth.push(xs.length - 1); } });
   xs.push(Lt); tenth.push(xs.length - 1);
@@ -150,6 +193,10 @@ export function prestress(p) {
     const a = rL ? sL[i] - rL.loss[i] : -Infinity, b = rR ? sR[i] - rR.loss[i] : -Infinity;
     return ends === 'both' ? Math.max(a, b) : ends === 'left' ? a : b;
   });
+  // contrainte initiale imposée (cb.sigImposed : table [x, σ] — par exemple la « contrainte finale » d'un logiciel, pertes
+  // instantanées et raccourcissement élastique compris) : remplace frottement, recul et raccourcissement
+  const sImp = cb.sigImposed && cb.sigImposed.length ? (() => { const T = [...cb.sigImposed].sort((a, b) => a[0] - b[0]); const tx = T.map(q => q[0]), ty = T.map(q => q[1]); return xs.map(x => interp(tx, ty, x)); })() : null;
+  if (sImp) sImp.forEach((v, i) => { sFric[i] = v; sAfter[i] = v; });
   const lossRecoil = xs.map((_, i) => sFric[i] - sAfter[i]);
 
   const hyperOf = sig => { const F = sig.map(s => nAp * s); return { F, h: hyperstatic(spans, xs, F.map((f, i) => f * z[i])) }; };
@@ -161,7 +208,8 @@ export function prestress(p) {
   // ---- raccourcissement élastique (BPEL 3.3,13 : E_p Σ k Δσ_bj/E_ij ; k = ½ pour la précontrainte et les actions
   // permanentes appliquées simultanément (ossature), 1 pour les actions appliquées ensuite (superstructures))
   let dScArr = xs.map(() => 0), sbj = 0;
-  if (reg === 'PSIDP84') {
+  if (sImp) { /* raccourcissement déjà compris dans la contrainte imposée */ }
+  else if (reg === 'PSIDP84') {
     // note PSIDP-EL : σ̄_bj = moyenne le long du câble de σ_b sous la seule précontrainte initiale, constante
     let dSc = 0;
     for (let it = 0; it < 4; it++) { sbj = trapz(xs, sigmaB(sAfter.map(s => s - dSc), null)) / Lt; dSc = (mat.kc ?? 0.5) * cb.Ep / mat.Eij * sbj; }
@@ -178,15 +226,29 @@ export function prestress(p) {
   const spi = sAfter.map((s, i) => s - dScArr[i]), dSi = spi.map(s => s0 - s);
 
   // ---- pertes différées
-  const dRho = spi.map(s => Math.max(0, 0.06 * cb.rho1000 * (s / cb.fprg - cb.mu0) * s));
+  const isEC2 = reg === 'EC2';
+  const dRho = isEC2 ? spi.map(s => relaxationEC2(s, { fpk: cb.fprg, rho1000: cb.rho1000, cls: mat.relCls ?? 2, t: mat.tRel ?? 500000 }))
+    : spi.map(s => Math.max(0, 0.06 * cb.rho1000 * (s / cb.fprg - cb.mu0) * s));
   // retrait (3.3,21) : ε_r [1 − r(j)] E_p, r(t) = t/(t + 9 r_m), t en jours, r_m en cm
   const rOf = t => (mat.rm ? t / (t + 9 * mat.rm * 100) : 0);
-  const dR = reg === 'PSIDP84' ? mat.epsR * cb.Ep : mat.epsR * (1 - rOf(mat.j ?? 7)) * cb.Ep;
+  const dR = isEC2 ? mat.epsCs * cb.Ep : reg === 'PSIDP84' ? mat.epsR * cb.Ep : mat.epsR * (1 - rOf(mat.j ?? 7)) * cb.Ep;
   // σ_M : contrainte maximale au niveau du câble (mise en tension : P_i + ossature)
   const sM0 = sigmaB(spi, MO);
-  let sInf = spi.map((s, i) => s - dR - dRho[i]), dFl = null, rect = null, dSd = null, sbFin = null;
+  let sInf = spi.map((s, i) => s - dR - dRho[i]), dFl = null, rect = null, dSd = null, sbFin = null, den = null, scQP = null;
   const hist = [];
-  for (let it = 0; it < (p.iterations || 6); it++) {
+  if (isEC2) {
+    // EN 1992-1-1 (5.46) : Δσ_p,c+s+r = [ε_cs E_p + 0,8 Δσ_pr + (E_p/E_cm) φ(t,t0) σ_c,QP] /
+    //   [1 + (E_p/E_cm)(A_p/A_c)(1 + A_c z_cp²/I_c)(1 + 0,8 φ(t,t0))], σ_c,QP au niveau des armatures sous le poids propre, la
+    //   précontrainte initiale et les autres actions quasi permanentes (p.MGmean) ; section brute (A_c, I_c), z_cp = z
+    const ae = cb.Ep / mat.Ecm, ph = mat.phi;
+    scQP = sigmaB(spi, MG);
+    dFl = scQP.map(v => ae * ph * Math.max(0, v));
+    den = z.map(zz => 1 + ae * nAp / sec.B * (1 + sec.B * zz * zz / sec.I) * (1 + 0.8 * ph));
+    rect = dRho.map(d => -0.2 * d);
+    dSd = spi.map((s, i) => (dR + 0.8 * dRho[i] + dFl[i]) / den[i]);
+    sInf = spi.map((s, i) => s - dSd[i]); sbFin = sigmaB(sInf, MG);
+  }
+  for (let it = 0; it < (isEC2 ? 0 : (p.iterations || 6)); it++) {
     const sb = sigmaB(sInf, MG); sbFin = sb;
     if (reg === 'PSIDP84') {
       dFl = sb.map(v => Math.max(0, mat.Kfl * cb.Ep * v / mat.Ei28));
@@ -214,7 +276,8 @@ export function prestress(p) {
     xs, z, th, Bn, In, Ag, nAp, geo, tenth,
     friction: { sL, sR, s: sFric }, recoil: { left: rL && { d: rL.d, sd: rL.sd }, right: rR && { d: rR.d, sd: rR.sd }, loss: lossRecoil },
     reg, shortening: { sbj, dSc, arr: dScArr }, spi, dSi,
-    delayed: { dRho, dR, dFl, rect, dSd, conv: hist, sbFin, sM0 },
+    delayed: { dRho, dR, dFl, rect, dSd, conv: hist, sbFin, sM0, den, scQP },
+    imposed: !!sImp,
     MT, MS, ES,
     /** Valeur d'un tableau aux nœuds en x (interpolation linéaire). */
     at: (arr, x) => interp(xs, arr, x),

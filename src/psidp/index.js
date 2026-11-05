@@ -4,9 +4,9 @@
  * transversale de Guyon-Massonnet) — démarche du dossier pilote SETRA PSI-DP et de la note modèle PSIDP-EL 84-1, règles
  * BPEL 91 révisé 99 (classe II). Unités internes : m, kN, kPa ; entrées et sorties des matériaux en MPa.
  */
-import { prestress, cableGeometry, deflection } from './prestress.js';
+import { prestress, cableGeometry, cablePoints, deflection } from './prestress.js';
 import { materialsBAEL, flexureELU, flexureELS } from '../section_bael.js';
-import { psidpChecks, mLim } from './checks.js';
+import { psidpChecks, ec2Checks, mLim } from './checks.js';
 import { unitOf } from './agrements.js';
 import { Axe } from '../geom/axe.js';
 import { resultats } from '../plate/deck.js';
@@ -23,6 +23,12 @@ export const BP_DEFAULTS = {
   actif: false, agrement: 'generique', unite: '12', casFrottement: 'I', n: null, fprg: 1860, fpeg: 1660, sigma0: null, Ep: 190000, rho1000: 2.5, mu0: 0.43,
   f: null, phi: null, g: null, ends: 'both', friction: 'continu', fcj: null, epsR: 3e-4, Kfl: 2, rj: 0.5, reg: 'BPEL91', j: 7,
   cover: null, decal: 0.007, eSup: null, eLow: null, lowEnd: 0.4, a: 0.1, segs: null, fe: 500, skin: 3e-4, trace: 'optimise',
+  // Eurocode 2 (reg = 'EC2') : k (déviation parasite, rad/m : φ = f·k), fluage φ(∞,t0), retrait ε_cs après la mise en tension,
+  // classe de relaxation, r_sup / r_inf, combinaison de la décompression, ciment (N, R, S)
+  k: null, phiC: 2, epsCs: null, relCls: 2, rsup: 1.1, rinf: 0.9, decomp: 'freq', cem: 'N',
+  // tracé par points « x z ; … » (référence : 'cdg' fibre moyenne, 'inf' sous-face, 'sup' profondeur sous la fibre supérieure),
+  // contrainte initiale imposée « x σ ; … » [MPa], section imposée (B, I, v)
+  pts: null, ptsRef: 'cdg', sigx: null, secB: null, secI: null, secV: null,
 };
 
 /** Caractéristiques de la section brute (rectangle 2b × h, ou encorbellements : épaisseur h_rive au bord, joue). */
@@ -79,6 +85,23 @@ export function parseSegs(txt, nSpans) {
   return spans;
 }
 
+/** Table « x y ; x y ; … » (séparateurs ; ou retours à la ligne, virgule décimale admise) → [[x, y], …] ; null si vide. */
+export function parsePairs(txt, what = 'table') {
+  if (!txt || !String(txt).trim()) return null;
+  const rows = String(txt).split(/[;\n]+/).map(t => t.trim()).filter(Boolean).map(t => t.replace(/(\d),(\d)/g, '$1.$2').split(/[\s,]+/).map(Number));
+  if (rows.some(q => q.length < 2 || !Number.isFinite(q[0]) || !Number.isFinite(q[1]))) throw new Error(`${what} : chaque ligne doit contenir deux nombres « x valeur ».`);
+  return rows.map(q => [q[0], q[1]]);
+}
+
+/** Résistances EN 1992-1-1 § 3.1 à 28 jours et à t jours (ciment N : s = 0,25 ; R : 0,20 ; S : 0,38) [MPa]. */
+export function concreteEC2(fck, t = 28, cem = 'N', fckt = null) {
+  const fcm = fck + 8, fctm = fck <= 50 ? 0.3 * fck ** (2 / 3) : 2.12 * Math.log(1 + fcm / 10), Ecm = 22000 * (fcm / 10) ** 0.3;
+  const s = cem === 'R' ? 0.2 : cem === 'S' ? 0.38 : 0.25, bcc = t >= 28 ? 1 : Math.exp(s * (1 - Math.sqrt(28 / t)));
+  const fcmt = bcc * fcm, fckT = fckt ?? (t >= 28 ? fck : Math.max(0, fcmt - 8));
+  const fcmT = fckt != null ? fckt + 8 : fcmt;
+  return { fck, fcm, fctm, Ecm, fcd: fck / 1.5, t, bcc, fckt: fckT, fctmt: (t >= 28 && fckt == null ? 1 : Math.min(1, fcmT / fcm)) * fctm, Ecmt: (Math.min(fcmT, fcm) / fcm) ** 0.3 * Ecm };
+}
+
 /**
  * Prédimensionnement de la force utile (dossier PSI-DP, annexe 1) : classe II, F∞ = max(F1, F2),
  * F1 = [l²/8 (g + ξ S1) − f_t η B y]/Z, F2 = l²/8 (g + ξ S2)/Z, S1 = 1,2 L_ch A(l), S2 = ψ1 L_ch A(l).
@@ -107,14 +130,25 @@ export function designPSIDP(ctx, bpIn = {}) {
   const U = unitOf(bp.agrement || 'generique', OLD[bp.unite] || bp.unite || '12', { cas: bp.casFrottement || 'I', fcj: fcj0, cover: 0.05 });
   // frottement et recul d'ancrage : valeurs saisies, sinon celles de l'agrément (ou BPEL annexe 3)
   bp.f = bp.f ?? U.f; bp.phi = bp.phi ?? U.phi; bp.g = bp.g ?? U.g;
-  const sec = sectionProps({ width: 2 * deck.b, h: deck.h, chamfer: deck.g.chamfer });
+  const isEC2 = bp.reg === 'EC2';
+  if (isEC2 && bp.k != null) bp.phi = bp.f * bp.k;                     // EN 1992-1-1 (5.45) : e^(−μ(θ + k x)), φ = μ k
+  const sec0 = sectionProps({ width: 2 * deck.b, h: deck.h, chamfer: deck.g.chamfer });
+  // section imposée (note de calcul : B, I et v connus, par exemple dalle à dévers et encorbellements)
+  const sec = bp.secB > 0 && bp.secI > 0 && bp.secV > 0 && bp.secV < deck.h
+    ? { ...sec0, B: bp.secB, I: bp.secI, v: bp.secV, vp: deck.h - bp.secV, rho: bp.secI / (bp.secB * bp.secV * (deck.h - bp.secV)), imposee: true } : sec0;
   const MPa = 1000, fc28 = ctx.fc28, fcj = bp.fcj || Math.min(fc28, 0.8 * fc28 + 2);
   const ft = v => 0.6 + 0.06 * v, Ei = v => 11000 * Math.cbrt(v);
   const fprg = bp.fprg, fpeg = bp.fpeg, sigma0 = bp.sigma0 || Math.min(0.8 * fprg, 0.9 * fpeg);
   const cover = bp.cover ?? U.phiG, off = cover + U.phiG / 2 + bp.decal;
   const zSup = bp.eSup != null ? sec.v - bp.eSup : sec.v - off, zLow = bp.eLow != null ? -(sec.vp - bp.eLow) : -(sec.vp - off);
-  const imposed = parseSegs(bp.segs, spans.length);
-  let segs = imposed || autoCable(spans, { zSup, zLow, lowEnd: bp.lowEnd, a: bp.a });
+  // tracé par points (table x z) : prioritaire sur les paraboles ; contrainte initiale imposée (x σ)
+  const ptsIn = parsePairs(bp.pts, 'Tracé du câble par points');
+  const points = ptsIn ? ptsIn.map(([x, zz]) => [x, bp.ptsRef === 'inf' ? zz - sec.vp : bp.ptsRef === 'sup' ? sec.v - zz : zz]) : null;
+  const sigImp = parsePairs(bp.sigx, 'Contrainte initiale imposée');
+  const sigImposed = sigImp ? sigImp.map(([x, sg]) => [x, sg * 1000]) : null;
+  const imposed = points ? null : parseSegs(bp.segs, spans.length);
+  let segs = points ? null : imposed || autoCable(spans, { zSup, zLow, lowEnd: bp.lowEnd, a: bp.a });
+  const geoOf = sg => (points ? cablePoints(spans, points) : cableGeometry(spans, sg));
 
   // sollicitations de poutre entière (moments de calcul = max_y m_x · 2b, comme PSIDP-EL) aux sections du modèle
   const xs = bm.sections.map(s => s.x), W = 2 * deck.b, nS = xs.length;
@@ -136,7 +170,30 @@ export function designPSIDP(ctx, bpIn = {}) {
       Q[`rare${w === 'max' ? 'Max' : 'Min'}`].push(rare * W); Q[`freq${w === 'max' ? 'Max' : 'Min'}`].push(freq * W); Q[`elu${w === 'max' ? 'Max' : 'Min'}`].push(elu * W);
     }
   }
-  const G = { min: perm.Mmin, moy: perm.M, max: perm.Mmax }, O = { min: oss.Mmin, moy: oss.M, max: oss.Mmax };
+  // Eurocodes (reg EC2) : LM1 (gr1a) caractéristique et fréquent, gradient thermique (ψ0 = 0,6, ψ1 = 0,6, ψ2 = 0,5),
+  // tassements probables et aléatoires ajoutés aux charges permanentes (γ = 1,20 à l'ELU, EN 1990 A2 tableau A2.4(B))
+  const QE = { carMax: [], carMin: [], freqMax: [], freqMin: [], qpMax: [], qpMin: [], eluMax: [], eluMin: [] };
+  const ecx = ctx.ec, stl = ctx.settle;
+  if (isEC2) {
+    if (!ecx) throw new Error('Précontrainte EN 1992 : les charges Eurocodes (LM1) ne sont pas disponibles.');
+    for (let s = 0; s < nS; s++) for (const w of ['max', 'min']) {
+      const sel = w === 'max' ? Math.max : Math.min, key = w === 'max' ? 'mxMax' : 'mxMin', ny = deck.ys.length;
+      let car = w === 'max' ? -Infinity : Infinity, freq = car, qp = car, elu = car;
+      for (let iy = 0; iy < ny; iy++) {
+        const g = res => (res && res[key] && res[key][s] ? res[key][s][iy] || 0 : 0);
+        const T = g(thermal), q1 = g(ecx.gr1a), qf = g(ecx.LM1f), q2 = g(ecx.gr1b);
+        car = sel(car, q1 + 0.6 * T, qf + T, q2); freq = sel(freq, qf + 0.5 * T, 0.6 * T, 0.75 * q2); qp = sel(qp, 0.5 * T, 0);
+        elu = sel(elu, 1.35 * q1 + 0.9 * T, 1.35 * qf + 1.5 * T, 1.35 * q2);
+      }
+      const K = w === 'max' ? 'Max' : 'Min';
+      QE[`car${K}`].push(car * W); QE[`freq${K}`].push(freq * W); QE[`qp${K}`].push(qp * W); QE[`elu${K}`].push(elu * W);
+    }
+  }
+  const zero = xs.map(() => 0);
+  const Sx = { max: stl && isEC2 ? stl.Mmax : zero, min: stl && isEC2 ? stl.Mmin : zero, moy: stl && isEC2 && stl.prob ? stl.prob.M : zero };
+  const G = isEC2 ? { min: perm.Mmin.map((m, k) => m + Sx.min[k]), moy: perm.M.map((m, k) => m + Sx.moy[k]), max: perm.Mmax.map((m, k) => m + Sx.max[k]) }
+    : { min: perm.Mmin, moy: perm.M, max: perm.Mmax };
+  const O = { min: oss.Mmin, moy: oss.M, max: oss.Mmax };
   const at = arr => x => interpS(xs, arr, x);
   const M = {
     oss: x => ({ min: at(O.min)(x), moy: at(O.moy)(x), max: at(O.max)(x) }),
@@ -145,10 +202,22 @@ export function designPSIDP(ctx, bpIn = {}) {
     freq: x => ({ max: at(Q.freqMax)(x), min: at(Q.freqMin)(x) }),
     elu: x => { const gx = at(G.max)(x), gn = at(G.min)(x); return { max: (gx >= 0 ? 1.35 : 1) * gx + at(Q.eluMax)(x), min: (gn <= 0 ? 1.35 : 1) * gn + at(Q.eluMin)(x) }; },
   };
-  const bV = ctx.beamF61 ? ctx.beamF61.V : null;
+  if (isEC2) {
+    const Gp = { max: at(perm.Mmax), min: at(perm.Mmin) }, Sm = { max: at(Sx.max), min: at(Sx.min) };
+    M.car = x => ({ max: at(QE.carMax)(x), min: at(QE.carMin)(x) });
+    M.rare = M.car;
+    M.freq = x => ({ max: at(QE.freqMax)(x), min: at(QE.freqMin)(x) });
+    M.qp = x => ({ max: at(QE.qpMax)(x), min: at(QE.qpMin)(x) });
+    M.elu = x => { const gx = Gp.max(x), gn = Gp.min(x); return { max: (gx >= 0 ? 1.35 : 1) * gx + 1.2 * Sm.max(x) + at(QE.eluMax)(x), min: (gn <= 0 ? 1.35 : 1) * gn + 1.2 * Sm.min(x) + at(QE.eluMin)(x) }; };
+  }
+  const bV = isEC2 ? (ctx.beamEC ? ctx.beamEC.V : null) : ctx.beamF61 ? ctx.beamF61.V : null;
   const V = bV ? { els: x => ({ max: at(bV.ELSmax)(x), min: at(bV.ELSmin)(x) }), elu: x => ({ max: at(bV.ELUmax)(x), min: at(bV.ELUmin)(x) }) } : null;
   const stations = bm.sections.map((s, k) => ({ x: xs[k], label: `${s.span + 1} — ${(s.xi / spans[s.span]).toLocaleString('fr-FR', { maximumFractionDigits: 2 })} L` }));
-  const lim = { fcj: fcj * MPa, fc28: fc28 * MPa, ftj: ft(fcj) * MPa, ft28: ft(fc28) * MPa };
+  const cE = isEC2 ? concreteEC2(fc28, bp.j ?? 7, bp.cem || 'N', bp.fcj || null) : null;
+  const lim = isEC2
+    ? { ec2: cE, fck: fc28 * MPa, fckt: cE.fckt * MPa, fctm: cE.fctm * MPa, fctmt: cE.fctmt * MPa, fcd: cE.fcd * MPa, decomp: bp.decomp || 'freq',
+      fcj: cE.fckt * MPa, fc28: fc28 * MPa, ftj: cE.fctmt * MPa, ft28: cE.fctm * MPa }
+    : { fcj: fcj * MPa, fc28: fc28 * MPa, ftj: ft(fcj) * MPa, ft28: ft(fc28) * MPa };
   const steel = { fe: bp.fe * MPa, skin: bp.skin, Es: 200000 * MPa, gs: 1.15, gp: 1.15, gb: 1.5, fpeg: fpeg * MPa, cover: 0.035, atMin: (bp.atMin ?? 0.1) * MPa };
 
   // ouvrage courbe : déviation angulaire horizontale cumulée α_h(x) = ∫|κ| ds le long de l'axe (câbles parallèles à l'axe :
@@ -161,12 +230,15 @@ export function designPSIDP(ctx, bpIn = {}) {
     for (let k = 1; k <= nA; k++) { const x = Lt * k / nA, xm = Lt * (k - 0.5) / nA; tx.push(x); ta.push(ta[k - 1] + Math.abs(kapAt(xm)) * Lt / nA); }
     alphaH = x => interpS(tx, ta, x);
   }
-  const cableOf = (n, sg) => ({ n, Ap: U.Ap, phiG: U.phiG, segs: sg, sigma0: sigma0 * MPa, f: bp.f, phi: bp.phi, g: bp.g, Ep: bp.Ep * MPa, rho1000: bp.rho1000, mu0: bp.mu0, fprg: fprg * MPa, ends: bp.ends, friction: bp.friction, alphaH });
+  const cableOf = (n, sg) => ({ n, Ap: U.Ap, phiG: U.phiG, segs: sg, points, sigImposed, sigma0: sigma0 * MPa, f: bp.f, phi: bp.phi, g: bp.g, Ep: bp.Ep * MPa, rho1000: bp.rho1000, mu0: bp.mu0, fprg: fprg * MPa, ends: bp.ends, friction: bp.friction, alphaH });
   const rm = sec.B / (sec.bTop + sec.bBot + 2 * sec.h);                       // rayon moyen B/u [m] (BPEL 2.1,51)
-  const matP = { Eij: Ei(fcj) * MPa, Ei28: Ei(fc28) * MPa, epsR: bp.epsR, Kfl: bp.Kfl, rj: bp.rj, reg: bp.reg || 'BPEL91', j: bp.j ?? 7, rm };
+  const matP = isEC2
+    ? { Eij: cE.Ecmt * MPa, Ei28: cE.Ecm * MPa, Ecm: cE.Ecm * MPa, phi: bp.phiC ?? 2, epsCs: bp.epsCs ?? bp.epsR, relCls: bp.relCls ?? 2, rj: bp.rj, reg: 'EC2', j: bp.j ?? 7, rm,
+      k: [bp.rsup ?? 1.1, bp.rsup ?? 1.1, bp.rinf ?? 0.9, bp.rinf ?? 0.9] }
+    : { Eij: Ei(fcj) * MPa, Ei28: Ei(fc28) * MPa, epsR: bp.epsR, Kfl: bp.Kfl, rj: bp.rj, reg: bp.reg || 'BPEL91', j: bp.j ?? 7, rm };
   const run = (n, sg = segs, fast = false) => {
     const r = prestress({ spans, sec, MGmean: at(G.moy), MOss: at(O.moy), cable: cableOf(n, sg), mat: matP, nPerSpan: fast ? 20 : 100, iterations: fast ? 3 : 6 });
-    const c = psidpChecks(r, { sec, phiG: U.phiG, nCables: n, Ep: bp.Ep * MPa, stations, M, V, lim, steel, stressOnly: fast });
+    const c = (isEC2 ? ec2Checks : psidpChecks)(r, { sec, phiG: U.phiG, nCables: n, Ep: bp.Ep * MPa, stations, M, V, lim, steel, stressOnly: fast });
     return { n, r, c, ok: c.extremes.every(e => e.ok), segs: sg };
   };
   /** Marge minimale normée des contraintes (> 0 : classe II vérifiée), pénalisée si le rayon minimal n'est pas respecté. */
@@ -176,7 +248,7 @@ export function designPSIDP(ctx, bpIn = {}) {
       m = Math.min(m, (e.cLim - e.cmax) / lim.fc28, (e.enc - e.encLim) / lim.ft28);
       if (e.horsLim !== null) m = Math.min(m, (e.hors - e.horsLim) / lim.ft28);
     }
-    const R = cableGeometry(spans, sg).checks().Rmin;
+    const R = geoOf(sg).checks().Rmin;
     return R < U.Rmin ? m - (U.Rmin - R) / U.Rmin : m;
   };
   // nombre d'unités : imposé, ou le plus petit satisfaisant les contraintes de classe II (départ au prédimensionnement)
@@ -195,7 +267,7 @@ export function designPSIDP(ctx, bpIn = {}) {
   else {
     const s1 = searchN(segs, n0); tried = s1.tr;
     let nBest = s1.n;
-    if (!imposed && bp.trace === 'optimise' && spans.length > 1) {
+    if (!imposed && !points && bp.trace === 'optimise' && spans.length > 1) {
       // ---- recherche du tracé : excentricités des points bas (fraction λ_j de l'excentricité maximale) et sur appuis
       // (μ_i), position du point bas des travées de rive ; recherche par coordonnées maximisant la marge minimale (centrage
       // du tracé dans le fuseau, comme la transformation linéaire du programme PSIDP), puis diminution du nombre d'unités.
@@ -243,11 +315,11 @@ export function designPSIDP(ctx, bpIn = {}) {
     res = run(nBest, segs);
     for (let k = 0; !res.ok && k < 3 && (!opt || opt.feasible); k++) { nBest++; res = run(nBest, segs); tried.push([nBest, res.ok]); }
   }
-  const geoChk = cableGeometry(spans, segs).checks();
+  const geoChk = geoOf(segs).checks();
   // armatures passives complémentaires si |M_cal| > M_lim (ELU)
   for (const e of res.c.elu) for (const w of ['min', 'max']) {
     const q = e[w]; if (q.ok) continue;
-    const k = res.c.stresses.findIndex(s => Math.abs(s.x - e.x) < 1e-9), st = res.c.steel[k], hog = q.Mcal < 0, P0 = e.ph === 'ES' ? res.r.ES.min : res.r.MS.max;
+    const k = res.c.stresses.findIndex(s => Math.abs(s.x - e.x) < 1e-9), st = res.c.steel[k], hog = q.Mcal < 0, P0 = isEC2 ? res.r[e.ph].moy : e.ph === 'ES' ? res.r.ES.min : res.r.MS.max;
     const base = { N: res.r.at(P0.F, e.x), hog, h: sec.h, v: sec.v, vp: sec.vp, b: hog ? sec.bBot : sec.bTop, d: sec.h - 0.035, zc: res.r.at(res.r.z, e.x), Ap: res.r.nAp, sp2: res.r.at(P0.sig, e.x), Ep: bp.Ep * MPa, Es: steel.Es, fbu: 0.85 * lim.fc28 / 1.5, fsu: steel.fe / 1.15, fpu: fpeg * MPa / 1.15 };
     let lo = hog ? st.top.As : st.bot.As, hi = lo + 0.5;
     if (mLim({ ...base, As: hi }).Mlim < Math.abs(q.Mcal)) { q.AsAdd = Infinity; continue; }
@@ -266,10 +338,12 @@ export function designPSIDP(ctx, bpIn = {}) {
   // (BPEL 2.1,5), retrait postérieur à la mise en tension ε_r [1 − r(j)], r(t) = t/(t + 9 r_m), r_m en cm (BPEL 2.1,51)
   const Fm = res.r.ES.moy.F.reduce((a, v) => a + v, 0) / res.r.ES.moy.F.length, sigm = Fm / sec.B / MPa;
   const rjS = (bp.j ?? 7) / ((bp.j ?? 7) + 9 * rm * 100);
-  const shorten = { sigm, Fm, el: sigm / Ei(fcj), fl: (bp.Kfl ?? 2) * sigm / Ei(fc28), r: bp.epsR * (1 - rjS), rj: rjS, rm, Kfl: bp.Kfl ?? 2, epsR: bp.epsR, j: bp.j ?? 7 };
+  const shorten = isEC2
+    ? { sigm, Fm, el: sigm / cE.Ecmt, fl: (bp.phiC ?? 2) * sigm / cE.Ecm, r: bp.epsCs ?? bp.epsR, rj: 0, rm, Kfl: bp.phiC ?? 2, epsR: bp.epsCs ?? bp.epsR, j: bp.j ?? 7, ec2: true }
+    : { sigm, Fm, el: sigm / Ei(fcj), fl: (bp.Kfl ?? 2) * sigm / Ei(fc28), r: bp.epsR * (1 - rjS), rj: rjS, rm, Kfl: bp.Kfl ?? 2, epsR: bp.epsR, j: bp.j ?? 7 };
   shorten.total = shorten.el + shorten.fl + shorten.r;
   const courbe = axe ? effetsCourbure({ res, U, sigma0: sigma0 * MPa, fe: bp.fe * MPa, deck, kapAt, alphaH, axe }) : null;
-  return { bp, unit: U, sec, sigma0, fcj, fc28, lim, steel, segs, geoChk, pre, n0, tried, auto: !bp.n, opt, anchors, shorten, xs, M, Q, G, O, courbe, ...res };
+  return { bp, unit: U, sec, sigma0, fcj: isEC2 ? cE.fckt : fcj, fc28, lim, steel, segs, points, sigImposed, isEC2, ec2: cE, geoChk, pre, n0, tried, auto: !bp.n, opt, anchors, shorten, xs, M, Q, G, O, courbe, ...res };
 }
 
 /**
@@ -321,8 +395,12 @@ export function transversePrestress(dp, { deck, model, transDesign, mat }) {
   const r = dp.r, b = deck.b, out = [];
   const m = materialsBAEL(mat), h = deck.h, d = h - (mat.c ?? 0.03) - (mat.phiLong ?? 0.02), sec = { b: 1, h, d };
   deck.spans.forEach((L, j) => {
-    const segs = dp.segs[j]; let sA = 0, sL = 0, x0 = 0;
-    for (const q of segs) { const len = q.x1 - x0; if (q.A > 0) { sA += q.A * len; sL += len; } x0 = q.x1; }
+    let sA = 0, sL = 0, x0 = 0;
+    if (dp.segs) for (const q of dp.segs[j]) { const len = q.x1 - x0; if (q.A > 0) { sA += q.A * len; sL += len; } x0 = q.x1; }
+    else {                                                   // tracé par points : A(x) = z''/2 lu sur la spline
+      const xa = r.geo.x0[j], nP = 200;
+      for (let k = 0; k < nP; k++) { const A = r.geo.curv(xa + (k + 0.5) * L / nP) / 2; if (A > 0) { sA += A * L / nP; sL += L / nP; } }
+    }
     const Abar = sL ? sA / sL : 0, xm = r.xOf(j, 0.5);
     const F2 = r.at(r.ES.min.F, xm), F1 = r.at(r.MS.max.F, xm), p = -F2 * 2 * Abar / (2 * b);
     const unit = model.response(j, 'pp', model.bandPatches(j, -b, b)).my;
@@ -348,7 +426,8 @@ export function transversePrestress(dp, { deck, model, transDesign, mat }) {
  */
 export function psidpDeflections(dp) {
   const r = dp.r, spans = r.geo.x0.slice(1).map((x, j) => x - r.geo.x0[j]), I = dp.sec.I, MPa = 1000;
-  const Eij = 11000 * Math.cbrt(dp.fcj) * MPa, E28 = 11000 * Math.cbrt(dp.fc28) * MPa, Kfl = dp.bp.Kfl;
+  // EN 1992-1-1 : E_cm(t0) et E_cm, fluage φ(∞,t0) ; BPEL : E_ij = 11 000 f_cj^⅓, K_fl
+  const Eij = dp.isEC2 ? dp.ec2.Ecmt * MPa : 11000 * Math.cbrt(dp.fcj) * MPa, E28 = dp.isEC2 ? dp.ec2.Ecm * MPa : 11000 * Math.cbrt(dp.fc28) * MPa, Kfl = dp.isEC2 ? (dp.bp.phiC ?? 2) : dp.bp.Kfl;
   const MG = r.xs.map(x => dp.M.cp(x).moy), MO = r.xs.map(x => dp.M.oss(x).moy);
   const MP = ph => r.xs.map((x, i) => ph.F[i] * r.z[i] + ph.Mhyp[i]);
   const oss = deflection(r.xs, MO, spans, Eij * I), cp = deflection(r.xs, MG, spans, Eij * I), cp28 = deflection(r.xs, MG, spans, E28 * I);

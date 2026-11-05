@@ -117,6 +117,7 @@ function parseData00(d) {
     methodeTablier: d.methodeTablier === 'plaque' || lireTrace(d.trace) ? 'plaque' : 'guyon',
     alpha: d.alpha, nRetenue: +d.nRetenue, classe: d.classe.trim() ? +d.classe : null, mil: d.mil || 'Mc120+D240', chamoaSign: !!d.chamoaSign,
     withTherm: !!d.withTherm, dT: nums(d.dT), E: +EIv[0] || 34000, I: EIv[1] ? +EIv[1] : null, delta: +d.delta, phiFluage: +d.phiFluage,
+    tassProb: String(d.tassProb || '').trim() ? nums(d.tassProb).map(v => v / 1000) : null,
     mat: { fck: +d.fck, fyk: +d.fyk, fc28: +d.fck, fe: +d.fyk, c: +d.cover, phi: +d.phi / 1000, phiT: +(d.phiT || 16) / 1000, wkMax: +d.wk, fissuration: d.fiss, tRev: +d.tRev },
     extra: parseExtra(d),
     supports: parseSupports(d),
@@ -193,7 +194,10 @@ export function parseBP(d) {
   return { actif: d.bp_actif === 'on' || d.bp_actif === true, agrement: d.bp_agrement || 'generique', unite: d.bp_unite || '12', casFrottement: d.bp_cas || 'I', n: num('bp_n'), fprg: num('bp_fprg', 1860), fpeg: num('bp_fpeg', 1660), sigma0: num('bp_sigma0'),
     f: num('bp_f'), phi: num('bp_phi'), g: num('bp_g') == null ? null : num('bp_g') / 1000, ends: d.bp_ends || 'both', friction: d.bp_friction || 'continu', rho1000: num('bp_rho1000', 2.5), mu0: num('bp_mu0', 0.43),
     Ep: num('bp_Ep', 190000), fcj: num('bp_fcj'), epsR: num('bp_epsR', 3e-4), reg: d.bp_reg || 'BPEL91', j: num('bp_j', 7), Kfl: num('bp_Kfl', 2), rj: num('bp_rj', 0.5), eSup: num('bp_eSup'), eLow: num('bp_eLow'),
-    lowEnd: num('bp_lowEnd', 0.4), a: num('bp_a', 0.1), trace: d.bp_trace || 'optimise', segs: String(d.bp_segs || '').trim() || null, fe: num('bp_fe', 500), atMin: num('bp_atMin', 0.1) };
+    lowEnd: num('bp_lowEnd', 0.4), a: num('bp_a', 0.1), trace: d.bp_trace || 'optimise', segs: String(d.bp_segs || '').trim() || null, fe: num('bp_fe', 500), atMin: num('bp_atMin', 0.1),
+    // Eurocode 2 et données d'une note existante (tracé par points, contrainte initiale, section imposée)
+    k: num('bp_k'), phiC: num('bp_phiC', 2), epsCs: num('bp_epsCs'), relCls: num('bp_relCls', 2), rsup: num('bp_rsup', 1.1), rinf: num('bp_rinf', 0.9), decomp: d.bp_decomp || 'freq', cem: d.bp_cem || 'N',
+    pts: String(d.bp_pts || '').trim() || null, ptsRef: d.bp_ptsRef || 'cdg', sigx: String(d.bp_sigx || '').trim() || null, secB: num('bp_secB'), secI: num('bp_secI'), secV: num('bp_secV') };
 }
 
 export function parseSupports(d) {
@@ -310,7 +314,7 @@ export function compute(p) {
   const ec = deck.eurocode({ alpha: EC_ALPHA[p.alpha] });
   const f61 = deck.fascicule61({ nRetenue: p.nRetenue, classe: p.classe, mil: p.mil });
   const thermal = p.withTherm ? deck.thermal({ dTheat: p.dT[0], dTcool: p.dT[1], E: p.E, I: p.I }) : null;
-  const settle = p.withTherm ? deck.settlements({ delta: p.delta, E: p.E, I: p.I, phi: p.phiFluage }) : null;
+  const settle = p.withTherm ? deck.settlements({ delta: p.delta, E: p.E, I: p.I, phi: p.phiFluage, prob: p.tassProb }) : null;
   // plaque : dimensionnement sur les moments de Wood-Armer (m_x ± |m_xy|, m_y ± |m_xy|)
   const PL = deck.plaque;
   const permD = PL ? woodArmer(perm) : perm, ecD = PL ? woodArmerTous(ec) : ec, f61D = PL ? woodArmerTous(f61) : f61;
@@ -398,7 +402,7 @@ export function compute(p) {
   let psidp = null, psidpError = null;
   if (p.bp && p.bp.actif) {
     try {
-      psidp = designPSIDP({ deck, perm, f61, thermal, beamF61: design.F61.beam, fc28: p.mat.fck }, p.bp);
+      psidp = designPSIDP({ deck, perm, f61, ec, thermal, settle, beamF61: design.F61.beam, beamEC: design.EC.beam, fc28: p.mat.fck }, p.bp);
       psidp.defl = psidpDeflections(psidp);
       const model = new TransverseModel(deck, { tRev: p.mat.tRev, nHarm: 15, I: p.I, skewEquivalent: true });
       psidp.trans = transversePrestress(psidp, { deck, model, transDesign: transDesign.F61, mat: { ...p.mat, phiLong: p.mat.phi } });
@@ -445,7 +449,7 @@ export function computeRail(p) {
   const ec = railCommeEC(deck, rail);
   rail.deformations = deformationsDalleRail(deck, rail, p);
   const thermal = p.withTherm ? deck.thermal({ dTheat: p.dT[0], dTcool: p.dT[1], E: p.E, I: p.I }) : null;
-  const settle = p.withTherm ? deck.settlements({ delta: p.delta, E: p.E, I: p.I, phi: p.phiFluage }) : null;
+  const settle = p.withTherm ? deck.settlements({ delta: p.delta, E: p.E, I: p.I, phi: p.phiFluage, prob: p.tassProb }) : null;
   const design = { EC: designRailEC(deck, perm, rail, { ...p.mat, thermal, settle }), F61: null };
   const tm = new TransverseModel(deck, { tRev: p.mat.tRev, nHarm: 15, I: p.I });
   const trans = tm.run({ thermal, settle, rail });

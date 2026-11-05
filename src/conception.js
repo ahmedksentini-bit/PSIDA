@@ -362,7 +362,7 @@ export async function rechercheEpaisseur(p, { hMin, hMax, step = 0.02, rhoMax = 
     const ec = deck.eurocode({ alpha: EC_ALPHA[p.alpha] || p.alpha || EC_ALPHA.recommended });
     const I = p.I ? p.I * Math.pow(h / h0, 3) : null;
     const thermal = p.withTherm ? deck.thermal({ dTheat: p.dT?.[0] ?? 12, dTcool: p.dT?.[1] ?? -6, E: p.E, I }) : null;
-    const settle = p.withTherm ? deck.settlements({ delta: p.delta ?? 0.01, E: p.E, I, phi: p.phiFluage ?? 2 }) : null;
+    const settle = p.withTherm ? deck.settlements({ delta: p.delta ?? 0.01, E: p.E, I, phi: p.phiFluage ?? 2, prob: p.tassProb }) : null;
     const d = designEC(deck, perm, ec, { ...p.mat, thermal, settle });
     const asBot = Math.max(...d.envBot), asTop = Math.max(...d.envTop);
     const as2 = Math.max(...d.perFibre.flatMap(r => r.flatMap(f => [f.bot.As2 || 0, f.top.As2 || 0])));
