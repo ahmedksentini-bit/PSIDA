@@ -693,13 +693,14 @@ function calculAppuis(st, input = {}) {
     }
     // réactions par appareil imposées (note de calcul d'un modèle aux éléments finis, appareil le plus chargé) : F_z,max ELU
     // et F_z,min (permanentes seules) substituées aux réactions PSIDA, avec les déplacements, rotations et efforts horizontaux
-    // PSIDA des combinaisons concomitantes (enveloppe : combinaison maximale la plus défavorable en rotation et en distorsion)
+    // PSIDA des combinaisons concomitantes
     const imp = sp.brgReac && sp.brgReac[i] ? sp.brgReac[i] : null;
     if (imp && imp.max > 0) {
       const mx = combos.filter(c => !c.minimal), cMin = combos.filter(c => c.minimal && !c.indicatif);
-      const env = mx.reduce((m, c) => ({ vSlow: Math.max(m.vSlow, c.vSlow), Hx: Math.max(m.Hx, c.Hx || 0), alpha: Math.max(m.alpha, c.alpha) }), { vSlow: 0, Hx: 0, alpha: 0 });
       const Nmin = imp.min != null && imp.min > 0 ? imp.min : null;
-      const ci = [{ label: 'ELU réaction imposée (max)', Fz: imp.max, ...env }];
+      // chaque combinaison ELU maximale PSIDA est reprise avec F_z = F_z,max imposée (déplacements, efforts horizontaux et
+      // rotations concomitants conservés)
+      const ci = mx.map(c => ({ ...c, label: `${c.label} — F_z imposée`, Fz: imp.max }));
       if (Nmin != null) ci.push({ label: 'réaction imposée (min)', Fz: Nmin, vSlow: cMin.length ? cMin[0].vSlow : vRF + vT, Hx: 0, alpha: cMin.length ? cMin[0].alpha : aG + a0, minimal: true });
       const si = Nmin != null ? slides.map(sl0 => ({ ...sl0, FzMin: Nmin, FzGmin: Nmin, label: `${sl0.label} — F_z,min imposée` })) : [];
       const ri = verifyBearing1337(bd, ci, null), sli = si.map(sl0 => ({ ...verifyBearing1337(bd, [], sl0).slide, label: sl0.label }));
