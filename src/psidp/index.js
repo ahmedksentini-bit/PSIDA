@@ -123,6 +123,19 @@ const interpS = (xs, ys, x) => { if (x <= xs[0]) return ys[0]; for (let k = 1; k
  * @param {object} ctx { deck, perm, f61, thermal, beamF61 (combineBeamBAEL), fc28 [MPa] } ; @param {object} bp options (BP_DEFAULTS)
  */
 export function designPSIDP(ctx, bpIn = {}) {
+  // EN 1992-1-1 § 5.10.3 (2) : σ_pm0 (après pertes instantanées) ≤ min(0,75 f_pk ; 0,85 f_p0,1k). Tension à l'ancrage laissée
+  // vide : celle de § 5.10.2.1 (min(0,8 f_pk ; 0,9 f_p0,1k)) est abaissée jusqu'à respecter la limite (au plus 4 reprises).
+  let dp = designPSIDP0(ctx, bpIn);
+  const auto = !(bpIn.sigma0 > 0), sp = dp.sigPm0;
+  for (let k = 0; k < 4 && dp.isEC2 && auto && sp && !dp.sigPm0.ok; k++) {
+    const s0 = dp.sigma0 * Math.min(0.995, dp.sigPm0.lim / dp.sigPm0.max * 0.999);
+    dp = designPSIDP0(ctx, { ...bpIn, sigma0: s0 });
+  }
+  if (dp.isEC2 && auto) dp.sigPm0.ajuste = dp.sigma0 < dp.sigPm0.sigmaJack - 0.05;
+  return dp;
+}
+
+function designPSIDP0(ctx, bpIn = {}) {
   const bp = { ...BP_DEFAULTS, ...bpIn };
   const { deck, perm, f61, thermal } = ctx, bm = deck.beam, spans = deck.spans;
   const OLD = { '7T15S': '7', '12T15S': '12', '19T15S': '19', '12T13': '12T13' };
@@ -343,7 +356,14 @@ export function designPSIDP(ctx, bpIn = {}) {
     : { sigm, Fm, el: sigm / Ei(fcj), fl: (bp.Kfl ?? 2) * sigm / Ei(fc28), r: bp.epsR * (1 - rjS), rj: rjS, rm, Kfl: bp.Kfl ?? 2, epsR: bp.epsR, j: bp.j ?? 7 };
   shorten.total = shorten.el + shorten.fl + shorten.r;
   const courbe = axe ? effetsCourbure({ res, U, sigma0: sigma0 * MPa, fe: bp.fe * MPa, deck, kapAt, alphaH, axe }) : null;
-  return { bp, unit: U, sec, sigma0, fcj: isEC2 ? cE.fckt : fcj, fc28, lim, steel, segs, points, sigImposed, isEC2, ec2: cE, geoChk, pre, n0, tried, auto: !bp.n, opt, anchors, shorten, xs, M, Q, G, O, courbe, ...res };
+  // tensions limites EN 1992-1-1 : à l'ancrage § 5.10.2.1, après pertes instantanées § 5.10.3 (2)
+  const sigmaJack = Math.min(0.8 * fprg, 0.9 * fpeg), sPm0Lim = Math.min(0.75 * fprg, 0.85 * fpeg);
+  let sigPm0 = null;
+  if (isEC2 && res.r && res.r.spi) {
+    let mx = -Infinity, xm = 0; res.r.spi.forEach((v, i) => { if (v > mx) { mx = v; xm = res.r.xs ? res.r.xs[i] : xs[i]; } });
+    sigPm0 = { max: mx / MPa, x: xm, lim: sPm0Lim, sigmaJack, okJack: sigma0 <= sigmaJack + 1e-6, ok: mx / MPa <= sPm0Lim + 1e-6 && sigma0 <= sigmaJack + 1e-6, imposee: !!sigImposed };
+  }
+  return { bp, unit: U, sec, sigma0, sigPm0, fcj: isEC2 ? cE.fckt : fcj, fc28, lim, steel, segs, points, sigImposed, isEC2, ec2: cE, geoChk, pre, n0, tried, auto: !bp.n, opt, anchors, shorten, xs, M, Q, G, O, courbe, ...res };
 }
 
 /**

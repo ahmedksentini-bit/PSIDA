@@ -96,10 +96,13 @@ export const reglesTablier = [
     const P = st.psidp;
     if (P && P.checks) {
       const c = P.checks, ko = [];
-      for (const e of c.extremes || []) if (e.ok === false) ko.push('contraintes (classe II)');
+      for (const e of c.extremes || []) if (e.ok === false) ko.push(P.isEC2 ? 'contraintes (EN 1992-1-1 § 7.2)' : 'contraintes (classe II)');
+      if (P.isEC2 && P.sigPm0 && !P.sigPm0.ok) out.push({ domaine: 'Précontrainte', lieu: `x = ${fx(P.sigPm0.x)} m`, verification: 'Tension après pertes instantanées σ_pm0',
+        constat: `σ_pm0 = ${fx(P.sigPm0.max, 0)} > ${fx(P.sigPm0.lim, 0)} MPa${P.sigPm0.okJack ? '' : ` ; σ_p0 = ${fx(P.sigma0, 0)} > ${fx(P.sigPm0.sigmaJack, 0)} MPa`}`, regle: 'EN 1992-1-1 § 5.10.2.1 et 5.10.3 (2)',
+        actions: [{ texte: 'Abaisser la tension à l\'ancrage (ou laisser le champ vide : PSIDA l\'ajuste)', champ: 'bp_sigma0', unite: 'MPa' }] });
       for (const e of c.elu || []) if ((e.min && e.min.ok === false) || (e.max && e.max.ok === false)) ko.push('ELU de flexion');
       for (const e of c.shear || []) if (e.okBeton === false || e.okELS === false) ko.push('effort tranchant');
-      if (ko.length) out.push({ domaine: 'Précontrainte', lieu: 'Dalle', verification: 'Justifications BPEL', constat: [...new Set(ko)].join(', ') + ' non vérifié(s)', regle: 'BPEL 91',
+      if (ko.length) out.push({ domaine: 'Précontrainte', lieu: 'Dalle', verification: P.isEC2 ? 'Justifications EN 1992' : 'Justifications BPEL', constat: [...new Set(ko)].join(', ') + ' non vérifié(s)', regle: P.isEC2 ? 'EN 1992-1-1 / EN 1992-2' : 'BPEL 91',
         actions: [{ texte: 'Ajouter des câbles', champ: 'bp_n' }, { texte: 'Unité plus forte', champ: 'bp_unite' }, { texte: 'Épaissir la dalle', champ: 'h', unite: 'm' }] });
     }
     return out;

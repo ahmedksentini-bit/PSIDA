@@ -86,3 +86,18 @@ export const COMBI = {
   psi1: { TS: 0.75, UDL: 0.40, footway: 0.40, gr1b: 0.75, gr3: 0 },
   psi2: { TS: 0, UDL: 0, footway: 0, gr1b: 0, gr3: 0 },
 };
+
+/**
+ * Gradient thermique vertical d'un tablier en dalle béton (EN 1991-1-5, approche 1 linéaire) : ΔT_M,heat = 15 °C et
+ * ΔT_M,cool = 8 °C (tableau 6.1, type 3), multipliés par k_sur (tableau 6.2, type 3) selon l'épaisseur du revêtement t [m] :
+ * sans revêtement 0,8 / 1,1 ; 50 mm 1,0 / 1,0 ; 100 mm 0,7 / 1,0 ; 150 mm 0,5 / 1,0 (interpolation linéaire entre lignes).
+ * @returns {{ heat, cool (négatif), kHeat, kCool, t }}
+ */
+export function gradientEN1991_1_5(t = 0.08) {
+  const T = [[0, 0.8, 1.1], [0.05, 1.0, 1.0], [0.10, 0.7, 1.0], [0.15, 0.5, 1.0]];
+  const tt = Math.max(0, Math.min(Number.isFinite(t) ? t : 0.08, 0.15));
+  let k = 0; while (k < T.length - 2 && tt > T[k + 1][0]) k++;
+  const u = (tt - T[k][0]) / (T[k + 1][0] - T[k][0]), kH = T[k][1] + u * (T[k + 1][1] - T[k][1]), kC = T[k][2] + u * (T[k + 1][2] - T[k][2]);
+  const r = x => Math.round(x * 10) / 10;
+  return { heat: r(15 * kH), cool: -r(8 * kC), kHeat: kH, kCool: kC, t: tt };
+}
