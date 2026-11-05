@@ -32,6 +32,56 @@ export function tBeamULS({ M, beff, hf, b0, d, fck = 30, fyk = 500, code = 'EC' 
 }
 
 /**
+ * Section en T fissurée à l'ELS (béton tendu négligé, coefficient d'équivalence n) : position de l'axe neutre x, inertie
+ * I et contraintes σ_bc = M x/I, σ_s = n M (d − x)/I pour une section d'acier A_s (m², M en kN·m, contraintes en MPa).
+ */
+export function tSectionELS({ M, As, beff, hf, b0, d, n = 15 }) {
+  // axe neutre : ½ b x² − ½ (b − b₀) ⟨x − h_f⟩² = n A_s (d − x)
+  const f = x => beff * x * x / 2 - (x > hf ? (beff - b0) * (x - hf) ** 2 / 2 : 0) - n * As * (d - x);
+  let lo = 0, hi = d;
+  for (let k = 0; k < 80; k++) { const m = (lo + hi) / 2; if (f(m) > 0) hi = m; else lo = m; }
+  const x = (lo + hi) / 2;
+  const I = beff * x ** 3 / 3 - (x > hf ? (beff - b0) * (x - hf) ** 3 / 3 : 0) + n * As * (d - x) ** 2;
+  return { x, I, sigC: M * x / I / 1000, sigS: n * M * (d - x) / I / 1000 };
+}
+
+/**
+ * Armatures inférieures d'une poutre en T à l'ELS : plus petite section A_s telle que σ_s ≤ σ̄_s (section fissurée,
+ * n = 15), puis contrôle de σ_bc ≤ σ̄_bc (sinon aciers comprimés ou section à revoir). BAEL 91 révisé 99 A.4.5,3 :
+ * fissuration peu préjudiciable sans limite sur σ_s ; préjudiciable σ̄_s = min(⅔ f_e ; max(0,5 f_e ; 110 √(η f_tj))) ;
+ * très préjudiciable 0,8 × cette valeur ; σ̄_bc = 0,6 f_c28 (A.4.5,2) ; η = 1,6 (HA). EN 1992-1-1 § 7.2 : σ_s ≤ 0,8 f_yk et
+ * σ_c ≤ 0,6 f_ck sous combinaison caractéristique (n = 15 : module différé, pratique courante).
+ */
+export function limitesELS({ code = 'BAEL', fck = 30, fyk = 400, fiss = 'prej', eta = 1.6 }) {
+  if (code === 'EC') return { sigS: 0.8 * fyk, sigC: 0.6 * fck, ref: 'EN 1992-1-1 § 7.2 (2) et (5) : σ_c ≤ 0,6 f_ck, σ_s ≤ 0,8 f_yk (caractéristique)' };
+  const ftj = 0.6 + 0.06 * fck, fp = Math.min(2 / 3 * fyk, Math.max(0.5 * fyk, 110 * Math.sqrt(eta * ftj)));
+  const sigS = fiss === 'peu' ? Infinity : fiss === 'tres' ? 0.8 * fp : fp;
+  return { sigS, sigC: 0.6 * fck, ftj, ref: `BAEL 91 A.4.5,3 : fissuration ${fiss === 'peu' ? 'peu préjudiciable (σ_s non limitée)' : fiss === 'tres' ? 'très préjudiciable, σ̄_s = 0,8 min(⅔ f_e ; max(0,5 f_e ; 110 √(η f_tj)))' : 'préjudiciable, σ̄_s = min(⅔ f_e ; max(0,5 f_e ; 110 √(η f_tj)))'} ; σ̄_bc = 0,6 f_c28` };
+}
+
+export function tBeamSLS({ M, beff, hf, b0, d, n = 15, sigS, sigC }) {
+  if (!(M > 0)) return { As: 0, sigS: 0, sigC: 0, okC: true, x: 0 };
+  if (!Number.isFinite(sigS)) { const r0 = tSectionELS({ M, As: M / (0.9 * d * 400e3), beff, hf, b0, d, n }); return { As: 0, libre: true, ...r0, okC: r0.sigC <= sigC + 1e-9 }; }
+  let lo = 1e-6, hi = 0.5;
+  for (let k = 0; k < 80; k++) { const m = Math.sqrt(lo * hi); if (tSectionELS({ M, As: m, beff, hf, b0, d, n }).sigS > sigS) lo = m; else hi = m; }
+  const r = tSectionELS({ M, As: hi, beff, hf, b0, d, n });
+  return { As: hi, ...r, sigSlim: sigS, sigClim: sigC, okC: r.sigC <= sigC + 1e-9, z: M / (hi * r.sigS * 1000) };
+}
+
+/**
+ * Armatures d'âme à l'ELU selon le BAEL 91 (A.5.1) : τ_u = V_u/(b₀ d) ≤ τ̄_u (fissuration peu préjudiciable :
+ * min(0,20 f_cj/γ_b ; 5 MPa) ; préjudiciable ou très préjudiciable : min(0,15 f_cj/γ_b ; 4 MPa)) ; armatures droites
+ * A_t/(b₀ s_t) ≥ γ_s (τ_u − 0,3 f_tj k)/(0,9 f_e) (k = 1, sans reprise de bétonnage), A_t f_e/(b₀ s_t) ≥ 0,4 MPa,
+ * s_t ≤ min(0,9 d ; 40 cm). V en kN, longueurs en m ; A_t/s_t en m²/m.
+ */
+export function etriersBAEL({ Vu, b0, d, fc28 = 30, fe = 400, fiss = 'prej', k = 1 }) {
+  const tau = Vu / (b0 * d) / 1000, ftj = 0.6 + 0.06 * fc28;
+  const tauLim = fiss === 'peu' ? Math.min(0.2 * fc28 / 1.5, 5) : Math.min(0.15 * fc28 / 1.5, 4);
+  const calc = Math.max(0, 1.15 * (tau - 0.3 * ftj * k) * b0 / (0.9 * fe)), min = 0.4 * b0 / fe;
+  return { tau, tauLim, ok: tau <= tauLim + 1e-9, AtSt: Math.max(calc, min), AtCalc: calc, AtMin: min, stMax: Math.min(0.9 * d, 0.40) };
+}
+
+/**
  * Étriers verticaux à l'effort tranchant (NF EN 1992-1-1 § 6.2.3, bielles d'inclinaison variable) : cot θ le plus grand
  * dans [1 ; 2,5] tel que V_Rd,max ≥ V_Ed, A_sw/s = V_Ed/(z f_ywd cot θ), minimum ρ_w,min = 0,08 √f_ck/f_yk (§ 9.2.2 (5)).
  * α_cw selon la contrainte moyenne de compression σ_cp (MPa) ; f_cd = 0,85 f_ck/1,5 (EN 1992-2 § 3.1.6 (101)).

@@ -26,7 +26,7 @@
  * cibles } ; `cibles` situe les lignes « NON » des tableaux (web/beams_view.js) qui reçoivent l'indication « → à
  * modifier ». Une action peut porter `champs` ({ pt_x: valeur }) quand plusieurs données vont ensemble.
  */
-import { parsePoutres, computePoutres } from '../beams/run.js';
+import { parsePoutres, computePoutres, calculPoutreBA } from '../beams/run.js';
 import { beamDeck, beamCombinations } from '../beams/index.js';
 import { tBeamULS, prestressCheck, etriersEC2 } from '../beams/design.js';
 import { sectionVIPP } from '../beams/vipp_section.js';
@@ -85,17 +85,7 @@ export function evaluerPoutres(data, { local = false, cache = null, exact = fals
       if ((inp.type === 'BP' || inp.type === 'PRAD') && inp.geo === 'dims') {
         lazy('vipp', () => { const c = comb(); return chaineVIPP({ ...inp.vipp, b1: inp.b1, hd: inp.hd, gExtra: 0 }, S.L, b, { elsF61: c.ELS_F61, eluF61: c.ELU_F61 }); });
       } else if (inp.type === 'BA') {
-        lazy('BA', () => {
-          const c = comb(), MuF = Math.max(...c.ELU_F61), MuE = Math.max(...c.ELU_EC);
-          const BA = { BAEL: tBeamULS({ M: MuF, beff: inp.b1, hf: inp.hd, b0: inp.b0, d, fck: inp.fck, fyk: inp.fyk, code: 'BAEL' }), EC: tBeamULS({ M: MuE, beff: inp.b1, hf: inp.hd, b0: inp.b0, d, fck: inp.fck, fyk: inp.fyk, code: 'EC' }) };
-          const secs = S.deck.beam.sections, half = secs.filter(q => q.x <= S.L / 2 + 1e-9);
-          BA.travee = half.map((q, i) => {
-            const VEd = 1.35 * Math.abs(b.G.Vmax?.[i] ?? 0) + 1.35 * Math.max(Math.abs(b.gr1a?.Vmax?.[i] ?? 0), Math.abs(b.gr1b?.Vmax?.[i] ?? 0));
-            const As = tBeamULS({ M: Math.max(c.ELU_EC[i], c.ELU_F61[i]), beff: inp.b1, hf: inp.hd, b0: inp.b0, d, fck: inp.fck, fyk: inp.fyk, code: 'EC' });
-            return { x: q.x, MEd: Math.max(c.ELU_EC[i], c.ELU_F61[i]), As: As.As, VEd, V: etriersEC2({ VEd, bw: inp.b0, z: 0.9 * d, fck: inp.fck, fyk: inp.fyk }) };
-          });
-          return BA;
-        });
+        lazy('BA', () => calculPoutreBA({ b, c: comb(), S, inp, d }));
       } else {
         lazy('BP', () => {
           const c = comb(), base = { A: sec.A, I: sec.I, v, vp, P: inp.P, e0: inp.e0, Mmin: b.G.Mmin[mid], fck: inp.fck };
@@ -170,6 +160,8 @@ function familles(mode) {
   if (mode === 'BA') return [
     { cle: 'flexBA', test: b => b.BA.EC.As != null && (!b.BA.BAEL || b.BA.BAEL.As != null) && (b.BA.travee || []).every(t => t.As != null) },
     { cle: 'tranchBA', test: b => (b.BA.travee || []).every(t => t.V.ok) },
+    { cle: 'elsBA', test: b => !b.BA.ELS || (b.BA.ELS.BAEL.okC && b.BA.ELS.EC.okC) },
+    { cle: 'tauBA', test: b => !b.BA.cisaillementBAEL || b.BA.cisaillementBAEL.ok },
   ];
   if (mode === 'BP') return [
     { cle: 'tracBP', test: (b, r) => { const P = b.BP.BPEL, E = b.BP.EC; return (!P || (P.enCharge.inf >= P.sigTlim - 1e-6 && P.Pmin <= r.inp.P + 1e-6)) && E.enCharge.inf >= -1e-6; } },
@@ -291,7 +283,7 @@ function parametres(cle, ctx) {
     compP: ['fck', 'hp'], compH: ['fckh', 'hd'], elu: ['hp', 'fckh', 'fck'],
     tranchantA: ['b0a', 'fck', 'hp'], tranchantC: ['b0v', 'Lb', 'fck', 'hp'],
     seismeElu: prad ? ['nt', 'hp'] : ['nc', 'hp'],
-    flexBA: ['hp', ...(ctx.modeBA === 'âme' ? ['b0'] : ctx.modeBA === 'table' ? ['hd'] : []), 'fck'], tranchBA: ['b0', 'fck', 'hp'],
+    flexBA: ['hp', ...(ctx.modeBA === 'âme' ? ['b0'] : ctx.modeBA === 'table' ? ['hd'] : []), 'fck'], tranchBA: ['b0', 'fck', 'hp'], elsBA: ['hp', 'hd', 'fck'], tauBA: ['b0', 'fck', 'hp'],
     tracBP: ['P', 'e0down'], videBP: ['e0up', 'Pdown'], compBP: ['fck'],
     poinc: ['hd', 'fckh', 'trev'],
     railFleche: ['hp'], railGauche: ['hp'], railDH: ['hp'], railDV: ['about', 'hp'], railTransv: ['hd'],
@@ -312,7 +304,7 @@ async function dicho(vals, ok) {
 const LIB_FAM = {
   sigpm0: 'contrainte initiale de précontrainte', constrT: 'traction en construction', constrC: 'compression en construction', traction: 'décompression et tractions en service',
   compP: 'compression des poutres', compH: 'compression du hourdis', elu: 'ELU de flexion', tranchantA: 'effort tranchant dans le blochet', tranchantC: 'effort tranchant en section courante', seismeElu: 'ELU sous séisme vertical',
-  flexBA: 'flexion ELU des poutres BA', tranchBA: 'effort tranchant des poutres BA', tracBP: 'tractions (précontrainte insuffisante)', videBP: 'traction à vide (fibre supérieure)',
+  flexBA: 'flexion ELU des poutres BA', tranchBA: 'effort tranchant des poutres BA', elsBA: 'compression du béton à l\'ELS des poutres BA', tauBA: 'contrainte de cisaillement BAEL des poutres BA', tracBP: 'tractions (précontrainte insuffisante)', videBP: 'traction à vide (fibre supérieure)',
   compBP: 'compressions', poinc: 'poinçonnement du hourdis', railFleche: 'flèche et confort sous rail', railGauche: 'gauche du tablier',
   railDH: 'déplacement δH des extrémités', railDV: 'soulèvement δV des extrémités', railTransv: 'déformation et fréquence transversales',
 };
@@ -582,6 +574,18 @@ export async function recommandationsPoutres(out, data, { budget = 45000, onProg
       const w = tv.sort((a, b) => b.t.VEd / b.t.V.VRdmax - a.t.VEd / a.t.V.VRdmax)[0];
       items.push({ domaine: dom('effort tranchant'), lieu: listeP(tv.map(x => x.b.k)), verification: 'V_Ed ≤ V_Rd,max (cot θ = 1)', constat: `V_Ed = ${fx(w.t.VEd, 0)} > V_Rd,max = ${fx(w.t.V.VRdmax, 0)} kN à x = ${fx(w.t.x, 1)} m (b_w = ${fx(inp.b0)} m), poutre ${w.b.k + 1}${ouT(w.si)}`,
         regle: 'EN 1992-1-1 § 6.2.3 (3)', actions: await acts(famDe('tranchBA')), cibles: tv.map(x => ({ si: x.si, type: 'BAV', k: x.b.k, x: x.t.x })) });
+    }
+    const ce = [], ct = [];
+    out.spans.forEach((s, si) => s.beams.forEach(b => { if (!famDe('elsBA').test(b)) ce.push({ si, b }); if (!famDe('tauBA').test(b)) ct.push({ si, b }); }));
+    if (ce.length) {
+      const E = ce[0].b.BA.ELS, q = E.BAEL.okC ? E.EC : E.BAEL;
+      items.push({ domaine: dom('ELS'), lieu: listeP(ce.map(x => x.b.k)), verification: 'σ_bc ≤ 0,6 f_c28 (section en T fissurée)', constat: `σ_bc = ${fx(q.sigC)} > ${fx(q.lim.sigC)} MPa (poutre ${ce[0].b.k + 1}${ouT(ce[0].si)})`,
+        regle: 'BAEL 91 A.4.5,2 / EN 1992-1-1 § 7.2 (2)', actions: await acts(famDe('elsBA')), cibles: ce.map(x => ({ si: x.si, type: 'BAels', k: x.b.k })) });
+    }
+    if (ct.length) {
+      const V = ct[0].b.BA.cisaillementBAEL;
+      items.push({ domaine: dom('effort tranchant'), lieu: listeP(ct.map(x => x.b.k)), verification: 'τ_u ≤ τ̄_u (BAEL)', constat: `τ_u = ${fx(V.tau)} > ${fx(V.tauLim)} MPa à l'appui (b₀ = ${fx(inp.b0)} m), poutre ${ct[0].b.k + 1}${ouT(ct[0].si)}`,
+        regle: 'BAEL 91 A.5.1,21', actions: await acts(famDe('tauBA')), cibles: ct.map(x => ({ si: x.si, type: 'BAtau', k: x.b.k })) });
     }
   } else {
     for (const cle of ['tracBP', 'videBP', 'compBP']) {

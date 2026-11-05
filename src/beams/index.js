@@ -22,6 +22,7 @@
  */
 import { SlabDeck } from '../analysis.js';
 import { EC_ALPHA } from '../loads_ec.js';
+import { biaisPoutres } from './biais.js';
 
 /**
  * Tablier « règle des bras de levier » : même modèle de charges que SlabDeck, mais K̄(y_k) = n w_k(e), w_k part de la charge
@@ -91,6 +92,8 @@ export function beamDeck(g) {
   const bySpan = new Map();
   for (const L of spansU) {
     const gp = guyonParams({ n, b1, L, Ip: sec.I, Kp: sec.K, hd: g.hd, Ie: g.Ie ?? null, Ke: g.Ke ?? null, le: g.le ?? 1 });
+    // biais (src/beams/biais.js) : effort tranchant et réaction des poutres de rive à l'angle obtus
+    const skew = biaisPoutres({ psi: g.biais ?? 100, L, ts: g.hd, S: b1, Kg: g.Kg || sec.I });
     const opts = { spans: [L], width, h: sec.H || g.hd, area: n * sec.A + (g.extraArea || 0), roadway: g.roadway, footways: g.footways || [],
       lines: g.lines || [], bands: g.bands || [], ys, Leq: [gp.Lguyon], alphaTorsion: gp.alpha, nu: 0, laneStep: g.laneStep || 0.25, nSec: 20, nGrid: 100, gammaC: g.gammaC || 25 };
     if (g.rail) {
@@ -100,14 +103,14 @@ export function beamDeck(g) {
       const deck = new SlabDeck(opts), { perm, rail } = chargesR(deck);
       const lev = n > 1 && g.levier !== false ? chargesR(new TablierLevier(opts)) : null;
       const cas = P => ({ G: P.perm, ...Object.fromEntries(P.rail.groupes.map(G => [G.id, G.res])) });
-      bySpan.set(L, { L, gp, deck, perm, f61: null, ec: null, rail, beams: perBeamCases(deck, cas({ perm, rail }), lev ? cas(lev) : {}, b1, n) });
+      bySpan.set(L, { L, gp, skew, deck, perm, f61: null, ec: null, rail, beams: perBeamCases(deck, cas({ perm, rail }), lev ? cas(lev) : {}, b1, n, skew) });
       continue;
     }
     const charges = dk => ({ perm: dk.permanent(), f61: dk.fascicule61({ nRetenue: g.nRetenue ?? 2, classe: g.classe ?? null, mil: g.mil || 'Mc120' }), ec: dk.eurocode({ alpha: EC_ALPHA[g.alphaEC || 'recommended'] }) });
     const deck = new SlabDeck(opts), { perm, f61, ec } = charges(deck);
     // règle des bras de levier (effort tranchant et réactions par poutre près des appuis) : inutile si n = 1
     const lev = n > 1 && g.levier !== false ? charges(new TablierLevier(opts)) : null;
-    bySpan.set(L, { L, gp, deck, perm, f61, ec, beams: perBeam(deck, perm, f61, ec, b1, n, lev) });
+    bySpan.set(L, { L, gp, skew, deck, perm, f61, ec, beams: perBeam(deck, perm, f61, ec, b1, n, lev, skew) });
   }
   return { sec, n, b1, width, ys, spans: g.spans, spansU, bySpan };
 }
@@ -116,13 +119,13 @@ export function beamDeck(g) {
  * Efforts par poutre : M_k = m_x(y_k) b₁ (enveloppes), V_k et R_k = V et R du tablier × coefficient de la poutre
  * η_k = M_k/(M/n) à mi-travée (pratique PAP : mêmes coefficients de répartition pour M et V).
  */
-function perBeam(deck, perm, f61, ec, b1, n, lev = null) {
+function perBeam(deck, perm, f61, ec, b1, n, lev = null, skew = null) {
   const casesDe = (P, F, E) => ({ G: P, A: F.A, Bc: F.Bc, Bt: F.Bt, Mc120: F.Mc120, D240: F.D240, trott: F.trottoir, TS: E.TS, UDL: E.UDL, footway: E.footway, LM1: E.LM1, gr1a: E.gr1a, gr1b: E.gr1b });
-  return perBeamCases(deck, casesDe(perm, f61, ec), lev ? casesDe(lev.perm, lev.f61, lev.ec) : {}, b1, n);
+  return perBeamCases(deck, casesDe(perm, f61, ec), lev ? casesDe(lev.perm, lev.f61, lev.ec) : {}, b1, n, skew);
 }
 
 /** Efforts par poutre pour un ensemble de cas de charge { id: résultat du tablier } (routiers ou ferroviaires). */
-function perBeamCases(deck, cases, casesL, b1, n) {
+function perBeamCases(deck, cases, casesL, b1, n, skew = null) {
   const secs = deck.beam.sections, mid = deck.beam.sectionIndex(0, 0.5);
   const etaDe = (r, k) => { if (!r) return null; const mx = r.mxMax || r.mx, Mt = (r.Mmax || r.M)[mid]; return Mt ? mx[mid][k] * b1 / (Mt / n) : 1; };
   return Array.from({ length: n }, (_, k) => {
@@ -135,10 +138,13 @@ function perBeamCases(deck, cases, casesL, b1, n) {
       const eta = Mt ? Mmax[mid] / (Mt / n) : 1;
       // V et R : poutres de rive, à l'appui, max(Guyon-Massonnet ; bras de levier), raccordé à Guyon-Massonnet sur 2b (≤ L/2)
       const rive = k === 0 || k === n - 1, etaL = etaDe(casesL[id], k), etaV = rive ? Math.max(eta, etaL ?? -Infinity) : eta, L = deck.spans[0], Ltr = Math.min(2 * deck.b, L / 2);
-      const etaX = x => eta + (etaV - eta) * Math.max(0, 1 - Math.min(x, L - x) / Ltr);
+      // biais : F_V à l'appui des poutres de rive pour les charges de trafic (pas G), linéaire jusqu'à la mi-travée
+      const Fv = rive && id !== 'G' && skew && skew.actif && n > 1 ? skew.Fv : 1;
+      const fB = x => 1 + (Fv - 1) * Math.max(0, 1 - 2 * Math.min(x, L - x) / L);
+      const etaX = x => (eta + (etaV - eta) * Math.max(0, 1 - Math.min(x, L - x) / Ltr)) * fB(x);
       const Vmax = r.Vmax ? r.Vmax.map((v, s) => v * etaX(secs[s].x) / n) : (r.Vm ? r.Vm.map((v, s) => v * etaX(secs[s].x) / n) : null);
       const Vmin = r.Vmin ? r.Vmin.map((v, s) => v * etaX(secs[s].x) / n) : null;
-      out[id] = { Mmax, Mmin, eta, etaL, etaV, Vmax, Vmin, Rmax: (r.Rmax || r.R).map(v => v * etaV / n) };
+      out[id] = { Mmax, Mmin, eta, etaL, etaV, Fv, Vmax, Vmin, Rmax: (r.Rmax || r.R).map(v => v * etaV * Fv / n), Rmin: r.Rmin ? r.Rmin.map(v => v * etaV * Fv / n) : null };
     }
     return out;
   });

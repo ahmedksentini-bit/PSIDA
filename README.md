@@ -469,6 +469,16 @@ BAEL 91 ou EN 1992-1-1, blocs monolithiques), recoupé sur 2 104 grandeurs de BV
 ferroviaire (EN 1991-2 : LM71, SW/0, SW/2, Φ2/Φ3 réduit pour la couverture, surcharge sur remblai) ; voie franchie route
 ou voie ferrée (gabarit, choc EN 1991-1-7 en situation accidentelle) ; portique ouvert sur appuis encastrés ou articulés
 avec enveloppe des réactions ; note HTML et Word ; avant-propos et chapitre 27 du manuel.
+v0.99.17 : ponts à poutres — biais (src/beams/biais.js) : effort tranchant et réactions des poutres de rive à l'angle obtus
+majorés par F_V de l'AASHTO LRFD § 4.6.2.2.3c, réaction de l'appareil le plus chargé par ligne (reportable dans les réactions
+imposées de l'onglet Appuis) ; diagrammes M_Ed / M_Rd et V_Ed / V_pd / V_Rd,max le long de la poutre ; stabilité latérale en
+phase de pose (src/beams/deversement.js, méthode de Mast) : levage et poutre posée sur ses appareils (raideur NF EN 1337-3),
+contraintes de manutention, critère (5.40b) de l'EN 1992-1-1 § 5.9 (test/poutres_v09917.test.js).
+Poutres BA : ELS (section en T fissurée, BAEL A.4.5 fissuration peu / préjudiciable / très préjudiciable, EN 1992-1-1
+§ 7.2), section retenue = max(ELU ; ELS), effort tranchant BAEL A.5.1 à l'appui (τ_u, A_t/s_t) ; détail des paramètres de
+Guyon-Massonnet (ρ, γ), de G, des voies et de A(l) dans la note. Recoupement sur une note publiée de pont BA de 15 m
+(test/poutres_ba_note.test.js) : G, A(l), δ, Mc120 et σ̄_s retrouvés ; écarts de la note relevés (α de Guyon > 1, b_c
+omis sur Bc, σ_s = 240 MPa au lieu de 215,6 MPa, effort tranchant réparti également entre les poutres).
 v0.99.15 : voie portée routière Eurocode des cadres (src/cadre/routeEC.js) — LM1 (TS + UDL, α_Q, α_q de l'annexe
 nationale, voies conventionnelles), LM2 (β_Q) et Mc120 optionnel, diffusion à 30° dans le remblai et la dalle, bande de
 1 m la plus chargée, positions balayées, γ_Q = 1,35 à l'ELU (test/cadre_ec.test.js, calé sur une note SCIA d'un PICF).
