@@ -139,6 +139,15 @@ PSIDP-EL 84-1, règles BPEL 91 révisé 99 (classe II) ; charges du Fascicule 61
   optimisés) et nombre d'unités minimal trouvés automatiquement (départ au prédimensionnement de l'annexe 1).
 - Calage : `test/psidp.test.js` reproduit la note modèle (13,50-17,61-17,61-13,50 m, 18 × 12T13) à 0,3 % près sur les
   tensions, au dixième de t·m sur les moments hyperstatiques, et M_lim ELU sur appui à 0,1 %.
+- Règles Eurocodes (« Règles des pertes : EN 1992 ») : frottement e^(−μ(θ + kx)), pertes différées EN 1992-1-1 (5.46) avec
+  relaxation § 3.3.2 (classes 1 à 3, 500 000 h), P_k,sup / P_k,inf = r_sup / r_inf P_m (§ 5.10.9), résistances au jeune âge
+  (§ 3.1.2), contraintes § 5.10.2.2 (5) et 7.2, décompression du tableau 7.1N (fréquente ou quasi permanente), armatures
+  minimales § 7.3.2, ELU (γ_P = 1), effort tranchant § 6.2 avec σ_cp ; charges LM1 / LM2 (ψ de l'EN 1990 A2), gradient
+  thermique et tassements probables par appui + aléatoires. Reprise des données d'une note existante : tracé par points
+  (spline), contrainte initiale imposée (« contrainte finale » d'un logiciel), section imposée (B, I, v).
+- Calage EN 1992 : `test/psidp_ec2.test.js` reprend la note SCIA du tablier EC6 (autoroute Tunis–Jelma, 2 travées
+  23,13 + 25,76 m, 27 × 12T15S) : pertes différées (192 / 180 / 172 MPa), moments hyperstatiques (8 170 / 7 110 kN·m),
+  traction caractéristique et décompression comparés à un recalcul manuel indépendant.
 
 ## Appareils d'appui et tête d'appui (`src/supports/bearings1337.js`, `src/supports/pierhead.js`)
 

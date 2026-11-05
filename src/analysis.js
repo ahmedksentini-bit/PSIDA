@@ -238,7 +238,12 @@ export class SlabDeck {
    * Tassements aléatoires (pratique CHAMOA / guide Cerema) : δ sur un appui et −δ sur l'appui adjacent,
    * module différé E/(1+φ) (φ = 2 → E/3), enveloppe sur toutes les paires d'appuis adjacents et les deux signes.
    */
-  settlements({ delta = 0.01, E = 34000, I = null, phi = 2 } = {}) {
+  /**
+   * Tassements d'appui : aléatoires (±δ entre appuis voisins, enveloppe) et, s'ils sont donnés, probables appui par appui
+   * (prob [m], vers le bas, un par appui) — les enveloppes valent alors probable ± aléatoire. Module différé E/(1 + φ)
+   * (φ = 0 : module instantané).
+   */
+  settlements({ delta = 0.01, E = 34000, I = null, phi = 2, prob = null } = {}) {
     const EI = this.spans.map(() => this.EItotal({ E, I }) / (1 + phi));
     const nS = this.beam.sections.length, nSup = this.spans.length + 1;
     const Mmax = new Array(nS).fill(0), Mmin = new Array(nS).fill(0), Rmax = new Array(nSup).fill(0), Rmin = new Array(nSup).fill(0);
@@ -251,8 +256,15 @@ export class SlabDeck {
       for (let s = 0; s < nS; s++) { Mmax[s] = Math.max(Mmax[s], Math.abs(r.M[s])); Mmin[s] = -Mmax[s]; Vmax[s] = Math.max(Vmax[s], Math.abs(r.Vm[s])); Vmin[s] = -Vmax[s]; }
       r.R.forEach((val, k) => { Rmax[k] = Math.max(Rmax[k], Math.abs(val)); Rmin[k] = -Rmax[k]; });
     }
+    let pr = null;
+    if (Array.isArray(prob) && prob.length === nSup && prob.some(v => Math.abs(v) > 0)) {
+      const r = this.beam.settlement(prob, EI);
+      pr = { v: prob, M: r.M, Vm: r.Vm, R: r.R };
+      for (let s = 0; s < nS; s++) { Mmax[s] += r.M[s]; Mmin[s] += r.M[s]; Vmax[s] += r.Vm[s]; Vmin[s] += r.Vm[s]; }
+      r.R.forEach((val, k) => { Rmax[k] += val; Rmin[k] += val; });
+    }
     const mxMax = Mmax.map(m => this.ys.map(() => m / (2 * this.b))), mxMin = Mmin.map(m => this.ys.map(() => m / (2 * this.b)));
-    return { cases, Mmax, Mmin, mxMax, mxMin, Rmax, Rmin, Vmax, Vmin, EI: EI[0] };
+    return { cases, Mmax, Mmin, mxMax, mxMin, Rmax, Rmin, Vmax, Vmin, EI: EI[0], prob: pr };
   }
 
   // ---------------------------------------------------------------------------

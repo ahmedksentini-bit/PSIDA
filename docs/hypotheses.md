@@ -427,6 +427,26 @@ Le modèle reprend les principes du programme SETRA/CETE de l'Ouest PSH (« Calc
   d'armatures si τ_réd,u ≤ 0,09 f_cj/γ_b ; sinon (A_t/(b s_t)) f_e/γ_s ≥ (τ_réd,u − f_tj/2) tg β_u, minimum 0,1 MPa
   (0,4 MPa sur 0,5 h le long des bords libres) ; τ_réd,u ≤ (0,85 f_cj/3γ_b) sin 2β_u × (10h/3 si h < 0,30 m) ; contrôle ELS
   de la note (7.2,2) donné à titre indicatif ; appuis d'extrémité inclus.
+## 1 quindecies bis. PSI-DP selon l'EN 1992 et reprise d’une note existante (v0.99.14, `test/psidp_ec2.test.js`)
+
+- Règles « EC2 » (`bp_reg = EC2`) : mêmes pertes instantanées que le BPEL 91 (frottement f = μ, φ = μ k ; recul ;
+  raccourcissement E_p Σ j Δσ_c/E_cm(t), j = ½ / 1 — EN 1992-1-1 (5.44), (5.45)) ; pertes différées (5.46) sans itération,
+  σ_c,QP sous la précontrainte initiale et les charges permanentes moyennes (tassement probable compris), section brute ;
+  relaxation (3.28)-(3.30) à 500 000 h, nulle pour μ < 0,5 ; phases mise en tension / mise en service (fraction r_j) /
+  temps infini, chacune avec P_k,sup et P_k,inf.
+- Contraintes : mise en tension σ ≤ 0,6 f_ck(t) et ≥ −f_ctm(t) (P_k,sup et P_k,inf, poids propre) ; caractéristique
+  σ ≤ 0,6 f_ck, traction ≥ −f_ctm (au-delà : section fissurée, w_k et armatures minimales à justifier) ; quasi permanente
+  σ ≤ 0,45 f_ck ; décompression = contrainte ≥ 0 à 25 mm de la gaine (Ø/2 + 25 mm autour du câble moyen) sous la
+  combinaison choisie. Combinaisons : G + max(gr1a + 0,6 T ; ψ0 gr1a + T ; gr1b), G + max(ψ1 gr1a + 0,5 T ; 0,6 T ;
+  0,75 gr1b), G + 0,5 T ; ELU 1,35 G + 1,20 S + max(1,35 gr1a + 0,9 T ; 1,35 ψ0 gr1a + 1,5 T ; 1,35 gr1b).
+- Tassements probables par appui (`tassProb`, mm, vers le bas) : réponse de la poutre continue au module E/(1 + φ),
+  ajoutée aux enveloppes de l'aléatoire (probable ± aléatoire) ; utilisée par toutes les combinaisons qui comptent les
+  tassements.
+- Tracé par points : spline cubique naturelle (z'' = 0 aux extrémités de la table) ; points au-delà des appuis d'extrémité
+  admis. Contrainte imposée : remplace frottement, recul et raccourcissement (contrainte « finale » d'un logiciel EF).
+- Écarts connus : le tranchant EC2 ne compte pas les câbles dans ρ_l (sécuritaire) ; zones d'about et flexion
+  transversale restent calculées par les méthodes BPEL / PSIDP-EL.
+
 ## 1 sexdecies. Appareils d'appui NF EN 1337-3, tête d'appui, liaison PSI-DP / appuis (v0.34)
 
 Contrôle sur la note « appuis et fondations » de d'un pont-dalle précontraint réel (note de bureau d'études, 6 travées) : `test/bearings1337.test.js`.
