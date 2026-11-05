@@ -469,6 +469,11 @@ BAEL 91 ou EN 1992-1-1, blocs monolithiques), recoupé sur 2 104 grandeurs de BV
 ferroviaire (EN 1991-2 : LM71, SW/0, SW/2, Φ2/Φ3 réduit pour la couverture, surcharge sur remblai) ; voie franchie route
 ou voie ferrée (gabarit, choc EN 1991-1-7 en situation accidentelle) ; portique ouvert sur appuis encastrés ou articulés
 avec enveloppe des réactions ; note HTML et Word ; avant-propos et chapitre 27 du manuel.
+v0.99.24 : durabilité (EN 1992-1-1 § 4.4.1, src/durabilite.js) : classes d'exposition, durée d'utilisation et référentiel
+(EN 1992-1-1 annexe E ou NF EN 206/CN) pour le pont-dalle, les ponts à poutres et les cadres ; classe de béton minimale,
+classe structurale (tableau 4.3N), c_min,dur (tableau 4.4N) et c_nom ; vérification de l'enrobage (dalle : à l'axe − Ø/2 ;
+cadres : au nu), tableaux OK / NON avec recommandation ; plans des poutres BA à c_nom au nu des cadres (3 cm fixes
+auparavant) et contrôle du centre de gravité des lits dessinés contre l'enrobage à l'axe du calcul (hauteur utile).
 v0.99.23 : poutres BA — nomenclature et façonnage des armatures (plan BA-FAC-01, src/plans/nomenclature_ba.js) : bordereau
 ISO 4066 d'une travée (codes 00, 11, 21, 51, croquis, cotes hors tout, longueurs de coupe, mandrins EN 1992-1-1 § 8.3), pièces
 de 12 m au plus avec recouvrements l₀ (§ 8.7.3), récapitulatif par diamètre : lits inférieurs (filants relevés de 10 φ,

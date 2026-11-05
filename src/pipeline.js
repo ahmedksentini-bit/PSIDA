@@ -23,6 +23,7 @@ import { cantileverMoments, cantileverDesign } from './cantilever.js';
 import { flm3Envelope, fatigueCheck } from './fatigue.js';
 import { rebarPlan } from './rebar.js';
 import { computeSupports } from './supports/index.js';
+import { durabilite } from './durabilite.js';
 
 export const nums = s => String(s ?? '').split(/[,;\s]+/).filter(Boolean).map(Number);
 const pairs = s => String(s ?? '').split(';').map(t => t.trim()).filter(Boolean).map(t => nums(t));
@@ -122,7 +123,8 @@ function parseData00(d) {
     ...(() => { const u = nums(d.dT); if (u.length >= 2) return { dT: u.slice(0, 2), dT61: u.slice(0, 2), dTauto: null };
       const g = gradientEN1991_1_5(Number.isFinite(+d.tRev) && String(d.tRev ?? '').trim() !== '' ? +d.tRev : 0.08); return { dT: [g.heat, g.cool], dT61: [12, -6], dTauto: g }; })(), E: +EIv[0] || 34000, I: EIv[1] ? +EIv[1] : null, delta: +d.delta, phiFluage: +d.phiFluage,
     tassProb: String(d.tassProb || '').trim() ? nums(d.tassProb).map(v => v / 1000) : null,
-    mat: { fck: +d.fck, fyk: +d.fyk, fc28: +d.fck, fe: +d.fyk, c: +d.cover, phi: +d.phi / 1000, phiT: +(d.phiT || 16) / 1000, wkMax: +d.wk, fissuration: d.fiss, tRev: +d.tRev },
+    mat: { fck: +d.fck, fyk: +d.fyk, fc28: +d.fck, fe: +d.fyk, c: +d.cover, phi: +d.phi / 1000, phiT: +(d.phiT || 16) / 1000, wkMax: +d.wk, fissuration: d.fiss, tRev: +d.tRev,
+      expoDur: d.expoDur || 'XC4', vieDur: +(d.vieDur || 100), refDur: d.refDur === 'CN' ? 'CN' : 'EC2' },
     extra: parseExtra(d),
     supports: parseSupports(d),
     bp: parseBP(d),
@@ -421,7 +423,10 @@ export function compute(p) {
   }
   let supports = null, supportsError = null;
   try { supports = computeSupports({ p, deck, perm, f61, ec, bearings, psidp, thermal }, p.supports); } catch (e) { supportsError = e.message; }
-  return { psidp, psidpError, supports, supportsError, rebar, rebarError, p, deck, keys, perm, ec, f61, cases, thermal, thermal61, settle, design, trans, transG, transF, transELU, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
+  // durabilité de la dalle (EN 1992-1-1 § 4.4.1) : classe de béton et enrobage nominal des aciers longitudinaux extérieurs
+  const mt = p.mat, durab = (() => { try { const D = durabilite({ expo: mt.expoDur, fck: mt.fck, phi: mt.phi * 1000, vie: mt.vieDur, dalle: true, ref: mt.refDur });
+    const enrobage = (mt.c - mt.phi / 2) * 1000; return { ...D, enrobage, okEnrobage: enrobage >= D.cnom - 1e-6, cAxeMin: (D.cnom + mt.phi * 1000 / 2) / 1000 }; } catch (e) { return null; } })();
+  return { psidp, psidpError, supports, supportsError, rebar, rebarError, p, deck, keys, perm, ec, f61, cases, thermal, thermal61, settle, durab, design, trans, transG, transF, transELU, transDesign, concept, bearings, chevetres, extra, dt: (performance.now() - t0) / 1000 };
 }
 
 /**

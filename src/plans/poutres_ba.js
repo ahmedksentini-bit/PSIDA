@@ -120,7 +120,11 @@ export function donneesBA(r, { code = 'BAEL' } = {}) {
   }) : tr0;
   const profil = x => { if (!tr.length) return 4 * x * (sp.L - x) / (sp.L * sp.L); let k = tr.findIndex(t => t.x >= x - 1e-9); if (k <= 0) return tr[0].MEd * (k === 0 ? 1 : 0); const t0 = tr[k - 1], t1 = tr[k]; return t0.MEd + (t1.MEd - t0.MEd) * (x - t0.x) / (t1.x - t0.x); };
   const profilS = x => Math.max(profil(x), profil(sp.L - x));   // travée continue : enveloppe non symétrique, symétrisée
-  const bars = barresInferieures({ As, parts, cover: 0.03, phiT: 10, L: sp.L, a, profil: profilS, h: H, fck: inp.fck, fyk: inp.fyk, code });
+  // enrobage au nu des cadres : c_nom de durabilité (EN 1992-1-1 § 4.4.1), 3 cm au moins
+  const cP = Math.max(0.03, r.durab ? r.durab.cnom / 1000 : 0.03);
+  const bars = barresInferieures({ As, parts, cover: cP, phiT: 10, L: sp.L, a, profil: profilS, h: H, fck: inp.fck, fyk: inp.fyk, code });
+  // centre de gravité des lits dessinés, à comparer à l'enrobage à l'axe du calcul (d = H − enrobage)
+  const nTot = bars.lits.reduce((t, l) => t + l.n, 0), yG = bars.lits.reduce((t, l) => t + l.n * l.y, 0) / Math.max(nTot, 1);
   // travées continues : armatures supérieures sur les appuis de la travée détaillée (PSI-BA V.1.4) ; longueur de part et
   // d'autre = distance au point de moment nul de l'enveloppe négative + 0,8 h + l_s
   let superieures = null;
@@ -154,7 +158,7 @@ export function donneesBA(r, { code = 'BAEL' } = {}) {
     const e = { brins: e0.brins, phi: e0.phi, s: Math.round(espace(AtSt(t)) * 100) / 100 }, x1 = k < tr.length - 1 ? (t.x + tr[k + 1].x) / 2 : sp.L / 2, last = zones[zones.length - 1];
     if (last && last.phi === e.phi && last.s === e.s && last.brins === e.brins) last.x1 = x1; else zones.push({ x0: last ? last.x1 : 0, x1, ...e, AtSt: AtSt(t) });
   });
-  return { r, sp, b, inp, sec, parts, hp, H, d, As, a, bars, zones, code, superieures, hourdis: r.hourdis, entretoise: r.entretoise, entInt: entretoisesInt(r, sp, parts, H, code) };
+  return { r, sp, b, inp, sec, parts, hp, H, d, As, a, bars, zones, code, superieures, hourdis: r.hourdis, entretoise: r.entretoise, entInt: entretoisesInt(r, sp, parts, H, code), c: cP, yG, okYG: yG <= inp.cover + 0.005, durab: r.durab };
 }
 
 /**
@@ -269,7 +273,7 @@ function vueElevation(D, { barres = false } = {}) {
 
 /** Longueurs des barres de l'entretoise intermédiaire (ancrages par courbure dans les poutres de rive, retours de 10 φ). */
 export function barresEntretoise(D) {
-  const EI = D.entInt, inp = D.inp, n = inp.n, Lt = (n - 1) * inp.b1, c = 0.03, H = D.H, retInf = Math.max(0.30, H / 3), retSup = 0.20;
+  const EI = D.entInt, inp = D.inp, n = inp.n, Lt = (n - 1) * inp.b1, c = D.c ?? 0.03, H = D.H, retInf = Math.max(0.30, H / 3), retSup = 0.20;
   const Linf = Lt + EI.bw - 2 * c - 0.04 + 2 * retInf, Lsup = Lt + EI.bw - 2 * c + 2 * retSup;
   const he = D.hp - EI.zInf, per = 2 * (EI.b - 2 * c) + 2 * (he + inp.hd - 2 * c) + 0.2, nEt = Math.ceil((n - 1) * (inp.b1 - EI.bw) / EI.et.s) + (n - 1);
   const kg = (k, phi, L) => k * L * kgm(phi);
@@ -284,7 +288,7 @@ export function barresEntretoise(D) {
 
 /** Coupe B-B : entretoise intermédiaire vue dans son plan (poutres coupées), armatures. */
 export function vueEntretoise(D) {
-  const EI = D.entInt, { inp, parts, hp, H } = D, n = inp.n, b1 = inp.b1, W = n * b1, ys = Array.from({ length: n }, (_, k) => -W / 2 + b1 * (k + 0.5)), c = 0.03;
+  const EI = D.entInt, { inp, parts, hp, H } = D, n = inp.n, b1 = inp.b1, W = n * b1, ys = Array.from({ length: n }, (_, k) => -W / 2 + b1 * (k + 0.5)), c = D.c ?? 0.03;
   const V = new Vue('COUPE B-B : FERRAILLAGE D\'UNE ENTRETOISE INTERMÉDIAIRE', { echelle: 50 });
   const yL = ys[0] - b1 / 2, yR = ys[n - 1] + b1 / 2;
   V.poly('COFFRAGE', [[yL, hp], [yR, hp], [yR, H], [yL, H]], true);
@@ -343,7 +347,7 @@ export function nappeBA(As) {
 }
 
 export function planFerraillageBA(D, cartouche = {}, { nom = 'TABLIER À POUTRES BA' } = {}) {
-  const { inp, sp, parts, hp, H, a, bars, zones, code } = D, L = sp.L, Lp = L + 2 * a, c = 0.03, bt = parts[0].b, b0 = parts.length > 1 ? Math.min(...parts.map(q => q.b)) : bt;
+  const { inp, sp, parts, hp, H, a, bars, zones, code } = D, L = sp.L, Lp = L + 2 * a, c = D.c ?? 0.03, bt = parts[0].b, b0 = parts.length > 1 ? Math.min(...parts.map(q => q.b)) : bt;
   const { ni, ns, rep } = nappesHourdis(D), AT = ameTalon(D);
   const E = D.entretoise, z0 = zones[0] || { phi: 10, s: 0.2, brins: 2 };
   const cp = vuePoutre(D, { titre: 'COUPE A-A : FERRAILLAGE DE LA POUTRE (MI-TRAVÉE)', armatures: V => {
@@ -390,7 +394,7 @@ export function planFerraillageBA(D, cartouche = {}, { nom = 'TABLIER À POUTRES
     `2. Épure d'arrêt (dossier Sétra PSI-BA 77, V.1.3 et V.3) : courbe des sections nécessaires décalée de 0,8 h = ${fr(bars.decal)} m vers l'appui, barres prolongées de l_s = ${fr(bars.ls)} m (${code === 'EC' ? 'EN 1992-1-1 § 8.4.4' : 'BAEL A.6.1,23, τ_su = 0,6 ψ_s² f_tj'}) ; lit inférieur filant, relevé et ancré au-delà de l'appui.`,
     `3. Armatures d'âme : ${code === 'EC' ? 'EN 1992-1-1 § 6.2.3' : 'BAEL 91 A.5.1 (A_t/(b₀ s_t) ≥ γ_s(τ_u − 0,3 f_t28)/(0,9 f_e), ≥ 0,4 MPa/f_e)'} ; espacement ≤ ${fr(code === 'EC' ? Math.min(0.75 * D.d, 0.4) : Math.min(0.9 * D.d, 0.4))} m ; deux cadres rapprochés au droit des appareils d'appui.`,
     `4. Hourdis : nappes transversales du calcul de flexion locale (onglet Tablier à poutres), répartition longitudinale HA${rep.phi} / ${fr(rep.s * 100, 1)} cm (≥ A_s/4) ; jonction hourdis-poutre (PSI-BA V.1.6) : les cadres des poutres montent dans le hourdis.`,
-    `5. Enrobage ${fr(c * 100, 0)} cm ; acier HA f_e = ${inp.fyk} MPa ; béton C${inp.fck}. Façonnage (codes de forme, mandrins, crochets, recouvrements) : bordereau BA-FAC-01.`,
+    `5. Enrobage au nu des cadres ${fr(c * 100, 1)} cm${D.durab ? ` = c_nom (EN 1992-1-1 § 4.4.1 : ${D.durab.expos.join(', ')}, ${D.durab.vie} ans, S${D.durab.S}, c_min,dur = ${D.durab.cminDur} mm + Δc_dev = ${D.durab.dcDev} mm)` : ''} ; acier HA f_e = ${inp.fyk} MPa ; béton C${inp.fck}${D.durab && !D.durab.okBeton ? ` (classe minimale ${D.durab.classeMin} non atteinte)` : ''}. Centre de gravité des lits inférieurs à ${fr(D.yG * 100, 1)} cm du fond ${D.okYG ? '≤' : '>'} enrobage à l'axe du calcul ${fr(inp.cover * 100, 1)} cm${D.okYG ? '' : ' : hauteur utile du calcul surestimée, enrobage à reprendre'}. Façonnage (codes de forme, mandrins, crochets, recouvrements) : bordereau BA-FAC-01.`,
     ...(EI ? [`${D.superieures && D.superieures.length ? 7 : 6}. Entretoises intermédiaires (coupe B-B ; PSI-BA V.1.7) : méthode de Courbon, entretoise la plus sollicitée (travée ${EI.E.travee + 1}) ; A_inf = ${fr(EI.Q.inf.As * 1e4, 1)} cm² (≥ ancrage V_u/f_su = ${fr(EI.Q.ancrage * 1e4, 1)} cm²), ancrée par courbure au-delà du nu des poutres de rive, ligaturée (poussée au vide) ; aciers supérieurs continus d'une poutre de rive à l'autre ; suspentes : la réaction de l'entretoise (V_u = ${fr(EI.Q.Vu, 0)} kN) est remontée dans la poutre par ${EI.nSusp} cadres HA12 répartis de part et d'autre de l'entretoise.`] : []),
     ...(D.superieures && D.superieures.length ? [`6. Travées continues : armatures supérieures sur appuis (PSI-BA V.1.4) en deux groupes, arrêtés où la section nécessaire A_sup M(x)/M(appui) ne dépasse plus la section restante plus celle des armatures longitudinales du hourdis (${fr(D.superieures[0].Ah * 1e4, 1)} cm² sur b₁), prolongés de 0,8 h + l_s, bornés aux travées adjacentes ; recouvrements des armatures inférieures sur appui.`] : [])]);
   const hb = (tb.lignes.length + 2) * 6, hz = (tz.lignes.length + 2) * 6, hq = (tq.lignes.length + 2) * 6, he2 = tE ? (tE.lignes.length + 2) * 6 + 6 : 0, hi = tI ? (tI.lignes.length + 2) * 6 + 6 : 0, hn = N.length * 2.1 * 1.6, wcol = 128;
@@ -410,3 +414,18 @@ export function planFerraillageBA(D, cartouche = {}, { nom = 'TABLIER À POUTRES
   F.masse = tot; F.masseEntretoiseInt = BE ? BE.masse : 0;
   return finir(F);
 }
+
+/**
+ * Durabilité (EN 1992-1-1 § 4.4.1) : classe de béton minimale, enrobage nominal des cadres et, pour les poutres BA, centre de
+ * gravité des lits inférieurs des plans comparé à l'enrobage à l'axe du calcul (hauteur utile).
+ */
+export function durabiliteLignes(r) {
+  const Dd = r.durab; if (!Dd) return null;
+  const rows = [{ k: 'beton', cells: ['Classe de résistance du béton', `C${Dd.fck}`, `${Dd.classeMin} au moins (${Dd.critique}, ${Dd.ref === 'CN' ? 'NF EN 206/CN' : 'EN 1992-1-1 tableau E.1N'})`], ok: Dd.okBeton }];
+  let P = null;
+  if (r.inp.type === 'BA' && r.spans && r.spans.some(s => s.beams && s.beams.some(b => b.BA))) { try { P = donneesBA(r); } catch (e) { P = null; } }
+  rows.push({ k: 'cnom', cells: ['Enrobage nominal (cadres, Ø12)', P ? `${(P.c * 1000).toFixed(0)} mm (plans)` : 'à respecter sur les plans', `c_nom = c_min,dur ${Dd.cminDur} + Δc_dev ${Dd.dcDev} = ${Dd.cnom} mm (S${Dd.S} : ${Dd.detailsS})`], ok: true });
+  if (P) rows.push({ k: 'yG', cells: ['Centre de gravité des lits inférieurs (plans)', `${(P.yG * 100).toFixed(1).replace('.', ',')} cm du fond`, `≤ enrobage à l'axe du calcul ${(r.inp.cover * 100).toFixed(1).replace('.', ',')} cm (d = H − enrobage)`], ok: P.okYG, yG: P.yG });
+  return { Dd, rows, P };
+}
+

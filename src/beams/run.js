@@ -14,6 +14,7 @@ import { chaineVIPP, DEFAUTS_VIPP } from './vipp.js';
 import { hourdisLocal } from './hourdis.js';
 import { entretoiseVerinage } from './entretoise.js';
 import { entretoiseIntermediaire } from './entretoise_int.js';
+import { durabilite } from '../durabilite.js';
 import { spectreVerticalDuFormulaire } from '../seisme_vertical.js';
 import { deformationsRail, ecmDynamique } from '../rail_deformations.js';
 
@@ -67,6 +68,7 @@ export function parsePoutres(d) {
     P: v('pt_P', 0), e0: v('pt_e0', -1.46), fpr: v('pt_sp', 1100),
     biais: Math.min(100, Math.max(1, v('pt_biais', 100))),
     fiss: d.pt_fiss || 'prej', regBA: d.pt_regBA === 'EC' ? 'EC' : 'BAEL',
+    expoDur: d.pt_expoDur || 'XC4', vieDur: v('pt_vie', 100), refDur: d.pt_refDur === 'CN' ? 'CN' : 'EC2',
     // travées continues coulées sur cintre (poutres BA, dossier Sétra PSI-BA 77) ; entretoises intermédiaires : méthode de
     // Courbon ; goussets d'appui (âme épaissie au droit des appuis intermédiaires) ; épaisseur des entretoises sur pile
     continu: d.pt_continu === 'oui' && (d.pt_type || 'BP') === 'BA', // entretoises intermédiaires : un nombre pour toutes les travées ou une liste par travée (« 1, 2, 2, 1 »)
@@ -80,6 +82,13 @@ export function parsePoutres(d) {
 }
 
 export function computePoutres(inp) {
+  const r = computePoutres0(inp);
+  // durabilité (EN 1992-1-1 § 4.4.1) : classe de béton des poutres, enrobage nominal des cadres (plans BA : c_nom au nu des cadres)
+  try { r.durab = durabilite({ expo: inp.expoDur, fck: inp.fck, phi: 12, vie: inp.vieDur, ref: inp.refDur }); } catch (e) { r.durab = null; }
+  return r;
+}
+
+function computePoutres0(inp) {
   if (inp.geo === 'dims') {
     // section VIPP : poutre + hourdis de largeur b₁ pour la répartition transversale (coefficient d'équivalence 1)
     const S = sectionVIPP(inp.vipp.forme, { b1: inp.b1, hd: inp.hd });

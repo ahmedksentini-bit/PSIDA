@@ -2,6 +2,7 @@
 import { goussetSup, goussetInf } from '../src/cadre/details.js';
 import { portee, hauteurCalc, nCell, epVoile } from '../src/cadre/cadre.js';
 import { indicationsParCible, cleCible, LIB_CADRE } from '../src/reco/cadre.js';
+import { texteDurabilite } from '../src/durabilite.js';
 
 const F = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: n, maximumFractionDigits: n }));
 const F0 = v => F(v, 0), F1 = v => F(v, 1), F3 = v => F(v, 3);
@@ -83,6 +84,15 @@ export function cadreBlocks(out, { reco = null } = {}) {
       s ? { texte: `${s.texte} : ${Object.entries(s.champs).map(([k, v]) => `${(LIB_CADRE[k] || k).toLowerCase()} ${F(+v)} m`).join(' ; ')}`, champs: s.champs } : null);
   } else if (reco) para('Toutes les vérifications sont satisfaites.');
   if (split && split.blocs.length > 1) para(split.explication);
+  if (out.durab) {
+    const Dd = out.durab;
+    h2('Durabilité et enrobage (EN 1992-1-1 § 4.4.1)');
+    table(['Vérification', 'Projet', 'Exigence', 'Résultat'], [
+      ['Classe de résistance du béton', `C${Dd.fck}`, `${Dd.classeMin} au moins (${Dd.critique}, ${Dd.ref === 'CN' ? 'NF EN 206/CN' : 'EN 1992-1-1 tableau E.1N'})`, Dd.okBeton ? 'OK' : 'NON'],
+      ['Enrobage au nu des aciers', `${Math.round(Dd.enrobage)} mm`, `c_nom = c_min,dur ${Dd.cminDur} + Δc_dev ${Dd.dcDev} = ${Dd.cnom} mm (S${Dd.S} : ${Dd.detailsS})`, Dd.okEnrobage ? 'OK' : 'NON']],
+    { small: true, ...(ind ? { hints: [Dd.okBeton ? null : hint({ type: 'durab', k: 'beton' }), Dd.okEnrobage ? null : hint({ type: 'durab', k: 'enrobage' })] } : {}) });
+    para(texteDurabilite(Dd, { enrobage: Dd.enrobage }));
+  }
   out.blocs.forEach((r, ib) => {
     const g = r.geom, h = r.h, titre = out.blocs.length > 1 ? `Bloc ${ib + 1} (${split.blocs[ib].label})` : (g.nom || (ouvert ? 'Portique ouvert' : 'Cadre fermé'));
     h2(`${titre} — ${r.statut}`);

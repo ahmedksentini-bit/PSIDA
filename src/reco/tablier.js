@@ -30,6 +30,17 @@ export const reglesTablier = [
     }
     return out;
   },
+  // ---------------------------------------------------------------- durabilité (EN 1992-1-1 § 4.4.1, EN 206)
+  st => {
+    const D = st.durab, out = [];
+    if (!D || (D.okBeton && D.okEnrobage)) return out;
+    const act = [];
+    if (!D.okBeton) act.push({ texte: `Béton ${D.classeMin} au moins (classe d'exposition ${D.critique})`, champ: 'fck', unite: 'MPa', valeur: String(D.fckMin), valeurChamp: String(D.fckMin) });
+    if (!D.okEnrobage) { const v = (Math.ceil(D.cAxeMin * 200 - 1e-9) / 200).toFixed(3); act.push({ texte: `Porter l'enrobage à l'axe à ${fx(+v, 3)} m (c_nom = ${D.cnom} mm + Ø/2)`, champ: 'cover', unite: 'm', valeur: fx(+v, 3), valeurChamp: v }); }
+    out.push({ domaine: 'Tablier', lieu: 'Dalle', verification: 'Durabilité : classe de béton et enrobage nominal', regle: 'EN 1992-1-1 § 4.4.1, tableaux 4.3N, 4.4N et E.1N',
+      constat: [D.okBeton ? '' : `béton C${D.fck} < ${D.classeMin} (${D.expos.join(', ')})`, D.okEnrobage ? '' : `enrobage ${Math.round(D.enrobage)} mm < c_nom = ${D.cnom} mm (S${D.S})`].filter(Boolean).join(' ; '), actions: act });
+    return out;
+  },
   // ---------------------------------------------------------------- plan de ferraillage
   st => {
     const out = [];

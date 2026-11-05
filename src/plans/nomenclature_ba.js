@@ -28,7 +28,7 @@ const fr = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : 
  * @param {object} D données des plans (donneesBA)
  */
 export function nomenclatureBA(D) {
-  const { inp, sp, a, H, hp, bars, zones, code } = D, n = inp.n, L = sp.L, Lp = L + 2 * a, c = 0.03, W = n * inp.b1, fck = inp.fck;
+  const { inp, sp, a, H, hp, bars, zones, code } = D, n = inp.n, L = sp.L, Lp = L + 2 * a, c = D.c ?? 0.03, W = n * inp.b1, fck = inp.fck;
   const AT = ameTalon(D), z0 = zones[0] || { phi: 10, s: 0.2, brins: 2 };
   const out = [];
   let rep = 0;
