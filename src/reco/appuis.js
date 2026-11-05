@@ -84,6 +84,12 @@ export const reglesAppuis = [
     });
     return out;
   },
+  // ---------------------------------------------------------------- séisme non calculé alors que le pont y est soumis
+  st => {
+    const A = st.supports && st.supports.alerteSeisme;
+    return A ? [{ domaine: 'Appuis et fondations', lieu: 'Ouvrage', verification: 'Combinaison sismique', constat: `séisme non calculé : zone ${A.zone}, catégorie ${A.categorie} (pont soumis aux règles parasismiques)`, regle: 'arrêté du 26/10/2011 art. 3 et 4, EN 1998-2',
+      actions: [{ texte: 'Cocher « Séisme » (onglet Appuis et fondations)', champ: 'ap_seisme', valeur: 'oui', valeurChamp: 'on' }, { texte: 'Ou vérifier la zone et la catégorie d\'importance (zone 1 ou catégorie I : non soumis)', champ: 'ap_zone' }] }] : [];
+  },
   // ---------------------------------------------------------------- appareils (EN 1337-3) et tête d'appui
   st => {
     const out = [], ref = st._recoRef || 'EC', sp = st.p && st.p.supports;
@@ -100,6 +106,7 @@ export const reglesAppuis = [
         const acts = [];
         if (B.proposal && B.proposal.label && B.proposal.label !== B.label) acts.push({ texte: `Retenir l'appareil standard qui vérifie l'EN 1337-3`, champ, valeur: B.proposal.label, valeurChamp: B.proposal.label });
         acts.push({ texte: 'Changer le nombre d\'appareils par ligne (répartition des réactions)', champ: 'nBearings' });
+        if (B.antiChem) acts.push({ texte: `Ou fixer les appareils : dispositif anti-cheminement pour F_Ed = ${fx(B.antiChem.FEd, 0)} kN par appareil (${B.antiChem.nHA16} HA16 de couture au moins, détail dans le tableau des appareils)` });
         if (noms.some(n => /distorsion|déformation/.test(n))) acts.push({ texte: 'Réduire les déplacements lents : point fixe au centre de la dilatation', champ: 'xFixed', unite: 'm' });
         out.push({ domaine: 'Appareils d\'appui', lieu, verification: 'Élastomère fretté (EN 1337-3)', constat: `${B.label} : ${noms.join(', ') || 'non vérifié'}${ko[0] ? ` (${ko[0].label})` : ''}`, regle: 'NF EN 1337-3 § 5.3.3, guide Sétra 2007', actions: acts });
       }

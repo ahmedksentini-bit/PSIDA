@@ -19,7 +19,7 @@ import { winklerPile, pileGroup, headFlexibility, pileProfile, pileShear, pileCa
 import { minorationSurface } from '../geotech/lateral.js';
 import { pierWater } from './water.js';
 import { bearingSpacing, STANDARD_BEARINGS, designation, checkBearing, totalHeight } from '../bearings.js';
-import { verifyBearing1337 } from './bearings1337.js';
+import { verifyBearing1337, antiCheminement } from './bearings1337.js';
 import { localPressure, bearingSplitting, shortCorbel } from './pierhead.js';
 import { toPontEC8 } from '../ec8export.js';
 import * as EC8 from '../vendor/pont-ec8.js';
@@ -669,6 +669,13 @@ function calculAppuis(st, input = {}) {
     const sl = slides.map(sl0 => ({ ...verifyBearing1337(bd, [], sl0).slide, label: sl0.label }));
     res.slides = sl; res.slide = sl.reduce((m, x) => (!m || x.Fxy / Math.max(x.R, 1e-12) > m.Fxy / Math.max(m.R, 1e-12) ? x : m), null);
     res.ok = res.rows.every(r => r.ok || r.indicatif) && res.slide.okGlissement && res.slide.okPerm;
+    // glissement non vérifié : l'appareil doit être fixé (NF EN 1337-3 § 5.3.3.6) — dispositif anti-cheminement (taquets
+    // en béton armé ou plaques à ergots) dimensionné pour tout l'effort horizontal, sans frottement : F_Ed = 1,35 F_xy max ;
+    // aciers de couture du taquet A_s ≥ F_Ed / (μ f_yd), μ = 0,7 (interface rugueuse, EN 1992-1-1 § 6.2.5, cohésion négligée) ;
+    // surface d'appui du taquet A ≥ F_Ed / f_cd (§ 6.7)
+    if (!res.slide.okGlissement) {
+      res.antiChem = antiCheminement({ Fxy: Math.max(...sl.map(x => x.Fxy)) * 1000, fck, fyk });
+    }
     // appareil non conforme : plus petit appareil de la gamme standard vérifiant la NF EN 1337-3 sous les mêmes efforts et
     // déplacements (la répartition des efforts horizontaux n'est pas recalculée)
     let proposal = null;
@@ -1182,5 +1189,9 @@ function calculAppuis(st, input = {}) {
     return out;
   });
   const footRotAll = xs.every((_, i) => onPiles(i)) ? null : xs.map((x, i) => (onPiles(i) ? null : { BAEL: RA ? null : footRot(i, 'BAEL'), EC: footRot(i, 'EC') }));
-  return { sp, niv, pente, centrifuge, distTB, distTE, spLigne: parLigne ? xs.map((_, i) => SL(i)) : null, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: railSup ? Math.max(...railSup.groupes.map(g => g.H)) : bearings.H }, ...(railSup ? { rail: resumeRail(railSup) } : {}), eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
+  // séisme non coché alors que le pont y est soumis : zone 2 à 5 et catégorie II à IV (arrêté du 26/10/2011 art. 3 et 4 ;
+  // EN 1998-1 § 3.2.1 (5) : a_g S > 0,04 g sauf très faible sismicité)
+  const z8 = sp.ec8 || {}, alerteSeisme = !sp.seisme?.actif && (z8.zone ?? 1) >= 2 && (z8.categorie || 'III') !== 'I'
+    ? { zone: z8.zone, categorie: z8.categorie || 'III', classeSol: z8.classeSol || 'B', agR: [0, 0.4, 0.7, 1.1, 1.6, 3.0][z8.zone] ?? null } : null;
+  return { alerteSeisme, sp, niv, pente, centrifuge, distTB, distTE, spLigne: parLigne ? xs.map((_, i) => SL(i)) : null, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: railSup ? Math.max(...railSup.groupes.map(g => g.H)) : bearings.H }, ...(railSup ? { rail: resumeRail(railSup) } : {}), eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
 }
