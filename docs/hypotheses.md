@@ -492,6 +492,14 @@ Contrôle sur la note « appuis et fondations » de d'un pont-dalle précontrain
 
 - Poutre détaillée : la plus sollicitée de la plus longue travée (section retenue max(ELU ; ELS) du règlement choisi). Barres HA20 à HA40, le plus petit diamètre tenant en trois lits au plus dans le talon (espacement ≥ max(φ ; 25 mm), enrobage 3 cm au cadre). Épure d'arrêt (PSI-BA 77, V.1.3) : section nécessaire A_s M(x + 0,8 h)/M(L/2) (enveloppe ELU de la poutre), lits arrêtés du haut vers le bas à l'abscisse théorique moins l_s (BAEL A.6.1,23 ou EN 1992-1-1 § 8.4.4) ; lit inférieur filant, relevé au-delà de l'appui. Armatures d'âme : diamètre et brins fixés par la zone d'appui, espacement variable par zones (BAEL A.5.1 avec τ_u(x) ∝ V_Ed(x), ou EN 1992-1-1 § 6.2.3). Hourdis : nappes du calcul de flexion locale, répartition ≥ A_s/4. Plan de principe : façonnage (crochets, recouvrements) à établir.
 
+## 1 septdecies quinquies. Poutres BA à travées continues (v0.99.19, `test/poutres_psiba.test.js`)
+
+- **Domaine** (`pt_continu = oui`, poutres BA seulement, hors voie ferrée) : 2 à 6 travées coulées sur cintre (dossier Sétra PSI-BA 77). Poutre continue d'inertie constante, appuis simples indéformables ; les goussets ne sont pas pris dans la raideur (prudent sur appui, un peu défavorable en travée selon PSI-BA).
+- **Répartition transversale** : Guyon-Massonnet avec, pour chaque travée, la portée équivalente de la poutre continue ; dès qu'il y a des entretoises intermédiaires (`pt_entInt` > 0) et au moins 3 poutres, méthode de Courbon R_k = P (1/n + e y_k / Σ y²) comme dans la note PSI-BA. Les entretoises intermédiaires ne sont pas dimensionnées.
+- **Sur appuis** : M_axe des combinaisons BAEL 1,35 G + min[1,605 (A ou B + trottoirs) ; 1,35 (Mc120 + trottoirs)] (ELU), G + 1,2 (A ou B) + trottoirs (ELS) et EC 1,35 G + 1,35 min(gr1a ; gr1b) ; moment au nu de l'entretoise sur pile |M_nu| = |M_axe| − V e/2 (e = `pt_tePile`, défaut 0,50 m). Section rectangulaire comprimée en bas, largeur max(talon ; gousset `pt_bgous`), aciers supérieurs dans la table. Gousset nécessaire = max(V_u/(τ̄_u d) ; largeur donnant σ_bc ≤ 0,6 f_ck aux ELS BAEL et EC).
+- **Plans** : aciers supérieurs sur appui en deux groupes — groupe long arrêté où A_nec ≤ A_h (aciers longitudinaux du hourdis dans la largeur participante), groupe court où A_nec ≤ A_1 + A_h — prolongés de 0,8 h + l_s et bornés aux travées voisines ; aciers inférieurs tirés de l'enveloppe positive de la travée détaillée, symétrisée.
+- **Recalage** (exemple PSI-BA 77, 11,66 / 18,80 / 18,80 / 14,45 m, 3 poutres à 4,00 m) : moments sur piles des charges permanentes à 0,1 % (−90,94 / −119,93 / −102,95 t·m) ; A(l) à 7 % (note −70,6 / −79,3 / −74,6 t·m) ; appui 3 le plus sollicité, comme la note.
+
 ## 1 octodecies. Textes relus (v0.36)
 
 - **Guide Sétra 2007** (appareils en élastomère fretté) : voir 1 sexdecies ; exemple du § 4.2 reproduit.

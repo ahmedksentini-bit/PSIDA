@@ -49,15 +49,17 @@ export function barresInferieures({ As, parts, cover = 0.03, phiT = 10, L, a = 0
     const p = phi / 1000, e = Math.max(p, e0), nmax = Math.max(2, Math.floor((bt - 2 * cover - 2 * phiT / 1000 + e) / (p + e)));
     const n = Math.max(2, Math.ceil(As / aire(phi)));
     const nl = Math.ceil(n / nmax);
-    if (nl <= 3 || phi === 40) { choix = { phi, n, nmax, nl, e }; break; }
+    if (nl <= 3 || (phi === 32 && nl <= 4) || phi === 40) { choix = { phi, n, nmax, nl, e }; break; }
   }
   const { phi, n, nmax, nl, e } = choix, p = phi / 1000;
   // répartition par lits (le plus chargé en bas), ordonnées des axes des lits depuis la sous-face
   const lits = [];
   for (let k = 0, reste = n; k < nl; k++) { const nk = Math.min(nmax, reste); reste -= nk; lits.push({ n: nk, y: cover + phiT / 1000 + p / 2 + k * (p + e) }); }
   // épure : section nécessaire As·M(x)/M(L/2), décalée de 0,8 h vers l'appui, plus l_s ; lits arrêtés du haut vers le bas
-  const ls = longueurScellement({ phi, fck, fyk, code }), decal = 0.8 * h, Mmid = profil(L / 2) || 1;
-  const besoin = x => As * Math.max(profil(Math.min(L / 2, x + decal)), 0) / Mmid;   // section nécessaire en x (depuis l'appui)
+  const ls = longueurScellement({ phi, fck, fyk, code }), decal = 0.8 * h;
+  let Mmid = 0; for (let x = 0; x <= L / 2 + 1e-9; x += L / 400) Mmid = Math.max(Mmid, profil(x)); Mmid = Mmid || 1;
+  // section nécessaire en x (depuis l'appui) : enveloppe décalée, bornée au maximum (atteint au plus tard à mi-travée)
+  const besoin = x => { let m = 0; for (let t = x; t <= Math.min(L / 2, x + decal) + 1e-9; t += L / 400) m = Math.max(m, profil(t)); return As * Math.max(m, 0) / Mmid; };
   let cumul = n;
   for (let k = lits.length - 1; k >= 1; k--) {
     cumul -= lits[k].n;
@@ -89,9 +91,37 @@ export function donneesBA(r, { code = 'BAEL' } = {}) {
   const b = sp.beams.reduce((m, q) => ((q.BA.retenu ? q.BA.retenu[code] : q.BA[code].As) > (m.BA.retenu ? m.BA.retenu[code] : m.BA[code].As) ? q : m));
   const parts = partiesPoutre(inp, sec), hp = parts.reduce((s, q) => s + q.h, 0), H = hp + inp.hd, d = H - inp.cover;
   const As = b.BA.retenu ? b.BA.retenu[code] : b.BA[code].As, a = inp.pose && inp.pose.about != null ? Math.min(inp.pose.about, 0.5) : 0.30;
-  const tr = b.BA.travee || [];
+  const tr0 = b.BA.travee || [];
+  // travée continue (tableaux sur toute la portée) : demi-travée symétrisée, effort tranchant le plus fort des deux côtés
+  const tr = tr0.length && tr0[tr0.length - 1].x > sp.L / 2 + 1e-6 ? tr0.filter(t => t.x <= sp.L / 2 + 1e-9).map(t => {
+    const o = tr0.reduce((m, q) => (Math.abs(q.x - (sp.L - t.x)) < Math.abs(m.x - (sp.L - t.x)) ? q : m)), w = o.VEd > t.VEd ? o : t;
+    return { ...t, MEd: Math.max(t.MEd, o.MEd), VEd: w.VEd, V: w.V };
+  }) : tr0;
   const profil = x => { if (!tr.length) return 4 * x * (sp.L - x) / (sp.L * sp.L); let k = tr.findIndex(t => t.x >= x - 1e-9); if (k <= 0) return tr[0].MEd * (k === 0 ? 1 : 0); const t0 = tr[k - 1], t1 = tr[k]; return t0.MEd + (t1.MEd - t0.MEd) * (x - t0.x) / (t1.x - t0.x); };
-  const bars = barresInferieures({ As, parts, cover: 0.03, phiT: 10, L: sp.L, a, profil, h: H, fck: inp.fck, fyk: inp.fyk, code });
+  const profilS = x => Math.max(profil(x), profil(sp.L - x));   // travée continue : enveloppe non symétrique, symétrisée
+  const bars = barresInferieures({ As, parts, cover: 0.03, phiT: 10, L: sp.L, a, profil: profilS, h: H, fck: inp.fck, fyk: inp.fyk, code });
+  // travées continues : armatures supérieures sur les appuis de la travée détaillée (PSI-BA V.1.4) ; longueur de part et
+  // d'autre = distance au point de moment nul de l'enveloppe négative + 0,8 h + l_s
+  let superieures = null;
+  if (r.continu && r.appuis && r.enveloppe) {
+    // armatures longitudinales du hourdis (deux nappes de répartition sur b₁) : elles reprennent la fin de l'épure
+    const Hd = r.hourdis && !r.hourdis.erreur ? r.hourdis : null, ni = Hd && Hd.inf ? nappeBA(Hd.inf.As) : nappeBA(0.0012 * inp.hd);
+    const rep = nappeBA(Math.max(aire(ni.phi) / ni.s / 4, 0.0008 * inp.hd)), Ah = 2 * inp.b1 * aire(rep.phi) / rep.s;
+    const j = r.spans.indexOf(sp), E = r.enveloppe.find(e => e.k === b.k), Mn = code === 'EC' ? E.ELU_EC_min : E.ELU_min, xs = E.x;
+    const Mat = x => { const i = xs.findIndex(t => t >= x - 1e-9); return i < 0 ? 0 : Mn[i]; };
+    superieures = r.appuis.filter(ap => ap.i === j || ap.i === j + 1).map(ap => {
+      const q = ap.beams.find(z => z.k === b.k), Asup = q.retenu[code], xa = r.inp.spans.slice(0, ap.i).reduce((s2, l) => s2 + l, 0), M0 = Math.min(Mat(xa), -1e-9);
+      let phi = 20, nb = 0; for (const ph of [16, 20, 25, 32]) { phi = ph; nb = Math.max(4, Math.ceil(Asup / aire(ph))); if (nb * 0.10 <= inp.b1 + 1e-9) break; }
+      const ls = longueurScellement({ phi, fck: inp.fck, fyk: inp.fyk, code }), Lg = r.inp.spans[ap.i - 1], Ld = r.inp.spans[ap.i];
+      // distance à l'appui où la section nécessaire A_sup M(x)/M(appui) descend sous un seuil (pas de 5 cm, borné à la travée)
+      const dist = (sens, seuil, Lmax) => { for (let t = 0; t <= Lmax + 1e-9; t += 0.05) if (Asup * Mat(xa + sens * t) / M0 <= seuil + 1e-12) return t; return Lmax; };
+      const n1 = Math.ceil(nb / 2), n2 = nb - n1, A1 = n1 * aire(phi), ext = 0.8 * H + ls;
+      // groupe long (n₁ barres) arrêté où A_nec ≤ A_h (hourdis seul) ; groupe court (n₂ barres) où A_nec ≤ A₁ + A_h
+      const g1 = { n: n1, dg: Math.min(Lg, dist(-1, Ah, Lg) + ext), dd: Math.min(Ld, dist(1, Ah, Ld) + ext) };
+      const court = { n: n2, dg: Math.min(Lg, dist(-1, A1 + Ah, Lg) + ext), dd: Math.min(Ld, dist(1, A1 + Ah, Ld) + ext) };
+      return { appui: ap.i, As: Asup, phi, n: nb, ls, groupes: [{ ...g1, L: g1.dg + g1.dd }, { ...court, L: court.dg + court.dd }], dg: g1.dg, dd: g1.dd, L: g1.dg + g1.dd, cote: ap.i === j ? 'gauche' : 'droite', Ah, rep };
+    });
+  }
   // étriers : EC2 le long de la travée, ou BAEL (τ_u(x) proportionnel à V_Ed(x)) ; zones depuis l'appui
   const V0 = tr.length ? tr[0].VEd : 0, B0 = b.BA.cisaillementBAEL, ftj = 0.6 + 0.06 * inp.fck;
   const AtSt = t => (code === 'EC' ? t.V.AswS : B0 ? Math.max(1.15 * Math.max(0, B0.tau * (V0 > 0 ? t.VEd / V0 : 1) - 0.3 * ftj) * inp.b0 / (0.9 * inp.fyk), 0.4 * inp.b0 / inp.fyk) : t.V.AswS);
@@ -103,7 +133,7 @@ export function donneesBA(r, { code = 'BAEL' } = {}) {
     const e = { brins: e0.brins, phi: e0.phi, s: Math.round(espace(AtSt(t)) * 100) / 100 }, x1 = k < tr.length - 1 ? (t.x + tr[k + 1].x) / 2 : sp.L / 2, last = zones[zones.length - 1];
     if (last && last.phi === e.phi && last.s === e.s && last.brins === e.brins) last.x1 = x1; else zones.push({ x0: last ? last.x1 : 0, x1, ...e, AtSt: AtSt(t) });
   });
-  return { r, sp, b, inp, sec, parts, hp, H, d, As, a, bars, zones, code, hourdis: r.hourdis, entretoise: r.entretoise };
+  return { r, sp, b, inp, sec, parts, hp, H, d, As, a, bars, zones, code, superieures, hourdis: r.hourdis, entretoise: r.entretoise };
 }
 
 /** Coupe de la poutre (rectangles empilés centrés) avec sa largeur de hourdis b₁. */
@@ -168,6 +198,12 @@ function vueElevation(D, { barres = false } = {}) {
       V.poly('ACIERS', l.filant ? [[x0, y + 0.25], [x0, y], [x1, y], [x1, y + 0.25]] : [[x0, y], [x1, y]]);
       V.repere([x1 + 0.45 + 0.35 * k, y + 0.12 * k], k + 1, [x1 - 0.05, y]);
       if (!l.filant) V.coteH([a, 0], [x0, 0], -0.35 - 0.25 * k, fr(l.x0));
+    });
+    // travées continues : armatures supérieures sur appuis (depuis l'axe d'appui vers la travée)
+    for (const q of D.superieures || []) q.groupes.forEach((g, m) => {
+      const xa = q.cote === 'gauche' ? a : Lp - a, xe = q.cote === 'gauche' ? Math.min(Lp, a + g.dd) : Math.max(0, Lp - a - g.dg), y = H - 0.04 - 0.05 * m;
+      V.poly('ACIERS', [[q.cote === 'gauche' ? 0 : Lp, y], [xe, y]]);
+      V.texte('TEXTES', [(xa + xe) / 2, y - 0.03], `${g.n} HA${q.phi}`, { h: 1.9, ancre: 'c', v: 'h' });
     });
     // armatures supérieures de montage ; armatures d'âme : zones cotées sur la demi-travée gauche, quelques cadres dessinés
     V.poly('ACIERS', [[0.03, hp - 0.05], [Lp - 0.03, hp - 0.05]]);
@@ -243,14 +279,15 @@ export function planFerraillageBA(D, cartouche = {}, { nom = 'TABLIER À POUTRES
     [String(bars.nl + 2), `HA${ns.phi} / ${fr(ns.s * 100, 1)}`, fr(inp.b1, 2), 'hourdis, nappe supérieure transversale', '—'],
     [String(bars.nl + 3), `HA${ni.phi} / ${fr(ni.s * 100, 1)}`, fr(inp.b1, 2), 'hourdis, nappe inférieure transversale', '—'],
     [String(bars.nl + 4), 'HA12 / 25', fr(Lp, 2), 'armatures de peau (2 faces)', '—']);
+  for (const [m, q] of (D.superieures || []).entries()) q.groupes.forEach((g, gi) => lignesB.push([`S${m + 1}${'ab'[gi]}`, `${g.n} HA${q.phi}`, fr(g.L, 2), `sup. appui ${q.appui + 1} : ${fr(g.dg)} g. / ${fr(g.dd)} d.${gi === 0 ? ` (${fr(q.As * 1e4, 0)} cm²)` : ''}`, milliers(g.n * g.L * kgm(q.phi))]));
   const tb = { titre: 'BARRES PRINCIPALES (UNE POUTRE)', cols: [{ t: 'Rep.', w: 10, a: 'c' }, { t: 'Barres', w: 22, a: 'c' }, { t: 'L [m]', w: 16, a: 'd' }, { t: 'Disposition', w: 52, a: 'g' }, { t: 'kg', w: 16, a: 'd' }], lignes: lignesB };
   const tz = { titre: 'ZONES D\'ÉTRIERS (DEPUIS L\'AXE D\'APPUI, SYMÉTRIQUE)', cols: [{ t: 'De [m]', w: 18, a: 'd' }, { t: 'À [m]', w: 18, a: 'd' }, { t: 'A_t/s_t [cm²/m]', w: 28, a: 'd' }, { t: 'Armatures d\'âme', w: 52, a: 'c' }],
     lignes: zones.map(z => [fr(z.x0), fr(z.x1), fr(z.AtSt * 1e4, 1), `${z.brins === 4 ? 'cadre + étrier' : 'cadre'} HA${z.phi} / ${fr(z.s * 100, 0)} cm`]) };
   const mHourdis = inp.b1 * Lp * (aire(ni.phi) / ni.s + aire(ns.phi) / ns.s) * 7850 * 1.1 + inp.b1 * Lp * 2 * aire(rep.phi) / rep.s * 7850;
-  const mB = bars.lits.reduce((s, l, k) => s + l.n * (l.L + (k === 0 ? 0.5 : 0)) * kgm(bars.phi), 0), mPeau = nPeau * Lp * kgm(12), mMont = 2 * Lp * kgm(16);
+  const mB = bars.lits.reduce((s, l, k) => s + l.n * (l.L + (k === 0 ? 0.5 : 0)) * kgm(bars.phi), 0) + (D.superieures || []).reduce((s2, q) => s2 + q.groupes.reduce((s3, g) => s3 + g.n * g.L * kgm(q.phi), 0), 0), mPeau = nPeau * Lp * kgm(12), mMont = 2 * Lp * kgm(16);
   const tot = mB + mEt + mPeau + mMont + mHourdis, vol = (parts.reduce((s, q) => s + q.b * q.h, 0) + inp.b1 * inp.hd) * Lp;
   const tq = { titre: 'ARMATURES (ESTIMATION, UNE POUTRE ET SON HOURDIS)', cols: [{ t: 'Poste', w: 70, a: 'g' }, { t: 'Masse [kg]', w: 26, a: 'd' }],
-    lignes: [['Barres principales inférieures', milliers(mB)], ['Cadres et étriers', milliers(mEt)], ['Armatures de peau et de montage', milliers(mPeau + mMont)], ['Hourdis (largeur b₁)', milliers(mHourdis)], ['Total', milliers(tot)], ['Ratio', `${fr(tot / vol, 0)} kg/m³`]] };
+    lignes: [[D.superieures && D.superieures.length ? 'Barres principales (inférieures et supérieures sur appuis)' : 'Barres principales inférieures', milliers(mB)], ['Cadres et étriers', milliers(mEt)], ['Armatures de peau et de montage', milliers(mPeau + mMont)], ['Hourdis (largeur b₁)', milliers(mHourdis)], ['Total', milliers(tot)], ['Ratio', `${fr(tot / vol, 0)} kg/m³`]] };
   const te = E ? [['Entretoise d\'about', `inf. ${fr(E.AsInf * 1e4, 1)} cm² ; sup. ${fr(E.AsSup * 1e4, 1)} cm² ; étriers ${fr(E.etriers.AswS * 1e4, 1)} cm²/m`]] : [];
   const tE = te.length ? { titre: 'ENTRETOISES D\'ABOUT (VÉRINAGE)', cols: [{ t: 'Élément', w: 34, a: 'g' }, { t: 'Sections d\'acier', w: 82, a: 'g' }], lignes: te } : null;
   const lim = D.b.BA.ELS ? D.b.BA.ELS[code] : null;
@@ -258,7 +295,8 @@ export function planFerraillageBA(D, cartouche = {}, { nom = 'TABLIER À POUTRES
     `2. Épure d'arrêt (dossier Sétra PSI-BA 77, V.1.3 et V.3) : courbe des sections nécessaires décalée de 0,8 h = ${fr(bars.decal)} m vers l'appui, barres prolongées de l_s = ${fr(bars.ls)} m (${code === 'EC' ? 'EN 1992-1-1 § 8.4.4' : 'BAEL A.6.1,23, τ_su = 0,6 ψ_s² f_tj'}) ; lit inférieur filant, relevé et ancré au-delà de l'appui.`,
     `3. Armatures d'âme : ${code === 'EC' ? 'EN 1992-1-1 § 6.2.3' : 'BAEL 91 A.5.1 (A_t/(b₀ s_t) ≥ γ_s(τ_u − 0,3 f_t28)/(0,9 f_e), ≥ 0,4 MPa/f_e)'} ; espacement ≤ ${fr(code === 'EC' ? Math.min(0.75 * D.d, 0.4) : Math.min(0.9 * D.d, 0.4))} m ; deux cadres rapprochés au droit des appareils d'appui.`,
     `4. Hourdis : nappes transversales du calcul de flexion locale (onglet Tablier à poutres), répartition longitudinale HA${rep.phi} / ${fr(rep.s * 100, 1)} cm (≥ A_s/4) ; jonction hourdis-poutre (PSI-BA V.1.6) : les cadres des poutres montent dans le hourdis.`,
-    `5. Enrobage ${fr(c * 100, 0)} cm ; acier HA f_e = ${inp.fyk} MPa ; béton C${inp.fck}. Plan de principe : le façonnage détaillé (crochets, recouvrements) reste à établir.`]);
+    `5. Enrobage ${fr(c * 100, 0)} cm ; acier HA f_e = ${inp.fyk} MPa ; béton C${inp.fck}. Plan de principe : le façonnage détaillé (crochets, recouvrements) reste à établir.`,
+    ...(D.superieures && D.superieures.length ? [`6. Travées continues : armatures supérieures sur appuis (PSI-BA V.1.4) en deux groupes, arrêtés où la section nécessaire A_sup M(x)/M(appui) ne dépasse plus la section restante plus celle des armatures longitudinales du hourdis (${fr(D.superieures[0].Ah * 1e4, 1)} cm² sur b₁), prolongés de 0,8 h + l_s, bornés aux travées adjacentes ; recouvrements des armatures inférieures sur appui.`] : [])]);
   const hb = (tb.lignes.length + 2) * 6, hz = (tz.lignes.length + 2) * 6, hq = (tq.lignes.length + 2) * 6, he2 = tE ? (tE.lignes.length + 2) * 6 + 6 : 0, hn = N.length * 2.1 * 1.6, wcol = 128;
   const F = composer({ titre: `${nom} — FERRAILLAGE`, cartouche, rangees: [[el], [cp]], groupes: [{ vues: [el], cible: 100, min: 50 }, { vues: [cp], cible: 20, min: 10 }],
     colonne: { largeur: wcol + 6, hauteur: Infinity },

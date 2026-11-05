@@ -66,6 +66,10 @@ export function parsePoutres(d) {
     P: v('pt_P', 0), e0: v('pt_e0', -1.46), fpr: v('pt_sp', 1100),
     biais: Math.min(100, Math.max(1, v('pt_biais', 100))),
     fiss: d.pt_fiss || 'prej', regBA: d.pt_regBA === 'EC' ? 'EC' : 'BAEL',
+    // travées continues coulées sur cintre (poutres BA, dossier Sétra PSI-BA 77) ; entretoises intermédiaires : méthode de
+    // Courbon ; goussets d'appui (âme épaissie au droit des appuis intermédiaires) ; épaisseur des entretoises sur pile
+    continu: d.pt_continu === 'oui' && (d.pt_type || 'BP') === 'BA', courbon: Math.round(v('pt_entInt', 0)) > 0, nEntInt: Math.round(v('pt_entInt', 0)),
+    bGousset: v('pt_bgous', null), lGousset: v('pt_lgous', null), tePile: v('pt_tePile', 0.50),
     // stabilité latérale en phase de pose (src/beams/deversement.js) : points de levage, appareil provisoire, dévers
     pose: { a: v('pt_levA', null), hLev: v('pt_levH', 0.20), appareil: parseDesignation(d.pt_devApp || '300x400x3(10+3)'), devers: v('pt_devers', 0) / 100, about: d.pt_type === 'PRAD' ? v('pr_about', 0.30) : v('pt_about', 0.40), balayage: v('pt_balay', null) },
   };
@@ -85,6 +89,7 @@ export function computePoutres(inp) {
     else inp = { ...inp, Kg: inp.beam.I, KgSource: 'approximation : I de la section composée, section par valeurs' };
   }
   const bd = beamDeck(inp);
+  if (bd.continu) return computePoutresContinu(inp, bd);
   const sec = bd.sec, H = sec.H || inp.beam.H || 2, v = sec.v ?? inp.beam.v, vp = sec.vp ?? inp.beam.vp;
   const spans = [...bd.bySpan.values()].map(S => {
     if (inp.rail) return traveeRail(S, inp, sec, H, v, vp);
@@ -111,6 +116,12 @@ export function computePoutres(inp) {
     });
     return { L: S.L, theta: S.gp.theta, alpha: S.gp.alpha, Lguyon: S.gp.Lguyon, classe: S.f61.classe, deltaB: S.f61.deltaBc[0], deltaC: S.f61.deltaMc?.[0], skew: S.skew, deversement: deversementDe(beams, S.L, inp), gp: S.gp, f61info: { G: S.f61.G?.[0], nv: S.f61.nv, v: S.f61.v, Lc: S.f61.Lc, Lr: S.f61.Lr }, beams };
   });
+  const { hourdis, entretoise } = localEtEntretoise(inp, bd, spans, sec);
+  return { inp, sec, spans, lines: inp.rail ? lineReactionsRail(bd, inp.rail) : lineReactions(bd), appareils: appareilsPoutres(bd, inp), bd, hourdis, entretoise, rail: !!inp.rail };
+}
+
+/** Hourdis (flexion locale) et entretoises d'about (vérinage) de la travée la plus longue. */
+function localEtEntretoise(inp, bd, spans, sec) {
   // hourdis (flexion locale) et entretoises d'about (vérinage) : sections connues par leurs dimensions ou leurs rectangles
   // (sous rail : charges des traverses diffusées dans le ballast, coefficient dynamique du hourdis, tableau 6.2 cas 4.1)
   let hourdis = null, entretoise = null;
@@ -130,7 +141,105 @@ export function computePoutres(inp) {
     entretoise = entretoiseVerinage({ ys: bd.ys, RG: sp.beams.map(b => b.V0.G ?? 0), dv: L0.dv, verinsRive: L0.verinsRive, he: Math.max(hp - 0.10, 0.5), te: L0.te, hd: inp.hd, fck: inp.fck, fyk: inp.fyk });
     entretoise.L = sp.L;
   }
-  return { inp, sec, spans, lines: inp.rail ? lineReactionsRail(bd, inp.rail) : lineReactions(bd), appareils: appareilsPoutres(bd, inp), bd, hourdis, entretoise, rail: !!inp.rail };
+  return { hourdis, entretoise };
+}
+
+/** Combinaisons des moments négatifs (sur appuis) d'une poutre, aux mêmes règles que beamCombinations (enveloppes Mmin). */
+export function beamCombinationsNeg(bm) {
+  const nS = bm.G.Mmin.length, z = () => new Array(nS).fill(0), m = (id, i) => (bm[id] ? Math.min(0, bm[id].Mmin[i]) : 0);
+  const out = { ELS_F61: z(), ELU_F61: z(), ELS_EC: z(), ELU_EC: z() };
+  for (let i = 0; i < nS; i++) {
+    const G = Math.min(bm.G.Mmin[i], bm.G.Mmax[i]), tr = m('trott', i), AB = Math.min(m('A', i), m('Bc', i), m('Bt', i)), MC = Math.min(m('Mc120', i), m('D240', i));
+    out.ELS_F61[i] = G + Math.min(1.2 * (AB + tr), MC + tr);
+    out.ELU_F61[i] = 1.35 * G + Math.min(1.605 * (AB + tr), 1.35 * (MC + tr));
+    const Q = Math.min(m('gr1a', i), m('gr1b', i));
+    out.ELS_EC[i] = G + Q; out.ELU_EC[i] = 1.35 * G + 1.35 * Q;
+  }
+  return out;
+}
+
+/** Vue d'une poutre réduite à la travée j d'un tablier continu (tableaux découpés, abscisses locales). */
+function vueTravee(b, deck, j) {
+  const secs = deck.beam.sections, idx = secs.map((q, i) => (q.span === j ? i : -1)).filter(i => i >= 0);
+  const out = { k: b.k, y: b.y };
+  for (const [id, r] of Object.entries(b)) {
+    if (!r || typeof r !== 'object' || !Array.isArray(r.Mmax)) continue;
+    const cut = a => (a ? idx.map(i => a[i]) : a);
+    out[id] = { ...r, eta: r.etaJ ? r.etaJ[j] : r.eta, etaV: r.etaVJ ? r.etaVJ[j] : r.etaV, Mmax: cut(r.Mmax), Mmin: cut(r.Mmin), Vmax: cut(r.Vmax), Vmin: cut(r.Vmin) };
+  }
+  const L = deck.spans[j], ss = idx.map(i => ({ ...secs[i], x: secs[i].xi, span: 0 }));
+  const S = { L, deck: { beam: { sections: ss, sectionIndex: (_, f) => { let best = 0, dd = Infinity; ss.forEach((q, i) => { const e = Math.abs(q.frac - f); if (e < dd) { dd = e; best = i; } }); return best; } } } };
+  return { b: out, S, idx };
+}
+
+/**
+ * Tablier à poutres BA à travées continues (coulé sur cintre, dossier Sétra PSI-BA 77) : poutre continue d'inertie
+ * constante, répartition transversale de Guyon-Massonnet par travée (portées de Guyon tirées des portées équivalentes) ou
+ * de Courbon (entretoises intermédiaires) ; en travée, section en T (moment positif maximal de la travée) ; sur appui,
+ * moment négatif au nu de l'entretoise d'appui, section rectangulaire comprimée en partie basse (talon ou gousset),
+ * armatures supérieures dans le hourdis ; effort tranchant BAEL de part et d'autre de chaque appui.
+ */
+function computePoutresContinu(inp, bd) {
+  const S = bd.bySpan.get('continu'), deck = S.deck, sec = bd.sec, H = sec.H || inp.beam.H || 2, d = H - inp.cover;
+  const nJ = inp.spans.length, secs = deck.beam.sections;
+  const parts = inp.beam.parts, bTalon = parts ? parts[0].b : inp.b0;
+  const spans = inp.spans.map((L, j) => {
+    const beams = S.beams.map(b0 => {
+      const { b, S: Sj } = vueTravee(b0, deck, j), c = beamCombinations(b);
+      const iM = c.ELU_F61.reduce((m, v, i, a) => (v > a[m] ? i : m), 0), x0 = 0, x1 = Sj.deck.beam.sections.length - 1;
+      const out = { k: b.k, y: b.y, mid: {}, eta: {}, etaL: {}, etaV: {}, V0: {}, V1: {}, xMax: Sj.deck.beam.sections[iM].x,
+        comb: { ELS_F61: c.ELS_F61[iM], ELU_F61: c.ELU_F61[iM], ELS_EC: c.ELS_EC[iM], ELU_EC: c.ELU_EC[iM] }, MuF: Math.max(...c.ELU_F61), MuE: Math.max(...c.ELU_EC) };
+      for (const id of ['G', 'A', 'Bc', 'Bt', 'Mc120', 'D240', 'trott', 'TS', 'UDL', 'gr1a', 'gr1b']) if (b[id]) {
+        out.mid[id] = b[id].Mmax[iM]; out.eta[id] = b[id].eta; out.etaL[id] = null; out.etaV[id] = b[id].etaV ?? b[id].eta;
+        const Va = i => Math.max(Math.abs(b[id].Vmax?.[i] ?? 0), Math.abs(b[id].Vmin?.[i] ?? 0));
+        out.V0[id] = Va(x0); out.V1[id] = Va(x1);
+      }
+      out.BA = calculPoutreBA({ b, c, S: Sj, inp, d, complet: true });
+      return out;
+    });
+    return { L, theta: S.gps[j].theta, alpha: S.gps[j].alpha, Lguyon: S.gps[j].Lguyon, classe: S.f61.classe, deltaB: S.f61.deltaBc[j], deltaC: S.f61.deltaMc?.[j],
+      skew: S.skew, gp: S.gps[j], f61info: { G: S.f61.G?.[j], nv: S.f61.nv, v: S.f61.v, Lc: S.f61.Lc, Lr: S.f61.Lr }, beams, continu: true };
+  });
+  // appuis intermédiaires : moment négatif au nu de l'entretoise, armatures supérieures, gousset, effort tranchant
+  const lB = limitesELS({ code: 'BAEL', fck: inp.fck, fyk: inp.fyk, fiss: inp.fiss }), lE = limitesELS({ code: 'EC', fck: inp.fck, fyk: inp.fyk });
+  const appuis = [];
+  for (let i = 1; i < nJ; i++) {
+    const sg = deck.beam.sectionIndex(i - 1, 1), sd = deck.beam.sectionIndex(i, 0), e2 = (inp.tePile ?? 0.5) / 2;
+    const beams = S.beams.map(b => {
+      const cn = beamCombinationsNeg(b), V = (id, s) => (b[id] ? Math.max(Math.abs(b[id].Vmax?.[s] ?? 0), Math.abs(b[id].Vmin?.[s] ?? 0)) : 0);
+      const VuDe = s => 1.35 * V('G', s) + Math.max(1.605 * (Math.max(V('A', s), V('Bc', s), V('Bt', s)) + V('trott', s)), 1.35 * (Math.max(V('Mc120', s), V('D240', s)) + V('trott', s)));
+      const VsDe = s => V('G', s) + Math.max(1.2 * (Math.max(V('A', s), V('Bc', s), V('Bt', s)) + V('trott', s)), Math.max(V('Mc120', s), V('D240', s)) + V('trott', s));
+      const VeDe = s => 1.35 * V('G', s) + 1.35 * Math.max(V('gr1a', s), V('gr1b', s)), VcE = s => V('G', s) + Math.max(V('gr1a', s), V('gr1b', s));
+      const Vg = VuDe(sg), Vd = VuDe(sd), Vmax = Math.max(Vg, Vd);
+      // moment au nu de l'entretoise d'appui (PSI-BA : |M| − V e/2, V de service le plus fort des deux côtés)
+      const red = (M, Vs) => Math.min(0, M + Vs * e2);
+      const MaxeF = Math.min(cn.ELU_F61[sg], cn.ELU_F61[sd]), MaxeFs = Math.min(cn.ELS_F61[sg], cn.ELS_F61[sd]), MaxeE = Math.min(cn.ELU_EC[sg], cn.ELU_EC[sd]), MaxeEs = Math.min(cn.ELS_EC[sg], cn.ELS_EC[sd]);
+      const MuF = red(MaxeF, Vmax), MsF = red(MaxeFs, Math.max(VsDe(sg), VsDe(sd))), MuE = red(MaxeE, Math.max(VeDe(sg), VeDe(sd))), MsE = red(MaxeEs, Math.max(VcE(sg), VcE(sd)));
+      // section sur appui : rectangle comprimé en bas, largeur max(talon ; gousset), armatures supérieures
+      const bg = Math.max(inp.bGousset ?? inp.b0, inp.b0), bc = Math.max(bTalon, bg), R = { beff: bc, hf: d, b0: bc, d };
+      const uF = tBeamULS({ M: -MuF, ...R, fck: inp.fck, fyk: inp.fyk, code: 'BAEL' }), uE = tBeamULS({ M: -MuE, ...R, fck: inp.fck, fyk: inp.fyk, code: 'EC' });
+      const sF = tBeamSLS({ M: -MsF, ...R, sigS: lB.sigS, sigC: lB.sigC }), sE = tBeamSLS({ M: -MsE, ...R, sigS: lE.sigS, sigC: lE.sigC });
+      const tau = etriersBAEL({ Vu: Vmax, b0: bg, d, fc28: inp.fck, fe: inp.fyk, fiss: inp.fiss });
+      // gousset nécessaire : τ_u ≤ τ̄_u, et σ_bc ≤ 0,6 f_c28 à l'ELS (largeur comprimée)
+      const bTau = Vmax / (tau.tauLim * 1000 * d);
+      const okB = bb => tBeamSLS({ M: -MsF, beff: bb, hf: d, b0: bb, d, sigS: lB.sigS, sigC: lB.sigC }).okC && tBeamSLS({ M: -MsE, beff: bb, hf: d, b0: bb, d, sigS: lE.sigS, sigC: lE.sigC }).okC;
+      let bComp = inp.b0; for (let k = 0; k < 60 && !okB(bComp); k++) bComp += 0.025;
+      return { k: b.k, y: b.y, Maxe: { ELU_F61: MaxeF, ELS_F61: MaxeFs, ELU_EC: MaxeE, ELS_EC: MaxeEs }, Mnu: { ELU_F61: MuF, ELS_F61: MsF, ELU_EC: MuE, ELS_EC: MsE },
+        Mcomp: { G: Math.min(b.G.Mmin[sg], b.G.Mmax[sg]), A: b.A ? b.A.Mmin[sg] : 0, trott: b.trott ? b.trott.Mmin[sg] : 0, Bc: b.Bc ? b.Bc.Mmin[sg] : 0, Mc120: b.Mc120 ? b.Mc120.Mmin[sg] : 0, gr1a: b.gr1a ? b.gr1a.Mmin[sg] : 0 },
+        Vg, Vd, bc, bg, ULS: { BAEL: uF, EC: uE }, ELS: { BAEL: { ...sF, lim: lB }, EC: { ...sE, lim: lE } },
+        retenu: { BAEL: Math.max(uF.As ?? 0, sF.As), EC: Math.max(uE.As ?? 0, sE.As) }, cisaillementBAEL: { Vu: Vmax, ...tau }, goussetNecessaire: Math.max(bTau, inp.b0), compressionNecessaire: bComp };
+    });
+    appuis.push({ i, beams });
+  }
+  const lines = Array.from({ length: nJ + 1 }, (_, i) => ({ G: S.perm.Rmax[i], Gmin: S.perm.Rmin ? S.perm.Rmin[i] : S.perm.Rmax[i], A: S.f61.A ? S.f61.A.Rmax[i] : 0, Bc: S.f61.Bc ? S.f61.Bc.Rmax[i] : 0,
+    Mc120: S.f61.Mc120 ? S.f61.Mc120.Rmax[i] : 0, trott: S.f61.trottoir ? S.f61.trottoir.Rmax[i] : 0, TS: S.ec.TS ? S.ec.TS.Rmax[i] : 0, UDL: S.ec.UDL ? S.ec.UDL.Rmax[i] : 0 }));
+  const app = { lignes: lines.map((_, i) => { let car = 0, elu = 0, gmin = Infinity, kmax = null;
+    for (const b of S.beams) { const RG = b.G.Rmax[i], RQ = Math.max(b.gr1a ? b.gr1a.Rmax[i] : 0, b.gr1b ? b.gr1b.Rmax[i] : 0); if (RG + RQ > car) { car = RG + RQ; kmax = b.k; } elu = Math.max(elu, 1.35 * (RG + RQ)); gmin = Math.min(gmin, b.G.Rmin ? b.G.Rmin[i] : RG); }
+    return { i, car, elu, gmin, poutre: kmax }; }) };
+  app.texte = app.lignes.map(l => `${Math.round(l.elu)} ${Math.round(l.gmin)}`).join(' ; ');
+  const { hourdis, entretoise } = localEtEntretoise(inp, bd, spans, sec);
+  return { inp, sec, spans, appuis, continu: true, lines, appareils: app, bd, hourdis, entretoise, rail: false,
+    enveloppe: S.beams.map(b => { const cp = beamCombinations(b), cn = beamCombinationsNeg(b); return { k: b.k, x: secs.map(q => q.x), ELU_max: cp.ELU_F61, ELU_min: cn.ELU_F61, ELU_EC_max: cp.ELU_EC, ELU_EC_min: cn.ELU_EC }; }) };
 }
 
 /**
@@ -138,12 +247,13 @@ export function computePoutres(inp) {
  * (armatures inférieures et étriers EC2), à l'ELS à mi-travée (section en T fissurée) et effort tranchant BAEL à l'appui.
  * Partagé par l'onglet et par les recherches des recommandations (src/reco/poutres.js).
  */
-export function calculPoutreBA({ b, c, S, inp, d }) {
-  const MuF = Math.max(...c.ELU_F61), MuE = Math.max(...c.ELU_EC), mid = S.deck.beam.sectionIndex(0, 0.5), x0 = S.deck.beam.sectionIndex(0, 0);
+export function calculPoutreBA({ b, c, S, inp, d, complet = false }) {
+  const MuF = Math.max(...c.ELU_F61), MuE = Math.max(...c.ELU_EC), x0 = S.deck.beam.sectionIndex(0, 0);
+  const argmax = a => a.reduce((m, v, i) => (v > a[m] ? i : m), 0), mid = argmax(c.ELS_F61), midE = argmax(c.ELS_EC);
   const T = { beff: inp.b1, hf: inp.hd, b0: inp.b0, d };
   const BA = { BAEL: tBeamULS({ M: MuF, ...T, fck: inp.fck, fyk: inp.fyk, code: 'BAEL' }), EC: tBeamULS({ M: MuE, ...T, fck: inp.fck, fyk: inp.fyk, code: 'EC' }) };
   // le long de la travée : armatures inférieures (ELU, enveloppe EC / F61) et étriers (EC2 § 6.2.3), z = 0,9 d
-  const secs = S.deck.beam.sections, half = secs.filter(q => q.x <= S.L / 2 + 1e-9);
+  const secs = S.deck.beam.sections, half = complet ? secs : secs.filter(q => q.x <= S.L / 2 + 1e-9);
   BA.travee = half.map((q, i) => {
     const VEd = 1.35 * Math.abs(b.G.Vmax?.[i] ?? 0) + 1.35 * Math.max(Math.abs(b.gr1a?.Vmax?.[i] ?? 0), Math.abs(b.gr1b?.Vmax?.[i] ?? 0));
     const As = tBeamULS({ M: Math.max(c.ELU_EC[i], c.ELU_F61[i]), ...T, fck: inp.fck, fyk: inp.fyk, code: 'EC' });
@@ -151,8 +261,8 @@ export function calculPoutreBA({ b, c, S, inp, d }) {
   });
   // ELS (souvent déterminant en fissuration préjudiciable) : moment de service à mi-travée, section en T fissurée
   const lB = limitesELS({ code: 'BAEL', fck: inp.fck, fyk: inp.fyk, fiss: inp.fiss }), lE = limitesELS({ code: 'EC', fck: inp.fck, fyk: inp.fyk });
-  const sB = tBeamSLS({ M: c.ELS_F61[mid], ...T, sigS: lB.sigS, sigC: lB.sigC }), sE = tBeamSLS({ M: c.ELS_EC[mid], ...T, sigS: lE.sigS, sigC: lE.sigC });
-  BA.ELS = { BAEL: { ...sB, Mser: c.ELS_F61[mid], lim: lB }, EC: { ...sE, Mser: c.ELS_EC[mid], lim: lE } };
+  const sB = tBeamSLS({ M: c.ELS_F61[mid], ...T, sigS: lB.sigS, sigC: lB.sigC }), sE = tBeamSLS({ M: c.ELS_EC[midE], ...T, sigS: lE.sigS, sigC: lE.sigC });
+  BA.ELS = { BAEL: { ...sB, Mser: c.ELS_F61[mid], lim: lB }, EC: { ...sE, Mser: c.ELS_EC[midE], lim: lE } };
   BA.retenu = { BAEL: Math.max(BA.BAEL.As ?? 0, sB.As), EC: Math.max(BA.EC.As ?? 0, sE.As) };
   // effort tranchant à l'appui, BAEL 91 A.5.1 : V_u = 1,35 V_G + max[1,605 (A ou B + trottoirs) ; 1,35 (Mc120 + trottoirs)]
   const V = id => (b[id] && b[id].Vmax ? b[id].Vmax[x0] : 0), Vu = 1.35 * V('G') + Math.max(1.605 * (Math.max(V('A'), V('Bc'), V('Bt')) + V('trott')), 1.35 * (Math.max(V('Mc120'), V('D240')) + V('trott')));

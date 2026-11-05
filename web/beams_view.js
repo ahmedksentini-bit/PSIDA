@@ -8,7 +8,7 @@ const CM = v => (v === null || v === undefined || !Number.isFinite(v) ? '—' : 
 const MPa = v => F(v / 1000, 2);
 
 /** Courbes le long de la demi-travée (contraintes, MPa) : séries [{ nom, pts: [[x, v]], c, dash }], limites horizontales. */
-function courbesX(series, { titre = '', unite = 'MPa', lim = [] } = {}) {
+function courbesX(series, { titre = '', unite = 'MPa', lim = [], xlab = 'x depuis l\'appui [m] (demi-travée)' } = {}) {
   const w = 720, h = 260, ml = 52, mr = 150, mt = 24, mb = 34, all = series.flatMap(q => q.pts.map(p => p[1])).concat(lim.map(l => l.v));
   const xMax = Math.max(...series.flatMap(q => q.pts.map(p => p[0]))), yMin = Math.min(0, ...all), yMax = Math.max(0, ...all), pad = (yMax - yMin) * 0.08 || 1;
   const sx = x => ml + x / xMax * (w - ml - mr), sy = v => mt + (yMax + pad - v) / (yMax - yMin + 2 * pad) * (h - mt - mb);
@@ -22,7 +22,7 @@ function courbesX(series, { titre = '', unite = 'MPa', lim = [] } = {}) {
     o.push(`<polyline fill="none" stroke="${q.c}" stroke-width="1.8"${q.dash ? ' stroke-dasharray="5 3"' : ''} points="${q.pts.map(([x, v]) => `${sx(x).toFixed(1)},${sy(v).toFixed(1)}`).join(' ')}"/>`);
     o.push(`<line x1="${w - mr + 8}" x2="${w - mr + 26}" y1="${mt + 14 + i * 15}" y2="${mt + 14 + i * 15}" stroke="${q.c}" stroke-width="2"${q.dash ? ' stroke-dasharray="5 3"' : ''}/><text x="${w - mr + 30}" y="${mt + 18 + i * 15}" font-size="10">${q.nom}</text>`);
   });
-  o.push(`<text x="${(ml + w - mr) / 2}" y="${h - 2}" font-size="10.5" text-anchor="middle">x depuis l'appui [m] (demi-travée)</text><text x="12" y="${mt + (h - mt - mb) / 2}" font-size="10.5" text-anchor="middle" transform="rotate(-90 12 ${mt + (h - mt - mb) / 2})">${unite}</text>`);
+  o.push(`<text x="${(ml + w - mr) / 2}" y="${h - 2}" font-size="10.5" text-anchor="middle">${xlab}</text><text x="12" y="${mt + (h - mt - mb) / 2}" font-size="10.5" text-anchor="middle" transform="rotate(-90 12 ${mt + (h - mt - mb) / 2})">${unite}</text>`);
   if (titre) o.push(`<text x="${ml}" y="15" font-size="11.5">${titre}</text>`);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="100%" font-family="system-ui,sans-serif">${o.join('')}</svg>`;
 }
@@ -212,7 +212,7 @@ export function beamsBlocks(r, { reco = null } = {}) {
     comment(`Coefficients de l'AASHTO LRFD (§ 4.6.2.2.3c et 4.6.2.2.2e, tabliers béton sur poutres béton, domaine 0 ≤ θ ≤ 60°, N_b ≥ 4), ni l'Eurocode ni le guide Sétra VIPP ne donnant de règle : F_V = 1 + 0,20 (L t_s³/K_g)^0,3 tan θ, θ = (100 − ψ) × 0,9° compté depuis la normale à l'axe, K_g = n (I_b + A_b e_g²) de la poutre seule (${inp.KgSource || '—'}). F_V majore la part du trafic de l'effort tranchant et de la réaction des poutres de rive à l'appui, décroissant linéairement jusqu'à la mi-travée (hypothèse PSIDA) ; la réduction des moments r_M = 1 − c₁ (tan θ)^1,5 n'est pas appliquée (prudent). La somme des réactions d'une ligne est inchangée (angle aigu déchargé) : la réaction de l'appareil le plus chargé ci-dessus peut être reportée dans le champ « réactions imposées » de l'onglet Appuis (${r.appareils ? r.appareils.texte : ''}). ${r.spans.flatMap(s => s.skew.notes).filter((t, i, a) => a.indexOf(t) === i).join(' ; ')}`);
   }
   for (const [si, s] of r.spans.entries()) {
-    h2(`Travée de ${F2(s.L)} m — moments à mi-travée par poutre [kN·m] et coefficients de répartition`);
+    h2(`Travée de ${F2(s.L)} m — moments ${s.continu ? `positifs maximaux (x = ${F2(s.beams[0].xMax)} m)` : 'à mi-travée'} par poutre [kN·m] et coefficients de répartition`);
     const ids = ['G', 'A', 'Bc', 'Bt', 'Mc120', 'D240', 'trott', 'gr1a', 'gr1b'].filter(id => s.beams[0].mid[id] !== undefined);
     const lab = { G: 'Permanentes', A: 'A(l)', Bc: 'Bc', Bt: 'Bt', Mc120: 'Mc120', D240: 'D240', trott: 'Trottoirs', gr1a: 'EC gr1a', gr1b: 'EC gr1b' };
     table(['Poutre (y [m])', ...ids.map(i => lab[i])], s.beams.map(b => [`${b.k + 1} (${F2(b.y)})`, ...ids.map(i => `${F0(b.mid[i])}${i !== 'G' ? ` (η ${F3(b.eta[i])})` : ''}`)]), { small: true });
@@ -253,18 +253,31 @@ export function beamsBlocks(r, { reco = null } = {}) {
       if (gov.BA.travee) {
         table(['x [m]', 'M_Ed [kN·m]', 'A_s [cm²]', 'V_Ed [kN]', 'cot θ', 'V_Rd,max [kN]', 'A_sw/s [cm²/m]', 'Proposition', 'Résultat'], gov.BA.travee.map(t => [F(t.x, 1), F0(t.MEd), CM(t.As), F0(t.VEd), F2(t.V.cot), F0(t.V.VRdmax), F(t.V.AswS * 1e4, 1), etriers(t.V.AswS, (sec.H || 2) - inp.cover), t.V.ok ? 'OK' : 'NON']), hints(gov.BA.travee, t => (t.V.ok ? null : hint({ si, type: 'BAV', k: gov.k, x: t.x }))));
         comment(`Poutre ${gov.k + 1} (la plus sollicitée), le long de la demi-travée : armatures inférieures pour l'enveloppe des ELU (EC et Fascicule 61) ; étriers EN 1992-1-1 § 6.2.3 avec V_Ed = 1,35 V_G + 1,35 max(V_gr1a ; V_gr1b), z = 0,9 d, b_w = b₀.`);
-        B.push({ t: 'svg', svg: courbesX([{ nom: 'M_Ed', pts: gov.BA.travee.map(t => [t.x, t.MEd]), c: '#c8552b' }], { titre: `Poutre ${gov.k + 1} — moment ELU le long de la demi-travée`, unite: 'kN·m' }), caption: 'Enveloppe ELU des moments (Eurocodes et Fascicule 61).' });
-        B.push({ t: 'svg', svg: courbesX([{ nom: 'V_Ed', pts: gov.BA.travee.map(t => [t.x, t.VEd]), c: '#c8552b' }, { nom: 'V_Rd,max', pts: gov.BA.travee.map(t => [t.x, t.V.VRdmax]), c: '#1f5fa8' }], { titre: `Poutre ${gov.k + 1} — effort tranchant ELU`, unite: 'kN' }), caption: 'Effort tranchant ELU et résistance des bielles.' });
+        B.push({ t: 'svg', svg: courbesX([{ nom: 'M_Ed', pts: gov.BA.travee.map(t => [t.x, t.MEd]), c: '#c8552b' }], { titre: `Poutre ${gov.k + 1} — moment ELU ${s.continu ? 'positif le long de la travée' : 'le long de la demi-travée'}`, unite: 'kN·m', ...(s.continu ? { xlab: 'x depuis l\'appui gauche de la travée [m]' } : {}) }), caption: 'Enveloppe ELU des moments (Eurocodes et Fascicule 61).' });
+        B.push({ t: 'svg', svg: courbesX([{ nom: 'V_Ed', pts: gov.BA.travee.map(t => [t.x, t.VEd]), c: '#c8552b' }, { nom: 'V_Rd,max', pts: gov.BA.travee.map(t => [t.x, t.V.VRdmax]), c: '#1f5fa8' }], { titre: `Poutre ${gov.k + 1} — effort tranchant ELU`, unite: 'kN', ...(s.continu ? { xlab: 'x depuis l\'appui gauche de la travée [m]' } : {}) }), caption: 'Effort tranchant ELU et résistance des bielles.' });
       }
     } else {
       table(['Poutre', 'P∞ [kN]', 'P min (Guyon) [kN]', 'σ sup / inf à vide [MPa]', 'σ sup / inf en charge [MPa]', 'BPEL classe II', 'EC2 (décompression QP, 0,6 f_ck)'], s.beams.map(b => [String(b.k + 1), F0(inp.P), F0(b.BP.BPEL.Pmin), `${MPa(b.BP.BPEL.aVide.sup)} / ${MPa(b.BP.BPEL.aVide.inf)}`, `${MPa(b.BP.BPEL.enCharge.sup)} / ${MPa(b.BP.BPEL.enCharge.inf)}`, b.BP.BPEL.ok ? 'OK' : 'NON', b.BP.EC.ok ? 'OK' : 'NON']), hints(s.beams, b => hint({ si, type: 'BP', k: b.k })));
       comment(`Section donnée par ses valeurs : vérification simplifiée des contraintes normales à mi-travée sur la section composite (poutre + hourdis) avec la précontrainte finale P∞ et l'excentricité e₀ = ${F2(inp.e0)} m : σ = P/A ± P e v/I ∓ M v/I. BPEL 91 classe II : traction ≥ −f_tj sous combinaison rare, compression ≤ 0,6 f_cj ; EC2 : décompression sous quasi-permanente (G), compression ≤ 0,6 f_ck sous caractéristique ; précontrainte minimale de Guyon P ≥ (M_max v'/I + σ_t)/(1/A + e v'/I). Ne remplace pas le calcul phasé (poutre seule puis section composite, pertes instantanées et différées, câblage réel) d'un programme du type PONTYPE/BP.`);
     }
   }
+  if (r.continu && r.appuis) {
+    const ok = q => (q ? 'OK' : 'NON');
+    h2(`Travées continues — appuis intermédiaires (moments négatifs, armatures supérieures, goussets)`);
+    if (r.enveloppe) { const E = r.enveloppe.reduce((m, e) => (Math.max(...e.ELU_max) > Math.max(...m.ELU_max) ? e : m));
+      B.push({ t: 'svg', svg: courbesX([{ nom: 'M_u max (F61)', pts: E.x.map((x, i) => [x, E.ELU_max[i]]), c: '#c8552b' }, { nom: 'M_u min (F61)', pts: E.x.map((x, i) => [x, E.ELU_min[i]]), c: '#1f5fa8' },
+        { nom: 'M_Ed max (EC)', pts: E.x.map((x, i) => [x, E.ELU_EC_max[i]]), c: '#c8552b', dash: true }, { nom: 'M_Ed min (EC)', pts: E.x.map((x, i) => [x, E.ELU_EC_min[i]]), c: '#1f5fa8', dash: true }],
+        { titre: `Poutre ${E.k + 1} — enveloppe des moments ELU le long du tablier continu`, unite: 'kN·m', xlab: 'x depuis la culée [m]' }), caption: 'Enveloppes ELU des moments positifs (travées) et négatifs (appuis) de la poutre la plus sollicitée, Fascicule 61 / BAEL et Eurocodes.' }); }
+    table(['Appui', 'Poutre', 'M_G [kN·m]', 'M_A [kN·m]', 'M trottoirs', 'M_u axe / nu (F61) [kN·m]', 'M_ser nu (F61)', 'A_s sup. BAEL / EC2 [cm²]', 'σ_bc ELS [MPa]', 'V_u gauche / droite [kN]', 'τ_u / τ̄_u [MPa]', 'Gousset nécessaire [m]', 'Résultat'],
+      r.appuis.flatMap(a => a.beams.map(q => [`P${a.i}`, String(q.k + 1), F0(q.Mcomp.G), F0(q.Mcomp.A), F0(q.Mcomp.trott), `${F0(q.Maxe.ELU_F61)} / ${F0(q.Mnu.ELU_F61)}`, F0(q.Mnu.ELS_F61), `${CM(q.retenu.BAEL)} / ${CM(q.retenu.EC)}`,
+        `${F2(q.ELS.BAEL.sigC)} / ${F1(q.ELS.BAEL.lim.sigC)}`, `${F0(q.Vg)} / ${F0(q.Vd)}`, `${F2(q.cisaillementBAEL.tau)} / ${F2(q.cisaillementBAEL.tauLim)}`, `${F2(Math.max(q.goussetNecessaire, q.compressionNecessaire))} (âme ${F2(q.bg)})`,
+        ok(q.cisaillementBAEL.ok && q.ELS.BAEL.okC && q.ELS.EC.okC && q.ULS.BAEL.As != null && q.ULS.EC.As != null)])), { small: true, ...hints(r.appuis.flatMap(a => a.beams.map(q => ({ a, q }))), x => (x.q.cisaillementBAEL.ok && x.q.ELS.BAEL.okC && x.q.ELS.EC.okC && x.q.ULS.BAEL.As != null && x.q.ULS.EC.As != null ? null : hint({ si: x.a.i, type: 'BAappui', k: x.q.k }))) });
+    comment(`Poutre continue d'inertie constante (dossier Sétra PSI-BA 77 : ouvrage coulé sur cintre), répartition transversale ${inp.courbon ? `de Courbon (entretoises intermédiaires infiniment rigides : R_k = P (1/n + e y_k/Σ y²))` : 'de Guyon-Massonnet par travée (portées de Guyon tirées des portées équivalentes de la poutre continue)'}. Sur appui : combinaisons des moments négatifs (BAEL : 1,35 G + min[1,605 (A ou B + trottoirs) ; 1,35 (Mc120 + trottoirs)] ; EC : 1,35 G + 1,35 min(gr1a ; gr1b)), réduites au nu de l'entretoise d'appui de ${F2(inp.tePile ?? 0.5)} m (|M| − V e/2, PSI-BA) ; section rectangulaire comprimée en partie basse (largeur max(talon ; gousset)), armatures supérieures réparties dans le hourdis ; ELS en section fissurée (n = 15). Gousset nécessaire : max(V_u/(τ̄_u d) ; largeur pour σ_bc ≤ 0,6 f_c28). Les épaisseurs des goussets sont à reporter dans le champ « gousset d'appui » (dossier PSI-BA : même épaisseur pour toutes les poutres d'un appui, rallonger les goussets).`);
+  }
   B.push(...indiquerHourdis(localBlocks(r), hint));
   h2('Réactions caractéristiques par ligne d\'appui (pour l\'onglet Appuis et fondations)');
   table(['Ligne', 'G', 'A(l)', 'Bc (δ appui)', 'Mc120 (δ appui)', 'Trottoirs', 'TS', 'UDL'], r.lines.map((l, i) => [i === 0 || i === r.lines.length - 1 ? `Culée C${i}` : `Pile P${i}`, F0(l.G), F0(l.A), F0(l.Bc), F0(l.Mc120), F0(l.trott), F0(l.TS), F0(l.UDL)]));
-  comment('Travées indépendantes : permanentes et charges réparties = somme des réactions des travées adjacentes ; convois = maximum sur la ligne d\'influence des deux travées (deux sens de circulation), δ d\'appui ½[δ + max(δ ; 1,5)] (B) et ½[δ + max(δ ; 1,2)] (Mc120).');
+  comment(r.continu ? 'Travées continues : réactions du tablier continu (lignes d\'influence de la poutre continue, enveloppes des charges du Fascicule 61 et des Eurocodes).' : 'Travées indépendantes : permanentes et charges réparties = somme des réactions des travées adjacentes ; convois = maximum sur la ligne d\'influence des deux travées (deux sens de circulation), δ d\'appui ½[δ + max(δ ; 1,5)] (B) et ½[δ + max(δ ; 1,2)] (Mc120).');
   return B;
 }
 

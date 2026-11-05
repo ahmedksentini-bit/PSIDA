@@ -43,7 +43,7 @@ const grille = (min, max, pas) => { const o = []; for (let v = min; v <= max + 1
 export const LIB_POUTRES = {
   pt_nc: 'Nombre de câbles par poutre', pt_n2: 'Câbles de 2e famille', pt_unite: 'Unité de précontrainte', pt_parlit: 'Câbles par lit',
   pt_cbas: 'Axe du lit inférieur', pt_ev: 'Entraxe vertical des lits', pt_yah: 'Ancrage le plus haut', pt_sp0: 'σ_p0 à la mise en tension',
-  pt_hp: 'Hauteur de la poutre h_p', pt_bta: 'Largeur du talon', pt_b0v: 'Épaisseur d\'âme b₀', pt_b0a: 'Âme sur appui (blochet)', pt_Lb: 'Longueur du blochet',
+  pt_hp: 'Hauteur de la poutre h_p', pt_bgous: 'Gousset d\'appui : épaisseur d\'âme sur appui intermédiaire', pt_bta: 'Largeur du talon', pt_b0v: 'Épaisseur d\'âme b₀', pt_b0a: 'Âme sur appui (blochet)', pt_Lb: 'Longueur du blochet',
   pt_fck: 'f_ck des poutres', pt_fckh: 'f_ck du hourdis', pt_hd: 'Épaisseur du hourdis', pt_t1: 'Âge à la mise en tension (1re famille) ou au relâchement',
   pr_nt: 'Nombre de torons par poutre', pr_nsup: 'Torons supérieurs', pr_e: 'Entraxe des torons', pr_cbas: 'Axe du lit inférieur des torons',
   pr_g1n: 'Groupe gainé 1 : torons', pr_g1L: 'Groupe gainé 1 : longueur', pr_g2n: 'Groupe gainé 2 : torons', pr_g2L: 'Groupe gainé 2 : longueur', pr_hetuv: 'Durée de l\'étuvage',
@@ -65,7 +65,7 @@ export const texteChamps = ch => Object.entries(ch).map(([k, v]) => `${min1(LIB_
  */
 export function evaluerPoutres(data, { local = false, cache = null, exact = false } = {}) {
   let inp = parsePoutres(data);
-  if (inp.rail || local) return computePoutres(inp);
+  if (inp.rail || local || inp.continu) return computePoutres(inp);   // travées continues : calcul complet
   if (inp.geo === 'dims') {
     const S = sectionVIPP(inp.vipp.forme, { b1: inp.b1, hd: inp.hd });
     inp = { ...inp, beam: { ...S.comp, v: S.comp.v, vp: S.comp.vp }, vippSection: S };
@@ -162,6 +162,7 @@ function familles(mode) {
     { cle: 'tranchBA', test: b => (b.BA.travee || []).every(t => t.V.ok) },
     { cle: 'elsBA', test: b => !b.BA.ELS || (b.BA.ELS.BAEL.okC && b.BA.ELS.EC.okC) },
     { cle: 'tauBA', test: b => !b.BA.cisaillementBAEL || b.BA.cisaillementBAEL.ok },
+    { cle: 'appuiBA', test: (b, r) => !r || !r.appuis || r.appuis.every(a => a.beams.every(q => q.cisaillementBAEL.ok && q.ELS.BAEL.okC && q.ELS.EC.okC && q.ULS.BAEL.As != null && q.ULS.EC.As != null)) },
   ];
   if (mode === 'BP') return [
     { cle: 'tracBP', test: (b, r) => { const P = b.BP.BPEL, E = b.BP.EC; return (!P || (P.enCharge.inf >= P.sigTlim - 1e-6 && P.Pmin <= r.inp.P + 1e-6)) && E.enCharge.inf >= -1e-6; } },
@@ -266,6 +267,7 @@ function parametres(cle, ctx) {
     g1n: () => num('pr_g1n', val('pr_g1n', A.groupes[0]?.n ?? 0), { pas: 1, min: 0, vers: 'bas', entier: true, unite: '' }),
     sp0: () => (C.sigP0 ? num('pt_sp0', val('pt_sp0', C.sigP0), { pas: 10, min: 1000, vers: 'bas', dec: 0, unite: 'MPa' }) : null),
     b0: () => num('pt_b0', val('pt_b0', inp.b0), { pas: 0.05, max: Math.max(val('pt_b0', inp.b0) + 0.5, 0.6) }),
+    bgous: () => num('pt_bgous', val('pt_bgous', inp.bGousset ?? inp.b0), { pas: 0.05, max: Math.max(val('pt_bgous', inp.bGousset ?? inp.b0) + 0.8, 1.2) }),
     P: () => num('pt_P', val('pt_P', inp.P), { pas: 100, max: Math.max(3 * val('pt_P', inp.P), 2000), dec: 0, unite: 'kN' }),
     Pdown: () => num('pt_P', val('pt_P', inp.P), { pas: 100, min: 100, vers: 'bas', dec: 0, unite: 'kN' }),
     e0down: () => { const q = num('pt_e0', val('pt_e0', inp.e0), { pas: 0.05, min: -Math.max((ctx.vp ?? 1) - 0.10, 0.05), vers: 'bas' }); return q && { ...q, texteChamp: 'excentricité e₀ (câble descendu)' }; },
@@ -283,7 +285,7 @@ function parametres(cle, ctx) {
     compP: ['fck', 'hp'], compH: ['fckh', 'hd'], elu: ['hp', 'fckh', 'fck'],
     tranchantA: ['b0a', 'fck', 'hp'], tranchantC: ['b0v', 'Lb', 'fck', 'hp'],
     seismeElu: prad ? ['nt', 'hp'] : ['nc', 'hp'],
-    flexBA: ['hp', ...(ctx.modeBA === 'âme' ? ['b0'] : ctx.modeBA === 'table' ? ['hd'] : []), 'fck'], tranchBA: ['b0', 'fck', 'hp'], elsBA: ['hp', 'hd', 'fck'], tauBA: ['b0', 'fck', 'hp'],
+    flexBA: ['hp', ...(ctx.modeBA === 'âme' ? ['b0'] : ctx.modeBA === 'table' ? ['hd'] : []), 'fck'], tranchBA: ['b0', 'fck', 'hp'], elsBA: ['hp', 'hd', 'fck'], tauBA: ['b0', 'fck', 'hp'], appuiBA: ['bgous', 'hp', 'fck'],
     tracBP: ['P', 'e0down'], videBP: ['e0up', 'Pdown'], compBP: ['fck'],
     poinc: ['hd', 'fckh', 'trev'],
     railFleche: ['hp'], railGauche: ['hp'], railDH: ['hp'], railDV: ['about', 'hp'], railTransv: ['hd'],
@@ -304,7 +306,7 @@ async function dicho(vals, ok) {
 const LIB_FAM = {
   sigpm0: 'contrainte initiale de précontrainte', constrT: 'traction en construction', constrC: 'compression en construction', traction: 'décompression et tractions en service',
   compP: 'compression des poutres', compH: 'compression du hourdis', elu: 'ELU de flexion', tranchantA: 'effort tranchant dans le blochet', tranchantC: 'effort tranchant en section courante', seismeElu: 'ELU sous séisme vertical',
-  flexBA: 'flexion ELU des poutres BA', tranchBA: 'effort tranchant des poutres BA', elsBA: 'compression du béton à l\'ELS des poutres BA', tauBA: 'contrainte de cisaillement BAEL des poutres BA', tracBP: 'tractions (précontrainte insuffisante)', videBP: 'traction à vide (fibre supérieure)',
+  flexBA: 'flexion ELU des poutres BA', tranchBA: 'effort tranchant des poutres BA', elsBA: 'compression du béton à l\'ELS des poutres BA', tauBA: 'contrainte de cisaillement BAEL des poutres BA', appuiBA: 'sections sur appuis des poutres BA continues', tracBP: 'tractions (précontrainte insuffisante)', videBP: 'traction à vide (fibre supérieure)',
   compBP: 'compressions', poinc: 'poinçonnement du hourdis', railFleche: 'flèche et confort sous rail', railGauche: 'gauche du tablier',
   railDH: 'déplacement δH des extrémités', railDV: 'soulèvement δV des extrémités', railTransv: 'déformation et fréquence transversales',
 };
@@ -581,6 +583,14 @@ export async function recommandationsPoutres(out, data, { budget = 45000, onProg
       const E = ce[0].b.BA.ELS, q = E.BAEL.okC ? E.EC : E.BAEL;
       items.push({ domaine: dom('ELS'), lieu: listeP(ce.map(x => x.b.k)), verification: 'σ_bc ≤ 0,6 f_c28 (section en T fissurée)', constat: `σ_bc = ${fx(q.sigC)} > ${fx(q.lim.sigC)} MPa (poutre ${ce[0].b.k + 1}${ouT(ce[0].si)})`,
         regle: 'BAEL 91 A.4.5,2 / EN 1992-1-1 § 7.2 (2)', actions: await acts(famDe('elsBA')), cibles: ce.map(x => ({ si: x.si, type: 'BAels', k: x.b.k })) });
+    }
+    if (out.appuis) {
+      const ko = []; out.appuis.forEach(a => a.beams.forEach(q => { if (!(q.cisaillementBAEL.ok && q.ELS.BAEL.okC && q.ELS.EC.okC && q.ULS.BAEL.As != null && q.ULS.EC.As != null)) ko.push({ a, q }); }));
+      if (ko.length) {
+        const w = ko[0].q, c = !w.cisaillementBAEL.ok ? `τ_u = ${fx(w.cisaillementBAEL.tau)} > ${fx(w.cisaillementBAEL.tauLim)} MPa (âme ${fx(w.bg)} m, gousset nécessaire ${fx(w.goussetNecessaire)} m)` : `compression du béton en partie basse (largeur ${fx(w.bc)} m ; ${fx(w.compressionNecessaire)} m nécessaires)`;
+        items.push({ domaine: dom('appuis intermédiaires'), lieu: listeP(ko.map(x => x.q.k)), verification: 'Section sur appui (gousset, compression, cisaillement)', constat: `appui ${ko[0].a.i + 1}, poutre ${w.k + 1} : ${c}`,
+          regle: 'Dossier Sétra PSI-BA 77, pièce V.1.1 ; BAEL 91 A.4.5,2 et A.5.1,21', actions: await acts(famDe('appuiBA')), cibles: ko.map(x => ({ si: x.a.i, type: 'BAappui', k: x.q.k })) });
+      }
     }
     if (ct.length) {
       const V = ct[0].b.BA.cisaillementBAEL;
