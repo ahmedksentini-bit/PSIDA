@@ -469,6 +469,11 @@ BAEL 91 ou EN 1992-1-1, blocs monolithiques), recoupé sur 2 104 grandeurs de BV
 ferroviaire (EN 1991-2 : LM71, SW/0, SW/2, Φ2/Φ3 réduit pour la couverture, surcharge sur remblai) ; voie franchie route
 ou voie ferrée (gabarit, choc EN 1991-1-7 en situation accidentelle) ; portique ouvert sur appuis encastrés ou articulés
 avec enveloppe des réactions ; note HTML et Word ; avant-propos et chapitre 27 du manuel.
+v0.99.21 : plans des poutres BA — entretoises intermédiaires dessinées (PSI-BA 77, pièce V § 1.1 et 1.7) : coffrage
+(coupe transversale au droit d'une entretoise, entretoises également espacées dans l'élévation, cotes, béton et coffrage
+dans les quantités) ; ferraillage (coupe B-B : aciers inférieurs ancrés par courbure dans les poutres de rive, aciers
+supérieurs continus, étriers, suspentes dans les poutres ; tableau des barres E1 à E4 et masse) ; format supérieur
+choisi automatiquement si la colonne des tableaux et des notes ne tient pas.
 v0.99.20 : entretoises intermédiaires des poutres BA (src/beams/entretoise_int.js), d'après le dossier Sétra PSI-BA 77
 (pièce IV § 7, pièce V § 1.7) : entretoise la plus sollicitée (travée où elles sont le plus espacées ; nombre par travée en
 liste « 1, 2, 2, 1 »), méthode de Courbon, coefficients longitudinaux (1 − |x|/λ) et transversaux sous A(l), Bc, Bt, Br,
