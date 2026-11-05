@@ -93,3 +93,21 @@ test('Entretoises intermédiaires en travée indépendante, sans entretoise : pa
   const m = r1.entInt.moments; near(m[0].max.ELU_F61 + 1, m[m.length - 1].max.ELU_F61 + 1, 0.01, 'symétrie');
   assert.equal(computePoutres(parsePoutres({ ...D1, pt_entInt: '0' })).entInt, null);
 });
+
+test('PSI-BA : plans — entretoises intermédiaires dessinées (coffrage, coupe B-B de ferraillage, quantités)', async () => {
+  const { donneesBA, planCoffrageBA, planFerraillageBA } = await import('../src/plans/poutres_ba.js');
+  const r4 = computePoutres(parsePoutres({ ...DP, pt_entInt: '1, 2, 2, 1', pt_beInt: '0.38' })), D = donneesBA(r4);
+  const EI = D.entInt;
+  assert.ok(EI && EI.nE === 2 && Math.abs(EI.xs[0] - 18.8 / 3) < 1e-9 && EI.zInf === 0, 'travée détaillée de 18,80 m : deux entretoises au tiers');
+  const C = planCoffrageBA(D, {}), Fe = planFerraillageBA(D, {});
+  for (const F of [C, Fe]) assert.deepEqual(F.valide().problemes, []);
+  // béton : 2 × 0,38 × 0,76 × 2 × (4,00 − 0,38) m³ en plus
+  const C0 = planCoffrageBA({ ...D, entInt: null }, {});
+  near(C.quantites.beton - C0.quantites.beton, 2 * 0.38 * 0.76 * 2 * 3.62, 1e-6, 'béton des entretoises intermédiaires');
+  assert.ok(Fe.vues.some(p => /COUPE B-B/.test(p.vue.titre)));
+  const t = Fe.tableaux.find(q => /ENTRETOISE INTERMÉDIAIRE/.test(q.titre));
+  assert.deepEqual(t.lignes.slice(0, 4).map(l => l[0]), ['E1', 'E2', 'E3', 'E4']);
+  assert.ok(Fe.masseEntretoiseInt > 100);
+  // aciers inférieurs dessinés : au moins A_s, ancrage compris
+  assert.ok(EI.inf.As >= Math.max(EI.Q.inf.As, EI.Q.ancrage) - 1e-12);
+});

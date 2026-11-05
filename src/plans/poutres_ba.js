@@ -10,7 +10,10 @@
  *    longueur de scellement droit l_s ; le lit inférieur (au moins deux barres d'angle) est filant et ancré au-delà de l'appui ;
  *  - armatures d'âme (§ V.1.5) : épure de répartition des étriers par zones depuis l'appui ;
  *  - hourdis (§ V.1.2) : nappes transversales inférieure et supérieure par mètre, armatures longitudinales de répartition ;
- *  - entretoises d'about (§ V.1.8) : armatures inférieures et supérieures, étriers (vérinage).
+ *  - entretoises d'about (§ V.1.8) : armatures inférieures et supérieures, étriers (vérinage) ;
+ *  - entretoises intermédiaires (§ V.1.7) : niveau inférieur à l'intrados des poutres (ou au-dessus des ailes du talon),
+ *    armatures inférieures ancrées par courbure au-delà du nu des poutres de rive, armatures supérieures continues d'une
+ *    poutre de rive à l'autre (porte-étriers), étriers, étriers de suspension dans les poutres.
  * Cotes en mètres.
  */
 import { Vue } from './dessin.js';
@@ -133,7 +136,22 @@ export function donneesBA(r, { code = 'BAEL' } = {}) {
     const e = { brins: e0.brins, phi: e0.phi, s: Math.round(espace(AtSt(t)) * 100) / 100 }, x1 = k < tr.length - 1 ? (t.x + tr[k + 1].x) / 2 : sp.L / 2, last = zones[zones.length - 1];
     if (last && last.phi === e.phi && last.s === e.s && last.brins === e.brins) last.x1 = x1; else zones.push({ x0: last ? last.x1 : 0, x1, ...e, AtSt: AtSt(t) });
   });
-  return { r, sp, b, inp, sec, parts, hp, H, d, As, a, bars, zones, code, superieures, hourdis: r.hourdis, entretoise: r.entretoise };
+  return { r, sp, b, inp, sec, parts, hp, H, d, As, a, bars, zones, code, superieures, hourdis: r.hourdis, entretoise: r.entretoise, entInt: entretoisesInt(r, sp, parts, H, code) };
+}
+
+/**
+ * Entretoises intermédiaires de la travée détaillée (calcul de l'entretoise la plus sollicitée, src/beams/entretoise_int.js) :
+ * positions (également espacées), niveau inférieur (intrados, ou dessus des ailes du talon), barres et étriers retenus.
+ */
+function entretoisesInt(r, sp, parts, H, code) {
+  const E = r.entInt, inp = r.inp;
+  if (!E || E.erreur) return null;
+  const j = r.spans.indexOf(sp), nE = (inp.nEntInt || [])[j] || 0;
+  if (!(nE > 0)) return null;
+  const Q = E[code], bw = Math.min(...parts.map(q => q.b));
+  let zInf = 0; for (const q of parts) { if (q.b > bw + 1e-9) zInf += q.h; else break; }
+  const smax = code === 'EC' ? Math.min(0.75 * E.d, 0.40) : Math.min(0.9 * E.d, 0.40), et = etrierBA(Q.V.AtSt ?? Q.V.AswS, smax);
+  return { E, Q, nE, xs: Array.from({ length: nE }, (_, i) => sp.L * (i + 1) / (nE + 1)), b: E.b0, zInf, bw, inf: Q.barresInf, sup: Q.barresSup, et, smax, nSusp: Q.suspente2HA12 };
 }
 
 /** Coupe de la poutre (rectangles empilés centrés) avec sa largeur de hourdis b₁. */
@@ -158,7 +176,7 @@ function vuePoutre(D, { titre, armatures = null, echelle = 20 }) {
 }
 
 /** Coupe transversale du tablier : poutres, hourdis, entretoise d'about (tiretée), chaussée et trottoirs. */
-function vueTablier(D, { titre = 'COUPE TRANSVERSALE DU TABLIER' } = {}) {
+function vueTablier(D, { titre = D.entInt ? 'COUPE TRANSVERSALE DU TABLIER (AU DROIT D\'UNE ENTRETOISE INTERMÉDIAIRE)' : 'COUPE TRANSVERSALE DU TABLIER' } = {}) {
   const { inp, parts, hp } = D, n = inp.n, b1 = inp.b1, W = n * b1, V = new Vue(titre, { echelle: 50 });
   const ys = Array.from({ length: n }, (_, k) => -W / 2 + b1 * (k + 0.5));
   V.poly('COFFRAGE', [[-W / 2, hp], [W / 2, hp], [W / 2, hp + inp.hd], [-W / 2, hp + inp.hd]], true);
@@ -171,6 +189,13 @@ function vueTablier(D, { titre = 'COUPE TRANSVERSALE DU TABLIER' } = {}) {
   // entretoise d'about (vue au-delà, tiretée) entre poutres
   const he = D.entretoise ? D.entretoise.he : hp - 0.1;
   V.poly('VUES', [[ys[0], hp - he], [ys[n - 1], hp - he], [ys[n - 1], hp], [ys[0], hp]], true);
+  // entretoise intermédiaire coupée (plan de coupe à son droit), entre les âmes des poutres
+  const EI = D.entInt;
+  if (EI) for (let k = 0; k < n - 1; k++) {
+    const pts = [[ys[k] + EI.bw / 2, EI.zInf], [ys[k + 1] - EI.bw / 2, EI.zInf], [ys[k + 1] - EI.bw / 2, hp], [ys[k] + EI.bw / 2, hp]];
+    V.poly('COFFRAGE', pts, true); V.hachure(pts);
+    if (k === 0) V.texte('TEXTES', [(ys[0] + ys[1]) / 2, (EI.zInf + hp) / 2], `entretoise intermédiaire e = ${fr(EI.b)}`, { h: 2.0, ancre: 'c', v: 'm' });
+  }
   // chaussée et trottoirs (au-dessus du hourdis)
   const zr = hp + inp.hd + 0.08;
   if (inp.roadway) { V.ligne('VUES', [inp.roadway.y1, zr], [inp.roadway.y2, zr]); V.texte('TEXTES', [(inp.roadway.y1 + inp.roadway.y2) / 2, zr + 0.06], `chaussée ${fr(inp.roadway.y2 - inp.roadway.y1)} m`, { h: 2.2, ancre: 'c' }); }
@@ -192,6 +217,11 @@ function vueElevation(D, { barres = false } = {}) {
   for (const xa of [a, Lp - a]) { V.ligne('AXES', [xa, -0.35], [xa, H + 0.25]); V.poly('APPAREILS', [[xa - 0.2, -0.06], [xa + 0.2, -0.06], [xa + 0.2, 0], [xa - 0.2, 0]], true); }
   V.ligne('AXES', [Lp / 2, -0.25], [Lp / 2, H + 0.25]);
   V.texte('TEXTES', [Lp / 2, H + 0.3], 'mi-travée', { h: 2.2, ancre: 'c' });
+  const EI = D.entInt;
+  if (EI) {
+    EI.xs.forEach(x => { const xe = a + x; V.poly('VUES', [[xe - EI.b / 2, EI.zInf], [xe + EI.b / 2, EI.zInf], [xe + EI.b / 2, hp], [xe - EI.b / 2, hp]], true); if (!barres) V.ligne('AXES', [xe, -0.15], [xe, H + 0.15]); });
+    if (!barres) { [0, ...EI.xs, L].forEach((x, i, l) => { if (i) V.coteH([a + l[i - 1], 0], [a + x, 0], -0.3, fr(x - l[i - 1])); }); V.texte('TEXTES', [a + EI.xs[0], H + 0.15], 'B', { h: 2.5, ancre: 'c', gras: true }); }
+  }
   if (barres) {
     bars.lits.forEach((l, k) => {
       const x0 = a + l.x0, x1 = x0 + l.L, y = l.y;
@@ -212,9 +242,53 @@ function vueElevation(D, { barres = false } = {}) {
       V.coteH([a + z.x0, H], [a + z.x1, H], H + 0.30 + 0.22 * (k % 2), `${z.brins === 4 ? 'C+E' : 'C'} HA${z.phi}/${fr(z.s * 100, 0)}`);
     });
   }
-  V.coteH([a, 0], [Lp - a, 0], barres ? -1.2 : -0.55, `L = ${fr(L)}`);
-  V.coteH([0, 0], [Lp, 0], barres ? -1.5 : -0.85, `${fr(Lp)}`);
+  const dz = !barres && D.entInt ? 0.2 : 0;
+  V.coteH([a, 0], [Lp - a, 0], barres ? -1.2 : -0.55 - dz, `L = ${fr(L)}`);
+  V.coteH([0, 0], [Lp, 0], barres ? -1.5 : -0.85 - dz, `${fr(Lp)}`);
   V.coteV([0, 0], [0, H], -0.6);
+  return V;
+}
+
+/** Longueurs des barres de l'entretoise intermédiaire (ancrages par courbure dans les poutres de rive, retours de 10 φ). */
+function barresEntretoise(D) {
+  const EI = D.entInt, inp = D.inp, n = inp.n, Lt = (n - 1) * inp.b1, c = 0.03, H = D.H, retInf = Math.max(0.30, H / 3), retSup = 0.20;
+  const Linf = Lt + EI.bw - 2 * c - 0.04 + 2 * retInf, Lsup = Lt + EI.bw - 2 * c + 2 * retSup;
+  const he = D.hp - EI.zInf, per = 2 * (EI.b - 2 * c) + 2 * (he + inp.hd - 2 * c) + 0.2, nEt = Math.ceil((n - 1) * (inp.b1 - EI.bw) / EI.et.s) + (n - 1);
+  const kg = (k, phi, L) => k * L * kgm(phi);
+  const lignes = [];
+  if (EI.inf) lignes.push({ rep: 'E1', bar: `${EI.inf.n} HA${EI.inf.phi}`, L: Linf, disp: `inférieures${EI.inf.lits > 1 ? `, ${EI.inf.lits} lits` : ''}, ancrées par courbure dans les poutres de rive`, kg: kg(EI.inf.n, EI.inf.phi, Linf) });
+  if (EI.sup) lignes.push({ rep: 'E2', bar: `${Math.max(EI.sup.n, EI.inf ? EI.inf.parLit : 2)} HA${EI.sup.phi}`, L: Lsup, disp: 'supérieures continues (porte-étriers)', kg: kg(Math.max(EI.sup.n, EI.inf ? EI.inf.parLit : 2), EI.sup.phi, Lsup) });
+  lignes.push({ rep: 'E3', bar: `${nEt} ${EI.et.brins === 4 ? 'cadres + étriers' : 'cadres'} HA${EI.et.phi}`, L: per, disp: `étriers / ${fr(EI.et.s * 100, 0)} cm entre poutres`, kg: kg(nEt * (EI.et.brins === 4 ? 1.8 : 1), EI.et.phi, per) });
+  const perS = 2 * (D.H - 2 * c) + 2 * (EI.bw - 2 * c) + 0.2;
+  lignes.push({ rep: 'E4', bar: `${EI.nSusp} cadres HA12`, L: perS, disp: 'suspentes dans chaque poutre, de part et d\'autre de l\'entretoise', kg: kg(EI.nSusp * n, 12, perS) });
+  return { lignes, Linf, Lsup, retInf, retSup, masse: lignes.reduce((t, l) => t + l.kg, 0) };
+}
+
+/** Coupe B-B : entretoise intermédiaire vue dans son plan (poutres coupées), armatures. */
+function vueEntretoise(D) {
+  const EI = D.entInt, { inp, parts, hp, H } = D, n = inp.n, b1 = inp.b1, W = n * b1, ys = Array.from({ length: n }, (_, k) => -W / 2 + b1 * (k + 0.5)), c = 0.03;
+  const V = new Vue('COUPE B-B : FERRAILLAGE D\'UNE ENTRETOISE INTERMÉDIAIRE', { echelle: 50 });
+  const yL = ys[0] - b1 / 2, yR = ys[n - 1] + b1 / 2;
+  V.poly('COFFRAGE', [[yL, hp], [yR, hp], [yR, H], [yL, H]], true);
+  for (const y0 of ys) { let y = 0; const right = [], left = []; parts.forEach(q => { right.push([y0 + q.b / 2, y], [y0 + q.b / 2, y + q.h]); left.unshift([y0 - q.b / 2, y + q.h], [y0 - q.b / 2, y]); y += q.h; }); const pts = [...right, ...left]; V.poly('COFFRAGE', pts, true); V.hachure(pts); V.ligne('AXES', [y0, -0.2], [y0, H + 0.2]); }
+  for (let k = 0; k < n - 1; k++) V.poly('COFFRAGE', [[ys[k] + EI.bw / 2, EI.zInf], [ys[k + 1] - EI.bw / 2, EI.zInf], [ys[k + 1] - EI.bw / 2, hp], [ys[k] + EI.bw / 2, hp]], true);
+  const B = barresEntretoise(D), y0 = ys[0] - EI.bw / 2 + c + 0.02, y1 = ys[n - 1] + EI.bw / 2 - c - 0.02;
+  // aciers inférieurs : lits au-dessus de ceux des poutres (d = H − 2 × enrobage), relevés dans les poutres de rive
+  const zb = Math.max(H - EI.E.d - (EI.inf && EI.inf.lits > 1 ? (EI.inf.lits - 1) * 0.03 : 0), EI.zInf + 0.06);
+  for (let k = 0; k < (EI.inf ? EI.inf.lits : 1); k++) { const z = zb + k * 0.06; V.poly('ACIERS', [[y0, z + B.retInf], [y0, z], [y1, z], [y1, z + B.retInf]]); }
+  const zs = H - 0.07;
+  V.poly('ACIERS', [[y0, zs - B.retSup], [y0, zs], [y1, zs], [y1, zs - B.retSup]]);
+  for (let k = 0; k < n - 1; k++) for (let y = ys[k] + EI.bw / 2 + 0.05; y < ys[k + 1] - EI.bw / 2 - 0.02; y += EI.et.s) V.ligne('ACIERS', [y, zb - 0.02], [y, zs + 0.02]);
+  for (const yy of ys) for (const s2 of [-1, 1]) V.ligne('ACIERS', [yy + s2 * (EI.bw / 2 - c), c], [yy + s2 * (EI.bw / 2 - c), H - c]);
+  const xm = (ys[0] + ys[1]) / 2;
+  if (EI.inf) { V.repere([xm, zb - 0.25], 'E1', [xm, zb]); V.texte('TEXTES', [xm + 0.12, zb - 0.25], `${EI.inf.n} HA${EI.inf.phi}${EI.inf.lits > 1 ? ` (${EI.inf.lits} lits)` : ''}`, { h: 2.0, v: 'm' }); }
+  if (EI.sup) { V.repere([xm, H + 0.25], 'E2', [xm, zs]); V.texte('TEXTES', [xm + 0.12, H + 0.25], `${B.lignes.find(l => l.rep === 'E2').bar}`, { h: 2.0, v: 'm' }); }
+  const xe = (ys[n - 2] + ys[n - 1]) / 2;
+  V.repere([xe, H + 0.25], 'E3', [xe, (zb + zs) / 2]); V.texte('TEXTES', [xe + 0.12, H + 0.25], `${EI.et.brins === 4 ? 'C+E' : 'cadres'} HA${EI.et.phi} / ${fr(EI.et.s * 100, 0)}`, { h: 2.0, v: 'm' });
+  V.repere([ys[0] - EI.bw / 2 - 0.35, H * 0.5], 'E4', [ys[0] - EI.bw / 2 + c, H * 0.5]); V.texte('TEXTES', [ys[0] - EI.bw / 2 - 0.42, H * 0.5], `suspentes ${EI.nSusp} cadres HA12`, { h: 2.0, ancre: 'd', v: 'm' });
+  for (let k = 0; k < n - 1; k++) V.coteH([ys[k], 0], [ys[k + 1], 0], -0.3);
+  V.coteV([ys[n - 1] + EI.bw / 2, EI.zInf], [ys[n - 1] + EI.bw / 2, hp], ys[n - 1] + b1 / 2 + 0.2, fr(hp - EI.zInf));
+  V.texte('TEXTES', [(ys[0] + ys[n - 1]) / 2, -0.75], `épaisseur de l'entretoise ${fr(EI.b)} m ; ${EI.nE} entretoise(s) dans la travée`, { h: 2.0, ancre: 'c' });
   return V;
 }
 
@@ -222,20 +296,22 @@ export function planCoffrageBA(D, cartouche = {}, { nom = 'TABLIER À POUTRES BA
   const { inp, sp, parts, hp, H, a } = D, L = sp.L, Lp = L + 2 * a, n = inp.n, te = D.entretoise ? D.entretoise.te : 0.25, he = D.entretoise ? D.entretoise.he : hp - 0.1;
   const ct = vueTablier(D), el = vueElevation(D), cp = vuePoutre(D, { titre: 'COUPE DE LA POUTRE (MI-TRAVÉE)' });
   const Ap = parts.reduce((s, q) => s + q.b * q.h, 0), vP = Ap * Lp * n, vH = n * inp.b1 * inp.hd * Lp, vE = 2 * te * he * (n - 1) * inp.b1;
-  const coff = n * Lp * (2 * hp + parts[0].b) + n * inp.b1 * Lp;
+  const EI = D.entInt, vI = EI ? EI.nE * EI.b * (hp - EI.zInf) * (n - 1) * (inp.b1 - EI.bw) : 0;
+  const coff = n * Lp * (2 * hp + parts[0].b) + n * inp.b1 * Lp + (EI ? EI.nE * 2 * (hp - EI.zInf) * (n - 1) * (inp.b1 - EI.bw) : 0);
   const tq = { titre: `QUANTITÉS (UNE TRAVÉE DE ${fr(L)} m)`, cols: [{ t: 'Désignation', w: 96, a: 'g' }, { t: 'Unité', w: 18, a: 'c' }, { t: 'Quantité', w: 30, a: 'd' }],
-    lignes: [[`Béton des poutres (${n} × ${fr(Ap, 3)} m² × ${fr(Lp)} m)`, 'm³', fr(vP, 2)], ['Béton du hourdis', 'm³', fr(vH, 2)], ['Béton des entretoises d\'about', 'm³', fr(vE, 2)], ['Total béton (C' + inp.fck + ')', 'm³', fr(vP + vH + vE, 2)], ['Coffrage (estimation)', 'm²', fr(coff, 0)]] };
+    lignes: [[`Béton des poutres (${n} × ${fr(Ap, 3)} m² × ${fr(Lp)} m)`, 'm³', fr(vP, 2)], ['Béton du hourdis', 'm³', fr(vH, 2)], ['Béton des entretoises d\'about', 'm³', fr(vE, 2)], ...(EI ? [[`Béton des entretoises intermédiaires (${EI.nE})`, 'm³', fr(vI, 2)]] : []), ['Total béton (C' + inp.fck + ')', 'm³', fr(vP + vH + vE + vI, 2)], ['Coffrage (estimation)', 'm²', fr(coff, 0)]] };
   const N = numeroter(['NOTES', `1. Cotes en mètres. Tablier coulé en place sur cintre : ${n} poutres de ${fr(H)} m (hourdis compris) à ${fr(inp.b1)} m d'entraxe, hourdis de ${fr(inp.hd)} m, travée de ${fr(L)} m entre axes d'appui, abouts de ${fr(a)} m.`,
     `2. Entretoises d'about de ${fr(te)} m d'épaisseur et ${fr(he)} m de hauteur sous hourdis, dimensionnées pour le vérinage (onglet Tablier à poutres).`,
     '3. Goussets des poutres de rive et ailes du talon du côté intérieur de l\'ouvrage (dossier Sétra PSI-BA 77, pièce V.1.1).',
     '4. Épaississement de l\'âme près des appuis (gousset d\'appui) si la contrainte de cisaillement l\'exige : voir la note de calcul.',
+    ...(EI ? [`4 bis. Entretoises intermédiaires : ${EI.nE} dans la travée, également espacées (${fr(D.sp.L / (EI.nE + 1))} m), épaisseur ${fr(EI.b)} m, niveau inférieur ${EI.zInf > 0 ? 'au-dessus des ailes du talon' : 'à l\'intrados des poutres'} (PSI-BA V.1.1) ; coupe B-B au plan BA-FER-01.`] : []),
     '5. Ferraillage : plan BA-FER-01 ; équipements (corniches, trottoirs, étanchéité) : plans du tablier.']);
   const hq = (tq.lignes.length + 2) * 6, hn = N.length * 2.1 * 1.6;
   const F = composer({ titre: `${nom} — COFFRAGE`, cartouche, rangees: [[ct], [el], [cp]],
     groupes: [{ vues: [ct], cible: 50, min: 20 }, { vues: [el], cible: 100, min: 50 }, { vues: [cp], cible: 20, min: 10 }],
     colonne: { largeur: 156, hauteur: 2 + hq + 6 + hn + 4 },
     poser: (F, [x, y]) => { F.tableau(tq, F.W - 10 - 146, y + 2); F.note(N, F.W - 10 - 156 + 2, y + 2 + hq + 6 + hn - 2.1 * 0.6, 2.1); F.notes[F.notes.length - 1].titreGras = true; } }, ['A3', 'A2', 'A1']);
-  F.quantites = { beton: vP + vH + vE, coffrage: coff };
+  F.quantites = { beton: vP + vH + vE + vI, coffrage: coff };
   return finir(F);
 }
 
@@ -270,7 +346,7 @@ export function planFerraillageBA(D, cartouche = {}, { nom = 'TABLIER À POUTRES
     V.repere([-inp.b1 / 2 - 0.1, hp + 0.03], bars.nl + 3, [-inp.b1 / 2 + 0.1, hp + 0.035]); V.texte('TEXTES', [-inp.b1 / 2 - 0.16, hp + 0.03], `inf. HA${ni.phi} / ${fr(ni.s * 100, 1)}`, { h: 2.0, ancre: 'd', v: 'm' });
     V.repere([-bt / 2 - 0.45, hp * 0.45], bars.nl + 4, [-b0 / 2 + c + 0.01, hp * 0.45]); V.texte('TEXTES', [-bt / 2 - 0.51, hp * 0.45], 'peau HA12 / 25', { h: 2.0, ancre: 'd', v: 'm' });
   } });
-  const el = vueElevation(D, { barres: true });
+  const el = vueElevation(D, { barres: true }), EI = D.entInt, ce = EI ? vueEntretoise(D) : null, BE = EI ? barresEntretoise(D) : null;
   // nomenclature simplifiée des barres d'une poutre
   const lignesB = bars.lits.map((l, k) => [String(k + 1), `${l.n} HA${bars.phi}`, fr(l.L + (l.filant && k === 0 ? 0.5 : 0), 2), l.filant ? (k === 0 ? 'filant, crochets relevés' : 'filant') : `arrêt à ${fr(l.x0)} m de l'appui`, milliers(l.n * (l.L + (k === 0 ? 0.5 : 0)) * kgm(bars.phi))]);
   const nEt = zones.reduce((s, z) => s + 2 * (z.x1 - z.x0) / z.s, 0) + 2 * a / 0.15, per = 2 * (hp + inp.hd - 2 * c) + 2 * (bt - 2 * c);
@@ -288,6 +364,8 @@ export function planFerraillageBA(D, cartouche = {}, { nom = 'TABLIER À POUTRES
   const tot = mB + mEt + mPeau + mMont + mHourdis, vol = (parts.reduce((s, q) => s + q.b * q.h, 0) + inp.b1 * inp.hd) * Lp;
   const tq = { titre: 'ARMATURES (ESTIMATION, UNE POUTRE ET SON HOURDIS)', cols: [{ t: 'Poste', w: 70, a: 'g' }, { t: 'Masse [kg]', w: 26, a: 'd' }],
     lignes: [[D.superieures && D.superieures.length ? 'Barres principales (inférieures et supérieures sur appuis)' : 'Barres principales inférieures', milliers(mB)], ['Cadres et étriers', milliers(mEt)], ['Armatures de peau et de montage', milliers(mPeau + mMont)], ['Hourdis (largeur b₁)', milliers(mHourdis)], ['Total', milliers(tot)], ['Ratio', `${fr(tot / vol, 0)} kg/m³`]] };
+  const tI = EI ? { titre: `ENTRETOISE INTERMÉDIAIRE (UNE ; ${EI.nE} DANS LA TRAVÉE)`, cols: [{ t: 'Rep.', w: 10, a: 'c' }, { t: 'Barres', w: 30, a: 'c' }, { t: 'L [m]', w: 14, a: 'd' }, { t: 'Disposition', w: 58, a: 'g' }, { t: 'kg', w: 14, a: 'd' }],
+    lignes: [...BE.lignes.map(l => [l.rep, l.bar, fr(l.L, 2), l.disp, milliers(l.kg)]), ['', '', '', 'Total (une entretoise et ses suspentes)', milliers(BE.masse)]] } : null;
   const te = E ? [['Entretoise d\'about', `inf. ${fr(E.AsInf * 1e4, 1)} cm² ; sup. ${fr(E.AsSup * 1e4, 1)} cm² ; étriers ${fr(E.etriers.AswS * 1e4, 1)} cm²/m`]] : [];
   const tE = te.length ? { titre: 'ENTRETOISES D\'ABOUT (VÉRINAGE)', cols: [{ t: 'Élément', w: 34, a: 'g' }, { t: 'Sections d\'acier', w: 82, a: 'g' }], lignes: te } : null;
   const lim = D.b.BA.ELS ? D.b.BA.ELS[code] : null;
@@ -296,16 +374,22 @@ export function planFerraillageBA(D, cartouche = {}, { nom = 'TABLIER À POUTRES
     `3. Armatures d'âme : ${code === 'EC' ? 'EN 1992-1-1 § 6.2.3' : 'BAEL 91 A.5.1 (A_t/(b₀ s_t) ≥ γ_s(τ_u − 0,3 f_t28)/(0,9 f_e), ≥ 0,4 MPa/f_e)'} ; espacement ≤ ${fr(code === 'EC' ? Math.min(0.75 * D.d, 0.4) : Math.min(0.9 * D.d, 0.4))} m ; deux cadres rapprochés au droit des appareils d'appui.`,
     `4. Hourdis : nappes transversales du calcul de flexion locale (onglet Tablier à poutres), répartition longitudinale HA${rep.phi} / ${fr(rep.s * 100, 1)} cm (≥ A_s/4) ; jonction hourdis-poutre (PSI-BA V.1.6) : les cadres des poutres montent dans le hourdis.`,
     `5. Enrobage ${fr(c * 100, 0)} cm ; acier HA f_e = ${inp.fyk} MPa ; béton C${inp.fck}. Plan de principe : le façonnage détaillé (crochets, recouvrements) reste à établir.`,
+    ...(EI ? [`${D.superieures && D.superieures.length ? 7 : 6}. Entretoises intermédiaires (coupe B-B ; PSI-BA V.1.7) : méthode de Courbon, entretoise la plus sollicitée (travée ${EI.E.travee + 1}) ; A_inf = ${fr(EI.Q.inf.As * 1e4, 1)} cm² (≥ ancrage V_u/f_su = ${fr(EI.Q.ancrage * 1e4, 1)} cm²), ancrée par courbure au-delà du nu des poutres de rive, ligaturée (poussée au vide) ; aciers supérieurs continus d'une poutre de rive à l'autre ; suspentes : la réaction de l'entretoise (V_u = ${fr(EI.Q.Vu, 0)} kN) est remontée dans la poutre par ${EI.nSusp} cadres HA12 répartis de part et d'autre de l'entretoise.`] : []),
     ...(D.superieures && D.superieures.length ? [`6. Travées continues : armatures supérieures sur appuis (PSI-BA V.1.4) en deux groupes, arrêtés où la section nécessaire A_sup M(x)/M(appui) ne dépasse plus la section restante plus celle des armatures longitudinales du hourdis (${fr(D.superieures[0].Ah * 1e4, 1)} cm² sur b₁), prolongés de 0,8 h + l_s, bornés aux travées adjacentes ; recouvrements des armatures inférieures sur appui.`] : [])]);
-  const hb = (tb.lignes.length + 2) * 6, hz = (tz.lignes.length + 2) * 6, hq = (tq.lignes.length + 2) * 6, he2 = tE ? (tE.lignes.length + 2) * 6 + 6 : 0, hn = N.length * 2.1 * 1.6, wcol = 128;
-  const F = composer({ titre: `${nom} — FERRAILLAGE`, cartouche, rangees: [[el], [cp]], groupes: [{ vues: [el], cible: 100, min: 50 }, { vues: [cp], cible: 20, min: 10 }],
+  const hb = (tb.lignes.length + 2) * 6, hz = (tz.lignes.length + 2) * 6, hq = (tq.lignes.length + 2) * 6, he2 = tE ? (tE.lignes.length + 2) * 6 + 6 : 0, hi = tI ? (tI.lignes.length + 2) * 6 + 6 : 0, hn = N.length * 2.1 * 1.6, wcol = 128;
+  const spec = c2 => ({ titre: `${nom} — FERRAILLAGE`, cartouche: c2, rangees: ce ? [[el], [cp], [ce]] : [[el], [cp]], groupes: [{ vues: [el], cible: 100, min: 50 }, { vues: [cp], cible: 20, min: 10 }, ...(ce ? [{ vues: [ce], cible: 50, min: 20 }] : [])],
     colonne: { largeur: wcol + 6, hauteur: Infinity },
     poser: (F, [x, y]) => {
       const x0 = F.W - 10 - wcol; let yy = y + 2;
       F.tableau(tb, x0, yy); yy += hb + 6; F.tableau(tz, x0, yy); yy += hz + 6; F.tableau(tq, x0, yy); yy += hq + 6;
       if (tE) { F.tableau(tE, x0, yy); yy += he2; }
+      if (tI) { F.tableau(tI, x0 - 0, yy); yy += hi; }
       F.note(N, x0, yy + hn - 2.1 * 0.6, 2.1); F.notes[F.notes.length - 1].titreGras = true;
-    } }, ['A3', 'A2', 'A1']);
-  F.masse = tot;
+    } });
+  // colonne de tableaux et de notes plus haute que la feuille retenue pour les vues : format supérieur (sauf format imposé)
+  let F = composer(spec(cartouche), ['A3', 'A2', 'A1']);
+  const libre = !cartouche.format || cartouche.format === 'auto';
+  for (const f of ['A1', 'A0']) { if (!libre || F.valide().ok || F.format === f || (f === 'A1' && F.format === 'A0')) break; F = composer(spec({ ...cartouche, format: f }), [f]); F.cartouche.format = cartouche.format; }
+  F.masse = tot; F.masseEntretoiseInt = BE ? BE.masse : 0;
   return finir(F);
 }
