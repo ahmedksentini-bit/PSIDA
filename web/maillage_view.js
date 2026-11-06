@@ -89,6 +89,8 @@ export function maillageDXF(M, { numeros = false } = {}) {
   return L.join('\r\n') + '\r\n';
 }
 
+/** Modèle de plaque courant : celui du calcul, sinon l'aperçu construit dans cette carte (null sinon). */
+export function modeleMaillage(st) { return modele(st); }
 function modele(st) {
   if (st.deck.plaque) return { M: st.deck.plaque.M, calcul: true };
   return apercu && apercu.deck === st.deck ? { M: apercu.M, calcul: false } : null;
@@ -117,6 +119,7 @@ export function initMaillage(getState) {
     const nb = st.bearings ? st.bearings.nb : 4, psi = st.p && st.p.concept ? st.p.concept.psi : 100;
     try { apercu = { deck: st.deck, M: plaqueTablier(st.deck, { h: 0.5, nb, psi, kv: Infinity, E: (st.p && st.p.E) || 34000 }) }; } catch (e) { $('#maillage-info').textContent = 'Maillage impossible : ' + e.message; return; }
     dessiner(st);
+    document.dispatchEvent(new CustomEvent('maillage:construit'));
   });
   $('#maillage-dxf').addEventListener('click', () => {
     const st = getState(); const r = st && st.deck ? modele(st) : null; if (!r) return;

@@ -482,6 +482,11 @@ béton par défaut C30/37. Pont-dalle biais calculé par Guyon : concentration d
 (κ_max, κ_min par ligne d'appui). Tablier à poutres : répartition transversale par grillage (poutres, hourdis, entretoises
 intermédiaires), au choix, comparée à Guyon-Massonnet ou Courbon. Pont-dalle précontraint en plaque : réactions
 hyperstatiques de précontrainte par appareil, par les charges équivalentes du câble appliquées à la plaque.
+v0.99.27 : vue 3D des résultats de la plaque (onglet Tablier). Déformée amplifiée et carte en couleurs de w, m_x, m_y,
+m_xy ou Wood-Armer m_x ± |m_xy| sur le maillage DKT, réactions des appareils en flèches, valeur au survol ou au toucher,
+image PNG ; cas : charges permanentes, tandem TS de LM1 déplaçable, charge répartie de 9 kN/m² sur la chaussée,
+précontrainte (E.S). WebGL natif sans bibliothèque (hors ligne) ; ouvrages droits, biais et courbes ; modèle du calcul en
+plaque ou aperçu du maillage pour un tablier calculé par Guyon.
 v0.99.24 : durabilité (EN 1992-1-1 § 4.4.1, src/durabilite.js) : classes d'exposition, durée d'utilisation et référentiel
 (EN 1992-1-1 annexe E ou NF EN 206/CN) pour le pont-dalle, les ponts à poutres et les cadres ; classe de béton minimale,
 classe structurale (tableau 4.3N), c_min,dur (tableau 4.4N) et c_nom ; vérification de l'enrobage (dalle : à l'axe − Ø/2 ;
