@@ -557,6 +557,12 @@ Contrôle sur la note « appuis et fondations » de d'un pont-dalle précontrain
 - **Grandeurs** : moments nodaux (moyenne des sommets des triangles adjacents, repère de l'axe), Wood-Armer simplifié m_x ± |m_xy| (armatures orthogonales, sans les corrections des moments négatifs). Les vérifications restent faites aux sections et fibres de calcul.
 - **Affichage** : déformée dessinée à 4 % de la plus grande dimension × curseur ; échelle symétrique pour les moments (palette divergente), séquentielle pour w ; réactions en flèches de longueur ∝ |R|. Contrôles : Σ réactions = charge (G, TS, UDL), précontrainte autoéquilibrée.
 
+## 1 septdecies terdecies. Vue 3D du grillage des ponts à poutres (v0.99.28, `test/vue3d_poutres.test.js`)
+
+- **Grillage** (`src/beams/grillage.js`, § 1 septdecies undecies) construit pour la travée choisie avec E = E_cm du béton des poutres (EN 1992-1-1 tableau 3.1), G = E/2, m ≈ L/1,5 éléments (20 au moins) ; résolution complète : w, M des poutres (−E I w″, moyenne des éléments adjacents), torsion G K θ′, m_y du hourdis (barre transversale / largeur tributaire), réactions F − K₀u aux appuis.
+- **Charges** : point (x, e) partagé linéairement entre stations, fonctions d'Hermite en travers (console rigide au-delà des rives) ; permanent = poids propre réparti également entre les poutres + charges linéiques et surfaciques à leur position ; TS et 9 kN/m² comme pour la plaque.
+- **Contrôles** : Σ R = charge ; Σ M(L/2) = moment isostatique (exact) ; poutres découplées : flèche 5 q L⁴/384 E I à 1 % près. Section brute homogénéisée, linéaire : lecture de la répartition, pas de justification.
+
 ## 1 octodecies. Textes relus (v0.36)
 
 - **Guide Sétra 2007** (appareils en élastomère fretté) : voir 1 sexdecies ; exemple du § 4.2 reproduit.

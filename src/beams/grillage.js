@@ -43,10 +43,10 @@ const hermite = (a, l) => { const t = a / l; return [1 - 3 * t * t + 2 * t ** 3,
  *   hourdis compris), pas (pas des positions e de la charge, m) }
  * @returns { ys, eta(e) → [η_k], Kbar(e1, e2) → [K̄_k], N (degrés de liberté) }
  */
-export function grillagePoutres({ n, b1, L, Ip, Kp, hd, m = 20, entretoises = [], pas = 0.05 }) {
+export function grillagePoutres({ n, b1, L, Ip, Kp, hd, m = 20, entretoises = [], pas = 0.05, E = 1 }) {
   if (!(n >= 2)) throw new Error('grillage : deux poutres au moins');
   m = Math.max(4, 2 * Math.round(m / 2));
-  const E = 1, G = 0.5, ys = Array.from({ length: n }, (_, k) => (k - (n - 1) / 2) * b1), dx = L / m, xs = Array.from({ length: m + 1 }, (_, i) => i * dx);
+  const G = E / 2, ys = Array.from({ length: n }, (_, k) => (k - (n - 1) / 2) * b1), dx = L / m, xs = Array.from({ length: m + 1 }, (_, i) => i * dx);
   const id = (i, k) => 3 * (i * n + k), N = 3 * n * (m + 1);   // DDL : w, θx, θy
   const K = Array.from({ length: N }, () => new Float64Array(N));
   const ajouter = (dofs, k) => { for (let a = 0; a < dofs.length; a++) for (let b = 0; b < dofs.length; b++) K[dofs[a][0]][dofs[b][0]] += dofs[a][1] * dofs[b][1] * k[a][b]; };
@@ -67,6 +67,7 @@ export function grillagePoutres({ n, b1, L, Ip, Kp, hd, m = 20, entretoises = []
     }
   }
   // appuis : w = 0 et θx = 0 aux deux extrémités de chaque poutre (pénalisation)
+  const K0 = K.map(r => Float64Array.from(r));   // raideur sans les appuis (réactions = K₀u − F aux appuis)
   const big = 1e12 * Math.max(...Array.from({ length: N }, (_, j) => Math.abs(K[j][j])));
   for (const i of [0, m]) for (let k = 0; k < n; k++) { K[id(i, k)][id(i, k)] += big; K[id(i, k) + 1][id(i, k) + 1] += big; }
   const resoudre = lu(K.map(r => Array.from(r)));
@@ -99,5 +100,47 @@ export function grillagePoutres({ n, b1, L, Ip, Kp, hd, m = 20, entretoises = []
     for (let i = 0; i < q; i++) { const e = q === 1 ? e1 : e1 + (e2 - e1) * (i + 0.5) / q; eta(e).forEach((v, k) => { acc[k] += v / q; }); }
     return acc.map(v => n * v);
   };
-  return { ys, eta, Kbar, N, m, entretoises: [...ent.entries()].map(([i, r]) => ({ x: xs[i], ...r })) };
+  // ------------------------------------------------------------ résolution complète (vue 3D, src/beams/grillage3d.js)
+  const In = i => { const e = ent.get(i) || { I: 0, K: 0 }, w = i === 0 || i === m ? dx / 2 : dx; return { I: w * hd ** 3 / 12 + e.I, K: w * hd ** 3 / 6 + e.K, w }; };
+  /** Force P (vers le bas) en (x, e) : partage linéaire entre stations, Hermite en travers (console rigide au-delà des rives). */
+  const chargePoint = (F, x, e, P) => {
+    const t = Math.min(m, Math.max(0, x / dx)), i0 = Math.min(m - 1, Math.floor(t)), r = t - i0;
+    for (const [i, c] of [[i0, 1 - r], [i0 + 1, r]]) {
+      if (c <= 0 || i === 0 || i === m) continue;     // charge directement sur l'appui : sans effet sur le tablier
+      const q = P * c, y0 = ys[0], yn = ys[n - 1];
+      if (e <= y0 || e >= yn) { const k = e <= y0 ? 0 : n - 1; F[id(i, k)] += q; F[id(i, k) + 1] += q * (e - ys[k]); }
+      else { let k = 0; while (k < n - 2 && e > ys[k + 1]) k++; const h = hermite(e - ys[k], b1); F[id(i, k)] += q * h[0]; F[id(i, k) + 1] += q * h[1]; F[id(i, k + 1)] += q * h[2]; F[id(i, k + 1) + 1] += q * h[3]; }
+    }
+    return F;
+  };
+  const resoudreF = F => resoudre(Array.from(F));
+  /** Résultats d'un vecteur de charges : flèches w, moments des poutres M [kN·m] et du hourdis m_y [kN·m/m] aux nœuds,
+   * torsion des poutres T [kN·m] par élément, réactions aux extrémités des poutres [kN]. */
+  const resultats = F => {
+    const u = resoudreF(F), w = new Float64Array(n * (m + 1)), M = new Float64Array(n * (m + 1)), my = new Float64Array(n * (m + 1)), T = new Float64Array(n * (m + 1));
+    const nd = (i, k) => i * n + k;
+    for (let i = 0; i <= m; i++) for (let k = 0; k < n; k++) w[nd(i, k)] = u[id(i, k)];
+    for (let k = 0; k < n; k++) for (let i = 0; i <= m; i++) {
+      const c = [];
+      if (i > 0) { const w0 = u[id(i - 1, k)], s0 = -u[id(i - 1, k) + 2], w1 = u[id(i, k)], s1 = -u[id(i, k) + 2]; c.push(6 * (w0 - w1) / dx ** 2 + (2 * s0 + 4 * s1) / dx); }
+      if (i < m) { const w1 = u[id(i, k)], s1 = -u[id(i, k) + 2], w2 = u[id(i + 1, k)], s2 = -u[id(i + 1, k) + 2]; c.push(6 * (w2 - w1) / dx ** 2 - (4 * s1 + 2 * s2) / dx); }
+      M[nd(i, k)] = -E * Ip * c.reduce((a, v) => a + v, 0) / c.length;
+      const tw = []; if (i > 0) tw.push(u[id(i, k) + 1] - u[id(i - 1, k) + 1]); if (i < m) tw.push(u[id(i + 1, k) + 1] - u[id(i, k) + 1]);
+      T[nd(i, k)] = G * Kp * tw.reduce((a, v) => a + v, 0) / tw.length / dx;
+    }
+    for (let i = 0; i <= m; i++) { const S = In(i); for (let k = 0; k < n; k++) {
+      const c = [];
+      if (k > 0) { const w0 = u[id(i, k - 1)], s0 = u[id(i, k - 1) + 1], w1 = u[id(i, k)], s1 = u[id(i, k) + 1]; c.push(6 * (w0 - w1) / b1 ** 2 + (2 * s0 + 4 * s1) / b1); }
+      if (k < n - 1) { const w1 = u[id(i, k)], s1 = u[id(i, k) + 1], w2 = u[id(i, k + 1)], s2 = u[id(i, k + 1) + 1]; c.push(6 * (w2 - w1) / b1 ** 2 - (4 * s1 + 2 * s2) / b1); }
+      my[nd(i, k)] = -E * S.I * c.reduce((a, v) => a + v, 0) / c.length / S.w;
+    } }
+    const R = [];
+    // réaction vers le haut = F − K₀u au degré de liberté w de l'appui
+    for (const i of [0, m]) for (let k = 0; k < n; k++) { const d = id(i, k); let r = F[d]; const Ki = K0[d]; for (let j = 0; j < N; j++) r -= Ki[j] * u[j]; R.push({ i, k, x: xs[i], y: ys[k], R: r }); }
+    // rotation θ_x des nœuds (pente transversale) pour prolonger la surface jusqu'aux bords du tablier
+    const tx = new Float64Array(n * (m + 1)); for (let i = 0; i <= m; i++) for (let k = 0; k < n; k++) tx[nd(i, k)] = u[id(i, k) + 1];
+    return { u, w, M, my, T, R, tx, total: F.reduce((a, v, j) => a + (j % 3 === 0 ? v : 0), 0) };
+  };
+  const vecteur = () => new Float64Array(N);
+  return { ys, xs, eta, Kbar, N, m, n, b1, L, dx, E, chargePoint, resultats, vecteur, entretoises: [...ent.entries()].map(([i, r]) => ({ x: xs[i], ...r })) };
 }

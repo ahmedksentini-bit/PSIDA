@@ -9,12 +9,12 @@ import { cas3D, GRANDEURS_3D } from '../src/plate/cas3d.js';
 import { modeleMaillage } from './maillage_view.js';
 
 const $ = s => document.querySelector(s);
-const fr = (v, d = 0) => (Number.isFinite(v) ? v.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }) : '–');
+const fr = (v, d = 0) => (Number.isFinite(v) ? (Math.abs(v) < 0.5 * 10 ** -d ? 0 : v).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }) : '–');
 
 // ---------------------------------------------------------------- palettes (interpolation linéaire en sRGB)
-const DIVERGENTE = [[33, 102, 172], [103, 169, 207], [209, 229, 240], [247, 247, 247], [253, 219, 199], [239, 138, 98], [178, 24, 43]];
-const SEQUENTIELLE = [[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]];
-function couleur(pal, t) {
+export const DIVERGENTE = [[33, 102, 172], [103, 169, 207], [209, 229, 240], [247, 247, 247], [253, 219, 199], [239, 138, 98], [178, 24, 43]];
+export const SEQUENTIELLE = [[68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98], [253, 231, 37]];
+export function couleur(pal, t) {
   t = Math.min(1, Math.max(0, t)); const u = t * (pal.length - 1), k = Math.min(pal.length - 2, Math.floor(u)), r = u - k;
   return pal[k].map((c, i) => (c + (pal[k + 1][i] - c) * r) / 255);
 }
@@ -28,9 +28,9 @@ function regarder(eye, c, up) {
   o.set([x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x, eye), -dot(y, eye), -dot(z, eye), 1]);
   return o;
 }
-const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const norm = a => { const l = Math.hypot(...a) || 1; return a.map(v => v / l); };
+export const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+export const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+export const norm = a => { const l = Math.hypot(...a) || 1; return a.map(v => v / l); };
 
 /**
  * Géométrie de la scène (testable sans WebGL) : positions, couleurs et normales des triangles, arêtes, flèches des
@@ -76,7 +76,7 @@ void main(){ gl_Position = mvp * vec4(p, 1.0); float l = abs(dot(normalize(nn), 
   vc = eclaire > 0.5 ? c * (0.62 + 0.38 * l) : c; }`;
 const FS = `precision mediump float; varying vec3 vc; uniform float alpha; void main(){ gl_FragColor = vec4(vc, alpha); }`;
 
-class Rendu {
+export class Rendu {
   constructor(canvas) {
     const gl = canvas.getContext('webgl', { antialias: true, preserveDrawingBuffer: true });
     if (!gl) throw new Error('WebGL indisponible dans ce navigateur');
@@ -95,7 +95,7 @@ class Rendu {
     const croix = []; for (const [x, y] of S.roues) { const d = 0.012 * S.Lc; croix.push(x - d, y, 0.003 * S.Lc, x + d, y, 0.003 * S.Lc, x, y - d, 0.003 * S.Lc, x, y + d, 0.003 * S.Lc); }
     this.tampon('roues', new Float32Array(croix.length ? croix : [0, 0, 0])); this.nRoues = croix.length / 3;
     this.tampon('noirR', new Float32Array(Math.max(croix.length, 3)).fill(0.05));
-    if (this.cam.dist == null) this.cam.dist = 1.05 * S.Lc;
+    if (this.cam.dist == null) this.cam.dist = (this.dist0 ?? 1.05) * S.Lc;
   }
   matrice() {
     const { yaw, pitch, dist, cx, cy } = this.cam, c = [cx, cy, 0];
@@ -177,14 +177,16 @@ function survol(ev) {
   tip.innerHTML = `x = ${fr(x, 2)} m, y = ${fr(y, 2)} m<br>${G.titre} : <b>${fr(S.val[p] * G.echelle, etat.o.grandeur === 'w' ? 2 : 1)}</b> ${G.unite}${etat.o.grandeur === 'w' ? '' : `<br>w = ${fr(etat.res.w[p] * 1000, 2)} mm`}${ap ? `<br>appareil (ligne ${ap.ligne}) : R = <b>${fr(ap.R)}</b> kN` : ''}`;
 }
 
-function gestes(canvas, redessiner) {
+/** Gestes souris et tactiles d'une vue : getR() → Rendu courant, survol(ev), tip (infobulle à masquer). */
+export function gestes(canvas, redessiner, getR = () => R, onSurvol = survol, tip = () => $('#v3d-tip')) {
   const pts = new Map(); let pan = false, d0 = null, last = null;
   canvas.addEventListener('contextmenu', e => e.preventDefault());
   canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); pan = e.button === 2 || e.shiftKey; last = null; d0 = null; });
   canvas.addEventListener('pointerup', e => { pts.delete(e.pointerId); d0 = null; last = null; });
   canvas.addEventListener('pointercancel', e => { pts.delete(e.pointerId); d0 = null; last = null; });
   canvas.addEventListener('pointermove', e => {
-    if (!pts.has(e.pointerId)) { survol(e); return; }
+    const R = getR();
+    if (!pts.has(e.pointerId)) { onSurvol(e); return; }
     const prev = pts.get(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]);
     if (!R || !R.S) return;
     const c = R.cam, dx = e.clientX - prev[0], dy = e.clientY - prev[1];
@@ -194,13 +196,13 @@ function gestes(canvas, redessiner) {
       if (last) deplacer(c, m[0] - last[0], m[1] - last[1]);
       d0 = d; last = m;
     } else if (pan) deplacer(c, dx, dy);
-    else { c.yaw -= dx * 0.008; c.pitch = Math.min(1.55, Math.max(-0.2, c.pitch + dy * 0.008)); }
+    else { c.yaw -= dx * 0.008; c.pitch = Math.min(1.55, Math.max(-1.4, c.pitch + dy * 0.008)); }
     redessiner();
   });
   const deplacer = (c, dx, dy) => { const k = c.dist / canvas.clientHeight * 0.9, sy = Math.sin(c.yaw), cy = Math.cos(c.yaw); c.cx += k * (dx * sy + dy * cy * Math.sin(c.pitch)); c.cy += k * (-dx * cy + dy * sy * Math.sin(c.pitch)); };
-  canvas.addEventListener('wheel', e => { if (!R || !R.S) return; e.preventDefault(); R.cam.dist = Math.min(8 * R.S.Lc, Math.max(0.15 * R.S.Lc, R.cam.dist * Math.exp(e.deltaY * 0.0012))); redessiner(); }, { passive: false });
-  canvas.addEventListener('dblclick', () => { if (!R || !R.S) return; Object.assign(R.cam, { yaw: -0.55, pitch: 0.62, dist: 1.05 * R.S.Lc, cx: 0, cy: 0 }); redessiner(); });
-  canvas.addEventListener('pointerleave', () => { $('#v3d-tip').hidden = true; });
+  canvas.addEventListener('wheel', e => { const R = getR(); if (!R || !R.S) return; e.preventDefault(); R.cam.dist = Math.min(8 * R.S.Lc, Math.max(0.15 * R.S.Lc, R.cam.dist * Math.exp(e.deltaY * 0.0012))); redessiner(); }, { passive: false });
+  canvas.addEventListener('dblclick', () => { const R = getR(); if (!R || !R.S) return; Object.assign(R.cam, { yaw: -0.55, pitch: R.pitch0 ?? 0.62, dist: (R.dist0 ?? 1.05) * R.S.Lc, cx: 0, cy: 0 }); redessiner(); });
+  canvas.addEventListener('pointerleave', () => { const t = tip(); if (t) t.hidden = true; });
 }
 
 /** Nouveau calcul : la vue déjà affichée est recalculée ; sinon, simple invitation (rien n'est résolu tant qu'on n'a pas demandé). */
