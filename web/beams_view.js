@@ -234,6 +234,14 @@ export function beamsBlocks(r, { reco = null } = {}) {
     comment(`Détail du calcul : rigidités par unité de largeur (E et G = E/2 en facteur commun, sans effet sur θ et α) ; K_p = Σ k b t³ des rectangles de la poutre + b₁ h_d³/6 pour le hourdis (Saint-Venant). θ = (b/L)(ρ_p/ρ_e)^¼ ; α = (γ_p + γ_e)/(2√(ρ_p ρ_e)), toujours compris entre 0 et 1 (α = 1 pour une dalle isotrope) : une valeur supérieure à 1 signale une erreur sur les inerties de torsion. Coefficients de majoration dynamique du Fascicule 61 (art. 5.5) : δ = 1 + 0,4/(1 + 0,2 L) + 0,6/(1 + 4 G/S), G poids de la travée, S poids maximal des essieux B (b_c inclus) ou du char Mc120 que l'on peut placer sur la travée. A(l) pour la longueur chargée la plus défavorable (ici la travée), pondéré par a₁ (classe, nombre de voies chargées) et a₂ = v₀/v, et au moins (4 − 0,002 L) kN/m².`);
   }
   comment('θ = (b/L)(ρ_p/ρ_e)^¼, α = (γ_p + γ_e)/(2√(ρ_p ρ_e)), ρ_p = I_p/b₁, γ_p = K_p/(2 b₁) (G = E/2), hourdis ρ_e = γ_e = h_d³/12 ; répartition transversale de Guyon-Massonnet avec l\'interpolation de Massonnet K = K₀ + (K₁ − K₀)√α (pratique PONTYPE/PAP, reproduite sur le Pont de Noé). M_poutre = K̄(y_k) M/n, charges placées transversalement au plus défavorable pour chaque poutre.');
+  if (r.spans.some(s => s.grillage)) {
+    h2('Répartition transversale par grillage (poutres + hourdis + entretoises)');
+    for (const s of r.spans.filter(q => q.grillage)) {
+      const G = s.grillage, n = inp.n;
+      table(['Charge sur la poutre', ...Array.from({ length: n }, (_, k) => `K̄ poutre ${k + 1}`)], G.comparaison.map((c, i) => [`P${i + 1} (y = ${F2(c.e)} m)`, ...c.grillage.map((v, k) => `${F3(v)} (${F3(c.reference[k])})`)]), { small: true });
+      comment(`Travée ${F2(s.L)} m : grillage de ${n} poutres × ${G.m} éléments (${G.N} degrés de liberté), barres transversales du hourdis (E Δx h_d³/12, G Δx h_d³/6)${G.ents.length ? `, ${G.ents.length} entretoise(s) intermédiaire(s) en x = ${G.ents.map(e => F2(e.x)).join(' ; ')} m (âme ${F2(G.ents[0].b0)} × ${F2(G.ents[0].he)} m, table participante ${F2(G.ents[0].beff)} m : I = ${F(G.ents[0].I, 4)} m⁴ hors hourdis)` : ''} ; appuis w = θ_x = 0 (entretoises d'about), G = E/2. Charge-ligne sinusoïdale en y = e (premier harmonique), K̄_k = n M_k/ΣM à mi-travée ; entre parenthèses : ${G.reference} au même point. Les efforts par poutre ci-dessous utilisent les coefficients du grillage (Hambly, Bridge Deck Behaviour, 1991, chap. 3).`);
+    }
+  }
   if (r.spans.some(s => s.skew && s.skew.actif)) {
     h2(`Biais ψ = ${F0(inp.biais)} gr — effort tranchant et réactions à l'angle obtus`);
     table(['Travée L [m]', 'θ [°]', 'K_g [m⁴]', 'F_V (V et R des poutres de rive, trafic)', 'r_M (pour mémoire, non appliqué)'], r.spans.map(s => [F2(s.L), F1(s.skew.theta), F3(s.skew.Kg), F3(s.skew.Fv), F3(s.skew.rM)]));
@@ -419,6 +427,6 @@ function durabiliteBlocks(r, hint) {
   const B = [{ t: 'h2', text: 'Durabilité et enrobage (EN 1992-1-1 § 4.4.1)' }];
   const hs = L.rows.map(q => (q.ok || !hint ? null : hint({ type: 'durab', k: q.k })));
   B.push({ t: 'table', head: ['Vérification', 'Projet', 'Exigence', 'Résultat'], rows: L.rows.map(q => [...q.cells, q.ok ? 'OK' : 'NON']), small: true, ...(hs.some(Boolean) ? { hints: hs } : {}) });
-  B.push({ t: 'p', text: texteDurabilite(L.Dd) + ' Les plans des poutres BA prennent c_nom au nu des cadres ; la hauteur utile du calcul doit couvrir les lits réellement dessinés.', cls: 'small' });
+  B.push({ t: 'p', text: texteDurabilite(L.Dd) + (r.durabP ? ` Précontrainte : ${texteDurabilite(r.durabP.D, { enrobage: r.durabP.pire.mm, objet: r.durabP.D.mode === 'pre' ? 'torons' : 'gaines' })} Les plans des poutres prennent c_nom au nu des cadres.` : ' Les plans des poutres BA prennent c_nom au nu des cadres ; la hauteur utile du calcul doit couvrir les lits réellement dessinés.'), cls: 'small' });
   return B;
 }

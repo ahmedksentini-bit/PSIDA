@@ -15,6 +15,7 @@ import { gardeGreve, murEnRetour, earthPressure, earthPressureUpper, videCombos,
 import { culeeSismique, inertieRemblaiTalon } from './culee_seisme.js';
 import { shallowFooting, footingStrutTie, pileCapStrutTie, pileGroupForces, menardReaction, lateralPile, pileMinSteel, pileCapacity, minPileLength, PILE_TYPES, pileCapTwoRows, paroiFlechie, negativeFrictionPiles, pileGroupSettlement, footingRotationStiffness, footingSettlement, footingCantilever, sigmaSBAEL, pileConcrete, efficaciteCoherentF62, efficaciteEC7, isCohesive, soilProfile } from './foundation.js';
 import { requiredSteelNM } from './section_nm.js';
+import { durabilite } from '../durabilite.js';
 import { winklerPile, pileGroup, headFlexibility, pileProfile, pileShear, pileCapFiles, blevot } from './psh.js';
 import { minorationSurface } from '../geotech/lateral.js';
 import { pierWater } from './water.js';
@@ -256,6 +257,10 @@ function calculAppuis(st, input = {}) {
   const HYP = dp ? ['MT', 'MS', 'ES'].flatMap(ph => ['moy', 'max', 'min'].map(k => dp.r[ph][k].hyp.R)) : null;
   const hypMax = xs.map((_, i) => (HYP ? Math.max(...HYP.map(R => R[i] || 0)) : 0)), hypMin = xs.map((_, i) => (HYP ? Math.min(...HYP.map(R => R[i] || 0)) : 0));
   const Gmax = i => jG(i) * perm.Rmax[i] + hypMax[i], Gmin = i => jG(i) * perm.Rmin[i] + hypMin[i];
+  // réaction hyperstatique de précontrainte par appareil : lue sur la plaque (src/plate/precontrainte.js) quand le tablier
+  // est calculé en plaque, sinon répartie également ; appareil le plus chargé / le moins chargé de la ligne
+  const ppl = dp && dp.plaque && dp.plaque.max ? dp.plaque : null;
+  const hypApp = (i, k) => (ppl && ppl[k][i] != null ? ppl[k][i] : (k === 'max' ? hypMax[i] : hypMin[i]) / bearings.rows[i].nb);
   // pile de joint (pile double) à une extrémité : appui commun avec un tablier adjacent — calculée comme une pile, sous les
   // réactions du tablier étudié augmentées de celles du tablier adjacent (rapports r_G, r_Q, r_H aux valeurs propres ;
   // 1 = tablier adjacent symétrique), efforts horizontaux cumulés dans le même sens (prudent)
@@ -264,6 +269,17 @@ function calculAppuis(st, input = {}) {
   const isEnd = i => (i === 0 || i === nL - 1) && !jointAt(i);
   const jG = i => (jointAt(i) ? 1 + (J.rG ?? 1) : 1), jQ = i => (jointAt(i) ? 1 + (J.rQ ?? 1) : 1), jH = i => (jointAt(i) ? 1 + (J.rH ?? 1) : 1);
   const { fck, fyk, c } = sp.mat;
+  // durabilité (EN 1992-1-1 § 4.4.1) : élévations (fûts, chevêtres, culées) et fondations, enrobage nominal au nu des armatures
+  // extérieures (Ø20 au plus) ; § 4.4.1.3 (4) : béton coulé sur béton de propreté c_nom ≥ k₁ = 40 mm, au contact du sol (pieux
+  // forés) c_nom ≥ k₂ = 75 mm — l'enrobage à l'axe des pieux en découle (Ø20/2 en plus, 7 cm au moins)
+  const durab = (() => {
+    try {
+      const Dd = sp.durab || {}, o = { fck, vie: Dd.vie ?? 100, ref: Dd.ref || 'EC2', phi: 20 };
+      const elev = durabilite({ ...o, expo: Dd.expo || 'XC4' }), fond = durabilite({ ...o, expo: Dd.expoFond || 'XC2' });
+      const cnomSem = Math.max(40, fond.cnom), cnomPieu = Math.max(75, fond.cnom), cmm = c * 1000;
+      return { elev, fond, c: cmm, cnomSem, cnomPieu, cAxePieu: Math.max(0.07, cnomPieu / 1000 + 0.01), okElev: cmm >= elev.cnom - 1e-6, okFond: cmm >= cnomSem - 1e-6, okBeton: elev.okBeton && fond.okBeton };
+    } catch (e) { return null; }
+  })();
   // plan de nivellement : données propres à chaque ligne d'appui (hauteurs, semelle, pieux) déduites des cotes
   const niv = nivellement(sp, { deck, bearings, tRev: st.p && st.p.mat ? st.p.mat.tRev : 0.08, isEnd, nL: xs.length });
   const S = i => (niv.parLigne[i] ? merge(sp, niv.parLigne[i]) : sp);
@@ -632,7 +648,7 @@ function calculAppuis(st, input = {}) {
     const vT = code === 'BAEL' ? Math.abs(dist.imposed(sp.eps.TLD, 'diff').disp[i]) + Math.abs(dist.imposed(sp.eps.TCD, 'inst').disp[i]) : Math.abs(dist.imposed(epsT, 'diff').disp[i]);
     // ouvrage courbe précontraint : réactions différentielles des appareils dues au couple de la poussée radiale des câbles
     const tC = dp && dp.courbe && dp.courbe.dRmax ? dp.courbe : null;
-    const Gb = row.kCP * perm.Rmax[i] / nb, GbMin = perm.Rmin[i] / nb, Pmax = hypMax[i] / nb + (tC ? tC.dRmax[i] : 0), Pmin = hypMin[i] / nb + (tC ? tC.dRmin[i] : 0);
+    const Gb = row.kCP * perm.Rmax[i] / nb, GbMin = perm.Rmin[i] / nb * (row.kBiais ? row.kBiais.kMin : 1), Pmax = hypApp(i, 'max') + (tC ? tC.dRmax[i] : 0), Pmin = hypApp(i, 'min') + (tC ? tC.dRmin[i] : 0);
     const tr = railSup ? 0 : R(f61.trottoir, i);
     const bB = distB.braking(1)[i], bE = distE.braking(1)[i];
     // pont-rail : groupes ferroviaires, réactions avec Φ (appareils d'appui : L_Φ des éléments portés, tableau 6.2 cas 6),
@@ -805,7 +821,7 @@ function calculAppuis(st, input = {}) {
           const nb = bearings.nb, pitch = bearingSpacing({ width, psi: st.p.concept.psi, n: nb });
           const ys = Array.from({ length: nb }, (_, k) => width / 2 + (k - (nb - 1) / 2) * pitch);
           const row = bearings.rows[i], kQ = code === 'BAEL' ? 1.605 : railSup ? Math.max(...railSup.groupes.map(g => g.gamma)) : 1.35;
-          const Pu = (jG(i) * 1.35 * row.kCP * perm.Rmax[i] + hypMax[i] + jQ(i) * kQ * row.kQ * Math.max(0, row.Rmax - perm.Rmax[i])) / nb;
+          const Pu = (jG(i) * 1.35 * row.kCP * perm.Rmax[i] + nb * hypApp(i, 'max') + jQ(i) * kQ * row.kQ * Math.max(0, row.Rmax - perm.Rmax[i])) / nb;
           extra.cap = pierCap({ length: width, supports: Array.from({ length: P.nCol }, (_, j) => ({ x: width * (2 * j + 1) / (2 * P.nCol) })), loads: ys.map(y => ({ x: y, P: Pu })), q: 1.35 * 25 * P.hc * P.lc, b: P.lc, h: P.hc, c, fck, fyk, code });
           extra.cap.Pu = Pu;
         }
@@ -853,7 +869,7 @@ function calculAppuis(st, input = {}) {
           const nb = bearings.nb, pitch = bearingSpacing({ width, psi: st.p.concept.psi, n: nb });
           const ys = Array.from({ length: nb }, (_, k) => width / 2 + (k - (nb - 1) / 2) * pitch);
           const row = bearings.rows[i], kQ = code === 'BAEL' ? 1.605 : railSup ? Math.max(...railSup.groupes.map(g => g.gamma)) : 1.35;
-          const Pu = (jG(i) * 1.35 * row.kCP * perm.Rmax[i] + hypMax[i] + jQ(i) * kQ * row.kQ * Math.max(0, row.Rmax - perm.Rmax[i])) / nb;
+          const Pu = (jG(i) * 1.35 * row.kCP * perm.Rmax[i] + nb * hypApp(i, 'max') + jQ(i) * kQ * row.kQ * Math.max(0, row.Rmax - perm.Rmax[i])) / nb;
           // PP73 1.3.2 § 2.2.2 : garde-grève (poids propre), dalle de transition (15 + D) t/ml ou, sans dalle, 5,5 t/ml × 2 = 11 t/ml ;
           // murs en retour ou murettes : poids propre et charge verticale à l'extrémité (4 tf, murettes ≤ 2,5 m : 5 tf) ;
           // valeurs du 1er genre → ELU × 1,35
@@ -1048,7 +1064,7 @@ function calculAppuis(st, input = {}) {
             Mmax: Math.max(...a.files.map(x => x.Mmax)), Tmax: Math.max(...a.files.map(x => x.Tmax)), y0: Math.max(...a.files.map(x => x.y0)), pmax: Math.max(...a.files.map(x => x.pmax)) };
         });
         const elu = rows.filter(r => r.ls === 'ELU' && !r.crue), els = rows.filter(r => r.ls === 'ELS' && !r.crue), eluAll = rows.filter(r => r.ls === 'ELU'), accR = rows.filter(r => r.ls === 'ACC');
-        const shapeP = { D, c: 0.07, nBars: 12 };
+        const shapeP = { D, c: durab ? durab.cAxePieu : 0.07, nBars: 12 };
         // béton de pieu foré : BAEL / F62-V f_c = min(f_c28 ; 25)/(k₁ k₂), k₁ = 1,2 (groupe B), k₂ = 1,05 ; EC2 § 2.4.2.5 : γ_c × k_f = 1,1
         const pileMat = code === 'BAEL' ? { code, fck: pc.fc, fyk } : { code, fck: Math.min(fck, 30), fyk, gammaC: 1.5 * 1.1 };
         // situations accidentelles : séisme γ_c = 1,3 (NF EN 1998-2/NA 5.2.4), chocs 1,2 (EC2) / 1,15 (BAEL), γ_s = 1,0 ;
@@ -1193,5 +1209,5 @@ function calculAppuis(st, input = {}) {
   // EN 1998-1 § 3.2.1 (5) : a_g S > 0,04 g sauf très faible sismicité)
   const z8 = sp.ec8 || {}, alerteSeisme = !sp.seisme?.actif && (z8.zone ?? 1) >= 2 && (z8.categorie || 'III') !== 'I'
     ? { zone: z8.zone, categorie: z8.categorie || 'III', classeSol: z8.classeSol || 'B', agR: [0, 0.4, 0.7, 1.1, 1.6, 3.0][z8.zone] ?? null } : null;
-  return { alerteSeisme, sp, niv, pente, centrifuge, distTB, distTE, spLigne: parLigne ? xs.map((_, i) => SL(i)) : null, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: railSup ? Math.max(...railSup.groupes.map(g => g.H)) : bearings.H }, ...(railSup ? { rail: resumeRail(railSup) } : {}), eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
+  return { alerteSeisme, durab, sp, niv, pente, centrifuge, distTB, distTE, spLigne: parLigne ? xs.map((_, i) => SL(i)) : null, xs, Lv, width, seisme, water, footRot: footRotAll, profiles: profs, distB, distE, braking: { F61: brk, EC: railSup ? Math.max(...railSup.groupes.map(g => g.H)) : bearings.H }, ...(railSup ? { rail: resumeRail(railSup) } : {}), eps: { RF, RFsaisi, psidp: dp && dp.shorten ? dp.shorten : null, TLD: sp.eps.TLD, TCD: sp.eps.TCD, T: epsT }, hyp: dp ? { max: hypMax, min: hypMin } : null, hGG, Ka: KA, lines };
 }

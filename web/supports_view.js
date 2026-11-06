@@ -55,6 +55,15 @@ export function supportsBlocks(sup, ref = 'F61', opts = {}) {
   const table = (head, rows, opt = {}) => B.push({ t: 'table', head, rows, ...opt });
   const dist = isF ? sup.distB : sup.distE, Ls = sup.lines, n = Ls.length;
   if (sup.alerteSeisme) { const A = sup.alerteSeisme; para(`ATTENTION — séisme non calculé alors que le pont y est soumis : zone ${A.zone}${A.agR ? ` (a_gR = ${String(A.agR).replace('.', ',')} m/s²)` : ''}, catégorie d'importance ${A.categorie}, sol ${A.classeSol} (arrêté du 26 octobre 2011, art. 3 et 4 ; EN 1998-2). Cocher « Séisme » pour la combinaison sismique des appuis, des appareils et des fondations, ou justifier que l'ouvrage n'y est pas soumis.`); }
+  if (sup.durab) {
+    const Dd = sup.durab, nC = f => `C${f}`, ok = b => (b ? 'OK' : 'NON'), E = Dd.elev, Fo = Dd.fond;
+    h2('Durabilité des appuis (EN 1992-1-1 § 4.4.1)');
+    table(['Élément', 'Expositions', 'Classe structurale', 'Béton (minimum)', 'c_min,dur', 'c_nom requis', 'Enrobage', 'État'], [
+      ['Élévations (fûts, chevêtres, culées)', E.expos.join(', '), `S${E.S} (${E.detailsS})`, `${nC(E.fck)} (${E.classeMin})`, `${E.cminDur} mm`, `${E.cnom} mm`, `${Math.round(Dd.c)} mm`, ok(Dd.okElev && E.okBeton)],
+      ['Semelles (sur béton de propreté)', Fo.expos.join(', '), `S${Fo.S}`, `${nC(Fo.fck)} (${Fo.classeMin})`, `${Fo.cminDur} mm`, `${Dd.cnomSem} mm (k₁ = 40 mm, § 4.4.1.3 (4))`, `${Math.round(Dd.c)} mm`, ok(Dd.okFond && Fo.okBeton)],
+      ['Pieux (béton au contact du sol)', Fo.expos.join(', '), `S${Fo.S}`, `${nC(Fo.fck)} (${Fo.classeMin})`, `${Fo.cminDur} mm`, `${Dd.cnomPieu} mm (k₂ = 75 mm, § 4.4.1.3 (4))`, `axe à ${(Dd.cAxePieu * 100).toFixed(1).replace('.', ',')} cm (calcul)`, ok(Fo.okBeton)]]);
+    comment(`Enrobage nominal ${Math.round(Dd.c)} mm saisi au nu des armatures extérieures (cadres compris) ; c_nom = max(c_min,b = Ø ; c_min,dur ; 10 mm) + Δc_dev = 10 mm. Classe de béton minimale : ${E.ref === 'CN' ? 'NF EN 206/CN' : 'EN 1992-1-1 tableau E.1N'}. Les pieux sont calculés avec l'enrobage à l'axe ${(Dd.cAxePieu * 100).toFixed(1).replace('.', ',')} cm (c_nom + Ø20/2).`);
+  }
 
   const RT = ' Raideurs transversales : appareils (élastomère isotrope en distorsion), pile voile fléchie dans son plan (I = b L_v³/12), colonnes liées par le chevêtre en portique (12 EI/H³ par colonne), culée remblayée rigide en travers, groupe de pieux dans le sens transversal ou semelle tournant autour de son grand axe ; tablier indéformable dans son plan, en translation et en rotation d\'ensemble sur les ressorts longitudinaux et transversaux des lignes d\'appui : une force excentrée par rapport au centre de rigidité fait tourner le tablier et charge davantage les lignes proches, avec une composante longitudinale H_x. Enveloppe des efforts par ligne sur la position de la charge (pas de 0,5 m, abouts compris).';
   if (sup.centrifuge && isF && sup.centrifuge.F61) {

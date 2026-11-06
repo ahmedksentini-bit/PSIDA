@@ -34,9 +34,14 @@ const plans = v => (v && v.ba ? PLANS_BA : v && v.prad ? PLANS.map(p => (p.k ===
 const feuille = (v, k, r) => {
   if (v.ba) { const P = PLANS_BA.find(p => p.k === k); return P.f(v.D, cartouche(P.num), { nom: `TABLIER À POUTRES BA ${v.D.sp.L.toFixed(2).replace('.', ',')} m` }); }
   const P = plans(v).find(p => p.k === k), inp = (r && r.inp) || {}, a = v.prad ? v.prad.a.about : 0.5;
-  const ctx = { n: inp.n, b1: inp.b1, hourdis: r && r.hourdis, entretoise: r && r.entretoise };
+  const ctx = { n: inp.n, b1: inp.b1, hourdis: r && r.hourdis, entretoise: r && r.entretoise, ...ctxDurabilite(r) };
   return P.f(v, cartouche(P.num), { nom: `POUTRE ${v.prad ? 'PRAD' : 'VIPP'} ${v.L.toFixed(2).replace('.', ',')} m`, ctx, a });
 };
+/** Enrobage des plans VIPP / PRAD : c_nom au nu des cadres (3 cm au moins), c_nom,p des gaines ou torons. */
+export function ctxDurabilite(r) {
+  const Dd = r && r.durab, Gp = r && r.durabP;
+  return { ...(Dd ? { c: Math.max(0.03, Dd.cnom / 1000), cnom: Dd.cnom } : {}), ...(Gp ? { cGaine: Gp.cnom, okGaine: Gp.ok } : {}) };
+}
 function telecharger(blob, nom) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nom; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
 
 export function renderPoutresPlans(r) {

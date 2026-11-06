@@ -29,6 +29,7 @@ import { pertesInstantanees } from '../phasage/precontrainte.js';
 import { betonEC2 } from '../phasage/fluage.js';
 import { sectionVIPP, contourVIPP, largeurEfficaceT } from './vipp_section.js';
 import { traceTorons, diagnosticPRAD, longueurAncrage } from './prad.js';
+import { durabilitePrecontrainte } from '../durabilite.js';
 
 /** Unités de précontrainte courantes (torons T15 super, 150 mm² ; T13 super, 100 mm²) et diamètre intérieur de gaine. */
 export const UNITES = {
@@ -340,6 +341,48 @@ export function chaineVIPP(p, L, ch, { elsF61 = null, eluF61 = null, trafic = nu
     dates: T, expo: p.expo, quantites: { volP, volT, kgP, ratioP }, conception, n1, n2, prad: prad ? tr.prad : null, ancrage, seismeV,
     ok: verifs.every(v => v.ok) && elu.every(e => e.ok) && tranchant.every(t => t.ok) && (!seismeV || seismeV.eluOk),
   };
+}
+
+/**
+ * Enrobage des armatures de précontrainte de la poutre (EN 1992-1-1 § 4.4.1.2) : distances au parement le plus proche,
+ * mesurées au nu de la gaine (post-tension) ou du toron (prétension), comparées à c_nom,p = max(c_min,b ; c_min,dur,p
+ * tableau 4.5N ; 10 mm) + Δc_dev. Post-tension : sous-face (lit inférieur à mi-travée), flancs du talon (gaines extrêmes
+ * des lits à mi-travée, largeur au niveau du haut de la gaine), âme (gaine relevée centrée dans l'âme : (b_w − Ø)/2, b_w = b₀
+ * au-delà de la zone d'about élargie L_b, b₀,a en deçà). Prétension : sous-face et flancs du talon (torons extrêmes).
+ * @param {object} v résultat de chaineVIPP ; o { expo, vie, ref, dcDev }
+ */
+export function enrobageGaines(v, o = {}) {
+  const f = v.S.forme, C = v.S.poutre.contour, pts = C.pts, tr = v.trace, L = v.L;
+  const iTop = pts.findIndex(q => q[0] === 0 && Math.abs(q[1] - f.hp) < 1e-12), ch = pts.slice(0, iTop + 1);
+  const demi = y => { for (let i = 1; i < ch.length; i++) { const [x1, y1] = ch[i - 1], [x2, y2] = ch[i]; if (y2 > y1 && y >= y1 - 1e-12 && y <= y2 + 1e-12) return x1 + (x2 - x1) * (y - y1) / (y2 - y1); } return f.bt / 2; };
+  const fck = v.betons.P.fck, items = [];
+  let D;
+  if (v.prad) {
+    const pr = v.prad, phi = pr.T.phi;
+    D = durabilitePrecontrainte({ ...o, fck, toron: phi * 1000 });
+    const bas = Math.min(...pr.pos.map(q => q.y)) - phi / 2, flanc = Math.min(...pr.pos.map(q => demi(q.y + phi / 2) - Math.abs(q.z))) - phi / 2;
+    items.push({ k: 'bas', lieu: 'sous-face du talon (lit inférieur)', c: bas }, { k: 'talon', lieu: 'flancs du talon (torons extrêmes)', c: flanc });
+  } else {
+    const phi = tr.u.phi, xm = L / 2;
+    D = durabilitePrecontrainte({ ...o, fck, gaine: phi * 1000 });
+    const bas = Math.min(...tr.cab.map(cb => tr.y(cb, xm))) - phi / 2;
+    const flanc = Math.min(...tr.cab.map(cb => demi(tr.y(cb, xm) + phi / 2) - Math.abs(cb.zm || 0))) - phi / 2;
+    items.push({ k: 'bas', lieu: 'sous-face du talon (lit inférieur, mi-travée)', c: bas }, { k: 'talon', lieu: 'flancs du talon (gaines extrêmes, mi-travée)', c: flanc });
+    // gaines relevées dans l'âme : abscisse où le haut de la gaine atteint le pan du talon
+    let ame = null;
+    for (const cb of tr.cab) {
+      if (Math.max(cb.ya, cb.ym) + phi / 2 <= C.yPan + 1e-9) continue;
+      let lo = 0, hi = xm;   // y décroît de l'appui vers la mi-travée
+      if (tr.y(cb, xm) + phi / 2 > C.yPan) lo = hi = xm;
+      else for (let it = 0; it < 60; it++) { const m = (lo + hi) / 2; if (tr.y(cb, m) + phi / 2 > C.yPan) lo = m; else hi = m; }
+      const x = (lo + hi) / 2, bw = x > (f.Lb ?? 0) + 1e-9 ? f.b0 : (f.b0a ?? f.b0), c = (bw - phi) / 2;
+      if (!ame || c < ame.c) ame = { k: 'ame', lieu: `âme (b_w = ${(bw * 100).toFixed(0)} cm, câble ${cb.i + 1} jusqu'à x = ${x.toFixed(2).replace('.', ',')} m)`, c, x, bw };
+    }
+    if (ame) items.push(ame);
+  }
+  for (const it of items) { it.mm = it.c * 1000; it.ok = it.mm >= D.cnom - 1e-6; }
+  const pire = items.reduce((m, q) => (!m || q.c < m.c ? q : m), null);
+  return { D, items, pire, ok: items.every(q => q.ok), cnom: D.cnom, bwMin: v.prad ? null : D.cnom / 500 + tr.u.phi };
 }
 
 /** Diagnostic de conception d'après le guide Sétra VIPP (1996), §§ 1.3, 2.1, 2.2, 3.1, 3.2. */
