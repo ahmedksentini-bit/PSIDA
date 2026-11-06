@@ -16,6 +16,7 @@ import { mechanicalSkew } from '../src/skew.js';
 import { supportsBlocks, waterBlocks } from './supports_view.js';
 import { seismicBlocks, texToText } from './seismic_note.js';
 import { ddrBlocks } from './ddr_view.js';
+import { dalleTransitionBlocks } from './notes_annexes.js';
 import { psidpBlocks } from './psidp_view.js';
 import { deckFigures, supportSchema, distributionChart, pileProfileCharts, footingPressureChart, svgBlock } from './note_figures.js';
 import { texteDurabilite } from '../src/durabilite.js';
@@ -302,7 +303,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
   }
 
   // ---------------------------------------------------------------------------------------------------------- 14
-  let chap = isF ? 14 : 13;
+  let chap = isF ? 14 : 13, avecDT = false;
   if (st.psidp || st.psidpError) {
     h1('Précontrainte longitudinale — dalle PSI-DP (BPEL 91, classe II)', chap++);
     for (const b of psidpBlocks(st.psidp, { error: st.psidpError })) B.push(b);
@@ -312,6 +313,8 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
     for (const b of supportsBlocks(st.supports, ref, { noWater: true })) B.push(b);
     const wb = waterBlocks(st.supports, ref);
     if (wb.length) { h1('Piles en rivière — courant, embâcles, affouillement', chap++); for (const b of wb) if (!(b.t === 'h2' && /^Piles en rivière/.test(b.text))) B.push(b); }
+    const dtb = dalleTransitionBlocks(st);
+    if (dtb.length) { avecDT = true; h1('Dalles de transition', chap++); for (const b of dtb) B.push(b); }
     h1('Calcul sismique — EN 1998-2 (Pont EC8)', chap++);
     for (const b of seismicBlocks(st.supports.sp.seisme.actif ? st.supports.seisme : null)) B.push(b);
   }
@@ -328,6 +331,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
     'SETRA, Programme PSIDA.EL — Note de calcul commentée (version 84-1), 1984 (réimpr. 1990).',
     'SETRA, Ponts-dalles précontraints d\'inertie constante — Programme PSIDP.EL, notice et note de calcul modèle, annexes 1 à 6, 1985.',
     'Cerema, CHAMOA-P PSIDA — Guide technique, 2023.',
+    ...(avecDT ? ['SETRA, Dalles de transition des ponts-routes — Technique et réalisation, 1984 ; DAfStb Heft 240 (largeurs efficaces des dalles sous charges concentrées) ; NF EN 1992-1-1 annexe J.3 (consoles courtes).'] : []),
     'Fascicule 61 titre II (1971, mod. 1981) ; BAEL 91 révisé 99 ; NF EN 1990/A1, NF EN 1991-2, NF EN 1992-1-1 et 1992-2 et annexes nationales.',
     ...(st.psidp ? ['SETRA, PSI-DP — Passages supérieurs ou inférieurs en dalle précontrainte, dossier pilote, et note de calcul modèle PSIDP-EL 84-1, 1984-1985.', 'BPEL 91 révisé 99 — Règles techniques de conception et de calcul des ouvrages et constructions en béton précontraint suivant la méthode des états limites (fascicule 62 titre I section II du CCTG).'] : []),
     ...(st.supports ? ['SETRA, PP73 — Appuis des tabliers (piles, palées, culées), 1973-1977 ; SETRA, FOND 72 — Fondations courantes d\'ouvrages d\'art.',
