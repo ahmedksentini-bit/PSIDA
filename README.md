@@ -761,6 +761,11 @@ l'axe avec corbeau, goujons, joint polystyrène et pente de 5 %, vue en plan bia
 bordereau, tableau de calcul), contrôles associés. Contre-flèche des dalles armées : flèche à long terme en section
 fissurée (EC2 § 7.4.3) dans le nivellement OA-IMP-01. Profil en long parabolique (rayon du raccordement). Calepinage des
 corniches préfabriquées (types, abouts biais, joints, réservations, masses) sur la feuille des équipements.
+v0.99.31 : corbeau de la dalle de transition (console courte EC2 annexe J.3 : tirant ancré dans le garde-grève, U
+horizontaux, bielle) sur la feuille APP-DT ; trafic de la dalle dans les efforts d'ensemble de la culée en EC (UDL de la
+dalle et excédent du TS sur la dalle par rapport au TS sur le tablier, au moins le forfait). Murs en aile des cadres et
+portiques : implantation du guide Sétra 1992 (quatre ailes, angles α et β, longueur tirée du talus), mur en T renversé
+(voile, stabilité, portance, semelle), feuille OH-AIL-01 (vue en plan, élévation développée, coupe, bordereau).
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à
