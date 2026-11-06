@@ -159,6 +159,7 @@ export function planMursAile(cadre, cartouche = {}) {
     lignes: [
       ['Ailes (θ depuis l\'axe ; longueur)', A.ailes.map(a => `${fr(a.theta, 1)}° ; ${fr(a.Lw)}`).join(' / ')],
       ['Hauteur du voile / épaisseur tête, base', `${fr(K.hv)} / ${fr(K.eT)}, ${fr(K.eB)} m`],
+      ['Base : fruit (e_h + f h)/(1 + f) / abaque e_m (DT422)', `${fr(K.eFruit, 3)} / ${fr(K.em, 3)} m`],
       ['Poussée K_a, γ, q', `${fr(K.Ka)} ; ${fr(K.gamma, 0)} kN/m³ ; ${fr(K.q, 0)} kN/m²`],
       ['M_G / M_Q / M_u / M_ser (pied du voile)', `${kN(V.Mg)} / ${kN(V.Mq)} / ${kN(V.Mu)} / ${kN(V.Ms)} kN·m/m`],
       ['Verticales côté terres : requis / retenu', `${cm2(V.As)} cm²/ml → HA${V.main.phi} e=${esp(V.main.s)} (${cm2(V.main.As)})`],
@@ -173,7 +174,7 @@ export function planMursAile(cadre, cartouche = {}) {
   const N = ['NOTES',
     ...couperLigne(`1. Béton f_c28 = ${h.fc28} MPa, aciers HA f_e = ${h.fe} MPa, enrobage ${fr((h.enrobage ?? 0.05) * 100, 0)} cm. Murs indépendants du cadre : joint de 2 cm au droit des piédroits.`, 110),
     ...couperLigne(`2. Implantation : guide Sétra « Ponts-cadres et portiques » (1992) § 2.8.1 — angles depuis l'axe de l'ouvrage${A.prop ? `, proposition α = ${fr(A.prop.alpha, 1)}°, β = ${fr(A.prop.beta, 1)}° (β au coin aigu de la tête)` : ''} ; arête 0,20 m sous la trace du talus ; dépassement du pied 0,20 m.`, 110),
-    ...couperLigne('3. Calcul à l\'enracinement (hauteur maximale) : armatures et semelle conservées sur toute la longueur ; poussée active et surcharge de remblai ; voile en T renversé fondé au niveau de la sous-face du radier.', 110),
+    ...couperLigne('3. Calcul à l\'enracinement (hauteur maximale) : armatures et semelle conservées sur toute la longueur ; poussée active et surcharge de remblai ; voile en T renversé fondé au niveau de la sous-face du radier ; épaisseur à la base ≥ e_m de l\'abaque des murs en aile et semelle de même épaisseur (Sétra PICF-EL, DT422, § 2.1).', 110),
     ...couperLigne('4. Verticales découpées par bandes de 1,50 m suivant la hauteur du mur ; horizontales par groupes de trois lits, longueur du lit le plus bas.', 110),
     ...(K.qadm > 0 ? [] : couperLigne('5. Contrainte admissible du sol non saisie : contrainte de référence à comparer à la portance (onglet Cadres, profil de sol).', 110)),
     ...(K.ok ? [] : ['6. ATTENTION — vérifications non satisfaites : voir le tableau de calcul.']),

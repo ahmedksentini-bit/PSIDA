@@ -66,3 +66,19 @@ test('Plan des murs en aile : PICF droit, biais, portique, plusieurs cellules ; 
   // murs non demandés
   assert.equal(ailesCadre(cadre({ cf_ailes: 'non' })), null);
 });
+
+test('v0.99.32 — abaque e_m des murs en aile (DT422 p. 75) et semelle de l\'épaisseur du mur à sa base', async () => {
+  const { epaisseurAbaque, ABAQUE_EM } = await import('../src/cadre/murs_aile.js');
+  // axe des murs en aile = axe des murs en retour + 0,50 m ; points numérisés
+  assert.ok(Math.abs(epaisseurAbaque(6.5, 25, 'aile') - 0.363) < 1e-9);
+  assert.ok(Math.abs(epaisseurAbaque(6.0, 25, 'retour') - 0.363) < 1e-9);
+  assert.ok(Math.abs(epaisseurAbaque(8.0, 20, 'aile') - 0.545) < 1e-9);
+  assert.ok(epaisseurAbaque(7, 20) > epaisseurAbaque(7, 25));
+  assert.equal(epaisseurAbaque(7, 30), epaisseurAbaque(7, 25));          // au-delà de 25 MPa : courbe 25 MPa
+  for (const T of Object.values(ABAQUE_EM)) for (let k = 1; k < T.length; k++) assert.ok(T[k][1] > T[k - 1][1]);
+  const h = { code: 'BAEL', fc28: 25, fe: 400, sigmaS: 201.6 };
+  const K = calculMurAile(7, { c: 0.05, es: 0.5, h, fruit: 0.0 });
+  assert.ok(K.eB >= K.em - 1e-9 && K.em > K.eFruit);                     // l'abaque gouverne sans fruit
+  const A = ailesCadre(cadre({}));
+  assert.ok(Math.abs(A.calc.es - A.calc.eB) < 0.006);                    // semelle = épaisseur à la base
+});

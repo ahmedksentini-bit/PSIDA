@@ -766,6 +766,8 @@ horizontaux, bielle) sur la feuille APP-DT ; trafic de la dalle dans les efforts
 dalle et excédent du TS sur la dalle par rapport au TS sur le tablier, au moins le forfait). Murs en aile des cadres et
 portiques : implantation du guide Sétra 1992 (quatre ailes, angles α et β, longueur tirée du talus), mur en T renversé
 (voile, stabilité, portance, semelle), feuille OH-AIL-01 (vue en plan, élévation développée, coupe, bordereau).
+v0.99.32 : murs en aile — épaisseur à la base contrôlée par l'abaque e_m du Sétra PICF-EL (DT422 p. 75, courbes
+f_c28 = 20 et 25 MPa numérisées) et semelle de l'épaisseur du mur à sa base (DT422 § 2.1).
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à
