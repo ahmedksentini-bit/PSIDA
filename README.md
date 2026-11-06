@@ -474,6 +474,14 @@ alors que le pont y est soumis (zone 2 à 5, catégorie II à IV : arrêté du 2
 élastomère fretté qui ne vérifient pas le non-glissement : dispositif anti-cheminement dimensionné (NF EN 1337-3 § 5.3.3.6 :
 appareil à fixer ; F_Ed = 1,35 F_xy sans frottement, aciers de couture des taquets F_Ed/(0,7 f_yd), surface d'appui
 F_Ed/f_cd). Pont-dalle : enrobage à l'axe par défaut porté de 3 à 5,5 cm (c_nom = 45 mm en XC4, 100 ans, + Ø/2).
+v0.99.26 : enrobages, biais, grillage, précontrainte sur la plaque. Enrobage des armatures de précontrainte (EN 1992-1-1
+§ 4.4.1.2, tableau 4.5N, c_min,b = Ø gaine ≤ 80 mm ou 1,5 Ø toron) : poutres VIPP (sous-face, talon, âme) et PRAD,
+dalle PSI-DP aux Eurocodes (enrobage des gaines par défaut = c_nom,p). Plans VIPP et nomenclature : enrobage c_nom au lieu
+de 3 cm. Appuis : durabilité des élévations et des fondations (classe de béton, c_nom ; pieux au contact du sol k₂ = 75 mm),
+béton par défaut C30/37. Pont-dalle biais calculé par Guyon : concentration des réactions à l'angle obtus lue sur la plaque
+(κ_max, κ_min par ligne d'appui). Tablier à poutres : répartition transversale par grillage (poutres, hourdis, entretoises
+intermédiaires), au choix, comparée à Guyon-Massonnet ou Courbon. Pont-dalle précontraint en plaque : réactions
+hyperstatiques de précontrainte par appareil, par les charges équivalentes du câble appliquées à la plaque.
 v0.99.24 : durabilité (EN 1992-1-1 § 4.4.1, src/durabilite.js) : classes d'exposition, durée d'utilisation et référentiel
 (EN 1992-1-1 annexe E ou NF EN 206/CN) pour le pont-dalle, les ponts à poutres et les cadres ; classe de béton minimale,
 classe structurale (tableau 4.3N), c_min,dur (tableau 4.4N) et c_nom ; vérification de l'enrobage (dalle : à l'axe − Ø/2 ;

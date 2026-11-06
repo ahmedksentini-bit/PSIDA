@@ -24,6 +24,7 @@ import { SlabDeck } from '../analysis.js';
 import { ContinuousBeam } from '../beam.js';
 import { EC_ALPHA } from '../loads_ec.js';
 import { biaisPoutres } from './biais.js';
+import { grillagePoutres } from './grillage.js';
 
 /**
  * Tablier « règle des bras de levier » : même modèle de charges que SlabDeck, mais K̄(y_k) = n w_k(e), w_k part de la charge
@@ -61,6 +62,25 @@ export class TablierCourbon extends TablierLevier {
     const ys = this.ys, n = ys.length, S2 = ys.reduce((a, y) => a + y * y, 0);
     return ys.map(y => 1 / n + (S2 > 0 ? e * y / S2 : 0));
   }
+}
+
+/**
+ * Tablier « grillage » (src/beams/grillage.js) : K̄(y_k) = n η_k(e), η_k part du moment de mi-travée reprise par la poutre k
+ * sous une charge-ligne sinusoïdale en y = e, lue sur le grillage poutres + hourdis (+ entretoises intermédiaires).
+ */
+export class TablierGrillage extends SlabDeck {
+  Kbar(L, e1, e2) { return this.grillage.Kbar(e1, e2); }
+}
+
+/**
+ * Entretoises intermédiaires du grillage : section en T (âme b_e × h_e, table de hourdis de largeur participante
+ * b_e + 2 min(0,1 (n − 1) b₁ ; s/2), s espacement des entretoises), rigidité propre hors hourdis déjà porté par les barres
+ * transversales (I_T − b_eff h_d³/12 ; torsion de l'âme seule).
+ */
+export function entretoisesGrillage({ L, nE, b0, he, hd, n, b1 }) {
+  if (!(nE > 0) || !(he > 0)) return [];
+  const s = L / (nE + 1), beff = b0 + 2 * Math.min(0.1 * (n - 1) * b1, s / 2), T = beamSection({ parts: [{ b: b0, h: he }], hourdis: { b: beff, h: hd } });
+  return Array.from({ length: nE }, (_, i) => ({ x: s * (i + 1), I: Math.max(T.I - beff * hd ** 3 / 12, 0), K: kTorsion(b0, he), b0, he, beff }));
 }
 
 /** Paramètres de Guyon-Massonnet d'un tablier à poutres (E disparaît des rapports). */
@@ -104,7 +124,8 @@ export function beamDeck(g) {
   const ys = Array.from({ length: n }, (_, k) => -b + b1 * (k + 0.5));
   const spansU = [...new Set(g.spans.map(L => +L.toFixed(3)))];
   const bySpan = new Map();
-  const Classe = g.courbon && n > 2 ? TablierCourbon : SlabDeck;
+  const grillage = g.repartition === 'grillage' && n >= 2 && !g.rail && !(g.continu && g.spans.length > 1);
+  const Classe = grillage ? TablierGrillage : g.courbon && n > 2 ? TablierCourbon : SlabDeck;
   // travées continues (coulées sur cintre, dossier PSI-BA) : un seul tablier continu, portées de Guyon d'après les portées
   // équivalentes de la poutre continue (moments) ; Courbon : répartition indépendante de la portée
   if (g.continu && g.spans.length > 1 && !g.rail) {
@@ -136,11 +157,21 @@ export function beamDeck(g) {
       continue;
     }
     const charges = dk => ({ perm: dk.permanent(), f61: dk.fascicule61({ nRetenue: g.nRetenue ?? 2, classe: g.classe ?? null, mil: g.mil || 'Mc120' }), ec: dk.eurocode({ alpha: EC_ALPHA[g.alphaEC || 'recommended'] }) });
-    const deck = new Classe(opts), { perm, f61, ec } = charges(deck);
+    const deck = new Classe(opts);
+    let gr = null;
+    if (grillage) {
+      const nE = Math.max(0, ...g.spans.map((Lj, j) => (Math.abs(Lj - L) < 1e-3 ? (g.nEntInt || [])[j] || 0 : 0)));
+      const ents = entretoisesGrillage({ L, nE, b0: g.beInt ?? 0.25, he: g.heInt ?? Math.max((sec.H || 0) - g.hd, 0), hd: g.hd, n, b1 });
+      gr = grillagePoutres({ n, b1, L, Ip: sec.I, Kp: sec.K, hd: g.hd, m: 20, entretoises: ents });
+      gr.ents = ents; deck.grillage = gr;
+    }
+    const { perm, f61, ec } = charges(deck);
     // règle des bras de levier (effort tranchant et réactions par poutre près des appuis) : inutile si n = 1 ou si les
     // entretoises intermédiaires répartissent déjà les charges (Courbon)
     const lev = n > 1 && g.levier !== false && !g.courbon ? charges(new TablierLevier(opts)) : null;
-    bySpan.set(L, { L, gp, skew, deck, perm, f61, ec, beams: perBeam(deck, perm, f61, ec, b1, n, lev, skew) });
+    // grillage : comparaison avec Guyon-Massonnet (ou Courbon) aux axes des poutres, charge sur chaque poutre
+    const cmp = gr ? (() => { const ref = new (g.courbon && n > 2 ? TablierCourbon : SlabDeck)(opts); return ys.map(e => ({ e, grillage: gr.Kbar(e, e), reference: ref.Kbar(ref.Leq[0], e, e) })); })() : null;
+    bySpan.set(L, { L, gp, skew, deck, perm, f61, ec, grillage: gr ? { N: gr.N, m: gr.m, ents: gr.ents, comparaison: cmp, reference: g.courbon && n > 2 ? 'Courbon' : 'Guyon-Massonnet' } : null, beams: perBeam(deck, perm, f61, ec, b1, n, lev, skew) });
   }
   return { sec, n, b1, width, ys, spans: g.spans, spansU, bySpan };
 }

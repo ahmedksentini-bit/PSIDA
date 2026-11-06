@@ -42,7 +42,9 @@ test('VIPP sous-câblée (3 câbles) : n₂ pour la traction en construction, n_
   assert.equal(action(bpel, 'pt_nc').valeurChamp, '4');
   const out2 = calc({ ...d, ...rec.synthese.champs });
   assert.ok(vippOk(out2), 'ensemble appliqué : toutes les poutres OK');
-  assert.equal((await recommandationsPoutres(out2, { ...d, ...rec.synthese.champs })).items.length, 0);
+  // reste l'enrobage EC2 des gaines dans l'âme de 20 cm (12T15S : b_w ≥ Ø + 2 c_nom,p = 26 cm), hors du câblage
+  const reste = (await recommandationsPoutres(out2, { ...d, ...rec.synthese.champs })).items;
+  assert.deepEqual(reste.map(i => i.verification), ['Enrobage des gaines (âme)']);
 });
 
 test('PRAD de 33 m (20 torons) : torons, torons supérieurs et béton cherchés ensemble, valeurs minimales', async () => {

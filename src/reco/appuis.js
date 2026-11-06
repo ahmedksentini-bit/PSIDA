@@ -90,6 +90,17 @@ export const reglesAppuis = [
     return A ? [{ domaine: 'Appuis et fondations', lieu: 'Ouvrage', verification: 'Combinaison sismique', constat: `séisme non calculé : zone ${A.zone}, catégorie ${A.categorie} (pont soumis aux règles parasismiques)`, regle: 'arrêté du 26/10/2011 art. 3 et 4, EN 1998-2',
       actions: [{ texte: 'Cocher « Séisme » (onglet Appuis et fondations)', champ: 'ap_seisme', valeur: 'oui', valeurChamp: 'on' }, { texte: 'Ou vérifier la zone et la catégorie d\'importance (zone 1 ou catégorie I : non soumis)', champ: 'ap_zone' }] }] : [];
   },
+  // ---------------------------------------------------------------- durabilité des appuis (EN 1992-1-1 § 4.4.1)
+  st => {
+    const Dd = st.supports && st.supports.durab, out = [];
+    if (!Dd) return out;
+    for (const [D, nom] of [[Dd.elev, 'élévations'], [Dd.fond, 'fondations']]) if (!D.okBeton) out.push({ domaine: 'Appuis et fondations', lieu: 'Ouvrage', verification: `Durabilité : classe de béton des ${nom}`, constat: `C${D.fck} < ${D.classeMin} (${D.expos.join(', ')})`, regle: D.ref === 'CN' ? 'NF EN 206/CN' : 'EN 1992-1-1 annexe E, tableau E.1N',
+      actions: [{ texte: `Béton ${D.classeMin} au moins`, champ: 'ap_fck', unite: 'MPa', valeur: String(D.fckMin), valeurChamp: String(D.fckMin) }, { texte: 'Ou revoir les classes d\'exposition', champ: nom === 'élévations' ? 'ap_expoDur' : 'ap_expoFond' }] });
+    const req = Math.max(Dd.elev.cnom, Dd.cnomSem);
+    if (!Dd.okElev || !Dd.okFond) out.push({ domaine: 'Appuis et fondations', lieu: 'Ouvrage', verification: 'Durabilité : enrobage nominal', constat: `${Math.round(Dd.c)} mm < c_nom = ${req} mm (${!Dd.okElev ? `élévations ${Dd.elev.expos.join(', ')}` : `fondations ${Dd.fond.expos.join(', ')}`})`, regle: 'EN 1992-1-1 § 4.4.1.2 et 4.4.1.3',
+      actions: [{ texte: `Enrobage nominal ${(req / 1000).toFixed(3).replace('.', ',')} m`, champ: 'ap_c', unite: 'm', valeur: (req / 1000).toFixed(3).replace('.', ','), valeurChamp: (req / 1000).toFixed(3) }] });
+    return out;
+  },
   // ---------------------------------------------------------------- appareils (EN 1337-3) et tête d'appui
   st => {
     const out = [], ref = st._recoRef || 'EC', sp = st.p && st.p.supports;

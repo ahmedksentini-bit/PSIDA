@@ -4,6 +4,7 @@
  * transversale de Guyon-Massonnet) — démarche du dossier pilote SETRA PSI-DP et de la note modèle PSIDP-EL 84-1, règles
  * BPEL 91 révisé 99 (classe II). Unités internes : m, kN, kPa ; entrées et sorties des matériaux en MPa.
  */
+import { durabilitePrecontrainte } from '../durabilite.js';
 import { prestress, cableGeometry, cablePoints, deflection } from './prestress.js';
 import { materialsBAEL, flexureELU, flexureELS } from '../section_bael.js';
 import { psidpChecks, ec2Checks, mLim } from './checks.js';
@@ -152,7 +153,12 @@ function designPSIDP0(ctx, bpIn = {}) {
   const MPa = 1000, fc28 = ctx.fc28, fcj = bp.fcj || Math.min(fc28, 0.8 * fc28 + 2);
   const ft = v => 0.6 + 0.06 * v, Ei = v => 11000 * Math.cbrt(v);
   const fprg = bp.fprg, fpeg = bp.fpeg, sigma0 = bp.sigma0 || Math.min(0.8 * fprg, 0.9 * fpeg);
-  const cover = bp.cover ?? U.phiG, off = cover + U.phiG / 2 + bp.decal;
+  // enrobage des gaines : saisi, sinon Eurocodes c_nom,p = max(c_min,b = Ø gaine ; c_min,dur tableau 4.5N) + Δc_dev
+  // (EN 1992-1-1 § 4.4.1.2, géométrie de dalle), BPEL : Ø gaine
+  let durabGaine = null;
+  if (isEC2 && bp.durab) try { durabGaine = durabilitePrecontrainte({ ...bp.durab, fck: fc28, dalle: true, gaine: U.phiG * 1000 }); } catch (e) { durabGaine = null; }
+  const cover = bp.cover ?? (durabGaine ? durabGaine.cnom / 1000 : U.phiG), off = cover + U.phiG / 2 + bp.decal;
+  if (durabGaine) Object.assign(durabGaine, { enrobage: cover * 1000, ok: cover * 1000 >= durabGaine.cnom - 1e-6, impose: bp.cover != null });
   const zSup = bp.eSup != null ? sec.v - bp.eSup : sec.v - off, zLow = bp.eLow != null ? -(sec.vp - bp.eLow) : -(sec.vp - off);
   // tracé par points (table x z) : prioritaire sur les paraboles ; contrainte initiale imposée (x σ)
   const ptsIn = parsePairs(bp.pts, 'Tracé du câble par points');
@@ -363,7 +369,7 @@ function designPSIDP0(ctx, bpIn = {}) {
     let mx = -Infinity, xm = 0; res.r.spi.forEach((v, i) => { if (v > mx) { mx = v; xm = res.r.xs ? res.r.xs[i] : xs[i]; } });
     sigPm0 = { max: mx / MPa, x: xm, lim: sPm0Lim, sigmaJack, okJack: sigma0 <= sigmaJack + 1e-6, ok: mx / MPa <= sPm0Lim + 1e-6 && sigma0 <= sigmaJack + 1e-6, imposee: !!sigImposed };
   }
-  return { bp, unit: U, sec, sigma0, sigPm0, fcj: isEC2 ? cE.fckt : fcj, fc28, lim, steel, segs, points, sigImposed, isEC2, ec2: cE, geoChk, pre, n0, tried, auto: !bp.n, opt, anchors, shorten, xs, M, Q, G, O, courbe, ...res };
+  return { bp, unit: U, sec, sigma0, sigPm0, durabGaine, fcj: isEC2 ? cE.fckt : fcj, fc28, lim, steel, segs, points, sigImposed, isEC2, ec2: cE, geoChk, pre, n0, tried, auto: !bp.n, opt, anchors, shorten, xs, M, Q, G, O, courbe, ...res };
 }
 
 /**

@@ -104,8 +104,8 @@ const fr = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : 
 const milliers = x => Math.round(x).toLocaleString('fr-FR').replace(/[  ]/g, ' ');
 
 /** Coupe de l'entretoise d'about (largeur te, hauteur he + hd) : contour, cadre, barres inférieures et supérieures. */
-function vueEntretoise(E, hd, lignes) {
-  const V = new Vue('COUPE C-C : ENTRETOISE D\'ABOUT', { echelle: 20 }), te = E.te, h = E.he + hd, c = 0.03;
+function vueEntretoise(E, hd, lignes, c = 0.03) {
+  const V = new Vue('COUPE C-C : ENTRETOISE D\'ABOUT', { echelle: 20 }), te = E.te, h = E.he + hd;
   const pts = [[-te / 2, 0], [te / 2, 0], [te / 2, h], [-te / 2, h]];
   V.poly('COFFRAGE', pts, true); V.hachure(pts);
   V.ligne('VUES', [-te / 2 - 0.3, E.he], [te / 2 + 0.3, E.he]);
@@ -138,10 +138,10 @@ export function planNomenclatureVIPP(v, cartouche = {}, { nom = 'POUTRE VIPP', a
     V.repere([f.bt / 2 + 0.2, f.hp + 0.12], rp(4), [f.bt / 2 - c - 0.1, f.hp - c]);
     V.repere([-f.bt / 2 - 0.2, f.hp - f.hte], rp(5), [-f.bt / 2 + c + 0.02, f.hp - f.hte + c + 0.012]);
   } });
-  const vues = [cA]; if (ctx.entretoise && N0.n >= 2) vues.push(vueEntretoise(ctx.entretoise, S.hd, lignes));
+  const vues = [cA]; if (ctx.entretoise && N0.n >= 2) vues.push(vueEntretoise(ctx.entretoise, S.hd, lignes, c));
   const td = { titre: 'REPÈRES', hl: 4.6, h: 1.9, cols: [{ t: 'Rep.', w: 11, a: 'c' }, { t: 'Élément', w: 22, a: 'c' }, { t: 'Désignation', w: 110, a: 'g' }, { t: 'Par poutre', w: 23, a: 'd' }],
     lignes: lignes.map(l => [l.repere, l.element, l.desig, l.parPoutre ? String(l.parPoutre) : '']) };
-  const notes = ['NOTES', `1. Nomenclature d'une travée de ${fr(v.L)} m : ${N0.n} poutres (abouts ${fr(a)} m), hourdis de ${fr(N0.W)} m, deux entretoises d'about. Aciers HA B500B, enrobage ${fr(c * 100, 0)} cm.`,
+  const notes = ['NOTES', `1. Nomenclature d'une travée de ${fr(v.L)} m : ${N0.n} poutres (abouts ${fr(a)} m), hourdis de ${fr(N0.W)} m, deux entretoises d'about. Aciers HA B500B, enrobage ${fr(c * 100, 1)} cm${ctx.cnom ? ' = c_nom de durabilité (EN 1992-1-1 § 4.4.1)' : ''}${ctx.cGaine ? ` ; gaines et torons : ${fr(ctx.cGaine / 10, 1)} cm au moins (c_nom,p, tableau 4.5N)` : ''}.`,
     '2. Longueurs de coupe ISO 4066 (codes 00, 21, 51), mandrins EC2 § 8.3 ; barres droites de 12 m au plus, recouvrements l₀ (§ 8.7.3) décalés.',
     `3. Masses : poutres ${milliers(N0.parElement.poutre)} kg (${fr(N0.ratioPoutre, 0)} kg/m³ de poutre ; guide Sétra VIPP : 100 à 120 kg/m³), hourdis ${milliers(N0.parElement.hourdis)} kg, entretoises ${milliers(N0.parElement.entretoise)} kg.`,
     '4. Frettage sous ancrages et armatures d\'éclatement : selon l\'agrément du procédé de précontrainte (non comptés).',

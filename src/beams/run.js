@@ -10,7 +10,7 @@ import { kgPoutre } from './biais.js';
 import { deversementPoutre, inertieVerticale } from './deversement.js';
 import { betonEC2 } from '../phasage/fluage.js';
 import { parseDesignation } from '../bearings.js';
-import { chaineVIPP, DEFAUTS_VIPP } from './vipp.js';
+import { chaineVIPP, DEFAUTS_VIPP, enrobageGaines } from './vipp.js';
 import { hourdisLocal } from './hourdis.js';
 import { entretoiseVerinage } from './entretoise.js';
 import { entretoiseIntermediaire } from './entretoise_int.js';
@@ -75,6 +75,8 @@ export function parsePoutres(d) {
     ...(() => { const l = nums(String(d.pt_entInt ?? '0')).map(x => Math.max(0, Math.round(x))), sp = nums(d.pt_spans), nE = sp.map((_, j) => l[Math.min(j, l.length - 1)] ?? 0);
       return { courbon: nE.some(x => x > 0), nEntInt: nE }; })(),
     beInt: v('pt_beInt', 0.25),
+    // répartition transversale : Guyon-Massonnet (ou Courbon si entretoises intermédiaires), ou grillage (travées indépendantes)
+    repartition: d.pt_repart === 'grillage' ? 'grillage' : 'auto',
     bGousset: v('pt_bgous', null), lGousset: v('pt_lgous', null), tePile: v('pt_tePile', 0.50),
     // stabilité latérale en phase de pose (src/beams/deversement.js) : points de levage, appareil provisoire, dévers
     pose: { a: v('pt_levA', null), hLev: v('pt_levH', 0.20), appareil: parseDesignation(d.pt_devApp || '300x400x3(10+3)'), devers: v('pt_devers', 0) / 100, about: d.pt_type === 'PRAD' ? v('pr_about', 0.30) : v('pt_about', 0.40), balayage: v('pt_balay', null) },
@@ -84,7 +86,10 @@ export function parsePoutres(d) {
 export function computePoutres(inp) {
   const r = computePoutres0(inp);
   // durabilité (EN 1992-1-1 § 4.4.1) : classe de béton des poutres, enrobage nominal des cadres (plans BA : c_nom au nu des cadres)
-  try { r.durab = durabilite({ expo: inp.expoDur, fck: inp.fck, phi: 12, vie: inp.vieDur, ref: inp.refDur }); } catch (e) { r.durab = null; }
+  const fckP = inp.geo === 'dims' && inp.vipp ? inp.vipp.beton.fckP : inp.fck, dOpt = { expo: inp.expoDur, vie: inp.vieDur, ref: inp.refDur };
+  try { r.durab = durabilite({ ...dOpt, fck: fckP, phi: 12 }); } catch (e) { r.durab = null; }
+  // VIPP / PRAD : enrobage des gaines ou des torons (EN 1992-1-1 § 4.4.1.2, tableau 4.5N)
+  try { const b = r.spans && r.spans.flatMap(sp => sp.beams).find(q => q.vipp); r.durabP = b ? enrobageGaines(b.vipp, dOpt) : null; } catch (e) { r.durabP = null; }
   return r;
 }
 
@@ -127,7 +132,7 @@ function computePoutres0(inp) {
       }
       return out;
     });
-    return { L: S.L, theta: S.gp.theta, alpha: S.gp.alpha, Lguyon: S.gp.Lguyon, classe: S.f61.classe, deltaB: S.f61.deltaBc[0], deltaC: S.f61.deltaMc?.[0], skew: S.skew, deversement: deversementDe(beams, S.L, inp), gp: S.gp, f61info: { G: S.f61.G?.[0], nv: S.f61.nv, v: S.f61.v, Lc: S.f61.Lc, Lr: S.f61.Lr }, beams };
+    return { L: S.L, grillage: S.grillage || null, theta: S.gp.theta, alpha: S.gp.alpha, Lguyon: S.gp.Lguyon, classe: S.f61.classe, deltaB: S.f61.deltaBc[0], deltaC: S.f61.deltaMc?.[0], skew: S.skew, deversement: deversementDe(beams, S.L, inp), gp: S.gp, f61info: { G: S.f61.G?.[0], nv: S.f61.nv, v: S.f61.v, Lc: S.f61.Lc, Lr: S.f61.Lr }, beams };
   });
   const { hourdis, entretoise, entInt } = localEtEntretoise(inp, bd, spans, sec);
   return { inp, sec, spans, lines: inp.rail ? lineReactionsRail(bd, inp.rail) : lineReactions(bd), appareils: appareilsPoutres(bd, inp), bd, hourdis, entretoise, entInt, rail: !!inp.rail };

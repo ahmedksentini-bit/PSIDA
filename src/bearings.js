@@ -193,9 +193,13 @@ export function designBearings({ deck, beamComb, EI, nPerLine = null, xFixed = n
     if (ineq) {
       const k = ineq.coef, Rp = ineq.Rperm[i], RA = Math.max(ineq.RA[i], 0), RB = Math.max(ineq.RB[i], 0);
       kCP = k.CP; kQ = RA + RB > 0 ? (k.A * RA + k.B * RB) / (RA + RB) : k.A;
+      // ouvrage biais (Guyon) : majoration de l'angle obtus lue sur la plaque (src/plate/biais_appuis.js)
+      const kb = ineq.kBiais && ineq.kBiais[i];
+      if (kb) { kCP *= kb.kMax; kQ *= kb.kMax; }
       Pmax = (kCP * Rp + kQ * Math.max(Rmax - Rp, 0)) / nb;
     }
-    const Pmin = Rmin / nb;
+    const kBiais = ineq && ineq.kBiais ? ineq.kBiais[i] : null;
+    const Pmin = Rmin / nb * (kBiais ? kBiais.kMin : 1);
     const ug = (epsSlow + alphaT * dT) * Math.abs(x - xf);
     // rotation : si fournie, θ permanent (module différé) + enveloppe des lignes d'influence de rotation sous trafic
     // (concomitante) ; sinon estimation conservative par l'enveloppe ELS caractéristique des moments (sagging)
@@ -214,7 +218,7 @@ export function designBearings({ deck, beamComb, EI, nPerLine = null, xFixed = n
     let sel;
     if (imp) { const r = checkBearing(imp.bd, imp.n, { ...loads, G1, G2, sigMax }); sel = { bd: imp.bd, n: imp.n, area: imp.bd.a * imp.bd.b, T: imp.n * imp.bd.t, ...r, label: designation(imp.bd, imp.n), hTot: totalHeight(imp.bd, imp.n), imposed: true }; }
     else sel = selectBearing(loads, { G1, G2, sigMax });
-    return { i, x, Rmax, Rmin, nb, Pmax, Pmin, kCP, kQ, ug, Hb, alpha, alphaExp, sel, uplift: Rmin < 0 };
+    return { i, x, Rmax, Rmin, nb, Pmax, Pmin, kCP, kQ, kBiais, ug, Hb, alpha, alphaExp, sel, uplift: Rmin < 0 || Pmin < 0 };
   });
   return { rows, nb, H, Hb, xf, nLines, epsSlow, dT, alphaT, alpha0, G1, G2, sigMax, ineq: ineq ? ineq.coef : null };
 }

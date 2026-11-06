@@ -14,7 +14,8 @@ const d0 = { ...formDefaults() };
 const calc = (ch, extra = {}) => { const d = { ...d0, ...ch, ...extra }; return computeStandalone(parseStandalone(d), parseSupports(d)); };
 
 test('mixte : tête de voile élargie pour que la diffusion sous les grands appareils passe', () => {
-  const st = calc(champsAppuisPhasage(computeMixte({ ph_type: 'mixte' })));
+  // béton C25/30 (défaut des appuis avant v0.99.26) : la tête du voile doit être élargie
+  const st = calc(champsAppuisPhasage(computeMixte({ ph_type: 'mixte' })), { ap_fck: '25' });
   const S = st.supports;
   assert.equal(S.sp.pile.bTopAuto, 'diffusion');
   assert.ok(S.sp.pile.bTop > S.sp.pile.b);

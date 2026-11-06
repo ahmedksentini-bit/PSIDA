@@ -155,8 +155,8 @@ export function zonesEtriers(v) {
 /** Armatures du talon : nombre de HA25 (A_s ELU à mi-travée, 4 au moins). */
 export const talonVIPP = v => ({ phi: 25, n: Math.max(4, Math.ceil(v.elu[v.elu.length - 1].As / 4.909e-4)) });
 
-export function planFerraillageVIPP(v, cartouche = {}, { nom = 'POUTRE VIPP', a = 0.5 } = {}) {
-  const S = v.S, f = S.forme, L = v.L, c = 0.03;
+export function planFerraillageVIPP(v, cartouche = {}, { nom = 'POUTRE VIPP', a = 0.5, ctx = {} } = {}) {
+  const S = v.S, f = S.forme, L = v.L, c = ctx.c ?? 0.03;
   const AsMid = v.elu[v.elu.length - 1].As, { n: nT, phi: phiT } = talonVIPP(v);
   const zones = zonesEtriers(v);
   const cA = vueCoupe(v, S, v.trace, { titre: 'COUPE A-A : FERRAILLAGE COURANT (PRINCIPE)', x: L / 2, armatures: V => {
@@ -180,7 +180,7 @@ export function planFerraillageVIPP(v, cartouche = {}, { nom = 'POUTRE VIPP', a 
   const tq = { titre: 'ARMATURES PASSIVES (ESTIMATION, UNE POUTRE)', cols: [{ t: 'Poste', w: 60, a: 'g' }, { t: 'Masse [kg]', w: 26, a: 'd' }],
     lignes: [['Talon (A_s ELU / minimum)', milliers(kg.talon)], ['Étriers (zones)', milliers(kg.etriers)], ['Armatures de peau', milliers(kg.peau)], ['Table (transversales)', milliers(kg.table)], ['Total', milliers(tot)], [`Ratio (guide : 100 à 120 kg/m³)`, `${fr(tot / vol, 0)} kg/m³`]] };
   const N = numeroter(['NOTES', `1. Plan de principe : sections d'acier du calcul (ELU de flexion : A_s = ${fr(AsMid * 1e4, 1)} cm² à mi-travée ; effort tranchant EN 1992-1-1 § 6.2.3). Façonnage : nomenclature VIPP-NOM-01.`,
-    `2. Aciers HA f_yk = 500 MPa ; enrobage ${fr(c * 100, 0)} cm (gaines : 5 cm au moins).`,
+    `2. Aciers HA f_yk = 500 MPa ; enrobage ${fr(c * 100, 1)} cm${ctx.cnom ? ' = c_nom (EN 1992-1-1 § 4.4.1)' : ''} ; ${v.prad ? 'torons' : 'gaines'} : ${ctx.cGaine ? `${fr(ctx.cGaine / 10, 1)} cm au moins (c_nom,p, tableau 4.5N)${ctx.okGaine === false ? ' — NON RESPECTÉ par la section : voir la note' : ''}` : '5 cm au moins'}.`,
     v.prad ? '3. Étriers fermés à 2 brins, espacement ≤ min(0,75 d ; 40 cm) ; frettage d\'about et armatures d\'éclatement sur la longueur de transmission (EN 1992-1-1 § 8.10.3).' : '3. Étriers fermés à 2 brins, espacement ≤ min(0,75 d ; 40 cm) ; densifier sous les plaques d\'ancrage (frettage selon l\'agrément du procédé).',
     '4. Armatures en attente dans la table pour la liaison avec le hourdis (couture à l\'interface, EN 1992-1-1 § 6.2.5) : à justifier.',
     '5. Ratio courant du guide Sétra VIPP : 100 à 120 kg/m³ de poutre (§ 3.1.2).']);

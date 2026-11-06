@@ -32,6 +32,15 @@ const T44 = [
   [15, 20, 30, 35, 40, 45, 50],   // S5
   [20, 25, 35, 40, 45, 50, 55],   // S6
 ];
+// tableau 4.5N : acier de précontrainte (mêmes colonnes)
+const T45 = [
+  [10, 15, 20, 25, 30, 35, 40],   // S1
+  [10, 15, 25, 30, 35, 40, 45],   // S2
+  [10, 20, 30, 35, 40, 45, 50],   // S3
+  [10, 25, 35, 40, 45, 50, 55],   // S4
+  [15, 30, 40, 45, 50, 55, 60],   // S5
+  [20, 35, 45, 50, 55, 60, 65],   // S6
+];
 // seuils de résistance du tableau 4.3N (réduction d'une classe), par colonne
 const SEUIL = [30, 30, 35, 40, 40, 40, 45];
 
@@ -45,9 +54,10 @@ export function lireExpositions(txt) {
 /**
  * @param {object} o { expo (texte ou liste), fck [MPa], phi [mm] (plus gros diamètre des barres extérieures), vie [ans],
  *   dalle (géométrie de dalle), qualite (maîtrise particulière), ref ('EC2' | 'CN'), dcDev [mm] }
+ *   precontrainte (tableau 4.5N au lieu de 4.4N), cminB [mm] (c_min,b imposé, sinon φ)
  * @returns { expos, fckMin, classeMin, okBeton, S, cminDur, cmin, cnom [mm], colonne, detailsS }
  */
-export function durabilite({ expo = 'XC4', fck = 30, phi = 16, vie = 100, dalle = false, qualite = false, ref = 'EC2', dcDev = 10 } = {}) {
+export function durabilite({ expo = 'XC4', fck = 30, phi = 16, vie = 100, dalle = false, qualite = false, ref = 'EC2', dcDev = 10, precontrainte = false, cminB = null } = {}) {
   const expos = Array.isArray(expo) ? expo : lireExpositions(expo), T = FCK_MIN[ref] || FCK_MIN.EC2;
   let fckMin = 0, critique = null;
   for (const e of expos) if ((T[e] ?? 0) > fckMin) { fckMin = T[e]; critique = e; }
@@ -60,12 +70,22 @@ export function durabilite({ expo = 'XC4', fck = 30, phi = 16, vie = 100, dalle 
   if (dalle) { S -= 1; det.push('−1 (géométrie de dalle)'); }
   if (qualite) { S -= 1; det.push('−1 (maîtrise de la qualité)'); }
   S = Math.min(6, Math.max(1, S));
-  const cminDur = T44[S - 1][col], cmin = Math.max(phi, cminDur, 10), cnom = cmin + dcDev;
-  return { expos, ref, fckMin, classeMin: fckMin ? nomClasse(fckMin) : '—', critique, okBeton: fck >= fckMin, S, detailsS: det.join(' '), colonne: col, cminDur, cmin, cnom, dcDev, phi, fck, vie };
+  const cminDur = (precontrainte ? T45 : T44)[S - 1][col], cb = cminB ?? phi, cmin = Math.max(cb, cminDur, 10), cnom = cmin + dcDev;
+  return { expos, ref, precontrainte, cminB: cb, fckMin, classeMin: fckMin ? nomClasse(fckMin) : '—', critique, okBeton: fck >= fckMin, S, detailsS: det.join(' '), colonne: col, cminDur, cmin, cnom, dcDev, phi, fck, vie };
+}
+
+/**
+ * Enrobage des armatures de précontrainte (EN 1992-1-1 § 4.4.1.2) : c_min,b (tableau 4.2) = diamètre de la gaine circulaire,
+ * 80 mm au plus (post-tension) ; 1,5 φ du toron ou du fil lisse (prétension) ; c_min,dur,p du tableau 4.5N.
+ * @param {object} o paramètres de durabilite() + { gaine [mm] (post-tension) | toron [mm] (prétension) }
+ */
+export function durabilitePrecontrainte({ gaine = null, toron = null, ...o } = {}) {
+  const cminB = gaine != null ? Math.min(gaine, 80) : 1.5 * (toron ?? 15.7);
+  return { ...durabilite({ ...o, precontrainte: true, cminB, phi: gaine ?? toron ?? 15.7 }), gaine, toron, mode: gaine != null ? 'post' : 'pre' };
 }
 
 /** Texte court de la vérification (note, tableaux). */
 export function texteDurabilite(D, { enrobage = null, objet = 'armatures extérieures' } = {}) {
   const r = D.ref === 'CN' ? 'NF EN 206/CN' : 'EN 1992-1-1 tableau E.1N';
-  return `Durabilité (${D.expos.join(', ')}, ${D.vie} ans) : béton ${nomClasse(D.fck)} ${D.okBeton ? '≥' : '<'} ${D.classeMin} (${r}) ; classe structurale S${D.S} (${D.detailsS}) ; c_min,dur = ${D.cminDur} mm (tableau 4.4N), c_min = ${D.cmin} mm, c_nom = c_min + Δc_dev = ${D.cnom} mm${enrobage != null ? ` ; enrobage des ${objet} ${Math.round(enrobage)} mm ${enrobage >= D.cnom - 1e-6 ? '≥' : '<'} c_nom` : ''}.`;
+  return `Durabilité (${D.expos.join(', ')}, ${D.vie} ans) : béton ${nomClasse(D.fck)} ${D.okBeton ? '≥' : '<'} ${D.classeMin} (${r}) ; classe structurale S${D.S} (${D.detailsS}) ; c_min,dur = ${D.cminDur} mm (tableau ${D.precontrainte ? '4.5N' : '4.4N'}), c_min = ${D.cmin} mm, c_nom = c_min + Δc_dev = ${D.cnom} mm${enrobage != null ? ` ; enrobage des ${objet} ${Math.round(enrobage)} mm ${enrobage >= D.cnom - 1e-6 ? '≥' : '<'} c_nom` : ''}.`;
 }

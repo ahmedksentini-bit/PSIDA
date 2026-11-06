@@ -426,6 +426,10 @@ export function durabiliteLignes(r) {
   if (r.inp.type === 'BA' && r.spans && r.spans.some(s => s.beams && s.beams.some(b => b.BA))) { try { P = donneesBA(r); } catch (e) { P = null; } }
   rows.push({ k: 'cnom', cells: ['Enrobage nominal (cadres, Ø12)', P ? `${(P.c * 1000).toFixed(0)} mm (plans)` : 'à respecter sur les plans', `c_nom = c_min,dur ${Dd.cminDur} + Δc_dev ${Dd.dcDev} = ${Dd.cnom} mm (S${Dd.S} : ${Dd.detailsS})`], ok: true });
   if (P) rows.push({ k: 'yG', cells: ['Centre de gravité des lits inférieurs (plans)', `${(P.yG * 100).toFixed(1).replace('.', ',')} cm du fond`, `≤ enrobage à l'axe du calcul ${(r.inp.cover * 100).toFixed(1).replace('.', ',')} cm (d = H − enrobage)`], ok: P.okYG, yG: P.yG });
+  // VIPP / PRAD : enrobage des gaines ou des torons (tableau 4.5N)
+  const Gp = r.durabP;
+  if (Gp) for (const q of Gp.items) rows.push({ k: 'gaine_' + q.k, cells: [`Enrobage ${Gp.D.mode === 'pre' ? 'des torons' : 'des gaines'} : ${q.lieu}`, `${q.mm.toFixed(0)} mm`,
+    `≥ c_nom,p = max(c_min,b ${Gp.D.mode === 'pre' ? '= 1,5 Ø' : '= Ø gaine'} ${Gp.D.cminB.toFixed(0)} ; c_min,dur ${Gp.D.cminDur} tableau 4.5N) + ${Gp.D.dcDev} = ${Gp.cnom} mm${q.k === 'ame' && !q.ok ? ` (b_w ≥ Ø + 2 c_nom,p = ${(Gp.bwMin * 100).toFixed(0)} cm)` : ''}`], ok: q.ok, item: q });
   return { Dd, rows, P };
 }
 

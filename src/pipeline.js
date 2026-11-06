@@ -15,6 +15,8 @@ import { aideConception } from './conception.js';
 import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations, parseDesignation } from './bearings.js';
 import { chevetresEC } from './chevetre.js';
 import { sectionDevers, bandesRevetement } from './devers.js';
+import { coefficientsBiais } from './plate/biais_appuis.js';
+import { precontraintePlaque } from './plate/precontrainte.js';
 import { woodArmer, woodArmerTous, transversalPlaque, chevetresPlaque, reactionsAppareils, renfortsAppareils } from './plate/design.js';
 import { raideurAppareil } from './plate/deck.js';
 import { parseAxles, vehicleEnvelope, provisionalProfile, ANNEX_A_VEHICLES, dynLM3 } from './vehicles.js';
@@ -225,6 +227,7 @@ export function parseSupports(d) {
       gb: (() => { const h = v('ap_gbH', 0); return { h: h > 0 ? h : 0, deb: v('ap_gbDeb', h / 2), fck: v('ap_gbFck', 15), gamma: v('ap_gbGamma', 23) }; })() },
     soil: { profiles: parseProfiles(d.ap_profil), assign: String(d.ap_profAssign || '').split(/[,;\s]+/).filter(Boolean), classe: d.ap_soil || 'sable-B', ple: v('ap_ple', 1), EM: v('ap_EM', 10), alpha: v('ap_alpha', 0.5), phi: v('ap_phi', 30), gamma: v('ap_gamma', 20), q: v('ap_q', 10), kSus: v('ap_kSus', 0.5) },
     mat: { fck: v('ap_fck', +d.fck || 25), fyk: v('ap_fyk', +d.fyk || 400), c: v('ap_c', 0.05) },
+    durab: { expo: d.ap_expoDur || 'XC4', expoFond: d.ap_expoFond || 'XC2', vie: v('ap_vie', 100), ref: d.ap_refDur === 'CN' ? 'CN' : 'EC2' },
     eps: { TLD: v('ap_TLD', 3e-4), TCD: v('ap_TCD', 1e-4) },
     bossage: { debord: v('ap_bosDeb', null), fck: v('ap_bosFck', null) ?? undefined },
     epsPSIDP: (d.ap_epsPSIDP ?? 'oui') !== 'non',
@@ -360,6 +363,9 @@ export function compute(p) {
   const kc = inequalityCoefficients({ width: 2 * deck.b, chargeable: deck.g.roadway.y2 - deck.g.roadway.y1, n: nbL, psi: p.concept.psi, nLanes: ec.lanes.n, h: deck.h, hRev: p.mat.tRev });
   const tsWheels = ec.lm1.lanes.slice(0, 3).flatMap((ln, i) => [{ y: i * ec.lanes.wl + ec.lanes.wl / 2 - 1, P: ln.Q }, { y: i * ec.lanes.wl + ec.lanes.wl / 2 + 1, P: ln.Q }]).filter(w => w.P > 0);
   const ineq = { coef: { ...kc, B: inequalityWheels(tsWheels, kc.e, nbL) }, Rperm: perm.Rmax, RA: ec.UDL.Rmax, RB: ec.TS.Rmax };
+  // ouvrage biais calculé par Guyon : concentration à l'angle obtus lue sur la plaque (deux résolutions, permanent)
+  const traceBiais = deck.g.trace && deck.g.trace.psiLignes && deck.g.trace.psiLignes.some(q => Math.abs(q - 100) > 1e-9);
+  if (!PL && (skewed || traceBiais)) { try { ineq.kBiais = coefficientsBiais(deck, { psi: p.concept.psi || 100, nb: nbL, E: p.E || 34000 }); } catch (e) { ineq.kBiaisErreur = e.message; } }
   // rotations d'appui : permanent (poutre conjuguée, module différé E/(1+φ)) + trafic gr1a (lignes d'influence de rotation, Ei)
   const rotPerm = deck.beam.x0.map((_, i) => {
     let th = 0;
@@ -374,7 +380,7 @@ export function compute(p) {
   const rotQ = ec.gr1a.Tmax ? ec.gr1a.Tmax.map((v, i) => Math.max(Math.abs(v), Math.abs(ec.gr1a.Tmin[i])) / EI) : null;
   const bearings = designBearings({ deck, beamComb: design.EC.beam, EI, nPerLine: p.concept.nBearings, xFixed: p.concept.xFixed, epsSlow: p.concept.epsSlow, dT: p.concept.dTu, alphaQ1: ec.alpha.aQ[0], alphaq1: ec.alpha.aq1, ineq, rot: rotQ ? { perm: rotPerm, traffic: rotQ } : null,
     impose: p.concept.bearingEnd || p.concept.bearingPier ? { end: p.concept.bearingEnd, pier: p.concept.bearingPier } : null });
-  bearings.rotPerm = rotPerm; bearings.EI = EI;
+  bearings.rotPerm = rotPerm; bearings.EI = EI; if (ineq.kBiais) bearings.kBiais = ineq.kBiais; if (ineq.kBiaisErreur) bearings.kBiaisErreur = ineq.kBiaisErreur;
   if (PL) {
     // plaque : réaction de l'appareil le plus chargé lue sur la plaque (au lieu des coefficients d'inégalité PSI-DA 68)
     const ra = reactionsAppareils(deck, perm, ec, design.EC.beam);
@@ -415,8 +421,11 @@ export function compute(p) {
   let psidp = null, psidpError = null;
   if (p.bp && p.bp.actif) {
     try {
-      psidp = designPSIDP({ deck, perm, f61, ec, thermal: p.bp && p.bp.reg === 'EC2' ? thermal : thermal61, settle, beamF61: design.F61.beam, beamEC: design.EC.beam, fc28: p.mat.fck }, p.bp);
+      psidp = designPSIDP({ deck, perm, f61, ec, thermal: p.bp && p.bp.reg === 'EC2' ? thermal : thermal61, settle, beamF61: design.F61.beam, beamEC: design.EC.beam, fc28: p.mat.fck },
+        { ...p.bp, durab: { expo: p.mat.expoDur, vie: p.mat.vieDur, ref: p.mat.refDur } });
       psidp.defl = psidpDeflections(psidp);
+      // tablier en plaque (droit ou biais) : réactions hyperstatiques de précontrainte par appareil, lues sur la plaque
+      if (PL && PL.M && !PL.M.geo) try { psidp.plaque = precontraintePlaque(PL.M, psidp.r, { b: deck.b }); } catch (e) { psidp.plaqueErreur = e.message; }
       const model = new TransverseModel(deck, { tRev: p.mat.tRev, nHarm: 15, I: p.I, skewEquivalent: true });
       psidp.trans = transversePrestress(psidp, { deck, model, transDesign: transDesign.F61, mat: { ...p.mat, phiLong: p.mat.phi } });
     } catch (e) { psidpError = e.message; }
