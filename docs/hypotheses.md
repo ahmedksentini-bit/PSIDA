@@ -551,6 +551,12 @@ Contrôle sur la note « appuis et fondations » de d'un pont-dalle précontrain
 - **Grillage** (Hambly 1991, chap. 3) : poutres E I_p, G K_p ; barres transversales du hourdis E Δx h_d³/12, G Δx h_d³/6 ; entretoises en T (âme b_e × h_e, table b_e + 2 min(0,1 (n−1) b₁ ; s/2)) ; appuis w = θ_x = 0 ; G = E/2 ; charge-ligne sinusoïdale (premier harmonique) → K̄_k = n M_k/ΣM. Contrôles : dalle isotrope à 10 poutres ≈ Guyon à 3 % ; entretoises infiniment rigides sans torsion = Courbon exactement. Pont de Noé (4 VIPP) : K̄ de la poutre de rive chargée 2,71 au lieu de 2,50 (Guyon), M_Ed +2 %. Travées indépendantes seulement.
 - **Précontrainte sur la plaque** : charges équivalentes de chaque état (M.T, M.S, E.S ; moyenne, P1, P2) : forces de déviation −Δ(dM₀/dx) réparties uniformément en travers, effort et couple d'ancrage aux abouts (couple ± M₀/δ) ; réactions des appareils = réactions hyperstatiques. Somme par ligne ≈ poutre (exemple 3 : 0,2 à 8 %). Appareils et chevêtres : appareil le plus et le moins chargé ; fûts et fondations : somme de la ligne. Ouvrages courbes : répartition uniforme conservée.
 
+## 1 septdecies duodecies. Vue 3D des résultats de la plaque (v0.99.27, `test/vue3d.test.js`)
+
+- **Cas** (`src/plate/cas3d.js`, une résolution du modèle déjà factorisé) : G = somme des fichiers permanents de `permanentPlaque` ; TS = 4 roues de 150 kN (essieux à 1,20 m, roues à 2,00 m) en charges ponctuelles réparties bilinéairement, tandem placé par curseurs (le long du tablier ; en travers de y₁ + 1,5 à y₂ − 1,5 m) ; UDL = 9 kN/m² sur toute la chaussée (illustration, pas l'enveloppe de calcul) ; P = charges équivalentes du câble à l'état E.S moyen (`chargesPrecontrainte`), dalle droite ou biaise.
+- **Grandeurs** : moments nodaux (moyenne des sommets des triangles adjacents, repère de l'axe), Wood-Armer simplifié m_x ± |m_xy| (armatures orthogonales, sans les corrections des moments négatifs). Les vérifications restent faites aux sections et fibres de calcul.
+- **Affichage** : déformée dessinée à 4 % de la plus grande dimension × curseur ; échelle symétrique pour les moments (palette divergente), séquentielle pour w ; réactions en flèches de longueur ∝ |R|. Contrôles : Σ réactions = charge (G, TS, UDL), précontrainte autoéquilibrée.
+
 ## 1 octodecies. Textes relus (v0.36)
 
 - **Guide Sétra 2007** (appareils en élastomère fretté) : voir 1 sexdecies ; exemple du § 4.2 reproduit.

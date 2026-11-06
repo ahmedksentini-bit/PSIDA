@@ -12,22 +12,28 @@
  * Ouvrages droits et biais (ouvrages courbes : non traité, la répartition reste uniforme).
  */
 
-export function precontraintePlaque(Mpl, r, { b }) {
+/** Charges nodales équivalentes à la précontrainte d'un état (force F(x) du câble moyen aux abscisses r.xs). */
+export function chargesPrecontrainte(Mpl, r, { b }, Fc) {
   const P = Mpl.P, ys = P.ys, W = 2 * b, xs = r.xs, z = r.z, nX = xs.length;
   // poids des nœuds en travers (largeurs tributaires)
   const wy = ys.map((y, j) => ((j < ys.length - 1 ? ys[j + 1] : y) - (j > 0 ? ys[j - 1] : y)) / 2 / W);
   const cot = Mpl.cot || 0, dx = Math.max(...P.xs.slice(1).map((x, i) => x - P.xs[i])) || 0.5;
   const ligne = (F, x, Pk) => { for (let j = 0; j < ys.length; j++) P.chargePonctuelle(F, { x: x + ys[j] * cot, y: ys[j], P: Pk * wy[j] }); };
+  const M0 = xs.map((x, i) => Fc[i] * z[i]), s = xs.slice(1).map((x, i) => (M0[i + 1] - M0[i]) / (x - xs[i]));
+  const F = P.vecteur();
+  // forces de déviation (charges vers le bas positives : q = −M₀″)
+  for (let k = 1; k < nX - 1; k++) ligne(F, xs[k], -(s[k] - s[k - 1]));
+  // abouts : effort tranchant d'ancrage et couple M₀ (couple de forces sur une maille)
+  const d = Math.min(dx, (xs[nX - 1] - xs[0]) / 10);
+  ligne(F, xs[0], -s[0] - M0[0] / d); ligne(F, xs[0] + d, M0[0] / d);
+  ligne(F, xs[nX - 1], s[nX - 2] - M0[nX - 1] / d); ligne(F, xs[nX - 1] - d, M0[nX - 1] / d);
+  return F;
+}
+
+export function precontraintePlaque(Mpl, r, { b }) {
+  const P = Mpl.P;
   const etat = Fc => {
-    const M0 = xs.map((x, i) => Fc[i] * z[i]), s = xs.slice(1).map((x, i) => (M0[i + 1] - M0[i]) / (x - xs[i]));
-    const F = P.vecteur();
-    // forces de déviation (charges vers le bas positives : q = −M₀″)
-    for (let k = 1; k < nX - 1; k++) ligne(F, xs[k], -(s[k] - s[k - 1]));
-    // abouts : effort tranchant d'ancrage et couple M₀ (couple de forces sur une maille)
-    const d = Math.min(dx, (xs[nX - 1] - xs[0]) / 10);
-    ligne(F, xs[0], -s[0] - M0[0] / d); ligne(F, xs[0] + d, M0[0] / d);
-    ligne(F, xs[nX - 1], s[nX - 2] - M0[nX - 1] / d); ligne(F, xs[nX - 1] - d, M0[nX - 1] / d);
-    const R = P.reactions(P.resoudre(F)), nL = Math.max(...R.map(a => a.ligne)) + 1;
+    const R = P.reactions(P.resoudre(chargesPrecontrainte(Mpl, r, { b }, Fc))), nL = Math.max(...R.map(a => a.ligne)) + 1;
     // réactions vers le haut positives (convention des réactions hyperstatiques de la poutre)
     return Array.from({ length: nL }, (_, i) => R.filter(a => a.ligne === i).sort((u, v) => u.rang - v.rang).map(a => a.R));
   };
