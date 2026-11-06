@@ -6,6 +6,7 @@
  * dalle à l'axe sur C0). Coupes transversales vues de C0 vers la dernière culée : la gauche de l'axe (y > 0) est à
  * gauche du dessin (x = −y).
  */
+import { notesDurabiliteTablier, couperLigne } from './notes_durabilite.js';
 import { Vue, Feuille, fmtCote, fmtNiv } from './dessin.js';
 import { composer } from './mise_en_page.js';
 import { geometrie, courbeU } from './geometrie.js';
@@ -297,11 +298,11 @@ export function quantitesCoffrage(st, G = geometrie(st)) {
 const fr = (x, d = 1) => x.toFixed(d).replace('.', ',');
 
 function notesCoffrage(st, G) {
-  const m = st.p.mat, CUBE = { 20: 25, 25: 30, 30: 37, 35: 45, 40: 50, 45: 55, 50: 60, 55: 67, 60: 75 }, cls = `C${m.fck}/${CUBE[m.fck] ?? Math.round(m.fck * 1.22)}`;
+  const [beton, enr, ...gaines] = notesDurabiliteTablier(st), m = st.p.mat;
   return [
     'NOTES',
-    `1. Béton du tablier : ${cls} (fck = ${m.fck} MPa), classes d'exposition à préciser au CCTP.`,
-    `2. Enrobage nominal des armatures : ${fr(m.c * 100, 1)} cm. Aciers B500B (fyk = ${m.fyk} MPa).`,
+    ...couperLigne(`1. ${beton}`),
+    ...couperLigne(`2. ${enr} Aciers B500B (fyk = ${m.fyk} MPa).${gaines.length ? ' ' + gaines[0] : ''}`),
     '3. Cotes en mètres, mesurées dans le plan horizontal et le long de l\'axe (développé).',
     G.niv ? '4. Niveaux en mètres, rattachés au système altimétrique du plan de nivellement.' : '4. Niveaux relatifs (m) : ±0,00 = dessus de la dalle à l\'axe, au droit de C0.',
     `5. Revêtement de chaussée : ${fr(G.tRev * 100, 0)} cm (étanchéité comprise). Bordures de trottoir figurées.`,

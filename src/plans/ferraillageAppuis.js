@@ -11,6 +11,7 @@
  *  - semelles : 0,12 % par nappe au moins (§ 1.1.1) ; semelles sur pieux : bandes au droit des pieux (ch. 4).
  * Longueurs d'ancrage et de recouvrement : EN 1992-1-1 § 8.4 et 8.7 (src/rebar.js, anchorage). Bordereau ISO 4066.
  */
+import { notesDurabiliteAppuis, texteRecouvrements, enrobagesAppuis } from './notes_durabilite.js';
 import { Vue, Feuille, fmtCote } from './dessin.js';
 import { geometrieAppui, vueElevation, vueCoupe, couperNote, sousFaceMarteau } from './appuis.js';
 import { longueurCoupe, rayonCintrage, croquisForme, recapitulatif } from './bordereau.js';
@@ -51,7 +52,7 @@ function barresCercle(As, D, c) {
  */
 export function reperesAppui(st, i) {
   const A = geometrieAppui(st, i), L = st.supports.lines[i], R = L.EC || L.BAEL, code = L.EC ? 'EC' : 'BAEL';
-  const sp = (st.supports.spLigne && st.supports.spLigne[i]) || st.supports.sp, mat = sp.mat, c = mat.c, cS = c + 0.02;
+  const sp = (st.supports.spLigne && st.supports.spLigne[i]) || st.supports.sp, mat = sp.mat, { c, cS, cP } = enrobagesAppuis(st, mat);
   const anc = phi => anchorage(phi, { fck: mat.fck, fyk: mat.fyk, h: 1 });
   const out = []; let k = 0;
   const add = m => { const r = { mark: ++k, ...m }; out.push(r); return r; };
@@ -85,7 +86,7 @@ export function reperesAppui(st, i) {
     const top = chooseBars(0.0012 * hs, { phiMin: 10, phiMax: 20, sMax: 0.25, sMin: 0.15 });
     nappeSup(top);
     // pieux : cage longitudinale (ancrée dans la semelle), cerces
-    const cp = 0.07, lb = barresCercle(Math.max(F.As || 0, F.Amin || 0), A.Dp, cp), a = anc(lb.phi);
+    const cp = cP, lb = barresCercle(Math.max(F.As || 0, F.Amin || 0), A.Dp, cp), a = anc(lb.phi);
     const Lp = A.Lp + Math.min(a.lbd, hs - 0.10);
     const nPieces = Math.ceil((Lp - 1e-9) / LMAX), Lpc = nPieces > 1 ? (Lp + (nPieces - 1) * a.l0) / nPieces : Lp;
     add({ elem: 'pieux', label: `Pieux Ø ${fr(A.Dp)} — armatures longitudinales${nPieces > 1 ? ` (${nPieces} tronçons, recouvrement ${fr(a.l0)})` : ''}`, phi: lb.phi, code: '00', dims: { A: Lpc * 1000 }, nombre: lb.n * nF * nP * nPieces, req: F.AsReq, prov: lb.As, pos: 'pieuL', n: lb.n });
@@ -213,6 +214,16 @@ export function reperesAppui(st, i) {
     m.dims = d; m.L = r25(longueurCoupe(m.code, d, m.phi));
     m.total = m.L / 1000 * m.nombre; m.masse = m.total * massPerM(m.phi);
   }
+  // barres de plus de 12 m (longueur commerciale) : pièces recouvertes de l₀ — droites (00) en n pièces égales, U (21) en
+  // deux L (11) symétriques ; contrôle « Barres ≤ 12 m » de src/plans/controles.js
+  for (const q of out) {
+    if (q.code !== '00' && q.code !== '21') continue;
+    const Lc = longueurCoupe(q.code, q.dims, q.phi) / 1000; if (Lc <= LMAX + 1e-9) continue;
+    const l0 = anc(q.phi).l0;
+    if (q.code === '00') { const n = Math.ceil((Lc - l0) / (LMAX - l0) - 1e-9); q.dims = { A: (Lc + (n - 1) * l0) / n * 1000 }; q.nombre *= n; q.label += ` — ${n} pièces, recouvrement ${fr(l0)} m`; q.pieces = n; }
+    else { const B = (q.dims.B / 1000 + l0) / 2; q.code = '11'; q.dims = { A: B * 1000, B: q.dims.A }; q.nombre *= 2; q.label += ` — 2 L recouvertes de ${fr(l0)} m`; q.pieces = 2; }
+    q.l0Pieces = l0;
+  }
   return { A, marks: out, code, mat };
 }
 
@@ -225,7 +236,7 @@ const desig = m => (m.pos === 'fret' ? `${m.n} cadres HA${m.phi} / appareil` : m
 function dessinerCoupe(A, marks) {
   const v = vueCoupe(A); v.titre = `COUPE DANS L'AXE DE L'OUVRAGE — ARMATURES — ${A.nom}`;
   v.ents = v.ents.filter(e => e.t !== 'hachure' && e.t !== 'pointille' && e.calque !== 'HACHURES');
-  const S = A.sgn, X = x => S * x, c = 0.05, cS = 0.07, M = p => marks.find(m => m.pos === p);
+  const S = A.sgn, X = x => S * x, { c, cS, cP } = enrobagesAppuis(A.st, A.mat), M = p => marks.find(m => m.pos === p);
   const bulles = [];
   const bul = (m, p, cote = 1) => m && bulles.push({ m, p, cote });
   // semelle : nappe inférieure // B (ligne avec retours), répartition (points), nappe supérieure (ligne)
@@ -295,7 +306,7 @@ function dessinerCoupe(A, marks) {
   if (pL) for (let f = 0; f < A.nF; f++) {
     const x = A.xFut + A.fileX(f), Lv = Math.min(A.Lp, 2.5);
     for (const sg of [-1, 1]) v.poly('ACIERS', [[X(x + sg * (A.Dp / 2 - 0.08)), A.zSS - Lv + 0.1], [X(x + sg * (A.Dp / 2 - 0.08)), A.zSS + Math.min(0.8, A.hs - 0.1)]]);
-    if (pT) for (let z = A.zSS - 0.2; z > A.zSS - Lv + 0.1; z -= Math.max(0.15, pT.s)) v.ligne('ACIERS_COUPES', [X(x - A.Dp / 2 + 0.07), z], [X(x + A.Dp / 2 - 0.07), z]);
+    if (pT) for (let z = A.zSS - 0.2; z > A.zSS - Lv + 0.1; z -= Math.max(0.15, pT.s)) v.ligne('ACIERS_COUPES', [X(x - A.Dp / 2 + cP), z], [X(x + A.Dp / 2 - cP), z]);
     if (f === A.nF - 1) { bul(pL, [X(x + A.Dp / 2 - 0.08), A.zSS - 1.2]); bul(pT, [X(x), A.zSS - 1.6]); }
   }
   // bulles : rangées à droite de la vue
@@ -311,7 +322,7 @@ function dessinerCoupe(A, marks) {
 function dessinerElevation(A, marks) {
   const v = vueElevation(A); v.titre = `ÉLÉVATION — ARMATURES — ${A.nom}`;
   v.ents = v.ents.filter(e => e.t !== 'hachure' && e.t !== 'pointille' && e.calque !== 'HACHURES' && e.calque !== 'COTES' && e.t !== 'coteH' && e.t !== 'coteV');
-  const X = y => -y, c = 0.05, cS = 0.07, w = A.width, M = p => marks.find(m => m.pos === p), bulles = [];
+  const X = y => -y, { c, cS } = enrobagesAppuis(A.st, A.mat), w = A.width, M = p => marks.find(m => m.pos === p), bulles = [];
   const bul = (m, p) => m && bulles.push({ m, p });
   // semelle : répartition // L (ligne), nappe // B (points)
   const zi = A.zSS + cS, zs = A.zDS - cS, l0 = -A.Lf / 2 + cS, l1 = A.Lf / 2 - cS;
@@ -398,7 +409,7 @@ function dessinerSections(A, marks) {
     return v;
   };
   if (A.nCol) vues.push(cercle(`SECTION D'UNE COLONNE Ø ${fr(A.D)}`, A.D, M('verC'), M('cerC'), c));
-  if (A.pieux) vues.push(cercle(`SECTION D'UN PIEU Ø ${fr(A.Dp)}`, A.Dp, M('pieuL'), M('pieuT'), 0.07));
+  if (A.pieux) vues.push(cercle(`SECTION D'UN PIEU Ø ${fr(A.Dp)}`, A.Dp, M('pieuL'), M('pieuT'), enrobagesAppuis(A.st, A.mat).cP));
   if (A.kind === 'pile' && A.type !== 'colonnes') {
     const v = new Vue('SECTION DU VOILE (extrémité)'), b = A.b, Lx = Math.min(A.Lv, 2.5), mV = M('verV'), mH = M('horV');
     v.poly('COFFRAGE', [[0, -b / 2], [Lx, -b / 2]]); v.poly('COFFRAGE', [[0, b / 2], [Lx, b / 2]]); v.ligne('COFFRAGE', [0, -b / 2], [0, b / 2]);
@@ -433,9 +444,9 @@ export function planFerraillageAppui(st, i, cartouche = {}) {
   const hb = (lignes.length + 2) * hl + 6 + (R0.diam.length + 3) * 5.5;
   const N = [
     'NOTES',
-    `1. Aciers HA (f_yk = ${mat.fyk} MPa). Enrobage ${fr(mat.c * 100, 1)} cm, ${fr(mat.c * 100 + 2, 1)} cm contre le sol ; pieux 7 cm.`,
+    ...couperNote(`1. Aciers HA (f_yk = ${mat.fyk} MPa). ${notesDurabiliteAppuis(st)[1] || ''}`, 110),
     `2. Sections calculées : onglet Appuis et fondations (${code === 'EC' ? 'Eurocodes' : 'BAEL'}) ; dispositions : Sétra PP 73, pièce 1.3.2 (ferraillages types).`,
-    '3. Ancrages et recouvrements : EN 1992-1-1 § 8.4 et 8.7 ; recouvrements des verticales au-dessus des attentes.',
+    ...couperNote(`3. Ancrages et recouvrements : EN 1992-1-1 § 8.4 et 8.7 — l₀ = ${texteRecouvrements(marks.map(q => q.phi), mat)} ; recouvrements des verticales au-dessus des attentes ; barres de plus de 12 m en pièces recouvertes.`, 110),
     '4. Bordereau ISO 4066 ; code 99 : cerce circulaire (longueur développée, recouvrement compris).',
     '5. Frettes et éclatement sous appareils : A_s = 0,04 R / f_su par appareil ; plans Δ′ et Δ répartis de 0,1 d à d.',
     '6. Plan type à valider : vérifier l\'encombrement des nappes et les zones de bétonnage.',

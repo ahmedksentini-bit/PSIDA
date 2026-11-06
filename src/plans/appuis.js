@@ -8,6 +8,7 @@
  * en x le long de l'ouvrage, origine sur l'axe des appareils, x > 0 côté travée pour une culée (miroir pour Cn).
  * Niveaux : NGF du plan de nivellement, sinon relatifs (±0,00 = dessus de la dalle à l'axe).
  */
+import { notesDurabiliteAppuis } from './notes_durabilite.js';
 import { Vue, Feuille, fmtCote, fmtNiv } from './dessin.js';
 import { composer } from './mise_en_page.js';
 import { tableauCalage } from './nivellement.js';
@@ -48,7 +49,7 @@ export function geometrieAppui(st, i) {
   const hBos = nvL ? nvL.hBos : 0.10, hApp = ap.h;
   const zT = nvL ? nvL.zT : -G.h - hApp - hBos, zSF = zT + hBos + hApp, zCh = nvL ? nvL.zCh : G.tRev;
   const F = sp.found, pieux = F.type !== 'superficielle';
-  const out = { i, nom: G.nomLigne(i), end, sgn: i === 0 ? 1 : -1, width, ap, hBos, hApp, zT, zSF, zCh, niv: !!nvL, G, F, pieux, st };
+  const out = { i, nom: G.nomLigne(i), end, sgn: i === 0 ? 1 : -1, width, ap, hBos, hApp, zT, zSF, zCh, niv: !!nvL, G, F, pieux, st, mat: sp.mat };
   if (end) {
     const C = sp.culee, rem = C.type === 'remblayee';
     out.kind = 'culee'; out.type = C.type; out.C = C;
@@ -368,8 +369,7 @@ function notes(st, A) {
   const CUBE = { 20: 25, 25: 30, 30: 37, 35: 45, 40: 50 };
   return [
     'NOTES',
-    `1. Béton des appuis : C${m.fck}/${CUBE[m.fck] ?? Math.round(m.fck * 1.22)} ; béton de propreté sous la semelle, 10 cm.`,
-    `2. Enrobage nominal ${fr(m.c * 100, 1)} cm (${fr(m.c * 100 + 2, 1)} cm sur les faces coffrées contre le sol). Aciers B500B.`,
+    ...((N => [...couperNote(`1. ${N[0]}`), ...couperNote(`2. ${N[1] || ''} Aciers B500B.`)])(notesDurabiliteAppuis(st))),
     '3. Cotes en mètres. ' + (A.niv ? 'Niveaux en mètres, rattachés au plan de nivellement.' : 'Niveaux relatifs (m) : ±0,00 = dessus de la dalle à l\'axe.'),
     `4. Appareils d'appui ${A.ap.label} (${A.ap.yb.length}) sur bossages de ${fr(A.hBos)} m, débord ${fr(DEB)} m.`,
     A.kind === 'culee' ? '5. Remblai technique contigu à la culée, drainage et barbacanes à définir. Murs en retour suspendus.' : '5. Parements vus : coffrage soigné ; arêtes chanfreinées 2 × 2 cm.',

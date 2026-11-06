@@ -4,6 +4,7 @@
  * et d'épingles ; demi-coupes transversales en travée et sur appui ; bordereau de façonnage ISO 4066 avec croquis et
  * récapitulatif par diamètre ; notes.
  */
+import { notesDurabiliteTablier, texteRecouvrements, couperLigne } from './notes_durabilite.js';
 import { Vue, Feuille, ECHELLES, echelleQuiTient, fmtCote } from './dessin.js';
 import { geometrie } from './geometrie.js';
 import { composer } from './mise_en_page.js';
@@ -232,11 +233,11 @@ function notesFerraillage(st, G, R) {
   const m = st.p.mat, rb = st.rebar, phis = [...new Set(rb.marks.map(q => q.phi))].sort((a, b) => a - b);
   return [
     'NOTES',
-    `1. Aciers B500B (fyk = ${m.fyk} MPa), HA. Enrobage nominal ${fr(m.c * 100, 1)} cm sur toutes les faces.`,
+    ...couperLigne(`1. Aciers B500B (fyk = ${m.fyk} MPa), HA. ${notesDurabiliteTablier(st)[1]}`),
     `2. Mandrins de cintrage (EC2 § 8.3) : Ø ≤ 16 : 4Ø ; Ø > 16 : 7Ø (r = ${phis.map(p => `${fr(rayonCintrage(p), 0)} mm pour Ø${p}`).slice(0, 3).join(', ')}…).`,
     '3. Longueurs de coupe selon l\'ISO 4066 (codes de forme 00, 11, 21, 51), arrondies aux 25 mm supérieurs.',
     '4. Longitudinaux : lit extérieur ; transversaux : lit intérieur, retours 10Ø aux bords libres.',
-    '5. Recouvrements décalés d\'une pièce à l\'autre (pièces courantes en longueur commerciale).',
+    ...couperLigne(`5. Recouvrements l₀ (EN 1992-1-1 § 8.7.3) : ${texteRecouvrements(phis, m)} ; décalés d'une pièce à l'autre (pièces courantes en longueur commerciale, transversales de plus de 12 m en deux L).`),
     `6. Masse du bordereau : ${milliers(R.masse)} kg (métré du calcul : ${milliers(rb.totalMass)} kg, retours compris ici).`,
     `7. Coupe longitudinale : échelles distinctes des longueurs et des hauteurs.`,
   ];

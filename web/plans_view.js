@@ -13,6 +13,7 @@ import { planFerraillageAppui } from '../src/plans/ferraillageAppuis.js';
 import { planEquipements, lireEquipements, controleCharges, souffleJoints, bordGeom } from '../src/plans/equipements.js';
 import { geometrie } from '../src/plans/geometrie.js';
 import { feuilleSVG } from '../src/plans/svg.js';
+import { controlesPlans } from '../src/plans/controles.js';
 import { feuilleDXF, octetsCp1252 } from '../src/plans/dxf.js';
 
 const $ = s => document.querySelector(s);
@@ -75,6 +76,13 @@ export function renderPlans(st) {
   if (!dispo.some(k => k.startsWith('appui-'))) msg.push('Plans des appuis : calcul des appuis indisponible (voir l\'onglet Appuis et fondations).');
   $('#plans-info').innerHTML = msg.join(' ');
   infoEquipements(st);
+  // contrôles automatiques : barres ≤ 12 m, barres dans leur élément, enrobages des plans = c_nom du calcul
+  try {
+    const C = controlesPlans(st), nNon = C.filter(c => !c.ok).length, esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    $('#plans-controles-titre').innerHTML = `${nNon ? `<span class="badge warn">${nNon} NON</span>` : '<span class="badge ok">OK</span>'} Contrôles automatiques des plans (${C.length})`;
+    $('#plans-controles').innerHTML = `<table><thead><tr><th>Objet</th><th>Contrôle</th><th>Plans</th><th>Limite</th><th>État</th></tr></thead><tbody>${C.map(c => `<tr><td>${esc(c.objet)}</td><td>${esc(c.controle)}</td><td>${esc(c.valeur)}</td><td>${esc(c.limite)}</td><td>${c.ok ? '<span class="badge ok">OK</span>' : '<span class="badge warn">NON</span>'}</td></tr>`).join('')}</tbody></table>`;
+    if (nNon) $('#plans-controles-box').open = true;
+  } catch (e) { $('#plans-controles').textContent = 'Contrôles : ' + e.message; }
   $('#plan-apercu').innerHTML = '';
 }
 
