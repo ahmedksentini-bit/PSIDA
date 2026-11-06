@@ -487,6 +487,10 @@ m_xy ou Wood-Armer m_x ± |m_xy| sur le maillage DKT, réactions des appareils e
 image PNG ; cas : charges permanentes, tandem TS de LM1 déplaçable, charge répartie de 9 kN/m² sur la chaussée,
 précontrainte (E.S). WebGL natif sans bibliothèque (hors ligne) ; ouvrages droits, biais et courbes ; modèle du calcul en
 plaque ou aperçu du maillage pour un tablier calculé par Guyon.
+v0.99.28 : vue 3D du grillage des ponts à poutres (travées indépendantes). Hourdis déformé, âmes des poutres à leur hauteur,
+entretoises, réactions en flèches ; couleurs : moment et torsion des poutres (vue de dessous), moment transversal du hourdis
+(vue de dessus), flèche ; cas : charges permanentes, tandem TS déplaçable, 9 kN/m² sur la chaussée. Grillage en grandeurs
+physiques (E_cm du béton des poutres), résolution complète : flèches, moments des poutres et du hourdis, torsion, réactions.
 v0.99.24 : durabilité (EN 1992-1-1 § 4.4.1, src/durabilite.js) : classes d'exposition, durée d'utilisation et référentiel
 (EN 1992-1-1 annexe E ou NF EN 206/CN) pour le pont-dalle, les ponts à poutres et les cadres ; classe de béton minimale,
 classe structurale (tableau 4.3N), c_min,dur (tableau 4.4N) et c_nom ; vérification de l'enrobage (dalle : à l'axe − Ø/2 ;
