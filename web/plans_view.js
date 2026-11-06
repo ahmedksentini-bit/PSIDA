@@ -17,6 +17,7 @@ import { controlesPlans } from '../src/plans/controles.js';
 import { planCablageDalle } from '../src/plans/cablage_dalle.js';
 import { etatFerraillageDP } from '../src/plans/ferraillage_dp.js';
 import { planImplantation } from '../src/plans/implantation.js';
+import { planDalleTransition, culeesAvecDalle } from '../src/plans/dalle_transition.js';
 import { feuilleDXF, octetsCp1252 } from '../src/plans/dxf.js';
 
 const $ = s => document.querySelector(s);
@@ -53,6 +54,7 @@ const PLANS = {
 function plan(st, k) {
   if (PLANS[k]) return PLANS[k];
   const i = +k.split('-')[1], nom = i === 0 ? 'C0' : i === st.deck.beam.x0.length - 1 ? `C${i}` : `P${i}`;
+  if (k.startsWith('dalleT-')) return { titre: `Culée ${nom} — dalle de transition (ferraillage, nomenclature)`, fichier: null, num: () => `${val('plan_num_dt') || 'APP-DT'}-${nom}`, faire: (s, c) => planDalleTransition(s, i, c) };
   if (k.startsWith('appuiF-')) return { titre: `Appui ${nom} — ferraillage`, fichier: null, num: () => `${val('plan_num_appF') || 'APP-FER'}-${nom}`, faire: (s, c) => planFerraillageAppui(s, i, c) };
   return { titre: `Appui ${nom} — coffrage`, fichier: null, num: () => `${val('plan_num_app') || 'APP-COF'}-${nom}`, faire: (s, c) => planCoffrageAppui(s, i, c) };
 }
@@ -66,7 +68,7 @@ const nomFichier = (st, k, ext) => { const P = plan(st, k); return `${P.num().re
 /** Plans disponibles pour l'état de calcul : le ferraillage seulement pour une dalle armée calculée. */
 export function plansDisponibles(st) {
   if (!st || !st.deck) return [];
-  return [...(appuisDisponibles(st).length ? ['ensemble', 'implantation'] : []), ...(st.rebar && st.rebar.marks ? ['coffrage', 'ferraillage'] : st.psidp && st.psidp.r ? ['coffrage', 'cablage', 'ferraillage'] : ['coffrage']), 'equipements', 'retenue', ...(appuisDisponibles(st).length ? ['nivellement'] : []), ...appuisDisponibles(st).flatMap(i => [`appui-${i}`, `appuiF-${i}`])];
+  return [...(appuisDisponibles(st).length ? ['ensemble', 'implantation'] : []), ...(st.rebar && st.rebar.marks ? ['coffrage', 'ferraillage'] : st.psidp && st.psidp.r ? ['coffrage', 'cablage', 'ferraillage'] : ['coffrage']), 'equipements', 'retenue', ...(appuisDisponibles(st).length ? ['nivellement'] : []), ...appuisDisponibles(st).flatMap(i => [`appui-${i}`, `appuiF-${i}`, ...(culeesAvecDalle(st).includes(i) ? [`dalleT-${i}`] : [])])];
 }
 
 export function renderPlans(st) {

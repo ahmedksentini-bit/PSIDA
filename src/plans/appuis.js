@@ -8,7 +8,8 @@
  * en x le long de l'ouvrage, origine sur l'axe des appareils, x > 0 côté travée pour une culée (miroir pour Cn).
  * Niveaux : NGF du plan de nivellement, sinon relatifs (±0,00 = dessus de la dalle à l'axe).
  */
-import { notesDurabiliteAppuis } from './notes_durabilite.js';
+import { notesDurabiliteAppuis, enrobagesAppuis } from './notes_durabilite.js';
+import { epaisseurDalleTransition } from '../supports/dalle_transition.js';
 import { Vue, Feuille, fmtCote, fmtNiv } from './dessin.js';
 import { composer } from './mise_en_page.js';
 import { tableauCalage } from './nivellement.js';
@@ -33,6 +34,12 @@ export function dalleTransition(A) {
   const dalle = [[xr, z0], [xr - L, z0 - pente * L], [xr - L, z0 - pente * L - e], [xr, z0 - e]];
   const zc = z0 - e, corbeau = [[xr, zc], [xr - 0.30, zc], [xr - 0.30, zc - 0.10], [xr, zc - 0.40]];
   return { dalle, corbeau, L, e, pente, z0 };
+}
+
+/** Coefficients d'ajustement du trafic routier (EN 1991-2 § 4.3.2) : α_Q1..3, α_q1 ; 1 à défaut. */
+export function alphasTrafic(st) {
+  const a = st && st.ec && st.ec.alpha;
+  return a ? { aQ: a.aQ, aq1: a.aq1 } : { aQ: [1, 1, 1], aq1: 1 };
 }
 
 /** Sous-face du chevêtre d'une pile marteau en élévation (X le long de la ligne d'appui) : points de gauche à droite. */
@@ -76,7 +83,13 @@ export function geometrieAppui(st, i) {
       out.xFut = (out.xChev[0] + out.xChev[1]) / 2;
       out.nCol = C.nCol; out.D = C.D;
     }
-    out.dalle = C.dalle ? { L: Math.min(6, Math.max(3, 0.6 * (C.Hm + out.hGG))), e: 0.30 } : null;
+    // dalle de transition : longueur min(6 ; max(3 ; 0,6 H_r)), largeur entre les murs en retour (joints de 2 cm), épaisseur
+    // de 0,30 m portée à 0,35–0,45 m si la flexion ou l'effort tranchant l'imposent (src/supports/dalle_transition.js)
+    if (C.dalle) {
+      const L = Math.min(6, Math.max(3, 0.6 * (C.Hm + out.hGG))), B = Math.max(2, width - 2 * (out.eRet + 0.02)), { c, cS } = enrobagesAppuis(st, sp.mat), al = alphasTrafic(st);
+      const ch = epaisseurDalleTransition({ L, B, hc0: 0.30, pente: 0.05, fck: sp.mat.fck, fyk: sp.mat.fyk, cSup: c, cInf: cS, aQ: al.aQ, aq1: al.aq1 });
+      out.dalle = { L, e: ch.e, B };
+    } else out.dalle = null;
   } else {
     const P = sp.pile, col = P.type === 'colonnes', H = Array.isArray(P.H) ? (P.H[Math.min(P.H.length - 1, i - 1)] ?? P.H[0]) : P.H;
     out.kind = 'pile'; out.type = P.type; out.P = P;

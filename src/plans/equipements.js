@@ -21,7 +21,7 @@ const fr = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : 
 
 /** Valeurs par défaut (champs eq_* du formulaire). */
 export const EQ_DEFAUTS = {
-  corn: 'prefa', cornH: 0.60, cornL: 0.25, cornE: 0.20, cornT: 0.15,
+  corn: 'prefa', cornH: 0.60, cornL: 0.25, cornE: 0.20, cornT: 0.15, cornLe: 2.48, cornJ: 0.02, cornRes: 1.50,
   dr: 'barriere', drPos: 'rive', hDR: 1.00, drY: 0.30, lgB: 0.50, lgH: 0.30, pDR: 0.65,
   gc: 'auto', hGC: 1.00, pGC: 0.50,
   hTrot: 0.15, bordB: 0.15, gTrot: 22,
@@ -401,6 +401,36 @@ function vueAssainissement(G, eq, joints) {
 }
 
 /* ------------------------------------------------------------------------------------- métré et feuille */
+/**
+ * Calepinage des corniches préfabriquées le long de chaque rive (sur le modèle du plan OA68 EQU-6 relu : éléments
+ * courants de 2,48 m, joints de 2 cm, éléments d'about coupés suivant le biais) : n éléments courants de longueur L_e,
+ * deux éléments d'about de longueur (L_rive − n L_e − (n + 1) j) / 2 mesurée au bord de la dalle, compris entre L_e/2
+ * et L_e + j ; coupe d'about parallèle à la ligne d'appui, décalage Δ = (L_talon + E) |cot ψ| entre faces. Réservations
+ * (scellement des montants du dispositif ou du garde-corps) au pas eq.cornRes le long de chaque rive, à 0,25 m des abouts.
+ * Longueur de rive : uB − uA ± b (cot ψ_n − cot ψ_0) ; ouvrage courbe : développé de l'axe (rives à reprendre).
+ */
+export function calepinageCorniches(st, eq = EQ_DEFAUTS, G = geometrie(st)) {
+  if (eq.corn !== 'prefa') return null;
+  const Le = eq.cornLe > 0.5 ? eq.cornLe : 2.48, j = eq.cornJ >= 0 ? eq.cornJ : 0.02, pas = Le + j, L = G.uB - G.uA;
+  const cot = p => Math.cos(p * Math.PI / 200) / Math.sin(p * Math.PI / 200), c0 = cot(G.psiL[0]), cn = cot(G.psiL[G.psiL.length - 1]);
+  const B = bordGeom(G, eq, 1), aire = poly => Math.abs(poly.reduce((S, p, k) => { const q = poly[(k + 1) % poly.length]; return S + p[0] * q[1] - q[0] * p[1]; }, 0)) / 2;
+  const Ac = B.corniche ? aire(B.corniche.poly) : eq.cornH * eq.cornE, w = eq.cornL + eq.cornE, masse = l => 25 * Ac * l / 9.81;
+  const rives = [1, -1].map(sg => {
+    const Lr = L + sg * G.b * (cn - c0);
+    let nc = Math.floor((Lr + j) / pas + 1e-9), r = Lr - (nc * pas - j);
+    if (r < 0.005) return { sg, Lr, nc, Lend: null, r: 0 };
+    nc = Math.max(0, nc - 1);
+    const Lend = (Lr - nc * Le - (nc + 1) * j) / 2;
+    return { sg, Lr, nc, Lend };
+  });
+  const types = [], add = (t, desc, l, n, delta = 0) => { if (n <= 0) return; const q = types.find(x => x.desc === desc && Math.abs(x.L - l) < 0.005 && Math.abs(x.delta - delta) < 0.005); if (q) q.nombre += n; else types.push({ type: t, desc, L: l, nombre: n, delta, masse: masse(l) }); };
+  for (const R of rives) add('C1', 'élément courant', Le, R.nc);
+  rives.forEach(R => { if (R.Lend == null) return; add('', 'about côté ' + G.nomLigne(0), R.Lend, 1, w * Math.abs(c0)); add('', 'about côté ' + G.nomLigne(G.n - 1), R.Lend, 1, w * Math.abs(cn)); });
+  types.forEach((t, k) => { if (!t.type) t.type = 'C' + (k + 1); });
+  const reservations = rives.reduce((S, R) => S + Math.floor(Math.max(0, R.Lr - 0.5) / (eq.cornRes || 1.5) + 1e-9) + 1, 0);
+  return { Le, j, pas, rives, types, reservations, Ac, nombre: types.reduce((S, t) => S + t.nombre, 0), courbe: !!G.courbe };
+}
+
 export function metreEquipements(st, eq, G = geometrie(st)) {
   const L = G.uB - G.uA, lignes = [];
   const sides = [1, -1].map(sg => bordGeom(G, eq, sg));
@@ -436,7 +466,13 @@ export function planEquipements(st, eq = EQ_DEFAUTS, cartouche = {}) {
   tC.lignes.push(Object.assign(['Total des équipements', ...C.map(c => fr(c.P.total, 2))], { gras: true }));
   tC.lignes.push(['Charges linéaires saisies', ...C.map(c => fr(c.saisi, 2))]);
   tC.lignes.push(Object.assign(['Écart', ...C.map(c => (c.ecart == null ? '—' : (c.ecart >= 0 ? '+' : '') + fr(c.ecart * 100, 0) + ' %'))], { gras: true }));
-  const hM = (tM.lignes.length + 2) * 5.5, hC = (tC.lignes.length + 2) * 5.5;
+  const CP = calepinageCorniches(st, eq, G);
+  const tP = CP ? { titre: `CALEPINAGE DES CORNICHES PRÉFABRIQUÉES — éléments de ${fr(CP.Le)} m, joints de ${fr(CP.j * 100, 0)} cm`, hl: 5.5,
+    cols: [{ t: 'Type', w: 14, a: 'c' }, { t: 'Désignation', w: 70, a: 'g' }, { t: 'L au bord (m)', w: 22, a: 'd' }, { t: 'Biais Δ (m)', w: 20, a: 'd' }, { t: 'Nombre', w: 18, a: 'd' }, { t: 'Masse (t)', w: 20, a: 'd' }],
+    lignes: [...CP.types.map(t => [t.type, t.desc, fr(t.L), t.delta ? fr(t.delta) : '—', String(t.nombre), fr(t.masse, 2)]),
+      ...CP.rives.map(R => ['', `rive ${R.sg > 0 ? 'y > 0' : 'y < 0'} : ${fr(R.Lr)} = ${R.nc} × ${fr(CP.Le)}${R.Lend ? ` + 2 × ${fr(R.Lend)}` : ''} + ${R.nc + (R.Lend ? 1 : -1)} j`, '', '', '', '']),
+      Object.assign(['', `Total — réservations au pas de ${fr(eq.cornRes || 1.5)} m : ${CP.reservations}`, '', '', String(CP.nombre), fr(CP.types.reduce((S, t) => S + t.nombre * t.masse, 0), 1)], { gras: true })] } : null;
+  const hM = (tM.lignes.length + 2) * 5.5, hC = (tC.lignes.length + 2) * 5.5, hP = tP ? (tP.lignes.length + 2) * 5.5 + 5 : 0;
   const notes = [
     'NOTES',
     '1. Dimensions des équipements : valeurs paramétrées (carte « Plans d\'exécution »),',
@@ -447,18 +483,20 @@ export function planEquipements(st, eq = EQ_DEFAUTS, cartouche = {}) {
     '   par le calcul hydraulique (guide Sétra « Assainissement des ponts-routes », 1989).',
     `4. Garde-corps : ${fr(eq.hGC)} m (XP P98-405 : 1,00 m piétons ; 1,20 m avec cycles, Certu 2008).`,
     '5. Écart poids / charges saisies > 10 % : revoir les charges linéaires du calcul.',
-    ...[...new Set([1, -1].flatMap(sg => bordGeom(G, eq, sg).alertes))].flatMap((t, k) => couperNote(`${6 + k}. ATTENTION — ${t}`, 92)),
+    ...(CP ? couperNote(`${'6'}. Corniches préfabriquées : abouts coupés parallèlement aux lignes d'appui, posées sur mortier (2 cm min.), joints de ${fr(CP.j * 100, 0)} cm${CP.courbe ? ' ; ouvrage courbe : longueurs de rive développées à reprendre sur le tracé' : ''}.`, 92) : []),
+    ...[...new Set([1, -1].flatMap(sg => bordGeom(G, eq, sg).alertes))].flatMap((t, k) => couperNote(`${(CP ? 7 : 6) + k}. ATTENTION — ${t}`, 92)),
   ], hn = notes.length * 2.1 * 1.6;
   const Lt = G.uB - G.uA;
   const F = composer({ titre: 'TABLIER — ÉQUIPEMENTS', cartouche,
     rangees: [[dA, dB], [dJ, dG, ...(dC ? [dC] : [])], [sA]],
     groupes: [{ vues: [dA, dB], cible: 25, min: 10 }, { vues: [dJ, dG], cible: 25, min: 20 }, ...(dC ? [{ vues: [dC], cible: 20, min: 10 }] : []), { vues: [sA], cible: Lt <= 60 ? 200 : 500, min: 100 }],
-    colonne: { largeur: 182, hauteur: 2 + hC + 5 + hM + 4 + hn + 4 },
+    colonne: { largeur: 182, hauteur: 2 + hC + 5 + hM + 4 + hP + hn + 4 },
     poser: (F, [x, y]) => {
       const xt = F.W - 10 - 162;
       F.tableau(tC, xt, y + 2);
       F.tableau(tM, xt, y + 2 + hC + 5);
-      F.note(notes, xt - 4, y + 2 + hC + 5 + hM + 4 + hn - 2.1 * 0.6, 2.1);
+      if (tP) F.tableau(tP, xt - 6, y + 2 + hC + 5 + hM + 4);
+      F.note(notes, xt - 4, y + 2 + hC + 5 + hM + 4 + hP + hn - 2.1 * 0.6, 2.1);
       F.notes[F.notes.length - 1].titreGras = true;
     } });
   F.cartouche.echelles = F.cartouche.echelles || [...new Set(F.vues.map(p => '1/' + p.vue.echelle))].join(' ; ');

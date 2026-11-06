@@ -6,8 +6,10 @@
  *     (origine : axe de C0 sur l'axe de l'ouvrage, x le long de l'axe vers la dernière culée, y à gauche) et, quand le
  *     point d'origine et le gisement de l'axe sont saisis, en coordonnées du projet (E, N) ;
  *   - tableau de nivellement du tablier aux appuis et aux quarts de portée : extrados à l'axe et aux bords
- *     (hors contre-flèche), contre-flèche de réglage du coffrage d'une dalle précontrainte (−w en service à long terme,
- *     src/psidp flèches NP 58) ;
+ *     (hors contre-flèche), profil en long interpolé entre appuis, droit ou parabolique (rayon R du raccordement :
+ *     flèche (u − a)(b − u) / 2R entre les appuis a et b) ; contre-flèche de réglage du coffrage = −w à long terme : dalle
+ *     précontrainte (service, src/psidp flèches NP 58), dalle armée (quasi permanent, section fissurée EN 1992-1-1 § 7.4.3,
+ *     src/fleche_ba.js) ;
  *   - cotes biaises : longueurs droites × K, K = 1/sin ψ.
  */
 import { Vue } from './dessin.js';
@@ -15,6 +17,7 @@ import { composer } from './mise_en_page.js';
 import { geometrie } from './geometrie.js';
 import { geometrieAppui, appuisDisponibles } from './appuis.js';
 import { couperLigne } from './notes_durabilite.js';
+import { flecheLongTermeBA, flecheEn } from '../fleche_ba.js';
 
 const fr = (x, d = 3) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : '—');
 
@@ -49,17 +52,21 @@ export function nivellementTablier(st) {
     if (!NV) return 0;
     const zs = NV.map(q => q.zCh - G.tRev);
     let j = 0; while (j < x0.length - 2 && u > x0[j + 1]) j++;
-    return zs[j] + (zs[j + 1] - zs[j]) * (u - x0[j]) / (x0[j + 1] - x0[j]);
+    const a = x0[j], b2 = x0[j + 1];
+    return zs[j] + (zs[j + 1] - zs[j]) * (u - a) / (b2 - a) + (R ? (u - a) * (b2 - u) / (2 * R) : 0);
   };
-  const dp = st.psidp, w = dp && dp.defl && dp.defl.w && dp.defl.w.service, xs = dp && dp.defl ? dp.defl.xs : null;
-  const wAt = u => { if (!w) return null; let i = 0; while (i < xs.length - 1 && xs[i + 1] < u) i++; const t = Math.min(1, Math.max(0, (u - xs[i]) / ((xs[i + 1] - xs[i]) || 1))); return w[i] + (w[Math.min(i + 1, xs.length - 1)] - w[i]) * t; };
+  const Rv = st.p && st.p.supports && st.p.supports.niv ? st.p.supports.niv.R : null, R = Number.isFinite(Rv) && Math.abs(Rv) > 1 ? Rv : null;
+  const dp = st.psidp, wP = dp && dp.defl && dp.defl.w && dp.defl.w.service, xs = dp && dp.defl ? dp.defl.xs : null;
+  const FB = !wP && st.rebar && st.rebar.marks ? flecheLongTermeBA(st) : null, w = wP || (FB ? FB.w : null);
+  const wAt = u => { if (FB) return -flecheEn(FB, u);   // convention des flèches PSIDP : w < 0 vers le bas
+    if (!w) return null; let i = 0; while (i < xs.length - 1 && xs[i + 1] < u) i++; const t = Math.min(1, Math.max(0, (u - xs[i]) / ((xs[i + 1] - xs[i]) || 1))); return w[i] + (w[Math.min(i + 1, xs.length - 1)] - w[i]) * t; };
   const st_ = [];
   for (let j = 0; j + 1 < x0.length; j++) for (let k = 0; k <= 4; k++) {
     if (j > 0 && k === 0) continue;
     const u = x0[j] + (x0[j + 1] - x0[j]) * k / 4, z = zAxe(u);
     st_.push({ nom: k === 0 ? G.nomLigne(j) : k === 4 ? G.nomLigne(j + 1) : `T${j + 1} — ${k}/4`, u, z, zG: z + G.dessus(b), zD: z + G.dessus(-b), cf: w ? -wAt(u) : null });
   }
-  return { stations: st_, relatif: !NV, contreFleche: !!w };
+  return { stations: st_, relatif: !NV, contreFleche: !!w, mode: wP ? 'DP' : FB ? 'BA' : null, fleche: FB, R };
 }
 
 function vuePlanFondations(G, pts) {
@@ -97,8 +104,10 @@ export function planImplantation(st, cartouche = {}, proj = null) {
     `1. Repère de l'ouvrage : origine à l'intersection de l'axe de C0 et de l'axe de l'ouvrage, x le long de l'axe vers ${G.nomLigne(G.n - 1)}, y à gauche${glob ? ` ; coordonnées du projet : origine E = ${fr(proj.E0)}, N = ${fr(proj.N0)}, gisement de l'axe ${fr(proj.gis, 4)} gr` : ' ; saisir l\'origine et le gisement de l\'axe (carte des plans) pour les coordonnées du projet'}.`,
     `2. Coins des semelles numérotés dans le sens trigonométrique depuis l'angle aval gauche ; « centre semelle » : intersection de l'axe de semelle et de l'axe de l'ouvrage (axe d'appui décalé de l'about pour les culées).`,
     ...(Math.abs(psi - 100) > 1e-6 && !G.courbe ? [`3. Ouvrage biais ψ = ${fr(psi, 2)} gr : K = 1/sin ψ = ${(1 / sinP).toFixed(5).replace('.', ',')} ; longueurs droites × K = longueurs biaises le long de l'axe.`] : []),
-    `${Math.abs(psi - 100) > 1e-6 && !G.courbe ? 4 : 3}. Nivellement : extrados ${N.relatif ? 'relatif' : 'déduit des cotes de chaussée des appuis (revêtement retranché), interpolé linéairement entre appuis — à reprendre sur le profil en long du projet'} ; dévers et bombement du profil en travers saisi.`,
-    N.contreFleche ? `${Math.abs(psi - 100) > 1e-6 && !G.courbe ? 5 : 4}. Contre-flèche de réglage du coffrage (positive vers le haut) = − flèche en service à long terme (poids propre, superstructures, précontrainte et fluage, note PSIDP-EL NP 58) ; à ajouter aux cotes de nivellement.` : `${Math.abs(psi - 100) > 1e-6 && !G.courbe ? 5 : 4}. Dalle armée : contre-flèche selon la note de calcul (flèche à long terme en section fissurée).`,
+    `${Math.abs(psi - 100) > 1e-6 && !G.courbe ? 4 : 3}. Nivellement : extrados ${N.relatif ? 'relatif' : `déduit des cotes de chaussée des appuis (revêtement retranché), interpolé entre appuis ${N.R ? `sur un raccordement parabolique de rayon ${fr(Math.abs(N.R), 0)} m (${N.R > 0 ? 'saillant' : 'rentrant'}), flèche (u − a)(b − u)/2R` : 'en ligne droite — saisir le rayon du raccordement pour un profil parabolique'}`} ; dévers et bombement du profil en travers saisi.`,
+    N.mode === 'DP' ? `${Math.abs(psi - 100) > 1e-6 && !G.courbe ? 5 : 4}. Contre-flèche de réglage du coffrage (positive vers le haut) = − flèche en service à long terme (poids propre, superstructures, précontrainte et fluage, note PSIDP-EL NP 58) ; à ajouter aux cotes de nivellement.`
+      : N.mode === 'BA' ? `${Math.abs(psi - 100) > 1e-6 && !G.courbe ? 5 : 4}. Contre-flèche de réglage du coffrage (positive vers le haut) = − flèche à long terme sous charges quasi permanentes (poids propre et superstructures), section fissurée interpolée EN 1992-1-1 § 7.4.3 (ζ, β = 0,5), E_c,eff = E_cm/(1 + φ), φ = ${fr(N.fleche.phi, 1)}, aciers du plan de ferraillage ; retrait non compris ; flèche maximale ${fr(N.fleche.wMax * 1000, 0)} mm à x = ${fr(N.fleche.xMax, 1)} m ; à ajouter aux cotes de nivellement.`
+        : `${Math.abs(psi - 100) > 1e-6 && !G.courbe ? 5 : 4}. Dalle armée : contre-flèche selon la note de calcul (flèche à long terme en section fissurée) — lancer le ferraillage du tablier.`,
   ].flatMap(t => couperLigne(t, 90))];
   const hI = (tI.lignes.length + 2) * tI.hl, hN = (tN.lignes.length + 2) * tN.hl, hn = notes.length * 2.1 * 1.6;
   const wI = tI.cols.reduce((s, c) => s + c.w, 0), wN = tN.cols.reduce((s, c) => s + c.w, 0), wc = Math.max(wI, wN, 150);
