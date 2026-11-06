@@ -75,8 +75,11 @@ export function vuePlan(G, eq = null) {
   if (!G.courbe) {
     const pts = [uA, ...x0, uB].filter((u, k, a) => k === 0 || u - a[k - 1] > 1e-6);
     const bord = u => G.pt(u, -b);   // biais uniforme : les écarts sur le bord égalent les écarts sur l'axe
-    for (let k = 0; k + 1 < pts.length; k++) v.coteH(bord(pts[k]), bord(pts[k + 1]), -b - 2.8);
-    v.coteH(bord(uA), bord(uB), -b - 4.2);
+    // ouvrage biais : cotes « L_droite K = L_biaise » avec K = 1/sin ψ (convention des dossiers d'ouvrages courants)
+    const sinP = Math.sin(psi * Math.PI / 200), biais = Math.abs(psi - 100) > 1e-6, cK = (a, bb) => (biais ? `${fr((bb - a) * sinP, 2)}K = ${fr(bb - a, 2)}` : null);
+    for (let k = 0; k + 1 < pts.length; k++) v.coteH(bord(pts[k]), bord(pts[k + 1]), -b - 2.8, cK(pts[k], pts[k + 1]));
+    v.coteH(bord(uA), bord(uB), -b - 4.2, cK(uA, uB));
+    if (biais) v.texte('TEXTES', G.pt(x0[0], -b - 6.4), `K = 1/sin ψ = ${(1 / sinP).toFixed(5).replace('.', ',')} ; cotes en longueurs droites × K = longueurs biaises le long de l'axe`, { h: 2.2, ancre: 'g' });
     const xg = Math.min(G.pt(uA, -b)[0], G.pt(uA, b)[0]) - 0.8;
     v.coteV(G.pt(uA, -b), G.pt(uA, b), xg - 2.6);
     // trottoirs et chaussée

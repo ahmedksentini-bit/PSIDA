@@ -102,6 +102,18 @@ function vueLongitudinale(G, st, marks, e, eV) {
     v.repere([xm, zEp], m.mark, [xm, -h + c]);
     v.texte('TEXTES', [xm + Hz(4.5), zEp], `épingles HA${m.phi}, maille ${esp(m.s)}`, { h: 2.2, ancre: 'g', v: 'm' });
   }
+  // dalle précontrainte : zones d'ancrage (frettage de surface, éclatement), U verticaux figurés, repères sous la zone
+  const fret = marks.filter(q => q.role === 'frettage' && q.dir === 'vertical');
+  fret.forEach((m, k) => {
+    const a = Math.max(m.x1, uA + c / 2), b = Math.min(m.x2, uB - c / 2), N = Math.max(1, Math.round((b - a) / 0.15));
+    for (let q = 0; q <= N; q++) { const x = a + (b - a) * q / N; v.ligne('ACIERS_COUPES', [x, -h + c], [x, -c]); }
+    const xm = (a + b) / 2, zr = zEp - V(3) * (k % 2);
+    v.repere([xm, zr], m.mark, [xm, -h + c]);
+  });
+  if (fret.length) for (const g of [fret.filter(m => m.x1 < (uA + uB) / 2), fret.filter(m => m.x1 >= (uA + uB) / 2)]) if (g.length) {
+    const a = Math.min(...g.map(m => m.x1)), b = Math.max(...g.map(m => m.x2)), gauche = a < (uA + uB) / 2;
+    v.texte('TEXTES', [gauche ? b + Hz(3) : a - Hz(3), -h / 2], `zone d'ancrage : ${g.map(m => m.mark).join(', ')} ; frettage local selon l'agrément`, { h: 2.0, ancre: gauche ? 'g' : 'd', v: 'm' });
+  }
   // cotes des travées
   const us = [uA, ...x0, uB].filter((u, k, a) => k === 0 || u - a[k - 1] > 1e-6);
   for (let k = 0; k + 1 < us.length; k++) v.coteH([us[k], -h], [us[k + 1], -h], zCote);
@@ -240,6 +252,7 @@ function notesFerraillage(st, G, R) {
     ...couperLigne(`5. Recouvrements l₀ (EN 1992-1-1 § 8.7.3) : ${texteRecouvrements(phis, m)} ; décalés d'une pièce à l'autre (pièces courantes en longueur commerciale, transversales de plus de 12 m en deux L).`),
     `6. Masse du bordereau : ${milliers(R.masse)} kg (métré du calcul : ${milliers(rb.totalMass)} kg, retours compris ici).`,
     `7. Coupe longitudinale : échelles distinctes des longueurs et des hauteurs.`,
+    ...(rb.dp ? [...couperLigne(`8. Dalle précontrainte : aciers passifs du calcul PSI-DP (peau, non-fragilité, zones tendues)${rb.dp.needAt ? '' : ', sans armatures d\'effort tranchant (non requises)'} ; zones d'ancrage selon BPEL 91 annexe 4 / EN 1992-1-1 § 8.10.3 ; frettage local de chaque ancrage selon l'agrément du procédé ; câblage : plan TAB-CAB-01.`)] : []),
   ];
 }
 
@@ -259,7 +272,7 @@ export function planFerraillage(st, cartouche = {}) {
   const wb = COLS.reduce((s, c) => s + c.w, 0), hl = 4.6;
   const hb = (lignes.length + 2) * hl + 6 + (R0.diam.length + 3) * 5.5;
   const notes = notesFerraillage(st, G, R0), hn = notes.length * 2.2 * 1.6;
-  const F = composer({ titre: 'TABLIER — PLAN DE FERRAILLAGE', cartouche,
+  const F = composer({ titre: st.rebar && st.rebar.dp ? 'DALLE PRÉCONTRAINTE — FERRAILLAGE PASSIF ET FRETTAGE' : 'TABLIER — PLAN DE FERRAILLAGE', cartouche,
     rangees: [[vl], [vd]],
     groupes: [{ vues: [vl], cible: Lt <= 60 ? 200 : 500, min: 50, refaire: e => [vueLongitudinale(G, st, marks, e, eV(e))] }, { vues: [vd], cible: 2 * G.b <= 14 ? 25 : 50, min: 20 }],
     colonne: { largeur: Math.max(182, wb + 3), hauteur: 2 + hb + 8 + hn + 4 },

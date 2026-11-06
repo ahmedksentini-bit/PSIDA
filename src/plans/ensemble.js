@@ -8,6 +8,7 @@
  * Coordonnées de la coupe : u le long de l'axe (m, origine de la géométrie du tablier), z (m, mêmes niveaux que les plans
  * des appuis : NGF du nivellement, sinon relatifs au dessus de la dalle à l'axe).
  */
+import { classeBeton } from './notes_durabilite.js';
 import { Vue } from './dessin.js';
 import { composer } from './mise_en_page.js';
 import { geometrie } from './geometrie.js';
@@ -92,8 +93,10 @@ export function vueCoupeLongitudinale(st, G = geometrie(st), e = 250) {
   });
   // cotes (abouts et travées, longueur totale) puis bulles des appuis, espacées en mm papier
   const zc1 = Math.max(...zTop) + G.tRev + 7 * k, zc2 = zc1 + 7 * k, zMax = zc2 + 9 * k;
-  for (let q = 0; q + 1 < us.length; q++) v.coteH([us[q], zAt(us[q])], [us[q + 1], zAt(us[q + 1])], zc1);
-  v.coteH([uA, zAt(uA)], [uB, zAt(uB)], zc2);
+  const psiE = G.psiL ? G.psiL[0] : 100, sinE = Math.sin(psiE * Math.PI / 200), biaisE = Math.abs(psiE - 100) > 1e-6 && !G.courbe;
+  const cK = (a, b) => (biaisE ? `${fr((b - a) * sinE)}K = ${fr(b - a)}` : null);
+  for (let q = 0; q + 1 < us.length; q++) v.coteH([us[q], zAt(us[q])], [us[q + 1], zAt(us[q + 1])], zc1, cK(us[q], us[q + 1]));
+  v.coteH([uA, zAt(uA)], [uB, zAt(uB)], zc2, cK(uA, uB));
   const zMin = Math.min(...As.map(A => (A.pieux ? A.zSS - (A.Lp <= 8 ? A.Lp : 5) : A.zSS))) - 1.2;
   As.forEach((A, i) => {
     v.ligne('AXES', [x0[i], zMin + 0.4], [x0[i], zMax - 3.5 * k]);
@@ -128,7 +131,7 @@ function tableauCaracteristiques(st, G) {
     ['Longueur (abouts compris)', `${fr(G.uB - G.uA)} m`],
     ['Largeur du tablier', `${fr(2 * G.b)} m`],
     ['Épaisseur à l\'axe', `${fr(G.h)} m`],
-    ['Biais', `${fr(G.psiL[0])} gr`],
+    ['Biais', `${fr(G.psiL[0])} gr${Math.abs(G.psiL[0] - 100) > 1e-6 && !G.courbe ? ` (K = 1/sin ψ = ${(1 / Math.sin(G.psiL[0] * Math.PI / 200)).toFixed(5).replace('.', ',')})` : ''}`],
     ['Appareils culées', `${ap[0] ? ap[0].label : ''} — ${nb} par ligne`], ...(ap.length > 2 ? [['Appareils piles', `${ap[1].label} — ${nb} par ligne`]] : []),
   ];
   return { titre: 'CARACTÉRISTIQUES GÉOMÉTRIQUES', cols: [{ t: 'Désignation', w: 52, a: 'g' }, { t: 'Valeur', w: 76, a: 'g' }], lignes, hl: 5.5, h: 2.1 };
@@ -138,7 +141,7 @@ function notesEnsemble(st, G) {
   const m = st.p.mat, ms = (st.p.supports && st.p.supports.mat) || {};
   const niv = st.supports && st.supports.niv && st.supports.niv.actif;
   return ['NOTES', ...[
-    `1. Béton du tablier C${m.fck}/${Math.round(m.fck * 1.22 + 0.5)} ; béton des appuis C${ms.fck || 25} ; béton de propreté sous les semelles, 10 cm.`,
+    `1. Béton du tablier ${classeBeton(m.fck)}${st.durab ? ` (${st.durab.expos.join(', ')})` : ''} ; béton des appuis ${classeBeton(ms.fck || 25)}${st.supports && st.supports.durab ? ` (élévations ${st.supports.durab.elev.expos.join(', ')}, fondations ${st.supports.durab.fond.expos.join(', ')})` : ''} ; béton de propreté sous les semelles, 10 cm.`,
     '2. Cotes en mètres. ' + (niv ? 'Niveaux NGF, rattachés au plan de nivellement.' : 'Niveaux relatifs (m) : ±0,00 = dessus de la dalle à l\'axe.'),
     '3. Terrain naturel, talus et remblais d\'accès : schématiques, à caler sur les profils en long et en travers du projet routier.',
     '4. Coffrage des appuis et du tablier, ferraillage, équipements : plans spécifiques.',

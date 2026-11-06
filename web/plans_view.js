@@ -14,6 +14,9 @@ import { planEquipements, lireEquipements, controleCharges, souffleJoints, bordG
 import { geometrie } from '../src/plans/geometrie.js';
 import { feuilleSVG } from '../src/plans/svg.js';
 import { controlesPlans } from '../src/plans/controles.js';
+import { planCablageDalle } from '../src/plans/cablage_dalle.js';
+import { etatFerraillageDP } from '../src/plans/ferraillage_dp.js';
+import { planImplantation } from '../src/plans/implantation.js';
 import { feuilleDXF, octetsCp1252 } from '../src/plans/dxf.js';
 
 const $ = s => document.querySelector(s);
@@ -41,7 +44,9 @@ const PLANS = {
   nivellement: { titre: 'Tableau de dimensionnement et nivellement des appuis', fichier: 'nivellement', num: () => val('plan_num_niv') || 'APP-NIV-01', faire: (st, c) => planNivellement(st, c) },
   retenue: { titre: 'Dispositifs de retenue : plans types', fichier: 'retenue', num: () => val('plan_num_ret') || 'TAB-EQU-02', faire: (st, c) => planRetenueTypes(st, equipements(), c) },
   equipements: { titre: 'Équipements', fichier: 'equipements', num: () => val('plan_num_eq') || 'TAB-EQU-01', faire: (st, c) => planEquipements(st, equipements(), c) },
-  ferraillage: { titre: 'Plan de ferraillage', fichier: 'ferraillage', num: () => val('plan_num_fer') || 'TAB-FER-01', faire: (st, c) => planFerraillage(st, c) },
+  ferraillage: { titre: 'Plan de ferraillage', fichier: 'ferraillage', num: () => val('plan_num_fer') || 'TAB-FER-01', faire: (st, c) => planFerraillage(st.rebar ? st : etatFerraillageDP(st), c) },
+  implantation: { titre: 'Implantation des fondations et nivellement du tablier', fichier: 'implantation', num: () => val('plan_num_imp') || 'OA-IMP-01', faire: (st, c) => planImplantation(st, c, { E0: parseFloat(val('impl_E0').replace(',', '.')), N0: parseFloat(val('impl_N0').replace(',', '.')), gis: parseFloat(val('impl_gis').replace(',', '.')) }) },
+  cablage: { titre: 'Plan de câblage (dalle précontrainte)', fichier: 'cablage', num: () => val('plan_num_cab') || 'TAB-CAB-01', faire: (st, c) => planCablageDalle(st, c) },
 };
 
 /** Plan par clé : 'coffrage', 'ferraillage', 'appui-i' (coffrage de la ligne d'appui i). */
@@ -61,7 +66,7 @@ const nomFichier = (st, k, ext) => { const P = plan(st, k); return `${P.num().re
 /** Plans disponibles pour l'état de calcul : le ferraillage seulement pour une dalle armée calculée. */
 export function plansDisponibles(st) {
   if (!st || !st.deck) return [];
-  return [...(appuisDisponibles(st).length ? ['ensemble'] : []), ...(st.rebar && st.rebar.marks ? ['coffrage', 'ferraillage'] : ['coffrage']), 'equipements', 'retenue', ...(appuisDisponibles(st).length ? ['nivellement'] : []), ...appuisDisponibles(st).flatMap(i => [`appui-${i}`, `appuiF-${i}`])];
+  return [...(appuisDisponibles(st).length ? ['ensemble', 'implantation'] : []), ...(st.rebar && st.rebar.marks ? ['coffrage', 'ferraillage'] : st.psidp && st.psidp.r ? ['coffrage', 'cablage', 'ferraillage'] : ['coffrage']), 'equipements', 'retenue', ...(appuisDisponibles(st).length ? ['nivellement'] : []), ...appuisDisponibles(st).flatMap(i => [`appui-${i}`, `appuiF-${i}`])];
 }
 
 export function renderPlans(st) {
@@ -71,7 +76,7 @@ export function renderPlans(st) {
   sel.innerHTML = dispo.map(k => `<option value="${k}">${k === 'ensemble' ? 'Ouvrage — ' + PLANS[k].titre.toLowerCase() : k === 'nivellement' ? 'Appuis — ' + PLANS[k].titre.toLowerCase().replace(' des appuis', '') : PLANS[k] ? 'Tablier — ' + PLANS[k].titre.toLowerCase() : plan(st, k).titre}</option>`).join('');
   if (dispo.includes(prev)) sel.value = prev;
   const msg = [];
-  if (!dispo.includes('ferraillage')) msg.push('Dalle précontrainte ou ferraillage indisponible : seul le plan de coffrage du tablier est proposé (le câblage et les aciers passifs sont dans l\'onglet Précontrainte).');
+  if (!dispo.includes('ferraillage')) msg.push('Ferraillage indisponible : seul le plan de coffrage du tablier est proposé.');
   if (st.rail) msg.push('<span class="badge warn">PONT-RAIL</span> Les plans de coffrage, d\'ensemble et d\'équipements sont établis pour un tablier routier (chaussée, trottoirs, joints de chaussée, dispositifs de retenue, gargouilles) : à adapter à la voie ferrée (ballast, garde-ballast, caniveaux, pistes) ; le plan de ferraillage du tablier reste valable.');
   if (!dispo.some(k => k.startsWith('appui-'))) msg.push('Plans des appuis : calcul des appuis indisponible (voir l\'onglet Appuis et fondations).');
   $('#plans-info').innerHTML = msg.join(' ');

@@ -497,6 +497,15 @@ d'ouvrage tirées du calcul de durabilité : classes d'exposition, c_nom au nu d
 appuis dessinent avec ces enrobages (pieux : c_nom 75 mm au lieu de 7 cm à l'axe). Barres de plus de 12 m découpées en
 pièces recouvertes (transversales du tablier, semelles, chevêtres). Contrôles automatiques des plans : barres ≤ 12 m,
 barres de semelle dans la semelle, cerces dans le pieu, enrobages des plans = c_nom, béton et axe des aciers du tablier.
+Dalle précontrainte : plan de câblage TAB-CAB-01 (coupe longitudinale du câble moyen et de sa gaine, élévation de l'about
+avec les plaques numérotées, ordonnées aux dixièmes depuis l'intrados — axe et fibre inférieure de la gaine —, unité, σ_p0,
+P_0, frottements, recul, f_cj de mise en tension, longueur développée, allongements théoriques ∫σ dx / E_p par extrémité,
+ordre de mise en tension symétrique depuis le centre, évents et injection) et plan de ferraillage passif et frettage
+TAB-FER-01 (aciers passifs du calcul PSI-DP disposés comme ceux d'une dalle armée, zones d'ancrage : armatures de surface,
+éclatement vertical et horizontal, armatures inférieures d'about). Feuille OA-IMP-01 : coordonnées des coins et du centre
+des semelles et des pieux (repère de l'ouvrage, et du projet quand l'origine et le gisement sont saisis), nivellement du
+tablier aux appuis et aux quarts de portée hors contre-flèche, contre-flèche de coffrage d'une dalle précontrainte. Ouvrage
+biais : cotes « L K = L' » avec K = 1/sin ψ. Note du plan d'ensemble : classe de béton corrigée (C35/45, et non C35/43).
 v0.99.24 : durabilité (EN 1992-1-1 § 4.4.1, src/durabilite.js) : classes d'exposition, durée d'utilisation et référentiel
 (EN 1992-1-1 annexe E ou NF EN 206/CN) pour le pont-dalle, les ponts à poutres et les cadres ; classe de béton minimale,
 classe structurale (tableau 4.3N), c_min,dur (tableau 4.4N) et c_nom ; vérification de l'enrobage (dalle : à l'axe − Ø/2 ;

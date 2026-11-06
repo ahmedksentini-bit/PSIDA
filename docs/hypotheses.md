@@ -563,6 +563,16 @@ Contrôle sur la note « appuis et fondations » de d'un pont-dalle précontrain
 - **Charges** : point (x, e) partagé linéairement entre stations, fonctions d'Hermite en travers (console rigide au-delà des rives) ; permanent = poids propre réparti également entre les poutres + charges linéiques et surfaciques à leur position ; TS et 9 kN/m² comme pour la plaque.
 - **Contrôles** : Σ R = charge ; Σ M(L/2) = moment isostatique (exact) ; poutres découplées : flèche 5 q L⁴/384 E I à 1 % près. Section brute homogénéisée, linéaire : lecture de la répartition, pas de justification.
 
+## 1 septdecies quaterdecies. Plans : relecture des plans d'entreprise A640 (v0.99.29, `test/plans_controles.test.js`, `test/plans_dp_implantation.test.js`)
+
+- **Source** : plans d'exécution des OA61 (SCC, lot 6), OA67 et OA68 (ETE, lot 7), PIGR-1 (SOR, lot 5) — 34 feuilles d'appuis, 14 de tablier, 10 de cadre relues. Défauts relevés chez eux : nomenclature de pile recopiée de la culée (barre de 7,89 m dans une semelle de 7,00 m), cotes biaises fausses (22,00K au lieu de 22,10K), abouts différents entre coffrage et câblage (0,774 / 0,786 m), dosages et recouvrements différents d'une feuille à l'autre, mandrins HA8 de 30 mm (< 4 Ø), classes d'exposition absentes.
+- **Notes par partie** (`src/plans/notes_durabilite.js`) : classes d'exposition et c_nom du calcul de durabilité ; « enrobage » = nu des armatures extérieures, l'axe des aciers étant donné à part ; appuis : élévations c, semelles max(c + 2 cm ; k₁), pieux k₂ = 75 mm ; recouvrements l₀ en Ø (§ 8.7.3, h = 1).
+- **Barres de plus de 12 m** : droites en n pièces égales recouvertes de l₀, U en deux L ; transversales du tablier en deux L.
+- **Contrôles** (`src/plans/controles.js`) : béton et axe des aciers du tablier ; barres ≤ 12 m ; retours dans h − 2 c_nom ; barres de semelle dans la semelle ; cerces dans le pieu ; enrobages des plans ≥ c_nom ; mandrins EC2.
+- **Câblage** (`src/plans/cablage_dalle.js`) : câble moyen PSI-DP (z depuis le centre de gravité, v′ + z depuis l'intrados), prolongé tangentiellement jusqu'aux abouts ; allongement Δl = ∫σ_frottement ds / E_p jusqu'au point fixe (σ_L = σ_R) plus la longueur hors modèle à σ_p0 ; ordre de mise en tension c, c−1, c+1… (n pair : c+1, c, c+2…, comme OA67).
+- **Ferraillage passif** (`src/psidp/ferraillage_passif.js`) : A_s passif par face de chaque section PSI-DP / largeur → enveloppes de `rebarPlan` ; effort tranchant sans armatures si aucune section ne le demande ; about : A_s (U HA12 dans 0,1 d), A_e (U HA14 sur 0,9 d), A_e,h (barres transversales HA12), A_s,inf de la bielle (HA16 à HA32) ; frettage local : agrément.
+- **Implantation** (`src/plans/implantation.js`) : centre de semelle = axe d'appui + x_fût normal à la ligne d'appui ; coins ± B/2 normal, ± L_f/2 le long de la ligne ; pieux (fileX, pieuY) ; E = E₀ + x sin g − y cos g, N = N₀ + x cos g + y sin g. Nivellement : chaussée − revêtement aux appuis, interpolation linéaire, dévers du profil saisi ; contre-flèche = − w_service (PSIDP-EL NP 58).
+
 ## 1 octodecies. Textes relus (v0.36)
 
 - **Guide Sétra 2007** (appareils en élastomère fretté) : voir 1 sexdecies ; exemple du § 4.2 reproduit.
