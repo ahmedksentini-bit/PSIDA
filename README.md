@@ -771,6 +771,9 @@ f_c28 = 20 et 25 MPa numérisées) et semelle de l'épaisseur du mur à sa base 
 v0.99.33 : murs en aile recalés sur le guide « Ponts-cadres et portiques » 1992 (§ 2.8.1, § 3.6.1, annexe) : contrôle
 de l'égalité des surfaces vues par tête (figure 35), β au coin aigu justifié par ce contrôle, ouverture 1,15 D pour les
 ouvrages multiples.
+v0.99.34 : notes de calcul — chapitre « Dalles de transition » dans la note du pont (par culée : géométrie, efforts,
+armatures, effort tranchant, corbeau, trafic transmis à la culée) et chapitre « Murs en aile » dans la note du cadre
+(implantation, surfaces vues, voile, semelle, stabilité) ; références complétées.
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à

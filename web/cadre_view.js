@@ -3,6 +3,7 @@ import { goussetSup, goussetInf } from '../src/cadre/details.js';
 import { portee, hauteurCalc, nCell, epVoile } from '../src/cadre/cadre.js';
 import { indicationsParCible, cleCible, LIB_CADRE } from '../src/reco/cadre.js';
 import { texteDurabilite } from '../src/durabilite.js';
+import { mursAileBlocks } from './notes_annexes.js';
 
 const F = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(v) ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: n, maximumFractionDigits: n }));
 const F0 = v => F(v, 0), F1 = v => F(v, 1), F3 = v => F(v, 3);
@@ -188,7 +189,9 @@ export function cadreNote(out, { version = '' } = {}) {
     title: `Note de calcul — ${ouvert ? 'portique ouvert (PIPO)' : 'cadre fermé (PICF)'}${g.nom ? ' ' + g.nom : ''}`,
     meta: `PSIDA ${version} — module cadres et portiques (portage du moteur BVTrace, programme SETRA PICF-EL, ${out.inp.opts.usage.portee === 'routeEC' ? 'EN 1991-2 (LM1, LM2)' : 'Fascicule 61 titre II'}, BAEL 91 / EN 1992-1-1${out.inp.opts.usage.portee === 'rail' ? ', EN 1991-2 section 6' : ''})`,
     blocks: [{ t: 'h1', text: '1. Calcul de structure' }, ...cadreBlocks(out),
-      { t: 'h1', text: '2. Références' },
+      ...(ailes => (ailes.length ? [{ t: 'h1', text: '2. Murs en aile' }, ...ailes] : []))(mursAileBlocks(out)),
+      { t: 'h1', text: `${mursAileBlocks(out).length ? 3 : 2}. Références` },
+      { t: 'ref', text: 'SETRA, Ponts-cadres et portiques — Guide de conception, décembre 1992 : § 2.8.1 (implantation des murs de tête), § 3.6.1 (murs en aile), annexe (prédimensionnement des murs de tête).' },
       { t: 'ref', text: 'SETRA, Programme de calcul PICF-EL — guide d\'emploi (déc. 1991, 2ᵉ éd. juillet 1992) : combinaisons, effet Marston (annexe 4), module ESOL (annexe 2), biais (annexe 5).' },
       { t: 'ref', text: 'Fascicule 61 titre II (charges routières) ; BAEL 91 révisé 99 ; NF EN 1992-1-1 ; NF EN 1991-2 section 6 (charges ferroviaires) ; NF EN 1990 annexe A2 ; NF EN 1991-1-7 (chocs).' },
       { t: 'ref', text: 'Séisme : NF EN 1998-1 et annexe nationale, arrêté du 26 octobre 2011 ; NF EN 1998-2, 6.7.3 et 6.7.4 (ponts-cadres sous grande couverture) ; NF EN 1998-5, 7.3.2.2, tableau 4.1 et annexe E ; J. Wang, Seismic Design of Tunnels (Parsons Brinckerhoff, 1993) ; J. Penzien, Seismically induced racking of tunnel linings (2000) ; FHWA-NHI-10-034, Technical Manual for Design and Construction of Road Tunnels, chapitre 13.' }],
