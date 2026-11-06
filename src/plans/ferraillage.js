@@ -4,6 +4,7 @@
  * et d'épingles ; demi-coupes transversales en travée et sur appui ; bordereau de façonnage ISO 4066 avec croquis et
  * récapitulatif par diamètre ; notes.
  */
+import { notesDurabiliteTablier, texteRecouvrements, couperLigne } from './notes_durabilite.js';
 import { Vue, Feuille, ECHELLES, echelleQuiTient, fmtCote } from './dessin.js';
 import { geometrie } from './geometrie.js';
 import { composer } from './mise_en_page.js';
@@ -100,6 +101,18 @@ function vueLongitudinale(G, st, marks, e, eV) {
     const xm = (a + b) / 2;
     v.repere([xm, zEp], m.mark, [xm, -h + c]);
     v.texte('TEXTES', [xm + Hz(4.5), zEp], `épingles HA${m.phi}, maille ${esp(m.s)}`, { h: 2.2, ancre: 'g', v: 'm' });
+  }
+  // dalle précontrainte : zones d'ancrage (frettage de surface, éclatement), U verticaux figurés, repères sous la zone
+  const fret = marks.filter(q => q.role === 'frettage' && q.dir === 'vertical');
+  fret.forEach((m, k) => {
+    const a = Math.max(m.x1, uA + c / 2), b = Math.min(m.x2, uB - c / 2), N = Math.max(1, Math.round((b - a) / 0.15));
+    for (let q = 0; q <= N; q++) { const x = a + (b - a) * q / N; v.ligne('ACIERS_COUPES', [x, -h + c], [x, -c]); }
+    const xm = (a + b) / 2, zr = zEp - V(3) * (k % 2);
+    v.repere([xm, zr], m.mark, [xm, -h + c]);
+  });
+  if (fret.length) for (const g of [fret.filter(m => m.x1 < (uA + uB) / 2), fret.filter(m => m.x1 >= (uA + uB) / 2)]) if (g.length) {
+    const a = Math.min(...g.map(m => m.x1)), b = Math.max(...g.map(m => m.x2)), gauche = a < (uA + uB) / 2;
+    v.texte('TEXTES', [gauche ? b + Hz(3) : a - Hz(3), -h / 2], `zone d'ancrage : ${g.map(m => m.mark).join(', ')} ; frettage local selon l'agrément`, { h: 2.0, ancre: gauche ? 'g' : 'd', v: 'm' });
   }
   // cotes des travées
   const us = [uA, ...x0, uB].filter((u, k, a) => k === 0 || u - a[k - 1] > 1e-6);
@@ -232,13 +245,14 @@ function notesFerraillage(st, G, R) {
   const m = st.p.mat, rb = st.rebar, phis = [...new Set(rb.marks.map(q => q.phi))].sort((a, b) => a - b);
   return [
     'NOTES',
-    `1. Aciers B500B (fyk = ${m.fyk} MPa), HA. Enrobage nominal ${fr(m.c * 100, 1)} cm sur toutes les faces.`,
+    ...couperLigne(`1. Aciers B500B (fyk = ${m.fyk} MPa), HA. ${notesDurabiliteTablier(st)[1]}`),
     `2. Mandrins de cintrage (EC2 § 8.3) : Ø ≤ 16 : 4Ø ; Ø > 16 : 7Ø (r = ${phis.map(p => `${fr(rayonCintrage(p), 0)} mm pour Ø${p}`).slice(0, 3).join(', ')}…).`,
     '3. Longueurs de coupe selon l\'ISO 4066 (codes de forme 00, 11, 21, 51), arrondies aux 25 mm supérieurs.',
     '4. Longitudinaux : lit extérieur ; transversaux : lit intérieur, retours 10Ø aux bords libres.',
-    '5. Recouvrements décalés d\'une pièce à l\'autre (pièces courantes en longueur commerciale).',
+    ...couperLigne(`5. Recouvrements l₀ (EN 1992-1-1 § 8.7.3) : ${texteRecouvrements(phis, m)} ; décalés d'une pièce à l'autre (pièces courantes en longueur commerciale, transversales de plus de 12 m en deux L).`),
     `6. Masse du bordereau : ${milliers(R.masse)} kg (métré du calcul : ${milliers(rb.totalMass)} kg, retours compris ici).`,
     `7. Coupe longitudinale : échelles distinctes des longueurs et des hauteurs.`,
+    ...(rb.dp ? [...couperLigne(`8. Dalle précontrainte : aciers passifs du calcul PSI-DP (peau, non-fragilité, zones tendues)${rb.dp.needAt ? '' : ', sans armatures d\'effort tranchant (non requises)'} ; zones d'ancrage selon BPEL 91 annexe 4 / EN 1992-1-1 § 8.10.3 ; frettage local de chaque ancrage selon l'agrément du procédé ; câblage : plan TAB-CAB-01.`)] : []),
   ];
 }
 
@@ -258,7 +272,7 @@ export function planFerraillage(st, cartouche = {}) {
   const wb = COLS.reduce((s, c) => s + c.w, 0), hl = 4.6;
   const hb = (lignes.length + 2) * hl + 6 + (R0.diam.length + 3) * 5.5;
   const notes = notesFerraillage(st, G, R0), hn = notes.length * 2.2 * 1.6;
-  const F = composer({ titre: 'TABLIER — PLAN DE FERRAILLAGE', cartouche,
+  const F = composer({ titre: st.rebar && st.rebar.dp ? 'DALLE PRÉCONTRAINTE — FERRAILLAGE PASSIF ET FRETTAGE' : 'TABLIER — PLAN DE FERRAILLAGE', cartouche,
     rangees: [[vl], [vd]],
     groupes: [{ vues: [vl], cible: Lt <= 60 ? 200 : 500, min: 50, refaire: e => [vueLongitudinale(G, st, marks, e, eV(e))] }, { vues: [vd], cible: 2 * G.b <= 14 ? 25 : 50, min: 20 }],
     colonne: { largeur: Math.max(182, wb + 3), hauteur: 2 + hb + 8 + hn + 4 },

@@ -6,12 +6,13 @@
  *   21 deux retours à 90° (U)        L = A + B + C − r − 2d
  *   51 cadre fermé à crochets        L = 2 (A + B + C) − 2,5 r − 5d
  *   99 forme spéciale (cerce circulaire de pieu ou de colonne) : A = longueur développée, recouvrement compris
+ * Transversales de plus de 12 m hors tout (longueur commerciale) : deux L (code 11) recouvertes de l₀ (EN 1992-1-1 § 8.7.3).
  * Cotes A, B, C hors tout (mm, arrondies à 5 mm) ; r = rayon intérieur de cintrage, mandrin de l'EC2 (§ 8.3 :
  * φm = 4φ pour φ ≤ 16 mm, 7φ au-delà, r = φm / 2) ; longueur de coupe L arrondie aux 25 mm supérieurs.
  * Les barres trop longues pour une seule pièce (repères à plusieurs pièces de PSIDA) sont découpées en sous-repères
  * (7a, 7b…) : pièces d'extrémité avec leur retour, pièces courantes droites, recouvrements compris.
  */
-import { massPerM } from '../rebar.js';
+import { massPerM, anchorage } from '../rebar.js';
 
 export const rayonCintrage = phi => (phi <= 16 ? 4 : 7) * phi / 2;   // mm
 const r5 = x => Math.round(x / 5) * 5, r25 = x => Math.ceil(x / 25 - 1e-9) * 25;
@@ -65,7 +66,11 @@ export function bordereau(st) {
       }
     } else if (m.dir === 'trans') {
       const ret = 10 * phi, B = m.len * 1000 - 2 * ret;
-      ligne(m, '', '21', { A: ret + phi, B, C: ret + phi }, m.count);
+      // au-delà de 12 m (longueur commerciale) : deux L recouvertes de l₀ (m.l0 du calcul, sinon 50 Ø)
+      if (longueurCoupe('21', { A: ret + phi, B, C: ret + phi }, phi) > 12000) {
+        const l0 = (m.l0 ?? anchorage(phi, { fck: st.p.mat.fck, fyk: st.p.mat.fyk, h: 1 }).l0) * 1000;
+        ligne(m, '', '11', { A: (B + l0) / 2, B: ret + phi }, 2 * m.count);
+      } else ligne(m, '', '21', { A: ret + phi, B, C: ret + phi }, m.count);
     } else if (m.dir === 'cadre') {
       const Bc = Math.max(h - 2 * c, 0.3) * 1000;
       ligne(m, '', '51', { A: hr, B: Bc, C: 10 * phi }, m.count);
