@@ -1,13 +1,21 @@
 /**
  * Murs en aile des cadres (PICF) et portiques (PIPO) : implantation, longueur, prédimensionnement et ferraillage.
  *
- * Géométrie (guide Sétra « Ponts-cadres et portiques — guide de conception », déc. 1992, § 2.8.1 et § 3.6.1, annexe 3 ;
- * règles reprises de BVTrace WingWallGeometry.cs, docs/context/ouvrages-tetes-murs.md) :
+ * Géométrie (guide Sétra « Ponts-cadres et portiques — guide de conception », déc. 1992, § 2.8.1 p. 29–30, § 3.6.1
+ * p. 58–59 : T renversé, fruit avant 1 à 2 %, épaisseur en tête 25 à 30 cm, arête 15 à 20 cm sous la trace du talus,
+ * prolongement d'au moins 20 cm au-delà du pied de talus, semelle de l'épaisseur de la base ; annexe p. 92 : abaques des
+ * murs en retour applicables aux murs en aile avec h_c = h − 0,50 m) :
  *  - quatre ailes distinctes (amont gauche, amont droite, aval gauche, aval droite), enracinées aux coins extérieurs des
  *    têtes, joint de 2 cm avec le piédroit ; angle θ mesuré depuis l'axe de l'ouvrage (0 = prolongement du piédroit,
  *    90° = mur frontal), jamais converti en 90° − θ ;
- *  - proposition esthétique (§ 2.8.1, en grades) : α_g = 15 + 0,03 L², β_g = 0,008 (φ_g + 25) α_g, L ouverture droite
- *    totale, φ biais ; α au coin obtus de la tête, β au coin aigu (ouvrage droit : α = β) ; angle saisi sinon ;
+ *  - proposition esthétique (§ 2.8.1 p. 29–30, d'après le document GUEST du Sétra, en grades) : α = 15 + 0,03 L²,
+ *    β = 0,008 (φ + 25) α (minimums 15 et 0,12 (φ + 25)), L ouverture droite (cadre ou portique multiple : L entre D et
+ *    1,3 D, D portée d'une travée — retenu 1,15 D), φ biais ; objectif du guide : surfaces vues égales (figure 35,
+ *    A = B, largeurs vues depuis la voie franchie). Le mur du coin aigu de la tête, plus long (le talus y descend moins
+ *    vite le long du mur), reçoit le petit angle β, celui du coin obtus α : c'est l'affectation qui égalise A = L_w sin θ
+ *    (contrôle `surfacesVues`) ; les lettres de la figure 35 placent α au coin aigu, mais la géométrie dessinée (mur long
+ *    et raide au coin aigu) et la condition A = B conduisent à l'inverse avec les formules ; ouvrage droit : α = β ;
+ *    angle saisi sinon ;
  *  - arête supérieure 0,20 m sous la trace du talus (pente 1/m, m = 3/2 par défaut) ; à l'enracinement, trace au niveau
  *    du dessus de la traverse + h_t ; le talus descend perpendiculairement aux têtes ; longueur = chute de l'arête jusqu'à
  *    h_min au-dessus du terrain naturel (dessus du radier) / pente le long du mur, + 0,20 m de dépassement du pied ;
@@ -184,5 +192,15 @@ export function mursEnAile(geo, o) {
   }
   // calcul : une fois par hauteur d'enracinement (identique pour les quatre ailes, les longueurs différant seules)
   const calc = calculMurAile(ailes[0].hv0, { ...o, es });
-  return { ailes, calc, prop, m, ht, hmin, es, joint: 0.02 };
+  for (const a of ailes) a.Avue = a.Lw ? a.Lw * Math.sin(a.theta * RAD) : null;    // largeur vue depuis la voie franchie
+  return { ailes, calc, prop, m, ht, hmin, es, joint: 0.02, surfacesVues: surfacesVues(ailes) };
+}
+
+/** Égalité des surfaces vues par tête (guide § 2.8.1, figure 35) : largeurs A = L_w sin θ et triangles ½ A h. */
+export function surfacesVues(ailes) {
+  return ['amont', 'aval'].map(end => {
+    const [g, d] = ['gauche', 'droite'].map(c => ailes.find(a => a.end === end && a.cote === c));
+    const sg = g.Avue * g.hv0 / 2, sd = d.Avue * d.hv0 / 2;
+    return { end, Ag: g.Avue, Ad: d.Avue, ecart: Math.abs(sg - sd) / Math.max(sg, sd) };
+  });
 }

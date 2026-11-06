@@ -768,6 +768,9 @@ portiques : implantation du guide Sétra 1992 (quatre ailes, angles α et β, lo
 (voile, stabilité, portance, semelle), feuille OH-AIL-01 (vue en plan, élévation développée, coupe, bordereau).
 v0.99.32 : murs en aile — épaisseur à la base contrôlée par l'abaque e_m du Sétra PICF-EL (DT422 p. 75, courbes
 f_c28 = 20 et 25 MPa numérisées) et semelle de l'épaisseur du mur à sa base (DT422 § 2.1).
+v0.99.33 : murs en aile recalés sur le guide « Ponts-cadres et portiques » 1992 (§ 2.8.1, § 3.6.1, annexe) : contrôle
+de l'égalité des surfaces vues par tête (figure 35), β au coin aigu justifié par ce contrôle, ouverture 1,15 D pour les
+ouvrages multiples.
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à
