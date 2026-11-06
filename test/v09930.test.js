@@ -57,14 +57,15 @@ test('Plan de la dalle de transition : culées C0 et Cn, repères, barres ≤ 12
   const F = planDalleTransition(st, 0, {});
   assert.ok(F.valide().ok); assert.ok(!F.deborde);
   const marks = F.dalleTransition.marks;
-  assert.equal(marks.length, 8);
+  assert.equal(marks.length, 10);
+  assert.ok(marks.find(m => m.pos === "cbT").prov >= marks.find(m => m.pos === "cbT").req);
   assert.ok(marks.every(m => m.L <= 12000));
   assert.ok(marks.find(m => m.pos === 'gj') && marks.find(m => m.pos === 'ch'));
   assert.ok(F.masse > 0);
   const svg = feuilleSVG(F);
   assert.match(svg, /DALLE DE TRANSITION/); assert.match(svg, /COUPE A-A/); assert.match(svg, /polystyrène/);
   const C = controlesPlans(st).filter(r => /^Dalle de transition/.test(r.objet));
-  assert.equal(C.length, 6); assert.ok(C.every(r => r.ok));
+  assert.equal(C.length, 8); assert.ok(C.every(r => r.ok));
 });
 
 test('Dalle de transition biaise : bords parallèles au garde-grève allongés de 1/sin ψ, barres trop longues en pièces', () => {
@@ -116,4 +117,21 @@ test('Calepinage des corniches préfabriquées : éléments + joints = longueur 
   assert.equal(calepinageCorniches(st, { ...EQ_DEFAUTS, corn: 'cip' }), null);
   const F = planEquipements(st, EQ_DEFAUTS, {});
   assert.ok(F.tableaux.some(t => /CALEPINAGE/.test(t.titre)));
+});
+
+test('v0.99.31 — corbeau (EC2 J.3) et trafic de la dalle dans les efforts d\'ensemble de la culée', async () => {
+  const { corbeauDalle } = await import('../src/supports/dalle_transition.js');
+  const K = corbeauDalle({ FEd: 260, ac: 0.15, hc: 0.40, c: 0.05, phi: 12, fck: 30, fyk: 500 });
+  const d = 0.40 - 0.05 - 0.006, z0 = 0.8 * d;
+  assert.ok(Math.abs(K.Ft - (260 * 0.15 / z0 + 52)) < 1e-9);
+  assert.ok(Math.abs(K.As - K.Ft / (500 / 1.15 * 1000)) < 1e-12);
+  assert.ok(Math.abs(K.lien - 0.5 * K.As) < 1e-12 && K.ok);
+  const D = dalleTransitionCulee(st, 0);
+  assert.ok(D.Kc.tirant.As >= D.Kc.As - 1e-12 && D.Kc.cadres.As >= D.Kc.lien - 1e-12);
+  // trafic ajouté par la dalle (EC) : UDL de la dalle + excédent du TS sur la dalle par rapport au TS sur le tablier
+  const q = st.supports.lines[0].EC.dalleQ;
+  assert.ok(q && q.N >= q.forfait && q.N >= q.dN);
+  assert.ok(Math.abs(q.dN - (q.RU + Math.max(0, q.RTSs - q.RTSd))) < 1e-9);
+  assert.equal(st.supports.lines[0].BAEL.dalleQ, undefined);
+  assert.match(feuilleSVG(planDalleTransition(st, 0, {})), /Corbeau/);
 });

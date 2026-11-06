@@ -18,8 +18,8 @@ import { placerBordereau } from './ferraillage.js';
 import { longueurCoupe, recapitulatif } from './bordereau.js';
 import { geometrieAppui, dalleTransition, alphasTrafic } from './appuis.js';
 import { couperLigne, classeBeton, texteRecouvrements, enrobagesAppuis } from './notes_durabilite.js';
-import { calculDalleTransition } from '../supports/dalle_transition.js';
-import { anchorage, massPerM } from '../rebar.js';
+import { calculDalleTransition, corbeauDalle } from '../supports/dalle_transition.js';
+import { anchorage, massPerM, chooseBars } from '../rebar.js';
 
 const fr = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : '—');
 const esp = s => fr(s * 100, Math.abs(s * 100 - Math.round(s * 100)) > 1e-6 ? 1 : 0);
@@ -33,7 +33,10 @@ export function dalleTransitionCulee(st, i) {
   const al = alphasTrafic(st);
   const psi = (A.G.psiL && A.G.psiL[i]) || 100, sinP = Math.sin(psi * Math.PI / 200), cotP = Math.cos(psi * Math.PI / 200) / sinP;
   const B = A.dalle.B, K = calculDalleTransition({ L: DT.L, e: DT.e, B, hc0: A.zT + A.hGG - DT.z0, pente: DT.pente, fck: mat.fck, fyk: mat.fyk, cSup: c, cInf: cS, aQ: al.aQ, aq1: al.aq1 });
-  return { A, DT, K, c, cS, mat, psi, sinP, cotP, B, Bk: B / sinP };
+  // corbeau : console courte sous la réaction ELU de la dalle (aciers posés avec le garde-grève)
+  const eGG = A.xGGav - A.xGGar, Kc = corbeauDalle({ FEd: K.corbeau.ELU, ac: 0.15, hc: 0.40, c, fck: mat.fck, fyk: mat.fyk });
+  Kc.tirant = chooseBars(Kc.As, { phiMin: 12, phiMax: 16, sMax: 0.20, sMin: 0.10 }); Kc.cadres = chooseBars(Kc.lien, { phiMin: 10, phiMax: 12, sMax: 0.20, sMin: 0.10 });
+  return { A, DT, K, Kc, eGG, c, cS, mat, psi, sinP, cotP, B, Bk: B / sinP };
 }
 
 /** Lignes d'appui (culées) qui portent une dalle de transition. */
@@ -64,6 +67,12 @@ export function reperesDalleTransition(D) {
   add({ label: 'Chaises de la nappe supérieure (1 par m²)', phi: 12, code: '21', dims: { A: 200, B: Math.max(0.05, hCh) * 1000, C: 200 }, nombre: Math.ceil(L * B - 1e-9), pos: 'ch' });
   // goujons dans le corbeau (articulation de la dalle, effort horizontal)
   add({ label: 'Goujons dans le corbeau', phi: 20, s: 0.50, code: '00', dims: { A: 600 }, nombre: nb(Bk - 0.50, 0.50), pos: 'gj' });
+  // corbeau (EN 1992-1-1 annexe J.3) : tirant en L ancré dans le garde-grève, U horizontaux (≥ 0,5 A_s)
+  if (D.Kc) {
+    const t = D.Kc.tirant, u = D.Kc.cadres, eG = D.eGG || 0.30;
+    add({ label: 'Corbeau — tirant (ancré dans le garde-grève)', phi: t.phi, s: t.s, code: '11', dims: { A: (0.30 + eG - 2 * c) * 1000, B: Math.max(0.40, anc(t.phi).lbd) * 1000 }, nombre: nb(Bk - 2 * c, t.s), req: D.Kc.As, prov: t.As, pos: 'cbT' });
+    add({ label: 'Corbeau — U horizontaux', phi: u.phi, s: u.s, code: '21', dims: { A: (0.10 + eG - c) * 1000, B: 100, C: (0.10 + eG - c) * 1000 }, nombre: nb(Bk - 2 * c, u.s), req: D.Kc.lien, prov: u.As, pos: 'cbU' });
+  }
   for (const m of out) {
     const dd = { A: r5(m.dims.A || 0), B: r5(m.dims.B || 0), C: r5(m.dims.C || 0) };
     m.dims = dd; m.L = r25(longueurCoupe(m.code, dd, m.phi));
@@ -79,7 +88,7 @@ export function reperesDalleTransition(D) {
   return out;
 }
 
-const desig = m => (m.pos === 'ch' ? `chaises HA${m.phi} (1/m²)` : m.pos === 'gj' ? `goujons HA${m.phi} L=${fr(m.L / 1000)} e=${esp(m.s)}` : m.pos.startsWith('u') ? `U HA${m.phi} e=${esp(m.s)}` : `HA${m.phi} e=${esp(m.s)}`);
+const desig = m => (m.pos === 'ch' ? `chaises HA${m.phi} (1/m²)` : m.pos === 'gj' ? `goujons HA${m.phi} L=${fr(m.L / 1000)} e=${esp(m.s)}` : m.pos === 'cbT' ? `corbeau : tirant HA${m.phi} e=${esp(m.s)}` : m.pos === 'cbU' ? `corbeau : U HA${m.phi} e=${esp(m.s)}` : m.pos.startsWith('u') ? `U HA${m.phi} e=${esp(m.s)}` : `HA${m.phi} e=${esp(m.s)}`);
 const lignesBordereau = marks => marks.map(m => ({ repere: String(m.mark), mark: m.mark, phi: m.phi, code: m.code, A: m.dims.A, B: ['11', '21', '51'].includes(m.code) ? m.dims.B : null, C: ['21', '51'].includes(m.code) ? m.dims.C : null, L: m.L, nombre: m.nombre, total: m.total, masse: m.masse }));
 
 /* ------------------------------------------------------------------------------------------ vues */
@@ -125,6 +134,10 @@ function coupeLongitudinale(D, marks) {
     bul(mU, [uf + 0.01, (zs(uf) + zi(uf)) / 2]);
   }
   if (mG) { const u = 0.15, zgb = zc - 0.30; v.poly('ACIERS', [[u, zgb], [u, zgb + mG.L / 1000]]); bul(mG, [u, zc + 0.05]); }
+  // corbeau : tirant en L sous la face supérieure, retour descendant le long du parement avant du garde-grève ; U horizontaux
+  const mCT = M('cbT'), mCU = M('cbU'), eG = D.eGG || 0.30;
+  if (mCT) { const zt0 = zc - c; v.poly('ACIERS', [[0.30 - c, zt0], [-eG + c, zt0], [-eG + c, zt0 - mCT.dims.B / 1000]]); bul(mCT, [0.20, zt0]); }
+  if (mCU) { const z1 = zc - c - 0.06, z2 = z1 - mCU.dims.B / 1000, xa = 0.10; v.poly('ACIERS', [[-eG + c + 0.02, z1], [xa, z1], [xa, z2], [-eG + c + 0.02, z2]]); bul(mCU, [xa, (z1 + z2) / 2]); }
   // cotes
   v.coteH([0.02, zb(L) - 0.10], [L, zb(L) - 0.10], zb(L) - 0.55, fr(L - 0.02));
   v.coteV([L + 0.10, zb(L)], [L + 0.10, zt(L)], L + 0.35, fr(e));
@@ -194,6 +207,9 @@ export function planDalleTransition(st, i, cartouche = {}) {
       ['Répartition (≥ 20 %) / nappe supérieure', `HA${K.rep.phi} e=${esp(K.rep.s)} / HA${K.sup.phi} e=${esp(K.sup.s)}`],
       ['V_Ed ELU / V_Rd,c (sans armatures)', `${fr(K.V.ELU, 1)} / ${fr(K.VRdc, 1)} kN/m ${K.okV ? '✓' : '✗'}`],
       ['Réaction sur le corbeau G / Q / ELU', `${fr(K.corbeau.G, 1)} / ${fr(K.corbeau.Q, 1)} / ${fr(K.corbeau.ELU, 1)} kN/m`],
+      ['Corbeau (J.3) : tirant F_Ed a_c/z₀ + 0,2 F_Ed / A_s', `${fr(D.Kc.Ft, 1)} kN/m / ${fr(D.Kc.As * 1e4, 2)} cm²/m → HA${D.Kc.tirant.phi} e=${esp(D.Kc.tirant.s)}`],
+      ...(() => { const q = st.supports && st.supports.lines && st.supports.lines[i] && st.supports.lines[i].EC && st.supports.lines[i].EC.dalleQ; return q ? [['Culée, efforts d\'ensemble : trafic de la dalle retenu', `${fr(q.N, 0)} kN (forfait ${fr(q.forfait, 0)} ; EC ${fr(q.dN, 0)})`]] : []; })(),
+      ['Corbeau : bielle σ / ν′ f_cd', `${fr(D.Kc.sig, 1)} / ${fr(D.Kc.sigRd, 1)} MPa ${D.Kc.ok ? '✓' : '✗'}`],
     ] };
   const hC = (tc.lignes.length + 2) * tc.hl;
   const N = ['NOTES',
@@ -202,7 +218,7 @@ export function planDalleTransition(st, i, cartouche = {}) {
     ...couperLigne('3. Dessus de la dalle à 0,30 m sous la chaussée au droit du garde-grève, pente de 5 % vers le remblai ; joint de 2 cm en polystyrène contre le garde-grève ; goujons scellés dans le corbeau, à disposer avant le bétonnage du corbeau.', 110),
     ...couperLigne(`4. Recouvrements l₀ (EN 1992-1-1 § 8.7.3) : ${texteRecouvrements(marks.map(q => q.phi), mat)} ; barres de plus de 12 m en pièces recouvertes.`, 110),
     ...couperLigne('5. Aciers de répartition ≥ 20 % des aciers principaux (§ 9.3.1.1(2)) ; moments transversaux sous charges concentrées non calculés : calcul de plaque si la dalle est large ou très biaise.', 110),
-    '6. Bordereau ISO 4066, cotes en mm ; chaises : une par m² de dalle.',
+    ...couperLigne('6. Bordereau ISO 4066, cotes en mm ; chaises : une par m² de dalle ; aciers du corbeau (tirant, U horizontaux, EN 1992-1-1 annexe J.3) à poser avec le garde-grève.', 110),
     ...(K.okV && K.okAs ? [] : ['7. ATTENTION — ' + (!K.okV ? 'effort tranchant > V_Rd,c : épaissir la dalle.' : 'section d\'acier insuffisante : épaissir la dalle.')]),
   ], hn = N.length * 2.2 * 1.6;
   const ca = coupeLongitudinale(D, marks), pl = vuePlan(D, marks), cb = coupeTransversale(D, marks);

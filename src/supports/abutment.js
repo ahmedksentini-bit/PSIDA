@@ -66,7 +66,10 @@ export function earthPressure({ H, B, K = 0.33, gamma = 20, q = 10 }) {
 
 /**
  * Dalle de transition (guide SETRA 1984, pratique) : longueur min(6 ; max(3 ; 0,6 H_r)), réaction linéique sur le corbeau
- * (demi-poids de la dalle, du remblai et de la chaussée + roue Bc de 60 kN répartie). TODO_VERIF
+ * (demi-poids de la dalle, du remblai et de la chaussée + roue Bc de 60 kN répartie). Valeur forfaitaire des efforts
+ * d'ensemble de la culée (appliquée sur le tiers de la largeur) ; en EC, src/supports/index.js retient au moins le trafic
+ * que la dalle ajoute à celui du tablier (dalleQ). Le corbeau et la dalle elle-même sont calculés avec la réaction
+ * locale par mètre (src/supports/dalle_transition.js).
  */
 export function dalleTransition({ Hr, e = 0.30, hRemblai = 0.6, gamma = 20 }) {
   const L = Math.min(6, Math.max(3, 0.6 * Hr));

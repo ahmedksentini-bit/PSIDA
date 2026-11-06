@@ -39,6 +39,10 @@ export function parseCadre(d) {
     seisme: { actif: d.cf_sis === 'oui', mode: d.cf_sisMode === 'direct' ? 'direct' : 'zone', zone: Math.round(num(d.cf_zone, 3)), categorie: d.cf_cat || 'III', classeSol: d.cf_solEC8 || 'B',
       ag: num(d.cf_ag, 1.0), S: num(d.cf_S, 1.2), Vs: num(d.cf_Vs, 0), nu: num(d.cf_nuSol, 0.35), approche: d.cf_sisAppr || 'auto', Tc: num(d.cf_Tc, 0) },
   };
+  // murs en aile (src/cadre/murs_aile.js) : implantation du guide Sétra 1992, mur en T renversé
+  opts.ailes = { actif: d.cf_ailes !== 'non', angle: num(d.cf_aileAng, null), m: num(d.cf_aileTalus, 1.5), ht: num(d.cf_aileHt, 0.30), hmin: num(d.cf_aileHmin, 0.50),
+    eT: Math.max(0.25, num(d.cf_aileEt, 0.25)), fruit: num(d.cf_aileFruit, 0.02), Ka: num(d.cf_aileKa, 0.33), gamma: 10 * num(d.cf_rhoR, 2.0), q: num(d.cf_aileQ, 10),
+    phiSol: num(d.cf_ailePhi, 30), qadm: num(d.cf_aileQadm, 0), es: num(d.cf_aileEs, null) ?? undefined };
   // Sol : table indicative, ESOL saisi, ou profil d'essais (pressiomètre, pénétromètres statique ou dynamique, SPT)
   const src = d.cf_solSrc || 'table';
   if (src === 'table') hyp.esol = 0;

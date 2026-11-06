@@ -69,6 +69,7 @@ export function controlesPlans(st) {
     add(nom, 'Flexion (ELU, ELS, fissuration)', `HA${K.inf.phi} e=${fr(K.inf.s * 100, 1)} = ${fr(K.inf.As * 1e4, 1)} cm²/m`, `≥ ${fr(K.As.requis * 1e4, 1)} cm²/m (e = ${fr(D.DT.e)} m)`, K.okAs);
     add(nom, 'Effort tranchant sans armatures', `V_Ed = ${fr(K.V.ELU, 0)} kN/m`, `≤ V_Rd,c = ${fr(K.VRdc, 0)} kN/m`, K.okV);
     add(nom, 'Barres ≤ 12 m (longueur commerciale)', `${marks.length - longs.length}/${marks.length} repères`, '12 m', !longs.length);
+    if (D.Kc) add(nom, 'Corbeau (EC2 J.3) : tirant et bielle', `HA${D.Kc.tirant.phi} e=${fr(D.Kc.tirant.s * 100, 0)} ; σ = ${fr(D.Kc.sig, 1)} MPa`, `≥ ${fr(D.Kc.As * 1e4, 2)} cm²/m ; ≤ ${fr(D.Kc.sigRd, 1)} MPa`, D.Kc.ok && D.Kc.tirant.As + 1e-12 >= D.Kc.As);
   }
   add('Bordereaux', 'Mandrins de cintrage (EC2 § 8.3)', `r = ${rayonCintrage(12)} mm (HA12), ${rayonCintrage(20)} mm (HA20)`, '4 Ø jusqu\'à Ø16, 7 Ø au-delà', true);
   return out;

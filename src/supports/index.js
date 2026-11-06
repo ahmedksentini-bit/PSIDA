@@ -834,6 +834,17 @@ function calculAppuis(st, input = {}) {
         const ep = app ? earthPressureUpper({ h1: hGG + C.hc + Math.max(0, C.hv), Htot: Hm + C.hc + hGG, L: width, gamma: soil.gamma, ...(railSup ? { p: qRem } : {}) })
           : earthPressure({ H: Hm + hGG, B: rem ? width : C.nCol * Math.min(3 * C.D, width / C.nCol), K: KA, gamma: soil.gamma, q: qRem });
         const dt = dalleTransition({ Hr: Hm + hGG });
+        // EC : LM1 est un seul modèle sur l'ouvrage et ses accès — un tandem est sur le tablier ou sur la dalle, l'UDL sur
+        // les deux. Trafic ajouté par la dalle sur le corbeau : R_UDL,dalle + max(0 ; R_TS,dalle − R_TS,tablier), avec
+        // R_TS,dalle = Σ α_Qi Q_i (2 − 1,2/L_c) (premier essieu sur le corbeau), R_UDL,dalle = (9 α_q1 × 3 + 2,5 (l − 3)) L_c/2 ;
+        // retenu : max(valeur forfaitaire 60 kN/m sur l/3 ; ce supplément). Fascicule 61 : valeur forfaitaire seule.
+        const dalleQ = !railSup && code === 'EC' && C.dalle ? (() => {
+          const Lc = Math.max(1, dt.L - 0.30), al = ec && ec.alpha ? ec.alpha : { aQ: [1, 1, 1], aq1: 1 }, nv = Math.max(1, Math.min(3, Math.floor(width / 3 + 1e-9)));
+          const RTSs = [300, 200, 100].slice(0, nv).reduce((S, Q, j) => S + (al.aQ[j] ?? 1) * Q * (2 - 1.2 / Lc), 0), RTSd = R(ec.TS, i);
+          const RU = (9 * (al.aq1 ?? 1) * Math.min(3, width) + 2.5 * Math.max(0, width - 3)) * Lc / 2, dN = RU + Math.max(0, RTSs - RTSd);
+          return { Lc, RTSs, RTSd, RU, dN, forfait: dt.Rq * width / 3, N: Math.max(dt.Rq * width / 3, dN) };
+        })() : null;
+        if (dalleQ) extra.dalleQ = dalleQ;
         const Wtop = rem ? 25 * (0.3 * hGG + 1.0 * (C.em + 0.3)) * width : 25 * C.hc * C.lc * width + 25 * 0.3 * hGG * width;
         const Wwall = rem ? 25 * C.em * Hm * width : 25 * C.nCol * Math.PI * C.D ** 2 / 4 * Hm;
         const mr = murEnRetour({ L: C.Lret, h: Hm + hGG });
@@ -848,8 +859,9 @@ function calculAppuis(st, input = {}) {
         base = combos.map(cb => {
           const elu = cb.ls === 'ELU', g = elu ? gU : 1, gq = cb.ls === 'ACC' ? 0 : code === 'BAEL' ? (elu ? 1.605 : 1.2) : (elu ? (railSup ? railSup.surcharge.gamma : 1.35) : 1);
           const kS = cb.sis && sisC ? (cb.cx ?? 1) : 0, dH = kS ? kS * sisC.H : 0, dM = kS ? kS * sisC.M : 0;
-          // dalle de transition : surcharge routière 60 kN/m (largeur /3) ; pont-rail : surcharge ferroviaire q_eq sur L/2
-          const Nq = railSup ? railSup.surcharge.qEq * dt.L / 2 * width : dt.Rq * width / 3;
+          // dalle de transition : surcharge routière 60 kN/m (largeur /3), majorée en EC du trafic que la dalle ajoute à
+          // celui du tablier (dalleQ) ; pont-rail : surcharge ferroviaire q_eq sur L/2
+          const Nq = railSup ? railSup.surcharge.qEq * dt.L / 2 * width : dalleQ ? dalleQ.N : dt.Rq * width / 3;
           return { ...cb, Wst: Wtop + Wwall + Wret + dt.Rg * width, Nb: cb.N + g * (Wtop + Wwall + Wret + dt.Rg * width) + gq * Nq, Mb: cb.H * (Hm + (rem ? 0 : C.hc)) + g * ep.Mg + gq * ep.Mq + dM, Hb: cb.H + g * ep.Pg + gq * ep.Pq + dH,
             ...(kS ? { culeeSis: kS, sisInst: { H: dH, M: dM } } : {}) };
         });

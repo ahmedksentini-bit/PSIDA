@@ -140,3 +140,19 @@ export function epaisseurDalleTransition(o) {
   CACHE.set(cle, res);
   return res;
 }
+
+/**
+ * Corbeau d'appui de la dalle de transition, console courte (EN 1992-1-1 annexe J.3, bielle et tirant) par mètre :
+ * charge F_Ed (réaction ELU de la dalle) à a_c du nu du garde-grève, effort horizontal H_Ed ≥ 0,2 F_Ed (§ 10.9.4.7,
+ * frottement et freinage transmis par les goujons), bras de levier z₀ = 0,8 d ;
+ * tirant A_s = (F_Ed a_c / z₀ + H_Ed) / f_yd ; a_c ≤ 0,5 h_c → cadres horizontaux fermés ≥ 0,5 A_s (J.3(3)) ;
+ * bielle : σ = F_Ed / (b_bielle sin θ) ≤ ν' f_cd, ν' = 1 − f_ck/250, largeur de bielle 0,2 d (à défaut d'appui défini).
+ * Unités : kN, m ; A_s en m²/m.
+ */
+export function corbeauDalle({ FEd, ac = 0.15, hc = 0.40, c = 0.05, phi = 12, fck = 30, fyk = 500 }) {
+  const d = hc - c - phi / 2000, z0 = 0.8 * d, fyd = fyk / 1.15, fcd = fck / 1.5;
+  const HEd = 0.2 * FEd, Ft = FEd * ac / z0 + HEd, As = Ft / (fyd * 1000);
+  const lien = ac <= 0.5 * hc ? 0.5 * As : 0.25 * As;
+  const theta = Math.atan2(z0, ac), sig = FEd / (0.2 * d * Math.sin(theta)) / 1000, sigRd = (1 - fck / 250) * fcd;
+  return { FEd, HEd, ac, hc, d, z0, Ft, As, lien, theta: theta * 180 / Math.PI, sig, sigRd, ok: sig <= sigRd + 1e-9 };
+}
