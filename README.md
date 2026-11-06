@@ -755,6 +755,12 @@ goujons. Les familles en défaut sont traitées ensemble (point fixe puis descen
 final est recalculé en entier ; les autres leviers sont proposés en variantes cherchées seules. Un calcul complet prenant
 quelques secondes, les recherches tournent dans un Web Worker (web/reco_phasage_worker.js) ; au-delà de 150 s, la valeur
 est laissée au bouton « Calculer » du panneau. Test : test/reco_phasage.test.js.
+v0.99.30 : dalle de transition — calcul (LM1 et LM2, largeurs efficaces, ELU, ELS, fissuration, tranchant sans
+armatures, épaisseur portée de 0,30 à 0,45 m si besoin) et feuille de ferraillage et nomenclature par culée (coupe dans
+l'axe avec corbeau, goujons, joint polystyrène et pente de 5 %, vue en plan biaise par nappes, coupe transversale,
+bordereau, tableau de calcul), contrôles associés. Contre-flèche des dalles armées : flèche à long terme en section
+fissurée (EC2 § 7.4.3) dans le nivellement OA-IMP-01. Profil en long parabolique (rayon du raccordement). Calepinage des
+corniches préfabriquées (types, abouts biais, joints, réservations, masses) sur la feuille des équipements.
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à
