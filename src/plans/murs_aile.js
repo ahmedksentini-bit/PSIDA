@@ -9,7 +9,7 @@ import { placerBordereau } from './ferraillage.js';
 import { longueurCoupe, recapitulatif } from './bordereau.js';
 import { anchorage, massPerM } from '../rebar.js';
 import { mursEnAile } from '../cadre/murs_aile.js';
-import { epVoile, nCell } from '../cadre/cadre.js';
+import { epVoile } from '../cadre/cadre.js';
 import { couperLigne } from './notes_durabilite.js';
 
 const fr = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : '—');
@@ -26,9 +26,10 @@ export function ailesCadre(cadre) {
   // portique : semelle du mur sous le terrain naturel (dessus des semelles du portique), décalage de son épaisseur
   const es0 = o.es ?? 0.40, er = ouvert ? es0 : g.er, zT = (ouvert ? es0 : er) + g.h + g.et, biais = res.geom.biais ?? 90;
   const h = res.h || inp.hyp;
-  const geo = { W, Lo: n * gi.B + (n - 1) * (gi.ei ?? 0), L: gi.L > 0 ? gi.L : Math.max(2, W), zT, er, biais, ep: epVoile(g, 0) };
+  // ouverture L du § 2.8.1 : ouverture droite ; ouvrage multiple : entre D et 1,3 D (D portée d'une travée), retenu 1,15 D
+  const geo = { W, Lo: n > 1 ? 1.15 * gi.B : gi.B, L: gi.L > 0 ? gi.L : Math.max(2, W), zT, er, biais, ep: epVoile(g, 0) };
   const R = mursEnAile(geo, { ...o, c: h.enrobage ?? 0.05, h: { code: h.code, fc28: h.fc28, fe: h.fe, sigmaS: h.sigmaS, exposition: h.exposition } });
-  return { ...R, geo, h, ouvert, nCell: nCell(g) };
+  return { ...R, geo, h, ouvert, nCell: n };
 }
 
 /* -------------------------------------------------------------------------------------------- repères */
@@ -158,6 +159,7 @@ export function planMursAile(cadre, cartouche = {}) {
   const tc = { titre: `CALCUL DES MURS EN AILE (par mètre, section d'enracinement, ${h.code === 'EC2' ? 'EN 1992-1-1' : 'BAEL 91'})`, hl: 4.4, h: 1.8, cols: [{ t: 'Grandeur', w: 100, a: 'g' }, { t: 'Valeur', w: 66, a: 'd' }],
     lignes: [
       ['Ailes (θ depuis l\'axe ; longueur)', A.ailes.map(a => `${fr(a.theta, 1)}° ; ${fr(a.Lw)}`).join(' / ')],
+      ['Surfaces vues gauche / droite (§ 2.8.1, A = L_w sin θ)', A.surfacesVues.map(q => `${q.end} ${fr(q.Ag)} / ${fr(q.Ad)} m (écart ${fr(q.ecart * 100, 0)} %)`).join(' ; ')],
       ['Hauteur du voile / épaisseur tête, base', `${fr(K.hv)} / ${fr(K.eT)}, ${fr(K.eB)} m`],
       ['Base : fruit (e_h + f h)/(1 + f) / abaque e_m (DT422)', `${fr(K.eFruit, 3)} / ${fr(K.em, 3)} m`],
       ['Poussée K_a, γ, q', `${fr(K.Ka)} ; ${fr(K.gamma, 0)} kN/m³ ; ${fr(K.q, 0)} kN/m²`],
@@ -173,7 +175,7 @@ export function planMursAile(cadre, cartouche = {}) {
   const hC = (tc.lignes.length + 2) * tc.hl;
   const N = ['NOTES',
     ...couperLigne(`1. Béton f_c28 = ${h.fc28} MPa, aciers HA f_e = ${h.fe} MPa, enrobage ${fr((h.enrobage ?? 0.05) * 100, 0)} cm. Murs indépendants du cadre : joint de 2 cm au droit des piédroits.`, 110),
-    ...couperLigne(`2. Implantation : guide Sétra « Ponts-cadres et portiques » (1992) § 2.8.1 — angles depuis l'axe de l'ouvrage${A.prop ? `, proposition α = ${fr(A.prop.alpha, 1)}°, β = ${fr(A.prop.beta, 1)}° (β au coin aigu de la tête)` : ''} ; arête 0,20 m sous la trace du talus ; dépassement du pied 0,20 m.`, 110),
+    ...couperLigne(`2. Implantation : guide Sétra « Ponts-cadres et portiques » (1992) § 2.8.1 — angles depuis l'axe de l'ouvrage${A.prop ? `, proposition α = 15 + 0,03 L², β = 0,008 (φ + 25) α (gr) : α = ${fr(A.prop.alpha, 1)}°, β = ${fr(A.prop.beta, 1)}°, β au coin aigu de la tête pour égaliser les surfaces vues (figure 35)${A.nCell > 1 ? ', L = 1,15 D (ouvrage multiple)' : ''}` : ''} ; arête 0,20 m sous la trace du talus ; dépassement du pied 0,20 m.`, 110),
     ...couperLigne('3. Calcul à l\'enracinement (hauteur maximale) : armatures et semelle conservées sur toute la longueur ; poussée active et surcharge de remblai ; voile en T renversé fondé au niveau de la sous-face du radier ; épaisseur à la base ≥ e_m de l\'abaque des murs en aile et semelle de même épaisseur (Sétra PICF-EL, DT422, § 2.1).', 110),
     ...couperLigne('4. Verticales découpées par bandes de 1,50 m suivant la hauteur du mur ; horizontales par groupes de trois lits, longueur du lit le plus bas.', 110),
     ...(K.qadm > 0 ? [] : couperLigne('5. Contrainte admissible du sol non saisie : contrainte de référence à comparer à la portance (onglet Cadres, profil de sol).', 110)),

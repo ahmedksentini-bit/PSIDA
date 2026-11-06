@@ -82,3 +82,24 @@ test('v0.99.32 — abaque e_m des murs en aile (DT422 p. 75) et semelle de l\'é
   const A = ailesCadre(cadre({}));
   assert.ok(Math.abs(A.calc.es - A.calc.eB) < 0.006);                    // semelle = épaisseur à la base
 });
+
+test('v0.99.33 — guide 1992 § 2.8.1 : β au coin aigu égalise les surfaces vues (figure 35) ; ouvrage multiple L = 1,15 D', async () => {
+  const { mursEnAile } = await import('../src/cadre/murs_aile.js');
+  const geo = { W: 3.7, Lo: 3, L: 15, zT: 3.2, er: 0.35, biais: 54 }, h = { code: 'BAEL', fc28: 25, fe: 400, sigmaS: 201.6 };
+  const R = mursEnAile(geo, { m: 1.5, c: 0.05, h });
+  const { alpha, beta } = R.prop;
+  // affectation inverse (α au coin aigu, β au coin obtus) : largeurs vues A = L_w sin θ
+  const wA = mursEnAile(geo, { m: 1.5, c: 0.05, h, angle: alpha }).ailes, wB = mursEnAile(geo, { m: 1.5, c: 0.05, h, angle: beta }).ailes;
+  const amont = c => [wA, wB].map(w => w.find(a => a.end === 'amont' && a.cote === c));
+  const [gA, gB] = amont('gauche'), [dA, dB] = amont('droite');
+  const aigu = gA.aigu ? 'gauche' : 'droite';
+  const inv = aigu === 'gauche' ? Math.abs(gA.Avue - dB.Avue) : Math.abs(dA.Avue - gB.Avue);
+  const ret = R.surfacesVues.find(q => q.end === 'amont'), dir = Math.abs(ret.Ag - ret.Ad);
+  assert.ok(dir < inv / 3, `${dir} < ${inv}`);
+  assert.ok(R.surfacesVues.every(q => q.ecart < 0.15));
+  // minimums du guide
+  assert.ok(alpha >= 0.9 * 15 - 1e-9 && beta >= 0.9 * 0.12 * (54 / 0.9 + 25) - 1e-9);
+  // ouvrage multiple : L = 1,15 D
+  const A = ailesCadre(cadre({ cf_n: '3', cf_B: '3' }));
+  assert.ok(Math.abs(A.geo.Lo - 3.45) < 1e-9);
+});
