@@ -11,8 +11,11 @@
  *  - arête supérieure 0,20 m sous la trace du talus (pente 1/m, m = 3/2 par défaut) ; à l'enracinement, trace au niveau
  *    du dessus de la traverse + h_t ; le talus descend perpendiculairement aux têtes ; longueur = chute de l'arête jusqu'à
  *    h_min au-dessus du terrain naturel (dessus du radier) / pente le long du mur, + 0,20 m de dépassement du pied ;
- *  - épaisseur en tête ≥ 0,25 m, à la base e = (e_t + f h)/(1 + f) (f fruit), épaissie par pas de 5 cm si la flexion ou
- *    l'effort tranchant l'imposent ; mur en T renversé, semelle au niveau de la sous-face du radier.
+ *  - épaisseur en tête ≥ 0,25 m, à la base e = (e_haut + (f_e + f_i) h)/(1 + f_e + f_i) et e ≥ e_m de l'abaque des murs
+ *    en aile (Sétra, PICF-EL, déc. 1991 – éd. juil. 1992, DT422, annexe « prédimensionnement des murs de tête » § 2.1.1,
+ *    p. 75 : courbes f_c28 = 20 et 25 MPa, axe des murs en aile décalé de +0,50 m sur celui des murs en retour ; sinon
+ *    augmenter le fruit intérieur), épaissie par pas de 5 cm si la flexion ou l'effort tranchant l'imposent ; semelle
+ *    d'épaisseur égale à celle du mur à sa base (même § 2.1), fondée au niveau de la sous-face du radier.
  *
  * Calcul (par mètre, section d'enracinement, la plus haute ; armatures et semelle constantes sur toute la longueur) :
  *  - poussée active K_a γ h et surcharge q de remblai : M = K_a γ h³/6 + K_a q h²/2, V = K_a γ h²/2 + K_a q h ;
@@ -29,6 +32,25 @@
 import { eluBael, elsBael, minimumBael, tranchantBael, eluEc2, minimumEc2, tranchantEc2, fissureEc2 } from './sections.js';
 
 const RAD = Math.PI / 180;
+
+/**
+ * Abaque e_m(h) du DT422 p. 75 (numérisé, axe des murs en retour : h de 3,69 à 8,96 m) ; murs en aile : h − 0,50 m.
+ * En deçà de la plage, première valeur ; au-delà, prolongement linéaire de la dernière pente.
+ */
+export const ABAQUE_EM = {
+  25: [[3.69, 0.210], [4.5, 0.263], [5.5, 0.330], [6.0, 0.363], [7.5, 0.475], [8.0, 0.516], [8.5, 0.558], [8.96, 0.597]],
+  20: [[3.69, 0.235], [4.5, 0.295], [5.5, 0.374], [6.0, 0.413], [6.5, 0.455], [7.5, 0.545], [8.0, 0.592], [8.5, 0.642], [8.96, 0.690]],
+};
+const interp = (T, x) => {
+  if (x <= T[0][0]) return T[0][1];
+  for (let k = 1; k < T.length; k++) if (x <= T[k][0]) return T[k - 1][1] + (T[k][1] - T[k - 1][1]) * (x - T[k - 1][0]) / (T[k][0] - T[k - 1][0]);
+  const [a, b] = T.slice(-2); return b[1] + (b[1] - a[1]) * (x - b[0]) / (b[0] - a[0]);
+};
+/** Épaisseur minimale à la base e_m [m] pour un mur de hauteur h (au-dessus de la semelle) ; f_c28 en MPa. */
+export function epaisseurAbaque(h, fc28 = 25, type = 'aile') {
+  const hr = type === 'aile' ? h - 0.50 : h, t = Math.min(1, Math.max(0, (Math.min(25, Math.max(20, fc28)) - 20) / 5));
+  return interp(ABAQUE_EM[20], hr) * (1 - t) + interp(ABAQUE_EM[25], hr) * t;
+}
 const PHIS = [10, 12, 14, 16, 20, 25];
 export const aireHA = (phi, s) => Math.PI * (phi / 2000) ** 2 / s * 1e4;   // cm²/ml
 
@@ -75,7 +97,8 @@ const tranchant = (Vu, d, As, h) => (h.code === 'EC2' ? tranchantEc2(Vu / 10, d,
 export function calculMurAile(hv, o) {
   const { eT = 0.25, fruit = 0.02, Ka = 0.33, gamma = 20, q = 10, phiSol = 30, qadm = 0, c = 0.05, es = 0.40, h: hyp } = o;
   // voile : épaisseur à la base, épaissie tant que flexion ou tranchant ne passent pas
-  let eB = Math.ceil((eT + fruit * hv) / (1 + fruit) * 100 - 1e-6) / 100, V = null;
+  const em = epaisseurAbaque(hv, hyp.fc28, 'aile'), eF = (eT + fruit * hv) / (1 + fruit);
+  let eB = Math.ceil(Math.max(eF, em) * 100 - 1e-6) / 100, V = null;
   const Mg = Ka * gamma * hv ** 3 / 6, Mq = Ka * q * hv ** 2 / 2, Vg = Ka * gamma * hv ** 2 / 2, Vq = Ka * q * hv;
   const Mu = 1.35 * Mg + 1.5 * Mq, Ms = Mg + Mq, Vu = 1.35 * Vg + 1.5 * Vq;
   for (let k = 0; k < 20; k++) {
@@ -120,7 +143,7 @@ export function calculMurAile(hv, o) {
   const repS = choixAile(Math.max(0.25 * Math.max(fT.choix ? fT.choix.As : 0, fP.choix ? fP.choix.As : 0), 0.0005 * es * 1e4));
   const ok = !V.surarme && main && !main.insuffisant && V.T.ok && S.ok && fT.choix && fP.choix;
   return {
-    hv, es, eT: eTop, eB, Ka, gamma, q, phiSol, qadm,
+    hv, es, eT: eTop, eB, eFruit: eF, em, Ka, gamma, q, phiSol, qadm,
     voile: { Mg, Mq, Mu, Ms, Vu, d, As: V.As, main, avant, horiz, T: V.T, wk: V.wk },
     semelle: { ...S, Nu, exu, MtalU, MpatU, talon: fT, patin: fP, rep: repS },
     ok: !!ok,
@@ -135,7 +158,10 @@ export function calculMurAile(hv, o) {
  */
 export function mursEnAile(geo, o) {
   const { W, Lo, L, zT, er, biais } = geo, b = biais * RAD, cb = Math.cos(b), sb = Math.sin(b);
-  const m = o.m > 0 ? o.m : 1.5, ht = o.ht ?? 0.30, hmin = o.hmin ?? 0.50, es = o.es ?? Math.max(0.40, er || 0);
+  const m = o.m > 0 ? o.m : 1.5, ht = o.ht ?? 0.30, hmin = o.hmin ?? 0.50;
+  // semelle d'épaisseur égale à celle du mur à sa base (DT422 § 2.1), sauf épaisseur saisie : point fixe sur e_b(h_v)
+  let es = o.es ?? 0.40;
+  if (o.es == null) for (let k = 0; k < 6; k++) { const eb = calculMurAile(zT + ht - es, { ...o, es }).eB; if (Math.abs(eb - es) < 0.005) break; es = eb; }
   const prop = anglesEsthetiques(Lo, biais);
   const P = (u, x) => [u + x * cb, -x * sb];
   const tete = [cb, -sb];                                                   // direction des têtes (x croissant)
