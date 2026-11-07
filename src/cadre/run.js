@@ -42,7 +42,8 @@ export function parseCadre(d) {
   // murs en aile (src/cadre/murs_aile.js) : implantation du guide Sétra 1992, mur en T renversé
   opts.ailes = { actif: d.cf_ailes !== 'non', angle: num(d.cf_aileAng, null), m: num(d.cf_aileTalus, 1.5), ht: num(d.cf_aileHt, 0.30), hmin: num(d.cf_aileHmin, 0.50),
     eT: Math.max(0.25, num(d.cf_aileEt, 0.25)), fruit: num(d.cf_aileFruit, 0.02), Ka: num(d.cf_aileKa, 0.33), gamma: 10 * num(d.cf_rhoR, 2.0), q: num(d.cf_aileQ, 10),
-    phiSol: num(d.cf_ailePhi, 30), qadm: num(d.cf_aileQadm, 0), es: num(d.cf_aileEs, null) ?? undefined };
+    phiSol: num(d.cf_ailePhi, 30), qadm: num(d.cf_aileQadm, 0), es: num(d.cf_aileEs, null) ?? undefined,
+    lr: num(d.cf_aileRev, 0.50), jonction: d.cf_aileJonction === 'sol2' ? 'sol2' : 'sol1' };
   // Sol : table indicative, ESOL saisi, ou profil d'essais (pressiomètre, pénétromètres statique ou dynamique, SPT)
   const src = d.cf_solSrc || 'table';
   if (src === 'table') hyp.esol = 0;

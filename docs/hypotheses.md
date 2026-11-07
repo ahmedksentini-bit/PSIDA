@@ -593,6 +593,13 @@ Contrôle sur la note « appuis et fondations » de d'un pont-dalle précontrain
 
 - `web/notes_annexes.js` : `dalleTransitionBlocks(st)` (note du pont, chapitre après les appuis, une section par culée portant une dalle) et `mursAileBlocks(cadre)` (note du cadre, chapitre 2, références renumérotées). Mêmes fonctions de calcul que les feuilles APP-DT et OH-AIL-01 : les chiffres de la note et du plan sont identiques par construction.
 
+## 1 septdecies duodevicies. Murs en aile : revanche, zones, jonction (v0.99.35, `test/murs_aile.test.js`)
+
+- Guide 1992 § 3.6.1 : revanche horizontale l_r en tête (champ cf_aileRev, 0,50 m par défaut), l'arête suivant ensuite la trace du talus ; longueur = l_r + chute / pente + 0,20 m.
+- Zones : zone 1 de l'enracinement à la mi-longueur du rampant (calcul à h_v0), zone 2 au-delà (calcul à sa hauteur maximale, épaisseur de semelle conservée) ; une seule zone si la différence de hauteur est inférieure à 0,30 m. Semelle de largeur différente par zone (figure 70 : « largeur variable »).
+- Jonction (figure 71) : solution 1 (défaut) joint ouvert devant l'extrémité du piédroit — la rotation du mur est gênée et la face avant est tendue ; le guide demande un ferraillage sans le chiffrer : PSIDA pose sur 1,00 m des verticales avant de la section des verticales côté terres (disposition forfaitaire). Solution 2 : joint plan, sans ce ferraillage, fruit initial majoré (non chiffré).
+- Non traité : niveau d'assise variable des murs longs (figure 70).
+
 ## 1 octodecies. Textes relus (v0.36)
 
 - **Guide Sétra 2007** (appareils en élastomère fretté) : voir 1 sexdecies ; exemple du § 4.2 reproduit.
