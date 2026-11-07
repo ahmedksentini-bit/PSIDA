@@ -87,7 +87,9 @@ export function geometrieAppui(st, i) {
     // de 0,30 m portée à 0,35–0,45 m si la flexion ou l'effort tranchant l'imposent (src/supports/dalle_transition.js)
     if (C.dalle) {
       const L = Math.min(6, Math.max(3, 0.6 * (C.Hm + out.hGG))), B = Math.max(2, width - 2 * (out.eRet + 0.02)), { c, cS } = enrobagesAppuis(st, sp.mat), al = alphasTrafic(st);
-      const ch = epaisseurDalleTransition({ L, B, hc0: 0.30, pente: 0.05, fck: sp.mat.fck, fyk: sp.mat.fyk, cSup: c, cInf: cS, aQ: al.aQ, aq1: al.aq1 });
+      const psiDT = (G.psiL && G.psiL[i]) || 100;
+      const rw = st.deck && st.deck.g && st.deck.g.roadway, wDT = rw ? rw.y2 - rw.y1 : null;
+      const ch = epaisseurDalleTransition({ L, B, w: wDT, psi: psiDT, hc0: 0.30, pente: 0.05, fck: sp.mat.fck, fyk: sp.mat.fyk, cSup: c, cInf: cS, aQ: al.aQ, aq1: al.aq1 });
       out.dalle = { L, e: ch.e, B };
     } else out.dalle = null;
   } else {

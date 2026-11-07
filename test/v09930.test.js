@@ -45,9 +45,9 @@ test('Dalle de transition 5 m × 0,30 : HA20 e = 0,10 en nappe inférieure (comm
   assert.ok(K.okAs && K.okV, `${K.V.ELU} ≤ ${K.VRdc}`);
   assert.ok(K.rep.As >= 0.2 * K.inf.As - 1e-12);
   assert.ok(K.M.ELU > 1.35 * K.M.G && K.M.TS > 0 && K.M.LM2 > 0);
-  // 6 m : l'épaisseur passe à 0,35 m
+  // 6 m : l'épaisseur est portée au-delà de 0,30 m (calcul de plaque compris)
   const E6 = epaisseurDalleTransition({ L: 6, B: 11.36, hc0: 0.30, fck: 30, fyk: 500, cSup: 0.05, cInf: 0.07 });
-  assert.equal(E6.e, 0.35); assert.ok(E6.K.okAs && E6.K.okV);
+  assert.ok(E6.e > 0.30); assert.ok(E6.K.okAs && E6.K.okV);
 });
 
 test('Plan de la dalle de transition : culées C0 et Cn, repères, barres ≤ 12 m, feuille valide, contrôles', () => {
@@ -134,4 +134,25 @@ test('v0.99.31 — corbeau (EC2 J.3) et trafic de la dalle dans les efforts d\'e
   assert.ok(Math.abs(q.dN - (q.RU + Math.max(0, q.RTSs - q.RTSd))) < 1e-9);
   assert.equal(st.supports.lines[0].BAEL.dalleQ, undefined);
   assert.match(feuilleSVG(planDalleTransition(st, 0, {})), /Corbeau/);
+});
+
+test('v0.99.36 — dalle de transition en plaque : contrôle sous charge uniforme, moments transversaux, moment principal = max(bandes, plaque)', async () => {
+  const { plaqueDalleTransition, calculDalleTransition, epaisseurDalleTransition } = await import('../src/supports/dalle_transition.js');
+  // charge uniforme seule (trafic nul) sur une dalle très large : m_x = g L_c²/8, m_y = ν m_x au centre
+  const U = plaqueDalleTransition({ L: 5, e: 0.30, B: 40, hc0: 0.30, aQ: [0, 0, 0], aq1: 0 });
+  const r = U.res.find(q => Math.abs(q.y - 20) < 0.6 && Math.abs(q.s - U.Lc / 2) < 0.2);
+  assert.ok(Math.abs(r.G.mx / (U.g * U.Lc ** 2 / 8) - 1) < 0.01);
+  assert.ok(Math.abs(r.G.my / (0.2 * U.g * U.Lc ** 2 / 8) - 1) < 0.02);
+  // trafic : la plaque donne au moins autant que les bandes à mi-portée ; aciers transversaux ≥ 20 % des principaux
+  const P = plaqueDalleTransition({ L: 5, e: 0.35, B: 11.36, w: 10, hc0: 0.30 });
+  const K = calculDalleTransition({ L: 5, e: 0.35, B: 11.36, w: 10, hc0: 0.30, fck: 30, fyk: 500, cSup: 0.05, cInf: 0.07, plaque: P });
+  assert.ok(K.M.Q >= K.M.bandes - 1e-9 && K.M.Q >= K.M.plaque - 1e-9);
+  assert.ok(K.transv && K.rep.As >= Math.max(0.2 * K.inf.As, K.transv.inf.requis) - 1e-12);
+  assert.ok(P.inf.ELU > 0 && P.sup.ELU < 0);
+  // biais : plaque en parallélogramme, résultats finis
+  const Pb = plaqueDalleTransition({ L: 4, e: 0.30, B: 11.36, w: 10, psi: 70, hc0: 0.30 });
+  assert.ok(Number.isFinite(Pb.inf.ELU) && Pb.mxMax.Q > 0);
+  // épaisseur : 0,30 m jusqu'à 4 m, portée au-delà sous LM1 (plaque)
+  assert.equal(epaisseurDalleTransition({ L: 4, B: 11.36, w: 10, hc0: 0.30, pente: 0.05, fck: 30, fyk: 500, cSup: 0.05, cInf: 0.07 }).e, 0.30);
+  assert.ok(epaisseurDalleTransition({ L: 5, B: 11.36, w: 10, hc0: 0.30, pente: 0.05, fck: 30, fyk: 500, cSup: 0.05, cInf: 0.07 }).e >= 0.35);
 });
