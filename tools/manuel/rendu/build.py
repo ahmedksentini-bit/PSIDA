@@ -8,7 +8,7 @@ chaque image par « [image: texte alternatif] » ; l'export HTML donne, dans le 
 chaque image. Le script substitue les images, convertit les blocs ```latex en formules $$…$$ et les
 indices X\\_ab en X~ab~, puis écrit doc_pd.md (Markdown pandoc avec page de titre).
 
-    python3 build.py export.md export.html dossier_images sortie/ "Novembre 2026 — PSIDA version 0.99.38"
+    python3 build.py export.md export.html dossier_images sortie/ "Novembre 2026 — PSIDA version 0.99.40"
 
 Puis : pandoc (voir make.sh) et node pdf.cjs.
 """

@@ -10,13 +10,13 @@ Publication d'une édition :
     python3 tools/manuel/pdf.py /tmp/manuel_docs.pdf    # signets, images allégées, métadonnées → PSIDA_Manuel.pdf
     npm run manuel:check                                # valeurs citées par les chapitres 31 à 34
 
-Rendu local (secours, et méthode de l'édition 0.99.38) : quand l'export PDF de Docs est refusé (document trop lourd
+Rendu local (secours, et méthode de l'édition 0.99.40) : quand l'export PDF de Docs est refusé (document trop lourd
 pour le service d'impression, plus de 200 images), on part des exports Markdown et HTML du même document (même
 révision) et des images nommées par leur identifiant de blob :
 
     # 2. images : pour chaque <img src="blob/…"> de l'export HTML, lire le blob dans Docs (→ identifiant d'asset),
     #    retrouver le fichier d'origine par son sha256 (list_assets de l'artefact) et le copier en <blob>.<ext>
-    tools/manuel/rendu/make.sh export.md export.html images/ "Novembre 2026 — PSIDA version 0.99.38" /tmp/brut.pdf
+    tools/manuel/rendu/make.sh export.md export.html images/ "Novembre 2026 — PSIDA version 0.99.40" /tmp/brut.pdf
     python3 tools/manuel/pdf.py /tmp/brut.pdf
 
 `rendu/build.py` substitue les images (l'export Markdown les remplace par « [image: …] », dans l'ordre de l'export

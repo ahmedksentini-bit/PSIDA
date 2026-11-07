@@ -787,8 +787,11 @@ rédigeant : bordereaux des appuis (longueurs et masses des barres découpées),
 dans les notes et les transversales en deux L, éclatement horizontal des abouts de la dalle précontrainte, allongement d'un
 câble tendu par l'extrémité opposée à C0, état non fissuré homogénéisé de la flèche des dalles armées, seuil XS2 du
 tableau 4.3N, réactions de la vue 3D du grillage, contrôle des cerces de pieux.
-v0.99.38 : manuel unique — les chapitres 31 à 34 et l'annexe G sont intégrés au manuel d'utilisation, qui redevient un
-seul polycopié (avant-propos, chapitres 1 à 34, annexes A à H dont l'historique des versions 0.99.1 à 0.99.38), rédigé
+v0.99.38 : accueil — boutons « Choisir cet ouvrage » alignés en bas à gauche des cartes, au même niveau sur une rangée.
+v0.99.39 : « Enregistrer » ajoute au nom du fichier la date et l'heure locales (projet_2026-11-07_09h54.json) ; l'horodatage
+d'un enregistrement précédent est remplacé, pas cumulé (web/projet_nom.js).
+v0.99.40 : manuel unique — les chapitres 31 à 34 et l'annexe G sont intégrés au manuel d'utilisation, qui redevient un
+seul polycopié (avant-propos, chapitres 1 à 34, annexes A à H dont l'historique des versions 0.99.1 à 0.99.40), rédigé
 dans Claude Docs et exporté en PDF ; plus de complément fusionné. tools/manuel/pdf.py met en forme l'export (signets,
 images allégées) ; tools/manuel/build.mjs devient un contrôle de non-régression des 83 valeurs à la main de ces
 chapitres (npm run manuel:check, sans KaTeX), à relancer à chaque version. Correction : le résumé en clair de l'onglet
