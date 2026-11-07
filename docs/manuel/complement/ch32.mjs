@@ -19,7 +19,7 @@ import { antiCheminement } from '../../../src/supports/bearings1337.js';
 import { coefficientsBiais } from '../../../src/plate/biais_appuis.js';
 
 const NOTE = JSON.parse(readFileSync(fileURLToPath(new URL('../../../test/data/ec6_note.json', import.meta.url)), 'utf8'));
-const NOE = { pt_geo: 'dims', pt_spans: '33', pt_n: '4', pt_b1: '3.28', pt_hd: '0.30', pt_road: '-4, 4', pt_foot: '-6.56,-4 ; 4,6.56', pt_lines: '18 @ -6.87 ; 18 @ 6.87', pt_bands: '1.79 sur -6.56,6.56', pt_type: 'BP', pt_fck: '40' };
+const VREF = { pt_geo: 'dims', pt_spans: '33', pt_n: '4', pt_b1: '3.28', pt_hd: '0.30', pt_road: '-4, 4', pt_foot: '-6.56,-4 ; 4,6.56', pt_lines: '18 @ -6.87 ; 18 @ 6.87', pt_bands: '1.79 sur -6.56,6.56', pt_type: 'BP', pt_fck: '40' };
 
 export default async function chapitre32(k) {
   const { fr } = k;
@@ -84,10 +84,10 @@ export default async function chapitre32(k) {
     C40/50. Le tableau 4.4N donne $c_{min,dur} = 35$ mm (S5, XC4), d'où $c_{min} = \\max(\\phi ; c_{min,dur} ; 10) = 35$ mm et
     $c_{nom} = 45$ mm au nu : l'axe des aciers longitudinaux doit être à $45 + 20/2 = 55$ mm du parement. C'est l'enrobage
     par défaut du pont-dalle depuis la version 0.99.25.`);
-  const Dp = durabilitePrecontrainte({ expo: 'XC4', fck: 40, vie: 100, gaine: 80 }), rN = computePoutres(parsePoutres({ ...formDefaults(), ...NOE })), G = rN.durabP;
+  const Dp = durabilitePrecontrainte({ expo: 'XC4', fck: 40, vie: 100, gaine: 80 }), rN = computePoutres(parsePoutres({ ...formDefaults(), ...VREF })), G = rN.durabP;
   k.p(`**Gaines de précontrainte** (§ 4.4.1.2 (3), version 0.99.26) : $c_{nom,p} = \\max(c_{min,b} ; c_{min,dur,p} ; 10) + \\Delta c_{dev}$ avec
     $c_{min,b}$ = diamètre de la gaine (80 mm au plus) en post-tension, 1,5 Ø du toron en pré-tension, et $c_{min,dur,p}$ du
-    tableau 4.5N. Pour le pont de Noé (VIPP de 33 m, 12T15S en gaine de 80 mm, XC4, 100 ans, C40/50) : S = 4 + 2 − 1 = S5,
+    tableau 4.5N. Pour le tablier VIPP de 4 × 33 m (VIPP de 33 m, 12T15S en gaine de 80 mm, XC4, 100 ans, C40/50) : S = 4 + 2 − 1 = S5,
     $c_{min,dur,p} = 45$ mm, d'où $c_{nom,p} = \\max(80 ; 45) + 10 = 90$ mm. Une âme de 0,20 m laisse
     $(200 − 80)/2 = 60$ mm de part et d'autre de la gaine relevée : il faut $b_w \\ge 2 \\times 90 + 80 = 260$ mm.`);
   k.cmp([
@@ -170,15 +170,15 @@ export default async function chapitre32(k) {
     torsion, le grillage doit retrouver Courbon. Pour quatre poutres à 3,28 m ($\\sum y^2 = ${t(S2, 3)}$ m²) et une charge sur la
     poutre de rive (e = −4,92 m) : $\\bar K = 4\\,(1/4 + e\\,y_k/\\sum y^2)$.`);
   k.cmp([0, 1, 2, 3].map(i => [`$\\bar K$ poutre ${i + 1}`, Kc[i], Kg[i], '—', 3, 0.005, 1e-6]), { legende: 'Grillage à entretoises rigides et méthode de Courbon' });
-  const rN2 = computePoutres(parsePoutres({ ...formDefaults(), ...NOE })), T = grillageTravee(rN2, 33), gg = T.g, im = gg.m / 2;
+  const rN2 = computePoutres(parsePoutres({ ...formDefaults(), ...VREF })), T = grillageTravee(rN2, 33), gg = T.g, im = gg.m / 2;
   const cG = casGrillage(T, { cas: 'UDL', y: -2.5 }), Mm = Array.from({ length: gg.n }, (_, kk) => cG.M[im * gg.n + kk]).reduce((a, v) => a + v, 0);
   const qU = 9 * 8, sR = cG.R.reduce((a, r) => a + r.R, 0);
-  k.p(`Second contrôle, sur la vue 3D (version 0.99.28) du pont de Noé : l'UDL de 9 kN/m² sur la chaussée de 8 m charge le tablier de
+  k.p(`Second contrôle, sur la vue 3D (version 0.99.28) d'un tablier VIPP de 4 × 33 m : l'UDL de 9 kN/m² sur la chaussée de 8 m charge le tablier de
     $q = 72$ kN/m. La somme des moments des poutres à mi-travée doit valoir le moment isostatique $q L^2/8$, et la somme des
     réactions la charge $q L$, quelle que soit la répartition :`);
-  k.cmp([['$\\sum M(L/2)$', qU * 33 ** 2 / 8, Mm, 'kN·m', 1, 0.002], ['$\\sum R$', qU * 33, sR, 'kN', 1, 0.002]], { legende: 'Vue 3D du grillage, UDL sur le pont de Noé' });
+  k.cmp([['$\\sum M(L/2)$', qU * 33 ** 2 / 8, Mm, 'kN·m', 1, 0.002], ['$\\sum R$', qU * 33, sR, 'kN', 1, 0.002]], { legende: 'Vue 3D du grillage, UDL sur un tablier VIPP de 4 × 33 m' });
   k.p(`(Avant la version 0.99.37, la charge répartie posée sur les lignes d'appui n'entrait pas dans les réactions de la vue 3D :
-    il manquait $q\\,dx$. Les moments n'étaient pas touchés.) Avec ses vraies raideurs, le grillage du pont de Noé donne
+    il manquait $q\\,dx$. Les moments n'étaient pas touchés.) Avec ses vraies raideurs, le grillage d'un tablier VIPP de 4 × 33 m donne
     $\\bar K = 2{,}71$ à la poutre de rive chargée sur son axe, contre 2,50 par Guyon-Massonnet. Le grillage reste une lecture
     de la répartition ; les justifications se font aux sections.`);
 

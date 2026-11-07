@@ -118,7 +118,7 @@ export function meanDeflection(h, pieces = 64) {
  */
 export function coefK({ b, L, e, y, nu = 0, alpha = 1, alphaMode = 'massonnet' }) {
   if (alpha < 1 - 1e-9 && alphaMode === 'massonnet') {
-    // interpolation de Massonnet K = K₀ + (K₁ − K₀)√α (pratique SETRA, PONTYPE/PAP : reproduite à 10⁻³ sur le Pont de Noé)
+    // interpolation de Massonnet K = K₀ + (K₁ − K₀)√α (pratique SETRA, PONTYPE/PAP : reproduite à 10⁻³ sur le VIPP de référence)
     const k0 = coefK({ b, L, e, y, nu, alpha: 0, alphaMode: 'exact' }), k1 = coefK({ b, L, e, y, nu, alpha: 1 });
     return k0 + (k1 - k0) * Math.sqrt(alpha);
   }

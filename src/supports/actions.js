@@ -1,6 +1,6 @@
 /**
  * Efforts horizontaux en tête des appuis — répartition par rigidités (pratique SETRA, programme PSH ; note des appuis du
- * Pont de Noé) et combinaisons des efforts en tête (BAEL 91 annexe D / Fascicule 61 ; EN 1990 annexe A2).
+ * VIPP de référence) et combinaisons des efforts en tête (BAEL 91 annexe D / Fascicule 61 ; EN 1990 annexe A2).
  *
  * Souplesse horizontale d'une ligne d'appui : s = s_néoprène + s_appui, s_néoprène = T_e/(n G a b) (G = 0,9 MPa différé,
  * 1,8 MPa instantané), s_appui = souplesse du fût et de sa fondation ramenée en tête.

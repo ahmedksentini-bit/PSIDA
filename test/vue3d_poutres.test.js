@@ -7,8 +7,8 @@ import { grillageTravee, casGrillage, GRANDEURS_GRILLAGE } from '../src/beams/gr
 import { grillagePoutres } from '../src/beams/grillage.js';
 import { sceneGrillage } from '../web/vue3d_poutres.js';
 
-const NOE = { pt_geo: 'dims', pt_spans: '33', pt_n: '4', pt_b1: '3.28', pt_hd: '0.30', pt_road: '-4, 4', pt_foot: '-6.56,-4 ; 4,6.56', pt_lines: '18 @ -6.87 ; 18 @ 6.87', pt_bands: '1.79 sur -6.56,6.56', pt_type: 'BP', pt_fck: '40' };
-const r = computePoutres(parsePoutres({ ...formDefaults(), ...NOE }));
+const VREF = { pt_geo: 'dims', pt_spans: '33', pt_n: '4', pt_b1: '3.28', pt_hd: '0.30', pt_road: '-4, 4', pt_foot: '-6.56,-4 ; 4,6.56', pt_lines: '18 @ -6.87 ; 18 @ 6.87', pt_bands: '1.79 sur -6.56,6.56', pt_type: 'BP', pt_fck: '40' };
+const r = computePoutres(parsePoutres({ ...formDefaults(), ...VREF }));
 
 test('Grillage complet : Σ réactions = charge, Σ M de mi-travée = moment isostatique, flèche E I', () => {
   const T = grillageTravee(r, 33), g = T.g;
@@ -38,6 +38,6 @@ test('Scène 3D du grillage : surfaces, âmes, entretoises, couleurs bornées ; 
     assert.ok(S.cols.every(c => c >= 0 && c <= 1) && S.tri.every(Number.isFinite));
     assert.equal(S.n, (T.g.m + 1) * T.g.n); assert.equal(S.roues.length, 4);
   }
-  const c = computePoutres(parsePoutres({ ...formDefaults(), ...NOE, pt_spans: '33, 33', pt_continu: 'on' }));
+  const c = computePoutres(parsePoutres({ ...formDefaults(), ...VREF, pt_spans: '33, 33', pt_continu: 'on' }));
   if (c.continu) assert.throws(() => grillageTravee(c, 33), /indépendantes/);
 });

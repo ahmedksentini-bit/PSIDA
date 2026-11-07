@@ -1,6 +1,6 @@
 /**
  * Modèle PSH (src/supports/psh.js) comparé à la sortie du programme PSH (SETRA/CETE de l'Ouest, v. 1.11) de la pile P3 du
- * Pont de Noé (note des appuis, A.P.D. mai 2012) : 3 pieux Ø 1,20 m sur une file, L = 30 m, pied libre, tête encastrée ;
+ * VIPP de référence (note des appuis, A.P.D. 2012) : 3 pieux Ø 1,20 m sur une file, L = 30 m, pied libre, tête encastrée ;
  * sol E_M = 1800 t/m², α = 0,66 → k_i = 6756 t/m³ ; fût 1,50 × 8,50 m, H = 18,50 m ; chevêtre 1,00 m (11,64 × 2,40) ;
  * semelle 1,50 m ; E béton 3,281·10⁶ (instantané) / 1,104·10⁶ t/m² (soutenu). Unités de la note : t, m.
  */
@@ -13,11 +13,11 @@ const rel = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol * Math.abs(b), 
 const seg = E => [{ h: 18.5, E, A: 1.5 * 8.5, I: 8.5 * 1.5 ** 3 / 12 }, { h: 1.0, E, A: 11.64 * 2.4, I: 11.64 * 2.4 ** 3 / 12 }];
 const model = E => { const wp = winklerPile({ L: 30, D: 1.2, E, k: 6756 }); return { wp, g: pileGroup([0, 0, 0].map(x => ({ x })), wp) }; };
 
-test('PSH Noé P3 — module de Ménard k_i = 6756 t/m³', () => {
+test('PSH réf. P3 — module de Ménard k_i = 6756 t/m³', () => {
   rel(menardReaction({ EM: 1800, alpha: 0.66, B: 1.2 }).k, 6756, 2e-4, 'k_i');
 });
 
-test('PSH Noé P3 — matrices de souplesse de la tête d\'appui (instantanée et soutenue)', () => {
+test('PSH réf. P3 — matrices de souplesse de la tête d\'appui (instantanée et soutenue)', () => {
   const ref = { 3.281e6: [3.148e-6, 5.957e-6, 1.039e-4, 2.104e-3], 1.104e6: [9.356e-6, 1.517e-5, 2.489e-4, 4.821e-3] };
   for (const [E, r] of Object.entries(ref)) {
     const { g } = model(+E), F = headFlexibility({ group: g, segments: seg(+E), hs: 1.5 });
@@ -27,7 +27,7 @@ test('PSH Noé P3 — matrices de souplesse de la tête d\'appui (instantanée e
   }
 });
 
-test('PSH Noé P3 — cas C1/C8 ELU : efforts en tête de pieu et profil le long du pieu', () => {
+test('PSH réf. P3 — cas C1/C8 ELU : efforts en tête de pieu et profil le long du pieu', () => {
   const mi = model(3.281e6), ms = model(1.104e6), lev = 21, Vs = 1426.98 - 114.28;
   const ri = mi.g.respond(114.28, 3.86 * lev, 3.86), rs = ms.g.respond(Vs, -4.71 * lev, -4.71);
   const p = k => ri.piles[0][k] + rs.piles[0][k];

@@ -9,7 +9,7 @@ import { grillagePoutres } from '../src/beams/grillage.js';
 import { beamDeck } from '../src/beams/index.js';
 import { EXEMPLES, donnees } from '../tools/exemples.mjs';
 
-const NOE = { pt_geo: 'dims', pt_spans: '33', pt_n: '4', pt_b1: '3.28', pt_hd: '0.30', pt_road: '-4, 4', pt_foot: '-6.56,-4 ; 4,6.56', pt_lines: '18 @ -6.87 ; 18 @ 6.87', pt_bands: '1.79 sur -6.56,6.56', pt_type: 'BP', pt_fck: '40' };
+const VREF = { pt_geo: 'dims', pt_spans: '33', pt_n: '4', pt_b1: '3.28', pt_hd: '0.30', pt_road: '-4, 4', pt_foot: '-6.56,-4 ; 4,6.56', pt_lines: '18 @ -6.87 ; 18 @ 6.87', pt_bands: '1.79 sur -6.56,6.56', pt_type: 'BP', pt_fck: '40' };
 
 test('Tableau 4.5N (précontrainte) et c_min,b des gaines (Ø, 80 mm au plus) et des torons (1,5 Ø)', () => {
   // S4 (50 ans, C30) : ligne S4 du tableau 4.5N = 10, 25, 35, 40, 45, 50, 55
@@ -23,13 +23,13 @@ test('Tableau 4.5N (précontrainte) et c_min,b des gaines (Ø, 80 mm au plus) et
 });
 
 test('VIPP : enrobage des gaines (âme de 20 cm, 12T15S : 60 mm < 90 mm), relèvement b₀ = 26 cm ; plans à c_nom', async () => {
-  const r = computePoutres(parsePoutres({ ...formDefaults(), ...NOE }));
+  const r = computePoutres(parsePoutres({ ...formDefaults(), ...VREF }));
   assert.equal(r.durab.fck, 40);
   const G = r.durabP, ame = G.items.find(q => q.k === 'ame');
   assert.equal(G.cnom, 90); assert.ok(Math.abs(ame.mm - 60) < 1e-6); assert.equal(ame.ok, false);
   assert.ok(Math.abs(G.bwMin - 0.26) < 1e-9);
   assert.ok(G.items.find(q => q.k === 'bas').ok);
-  const r2 = computePoutres(parsePoutres({ ...formDefaults(), ...NOE, pt_b0v: '0.26' }));
+  const r2 = computePoutres(parsePoutres({ ...formDefaults(), ...VREF, pt_b0v: '0.26' }));
   assert.ok(r2.durabP.items.find(q => q.k === 'ame').ok);
   const { ctxDurabilite } = await import('../web/poutres_plans.js');
   const ctx = ctxDurabilite(r);
@@ -38,7 +38,7 @@ test('VIPP : enrobage des gaines (âme de 20 cm, 12T15S : 60 mm < 90 mm), relèv
   const F = planFerraillageVIPP(r.spans[0].beams[0].vipp, {}, { ctx });
   assert.match(JSON.stringify(F), /enrobage 4,5 cm = c_nom/);
   // PRAD : torons à 5 cm de la sous-face (axe) : 42 mm < 55 mm
-  const p = computePoutres(parsePoutres({ ...formDefaults(), ...NOE, pt_type: 'PRAD', pt_spans: '25' }));
+  const p = computePoutres(parsePoutres({ ...formDefaults(), ...VREF, pt_type: 'PRAD', pt_spans: '25' }));
   assert.equal(p.durabP.D.mode, 'pre'); assert.equal(p.durabP.cnom, 55);
   assert.equal(p.durabP.items.find(q => q.k === 'bas').ok, false);
 });
@@ -83,12 +83,12 @@ test('Grillage : dalle isotrope (α = 1) ≈ Guyon-Massonnet à 3 % ; entretoise
 });
 
 test('Grillage dans le tablier à poutres : coefficients et comparaison à Guyon ; entretoises BA dans le grillage', () => {
-  const r = computePoutres(parsePoutres({ ...formDefaults(), ...NOE, pt_repart: 'grillage' })), G = r.spans[0].grillage;
+  const r = computePoutres(parsePoutres({ ...formDefaults(), ...VREF, pt_repart: 'grillage' })), G = r.spans[0].grillage;
   assert.equal(G.reference, 'Guyon-Massonnet'); assert.equal(G.comparaison.length, 4);
   const rive = G.comparaison[0];
   assert.ok(rive.grillage[0] > rive.reference[0], 'grillage : poutre de rive plus chargée que Guyon (4 poutres discrètes)');
   assert.ok(Math.abs(rive.grillage.reduce((t, v) => t + v, 0) - 4) < 1e-6);
-  const r0 = computePoutres(parsePoutres({ ...formDefaults(), ...NOE }));
+  const r0 = computePoutres(parsePoutres({ ...formDefaults(), ...VREF }));
   assert.equal(r0.spans[0].grillage, null);
   const ba = computePoutres(parsePoutres({ ...formDefaults(), pt_type: 'BA', pt_geo: 'rect', pt_spans: '15', pt_n: '4', pt_b1: '2.40', pt_hd: '0.22', pt_entInt: '2', pt_repart: 'grillage' }));
   const Gb = ba.spans[0].grillage;

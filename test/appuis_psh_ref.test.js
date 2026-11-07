@@ -1,5 +1,5 @@
 /**
- * Appuis et fondations — note de calcul du Pont de Noé (COMETE/ICI, A.P.D. mai 2012, programme PSH) : 4 travées isostatiques
+ * Appuis et fondations — note de calcul d'un VIPP de référence (A.P.D. 2012, programme PSH) : 4 travées isostatiques
  * de 33 m, lignes C1 (x = 0), P2, P3, P4, C5 (x = 132 m). Valeurs de la note en t et t·m (souplesses en m/t).
  * Formules NF P 94-261 (tableau des k_p : guide Cerema 2015, tab. 11).
  */
@@ -17,14 +17,14 @@ const sNeo = { inst: 10 * neopreneFlexibility({ n: 4, a: 0.4, b: 0.4, Te: 0.053,
 const sApp = [[0.1016, 0.2137], [0.4927, 0.9818], [0.5437, 1.09], [0.5437, 1.09], [0.5437, 1.09]].map(([i, d]) => ({ inst: i * 1e-3, diff: d * 1e-3 }));
 const dist = horizontalDistribution(xs.map((x, i) => ({ x, sNeo, sApp: sApp[i] })));
 
-test('Noé — souplesses des appareils, rigidités des lignes et centre de déformation', () => {
+test('Ouvrage de référence — souplesses des appareils, rigidités des lignes et centre de déformation', () => {
   rel(sNeo.inst, 0.4601e-3, 1e-3, 's néoprène instantané'); rel(sNeo.diff, 0.9201e-3, 1e-3, 's néoprène différé');
   [1780, 1050, 996, 996, 996].forEach((k, i) => rel(dist.K.inst[i], k, 1e-3, `K_inst ligne ${i + 1}`));
   [882, 526, 497, 497, 497].forEach((k, i) => rel(dist.K.diff[i], k, 2e-3, `K_diff ligne ${i + 1}`));
   rel(dist.x0.inst, 56.80, 1e-3, 'x0 instantané'); rel(dist.x0.diff, 56.905, 1e-3, 'x0 différé');
 });
 
-test('Noé — freinage et déformations imposées réparties', () => {
+test('Ouvrage de référence — freinage et déformations imposées réparties', () => {
   dist.braking(30).forEach((h, i) => rel(h, [9.179, 5.411, 5.136, 5.136, 5.136][i], 2e-3, `freinage Bc ligne ${i + 1}`));
   // A(l) : la note prend a1 = 0,75 (erreur : 2 voies → a1 = 1) ; on reproduit sa valeur avec ses coefficients
   rel(brakingF61Deck({ Ltot: 132, Lc: 8, a1: 0.75, a2: 0.875 }).A, 14.038 * 10, 2e-3, 'freinage A(l) total [kN]');
@@ -35,7 +35,7 @@ test('Noé — freinage et déformations imposées réparties', () => {
   rel(dist.imposed(3e-4).disp[0], 1.39e-2, 5e-3, 'déplacement TLD appareil C1');
 });
 
-test('Noé — pile P3 : combinaisons en tête (C1/C8), descente en pied, flambement, ferraillage', () => {
+test('Ouvrage de référence — pile P3 : combinaisons en tête (C1/C8), descente en pied, flambement, ferraillage', () => {
   const RF = dist.imposed(3.5e-4).H[2] + dist.imposed(2.5e-4).H[2], TLD = dist.imposed(3e-4).H[2];
   const comb = headCombinationsBAEL({ G: { N: 255 }, Q: [{ label: 'A(l)', N: 71.20, H: 2.403, gU: 1.605, gS: 1.2 }], RF: { H: RF }, TLD: { H: TLD } });
   const elu = comb.find(c => c.label === 'ELU A(l)'), els = comb.find(c => c.label === 'ELS A(l)');
@@ -55,7 +55,7 @@ test('Noé — pile P3 : combinaisons en tête (C1/C8), descente en pied, flambe
   rel(buckling({ Lf: 6, h: 0.8, Ev: 10819 }).lambda, 25.98, 1e-3, 'λ voile de culée');
 });
 
-test('Noé — culée C1 : descente, pieux (2 files de 4), bielles', () => {
+test('Ouvrage de référence — culée C1 : descente, pieux (2 files de 4), bielles', () => {
   const d = descendLoads({ N: 211.29, H: 59.31, Hf: 3.0, hc: 1.45, Wchev: 91.71, Wfut: 59.67, Wsem: 137.69, hs: 1.0 });
   rel(d.base.N, 415.66, 1e-4, 'N haut de semelle'); rel(d.base.M, 263.93, 1e-4, 'M haut de semelle');
   rel(d.found.N, 601.55, 1e-4, 'N bas de semelle'); rel(d.found.M, 323.24, 1e-4, 'M bas de semelle');
@@ -68,10 +68,10 @@ test('Noé — culée C1 : descente, pieux (2 files de 4), bielles', () => {
   assert.equal(t.thetaOk, false); rel(t.theta, 36.2, 3e-3, 'angle des bielles');
 });
 
-test('Noé — module de réaction de Ménard, minimum des pieux', () => {
+test('Ouvrage de référence — module de réaction de Ménard, minimum des pieux', () => {
   rel(menardReaction({ EM: 1800, alpha: 0.66, B: 1.2 }).k, 6756, 1e-3, 'k Ø 1,20');
   rel(menardReaction({ EM: 1800, alpha: 0.66, B: 0.8 }).k, 9120, 1e-3, 'k Ø 0,80');
-  rel(sigmaSBAEL({ fe: 400, fc28: 25, fiss: 'FP' }), 201.6, 1e-3, 'σ̄_s FP Noé'); rel(sigmaSBAEL({ fe: 400, fc28: 25 }), 161.3, 1e-3, 'σ̄_s FTP Noé');
+  rel(sigmaSBAEL({ fe: 400, fc28: 25, fiss: 'FP' }), 201.6, 1e-3, 'σ̄_s FP réf.'); rel(sigmaSBAEL({ fe: 400, fc28: 25 }), 161.3, 1e-3, 'σ̄_s FTP réf.');
   rel(pileMinSteel({ D: 1.2 }) * 1e4, 56.55, 1e-3, 'A_min Ø 1,20'); rel(pileMinSteel({ D: 0.8 }) * 1e4, 25.13, 1e-3, 'A_min Ø 0,80');
 });
 
@@ -173,7 +173,7 @@ test('Appuis seuls (tablier quelconque) : réactions saisies, séisme, note', as
     ss_lines: ['1275;1275;710;650;900;50;900;600', ...Array(3).fill('2550;2550;1100;900;1300;80;1300;1000'), '1275;1275;710;650;900;50;900;600'].join('\n'),
     ap_pileH: '18.5', ap_pileB: '1.5', ap_pileLv: '8.5', ap_found: 'pieux', ap_nFiles: '1', ap_nPile: '3', ap_pileD: '1.2', ap_Lpile: '30', ap_seisme: 'on' };
   const st = computeStandalone(parseStandalone(d), parseSupports(d));
-  // appareils 4 × 400 × 400 × 4(12 + 3) : souplesse 0,4601·10⁻³ m/t (note Noé) ; culée sur pieux : + souplesse PSH de la
+  // appareils 4 × 400 × 400 × 4(12 + 3) : souplesse 0,4601·10⁻³ m/t (note de référence) ; culée sur pieux : + souplesse PSH de la
   // fondation (mur rigide), K = 1/(s_néoprène + s_appui)
   const sup = st.supports, f0 = sup.lines[0].BAEL.found.psh.flex.inst[2][2];
   assert.ok(f0 > 0);
