@@ -18,6 +18,9 @@ const pagesText = f => { const n = +execFileSync('pdfinfo', [f]).toString().matc
   await p.waitForTimeout(3000);
   await p.emulateMedia({ media: 'print' });
   const fit = await p.evaluate(() => {
+    // 0. largeurs relatives de pandoc (<colgroup>, souvent 25 % partout pour un tableau à lignes longues) : retirées,
+    //    le navigateur répartit les colonnes selon leur contenu (table-layout: auto)
+    for (const cg of document.querySelectorAll('table colgroup')) cg.remove();
     // 1. formules en display trop larges : police réduite jusqu'à tenir dans la largeur utile (sinon Chromium réduit toute la page)
     let n = 0;
     for (const d of document.querySelectorAll('.katex-display')) {

@@ -3,22 +3,27 @@
 Manuel d'utilisation : met en forme le PDF exporté du document Claude Docs (polycopié unique, chapitres 1 à 34 et
 annexes A à H) avant de le publier sous docs/manuel/PSIDA_Manuel.pdf.
 
-    python3 tools/manuel/pdf.py export_docs.pdf [--sortie docs/manuel/PSIDA_Manuel.pdf] [--px 1100] [--qualite 80]
+    python3 tools/manuel/pdf.py export_docs.pdf [--sortie docs/manuel/PSIDA_Manuel.pdf] [--px 1100] [--px-plan 1700] [--qualite 60]
 
 Trois opérations, sans rien ajouter au contenu :
   1. signets : un par chapitre (« Chapitre N — … »), par annexe (« Annexe X … ») et par section (« N.M … »), repérés
      dans le texte des pages ;
-  2. allègement : images recompressées en JPEG, largeur bornée à --px pixels (0 : images laissées telles quelles) ;
+  2. allègement : images recompressées en JPEG, largeur bornée à --px pixels, --px-plan pour les plans et dessins au
+     trait (très larges, fond blanc) dont les cotes doivent rester lisibles (--px 0 : images laissées telles quelles) ;
   3. métadonnées (titre, auteur) et ouverture sur les signets.
+
+Taille : le site est publié par Cloudflare Pages, qui refuse tout fichier de plus de 25 MiB (26 214 400 octets).
+Le script échoue (code 2) si le PDF produit dépasse LIMITE_MO = 24 Mo : baisser --qualite ou --px et recommencer.
 
 Il n'y a plus de complément à fusionner : tout le manuel vit dans le document Docs. Les valeurs citées par les
 chapitres 31 à 34 se contrôlent à part (npm run manuel:check). Prérequis : python3 avec pypdf et Pillow.
 """
-import argparse, io, os, re, sys, unicodedata
+import argparse, io, os, re, shutil, subprocess, sys, unicodedata
 from pathlib import Path
 from pypdf import PdfReader, PdfWriter
 
 RACINE = Path(__file__).resolve().parents[2]
+LIMITE_MO = 24  # Cloudflare Pages : 25 MiB par fichier au plus ; marge d'un peu plus d'1 Mo
 MANUEL = RACINE / 'docs/manuel/PSIDA_Manuel.pdf'
 
 # « Chapitre 12 — … » ou « 28. … » ; « Annexe B … » ou « B. … » ; « Avant-propos »
@@ -78,13 +83,24 @@ def reperer(lecteur):
     return titres
 
 
-def alleger(ecrivain, px, qualite):
+def est_plan(im):
+    """Plan ou dessin au trait : image très large (rapport > 2,4), à fond blanc à plus de 80 %. Ses cotes et repères
+    sont trop petits pour 1100 px : il garde une largeur plus grande (--px-plan)."""
+    if im.width / im.height <= 2.4:
+        return False
+    g = im.convert('L').resize((max(1, im.width // 4), max(1, im.height // 4)))
+    blancs = sum(n for v, n in enumerate(g.histogram()) if v > 235)
+    return blancs > 0.8 * g.width * g.height
+
+
+def alleger(ecrivain, px, qualite, px_plan=1700):
     from PIL import Image
     n = 0
     for page in ecrivain.pages:
         for img in page.images:
             im = img.image
-            if im.width <= px and img.name.lower().endswith(('.jpg', '.jpeg')):
+            lim = px_plan if est_plan(im) else px
+            if im.width <= lim and img.name.lower().endswith(('.jpg', '.jpeg')):
                 continue  # déjà allégée : la recompresser l'alourdirait
             if im.mode in ('RGBA', 'LA', 'P'):
                 fond = Image.new('RGB', im.size, 'white')
@@ -92,9 +108,9 @@ def alleger(ecrivain, px, qualite):
                 im = fond
             elif im.mode != 'RGB':
                 im = im.convert('RGB')
-            if im.width > px:
-                im = im.resize((px, round(im.height * px / im.width)), Image.LANCZOS)
-            img.replace(im, quality=qualite)
+            if im.width > lim:
+                im = im.resize((lim, round(im.height * lim / im.width)), Image.LANCZOS)
+            img.replace(im, quality=qualite, optimize=True)
             n += 1
     return n
 
@@ -104,7 +120,8 @@ def main():
     ap.add_argument('export', help='PDF exporté du document Claude Docs')
     ap.add_argument('--sortie', default=str(MANUEL))
     ap.add_argument('--px', type=int, default=1100)
-    ap.add_argument('--qualite', type=int, default=80)
+    ap.add_argument('--qualite', type=int, default=60)
+    ap.add_argument('--px-plan', type=int, default=1700, help='largeur maximale des plans et dessins au trait')
     a = ap.parse_args()
 
     lecteur = PdfReader(a.export)
@@ -113,7 +130,7 @@ def main():
         print('attention : chapitre 34 introuvable dans l\'export — le document Docs est-il complet ?', file=sys.stderr)
     w = PdfWriter(clone_from=lecteur)
     w._root_object.pop('/Outlines', None)  # signets éventuels de l'export : remplacés par ceux du sommaire repéré
-    n = alleger(w, a.px, a.qualite) if a.px > 0 else 0
+    n = alleger(w, a.px, a.qualite, a.px_plan) if a.px > 0 else 0
     parent = None
     for niv, titre, page in titres:
         if niv == 0:
@@ -127,9 +144,18 @@ def main():
     with open(tmp, 'wb') as f:
         w.write(f)
     os.replace(tmp, a.sortie)
+    if shutil.which('qpdf'):
+        # flux recompressés au niveau 9 et objets regroupés en flux d'objets : environ 5 % de moins
+        subprocess.run(['qpdf', '--recompress-flate', '--compression-level=9', '--object-streams=generate',
+                        a.sortie, str(tmp)], check=True)
+        os.replace(tmp, a.sortie)
     nc = sum(1 for niv, *_ in titres if niv == 0)
     print(f'{a.sortie} : {len(lecteur.pages)} pages, {nc} chapitres et annexes, {len(titres) - nc} sections en signets, '
           f'{n} images allégées ({os.path.getsize(a.sortie) / 1e6:.1f} Mo)')
+    if os.path.getsize(a.sortie) > LIMITE_MO * 1e6:
+        print(f'ERREUR : {os.path.getsize(a.sortie) / 1e6:.1f} Mo > {LIMITE_MO} Mo (Cloudflare Pages refuse tout fichier de plus '
+              f'de 25 MiB) : relancer avec --qualite ou --px plus bas', file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == '__main__':
