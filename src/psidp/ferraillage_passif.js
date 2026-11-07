@@ -43,7 +43,13 @@ export function rebarDP(st) {
     if (V.Ae > 0) { const phi = 14, n = nBarres(V.Ae, phi, 4), nl = Math.max(2, Math.ceil(0.9 * d / 0.15)), parL = Math.ceil(n / nl); frettage.push(add({ face: 'vert', dir: 'vertical', role: 'frettage', phi, s: Math.max(0.10, (W - 2 * c) / parL), ...fx(xa + sgn * 0.1 * d, 0.9 * d), len: h - 2 * c, totalLen: h - 2 * c + 2 * 10 * phi / 1000, count: parL * nl, pieces: 1, label: `About ${cote} — éclatement vertical (A_e = ${(V.Ae * 1e4).toFixed(1)} cm², ${nl} files)`, note: `zone de régularisation d = ${d.toFixed(2)} m` })); }
     // éclatement horizontal : barres transversales sur la largeur, réparties sur la longueur de régularisation horizontale
     const Ah = Math.max(Hz.Ae || 0, Hz.As || 0);
-    if (Ah > 0) { const phi = 12, n = Math.max(2, nBarres(Ah, phi, 2)), lh = Math.max(Hz.L || 0.3, 0.3); frettage.push(add({ face: 'inf', dir: 'trans', role: 'frettage', phi, s: Math.max(0.10, lh / n), ...fx(xa, lh), len: W - 2 * c, totalLen: W - 2 * c + 2 * 10 * phi / 1000, count: n, pieces: 1, label: `About ${cote} — éclatement horizontal (A_e,h = ${(Ah * 1e4).toFixed(1)} cm²)`, note: `barres transversales sur ${lh.toFixed(2)} m` })); }
+    // longueur de régularisation horizontale L_zone (au moins 0,30 m) ; diamètre porté de HA12 à HA25 pour que les barres
+    // y tiennent à 0,10 m d'entraxe au moins ; au-delà, la zone est allongée
+    if (Ah > 0) {
+      const lz = Math.max(Hz.Lzone || 0, 0.3), cap = Math.floor(lz / 0.10 + 1e-9) + 1;
+      const phi = [12, 14, 16, 20, 25].find(f => nBarres(Ah, f, 2) <= cap) || 25, n = nBarres(Ah, phi, 2), sh = Math.max(0.10, lz / (n - 1)), lh = (n - 1) * sh;
+      frettage.push(add({ face: 'inf', dir: 'trans', role: 'frettage', phi, s: sh, ...fx(xa, lh), len: W - 2 * c, totalLen: W - 2 * c + 2 * 10 * phi / 1000, count: n, pieces: 1, label: `About ${cote} — éclatement horizontal (A_e,h = ${(Ah * 1e4).toFixed(1)} cm²)`, note: `${n} barres transversales HA${phi} sur ${lh.toFixed(2)} m (zone de régularisation horizontale ${lz.toFixed(2)} m)` }));
+    }
     // bielle d'appui : armatures inférieures d'about
     const Ai = sd.bielle && sd.bielle.AsInf;
     if (Ai > 0) { const b = chooseBars(Ai / W, { phiMin: 16, phiMax: 32, sMax: 0.20, sMin: 0.10 }), len = Math.max(1.5, d + 0.8); frettage.push(add({ face: 'inf', dir: 'long', role: 'frettage', phi: b.phi, s: b.s, ...fx(xa, len), len, totalLen: len, count: Math.floor((W - 2 * c) / b.s) + 1, pieces: 1, hookL: gauche, hookR: !gauche, label: `About ${cote} — armatures inférieures d'about (bielle, A_s,inf = ${(Ai * 1e4).toFixed(1)} cm²)`, note: 'ancrées par retour au-delà de l\'axe d\'appui' })); }

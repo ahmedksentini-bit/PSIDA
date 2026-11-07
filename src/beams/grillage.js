@@ -106,7 +106,7 @@ export function grillagePoutres({ n, b1, L, Ip, Kp, hd, m = 20, entretoises = []
   const chargePoint = (F, x, e, P) => {
     const t = Math.min(m, Math.max(0, x / dx)), i0 = Math.min(m - 1, Math.floor(t)), r = t - i0;
     for (const [i, c] of [[i0, 1 - r], [i0 + 1, r]]) {
-      if (c <= 0 || i === 0 || i === m) continue;     // charge directement sur l'appui : sans effet sur le tablier
+      if (c <= 0) continue;                            // sur une ligne d'appui : u ≈ 0 (pénalisation), la charge passe dans la réaction
       const q = P * c, y0 = ys[0], yn = ys[n - 1];
       if (e <= y0 || e >= yn) { const k = e <= y0 ? 0 : n - 1; F[id(i, k)] += q; F[id(i, k) + 1] += q * (e - ys[k]); }
       else { let k = 0; while (k < n - 2 && e > ys[k + 1]) k++; const h = hermite(e - ys[k], b1); F[id(i, k)] += q * h[0]; F[id(i, k) + 1] += q * h[1]; F[id(i, k + 1)] += q * h[2]; F[id(i, k + 1) + 1] += q * h[3]; }

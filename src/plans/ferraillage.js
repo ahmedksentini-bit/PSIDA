@@ -249,7 +249,7 @@ function notesFerraillage(st, G, R) {
     `2. Mandrins de cintrage (EC2 § 8.3) : Ø ≤ 16 : 4Ø ; Ø > 16 : 7Ø (r = ${phis.map(p => `${fr(rayonCintrage(p), 0)} mm pour Ø${p}`).slice(0, 3).join(', ')}…).`,
     '3. Longueurs de coupe selon l\'ISO 4066 (codes de forme 00, 11, 21, 51), arrondies aux 25 mm supérieurs.',
     '4. Longitudinaux : lit extérieur ; transversaux : lit intérieur, retours 10Ø aux bords libres.',
-    ...couperLigne(`5. Recouvrements l₀ (EN 1992-1-1 § 8.7.3) : ${texteRecouvrements(phis, m)} ; décalés d'une pièce à l'autre (pièces courantes en longueur commerciale, transversales de plus de 12 m en deux L).`),
+    ...couperLigne(`5. Recouvrements l₀ (EN 1992-1-1 § 8.7.3) : ${texteRecouvrements(phis, m, { hauteur: st.deck.h })} ; décalés d'une pièce à l'autre (pièces courantes en longueur commerciale, transversales de plus de 12 m en deux L).`),
     `6. Masse du bordereau : ${milliers(R.masse)} kg (métré du calcul : ${milliers(rb.totalMass)} kg, retours compris ici).`,
     `7. Coupe longitudinale : échelles distinctes des longueurs et des hauteurs.`,
     ...(rb.dp ? [...couperLigne(`8. Dalle précontrainte : aciers passifs du calcul PSI-DP (peau, non-fragilité, zones tendues)${rb.dp.needAt ? '' : ', sans armatures d\'effort tranchant (non requises)'} ; zones d'ancrage selon BPEL 91 annexe 4 / EN 1992-1-1 § 8.10.3 ; frettage local de chaque ancrage selon l'agrément du procédé ; câblage : plan TAB-CAB-01.`)] : []),

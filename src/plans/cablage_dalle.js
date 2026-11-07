@@ -21,7 +21,7 @@ import { couperLigne, classeBeton } from './notes_durabilite.js';
 const fr = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : '—');
 const milliers = x => Math.round(x).toLocaleString('fr-FR').replace(/[  ]/g, ' ');
 
-/** Ordre de mise en tension symétrique à partir du centre : n = 20 → 11, 10, 12, 9, …, 20, 1. */
+/** Ordre de mise en tension symétrique à partir du centre : n = 21 → 11, 12, 10, 13, 9… ; n = 20 → 11, 10, 12, 9, …, 20, 1. */
 export function ordreTension(n) {
   const out = [], c = Math.ceil(n / 2);
   if (n % 2) { out.push(c); for (let k = 1; k < c; k++) out.push(c + k, c - k); }
@@ -57,11 +57,15 @@ export function donneesCablage(st) {
   let im = xs.length - 1; if (deux) { im = 0; for (let i = 0; i < xs.length; i++) if (Math.abs(sL[i] - sR[i]) < Math.abs(sL[im] - sR[im])) im = i; }
   const integ = (s, a, b) => { let t = 0; for (let i = a; i < b; i++) t += (s[i] + s[i + 1]) / 2 * Math.hypot(xs[i + 1] - xs[i], yAxe[i + 1] - yAxe[i]); return t; };
   const sig0 = dp.sigma0 * 1000, dA = xs[0] - uA, dB = uB - xs.at(-1);
-  const allG = (integ(sL, 0, im) + sig0 * dA) / Ep, allD = deux ? (integ(sR, im, xs.length - 1) + sig0 * dB) / Ep : 0;
+  // une seule extrémité active : tout le câble s'allonge vers elle ; la longueur hors modèle côté passif est à la tension
+  // qui y arrive après frottement
+  const N = xs.length - 1, ends = dp.bp.ends, droite = ends === 'right';
+  const allG = deux ? (integ(sL, 0, im) + sig0 * dA) / Ep : droite ? 0 : (integ(sL, 0, N) + sig0 * dA + sL[N] * dB) / Ep;
+  const allD = deux ? (integ(sR, im, N) + sig0 * dB) / Ep : droite ? (integ(sR, 0, N) + sig0 * dB + sR[0] * dA) / Ep : 0;
   const An = dp.anchors || {}, perRow = An.perRow || n, rows = An.rows || 1, sp = An.spacing || 0.3, edge = An.edge || 0.2;
   const plaques = [];
   for (let rI = 0; rI < rows; rI++) for (let k = 0; k < perRow && plaques.length < n; k++) plaques.push({ n: plaques.length + 1, y: (k - (perRow - 1) / 2) * sp, z: yAxe[0] + (rI - (rows - 1) / 2) * Math.max(U.plateB || 0.25, 0.3) });
-  return { dp, G, U, n, h, phiG, sec, xs, yAxe, pts, ordonnees, rem, Ldev, allG, allD, deux, xFixe: xs[im], plaques, sp, edge, rows, perRow, sig0: dp.sigma0, P0: dp.sigma0 * U.Ap * 1000, x0, uA, uB };
+  return { dp, G, U, n, h, phiG, sec, xs, yAxe, pts, ordonnees, rem, Ldev, allG, allD, deux, droite, xFixe: xs[im], plaques, sp, edge, rows, perRow, sig0: dp.sigma0, P0: dp.sigma0 * U.Ap * 1000, x0, uA, uB };
 }
 
 function vueLongitudinale(C) {
@@ -114,9 +118,11 @@ export function planCablageDalle(st, cartouche = {}) {
       ['Câbles', `${C.n} × ${U.label}`], ['Section d\'un câble A_p', `${fr(U.Ap * 1e4, 1)} cm²`], ['f_pk / f_p0,1k', `${fpk} / ${fp01} MPa`], ['E_p', `${milliers(bp.Ep)} MPa`],
       ['Gaine (diamètre intérieur)', `Ø ${fr(C.phiG * 1000, 0)} mm`], ['Tension à l\'ancrage σ_p0', `${fr(dp.sigma0, 0)} MPa`], ['Force à l\'ancrage P_0 par câble', `${milliers(C.P0)} kN`],
       ['Frottement en courbe f (μ) / en ligne φ (k)', `${fr(bp.f, 2)} / ${fr(bp.phi, 4)} m⁻¹`], ['Recul d\'ancrage g', `${fr(bp.g * 1000, 0)} mm`],
-      ['Mise en tension', C.deux ? 'aux deux extrémités' : 'à une extrémité (C0)'], ['Résistance du béton requise', `f_cj ≥ ${fr(dp.fcj, 0)} MPa (j = ${bp.j} j)`],
-      ['Longueur développée (hors surlongueurs)', `${fr(C.Ldev)} m`], ['Allongement théorique côté C0', `${fr(C.allG * 1000, 0)} mm`],
-      ...(C.deux ? [['Allongement théorique côté opposé', `${fr(C.allD * 1000, 0)} mm`], ['Point fixe (x depuis C0)', `${fr(C.xFixe)} m`]] : []),
+      ['Mise en tension', C.deux ? 'aux deux extrémités' : C.droite ? 'à une extrémité (côté opposé à C0)' : 'à une extrémité (C0)'], ['Résistance du béton requise', `f_cj ≥ ${fr(dp.fcj, 0)} MPa (j = ${bp.j} j)`],
+      ['Longueur développée (hors surlongueurs)', `${fr(C.Ldev)} m`],
+      ...(C.deux || !C.droite ? [['Allongement théorique côté C0', `${fr(C.allG * 1000, 0)} mm`]] : []),
+      ...(C.deux || C.droite ? [['Allongement théorique côté opposé', `${fr(C.allD * 1000, 0)} mm`]] : []),
+      ...(C.deux ? [['Point fixe (x depuis C0)', `${fr(C.xFixe)} m`]] : []),
       ['Ordre de mise en tension', ordre.length > 12 ? `${ordre.slice(0, 6).join('-')}-…-${ordre.slice(-2).join('-')}` : ordre.join('-')],
     ] };
   const N = ['NOTES',

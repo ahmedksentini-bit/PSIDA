@@ -10,6 +10,7 @@
  *   - dalles de transition : flexion et effort tranchant sans armatures, barres ≤ 12 m ;
  *   - mandrins : EC2 § 8.3 (4 Ø jusqu'à Ø16, 7 Ø au-delà) par construction du bordereau.
  */
+import { anchorage } from '../rebar.js';
 import { bordereau, longueurCoupe, rayonCintrage } from './bordereau.js';
 import { reperesAppui } from './ferraillageAppuis.js';
 import { geometrieAppui, appuisDisponibles } from './appuis.js';
@@ -31,7 +32,7 @@ export function controlesPlans(st) {
     const L = bordereau(st), longs = L.filter(l => l.code !== '99' && l.L > LMAX + 1e-6);
     add('Tablier', 'Barres ≤ 12 m (longueur commerciale)', `${L.length - longs.length}/${L.length} repères`, longs.length ? `trop longues : ${longs.map(l => l.repere).join(', ')}` : '12 m', !longs.length);
     if (D) {
-      const hMax = st.deck.h * 1000 - 2 * D.cnom, hors = L.filter(l => (l.code === '21' || l.code === '51') && l.role !== 'long' && Math.min(l.A || 0, l.C || 1e9) + l.phi > hMax + 1);
+      const hMax = st.deck.h * 1000 - 2 * D.cnom, hors = L.filter(l => (l.code === '21' || l.code === '51') && Math.min(l.A || 0, l.C || 1e9) + l.phi > hMax + 1);
       const hr = L.filter(l => l.code === '21' || l.code === '51');
       add('Tablier', 'Retours, cadres, épingles dans h − 2 c_nom', `${hr.length - hors.length}/${hr.length} repères`, `≤ ${fr(hMax / 10, 1)} cm hors tout${hors.length ? ` — dépassent : ${hors.map(l => l.repere).join(', ')}` : ''}`, !hors.length);
     }
@@ -53,7 +54,7 @@ export function controlesPlans(st) {
     }
     if (A.pieux) {
       const cer = marks.find(q => q.elem === 'pieux' && q.code === '99');
-      if (cer) { const Dmax = A.Dp - 2 * cP, dev = Math.PI * Dmax * 1000; add(nom, 'Cerces des pieux dans Ø − 2 c_nom', `${fr((cer.dims.A || 0) / 1000)} m développés`, `≤ π (Ø − 2 c_nom) + l₀ ≈ ${fr(dev / 1000)} m + recouvrement`, (cer.dims.A || 0) <= dev + 2.5 * 50 * cer.phi + 1); }
+      if (cer) { const Dmax = A.Dp - 2 * cP, dev = Math.PI * Dmax * 1000; const l0 = anchorage(cer.phi, { fck: A.mat.fck, fyk: A.mat.fyk }).l0 * 1000; add(nom, 'Cerces des pieux dans Ø − 2 c_nom', `${fr((cer.dims.A || 0) / 1000)} m développés`, `≤ π (Ø − 2 c_nom) + l₀ = ${fr(dev / 1000)} + ${fr(l0 / 1000)} m`, (cer.dims.A || 0) <= dev + l0 + 1); }
     }
     if (Dd) {
       add(nom, 'Enrobages des plans = c_nom du calcul', `${Math.round(c * 1000)} / ${Math.round(cS * 1000)}${A.pieux ? ` / ${Math.round(cP * 1000)}` : ''} mm`, `élévations ${Dd.elev.cnom}, semelles ${Dd.cnomSem}${A.pieux ? `, pieux ${Dd.cnomPieu}` : ''} mm`, c * 1000 >= Dd.elev.cnom - 1e-6 && cS * 1000 >= Dd.cnomSem - 1e-6 && (!A.pieux || cP * 1000 >= Dd.cnomPieu - 1e-6));
