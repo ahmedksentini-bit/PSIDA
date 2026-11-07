@@ -791,7 +791,9 @@ v0.99.38 : manuel unique — les chapitres 31 à 34 et l'annexe G sont intégré
 seul polycopié (avant-propos, chapitres 1 à 34, annexes A à H dont l'historique des versions 0.99.1 à 0.99.38), rédigé
 dans Claude Docs et exporté en PDF ; plus de complément fusionné. tools/manuel/pdf.py met en forme l'export (signets,
 images allégées) ; tools/manuel/build.mjs devient un contrôle de non-régression des 83 valeurs à la main de ces
-chapitres (npm run manuel:check, sans KaTeX), à relancer à chaque version.
+chapitres (npm run manuel:check, sans KaTeX), à relancer à chaque version. Correction : le résumé en clair de l'onglet
+Tablier annonce, quand le gradient n'est pas saisi, le gradient automatique EN 1991-1-5 (+12,3 / −8 °C pour 8 cm de
+revêtement) au lieu de la valeur de repli 12 / −6 °C, qui reste celle du Fascicule 61.
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à

@@ -2,7 +2,7 @@
  * Schémas « ce que vous saisissez » : élévation, coupe transversale et vue en plan dessinées en direct à partir du
  * formulaire (sans lancer le calcul), avec les cotes des valeurs saisies ; aide contextuelle des champs.
  */
-import { notionalLanes } from '../src/loads_ec.js';
+import { notionalLanes, gradientEN1991_1_5 } from '../src/loads_ec.js';
 import { classePont } from '../src/loads_f61.js';
 import { parseRail } from '../src/pipeline.js';
 
@@ -60,7 +60,7 @@ export const HELP = {
   hEdge: 'Chanfreins de l\'intrados : hauteur de la dalle au bord libre (joue) [m] ; vide = sans chanfrein. Réduit la largeur comprimée sur appuis.',
   joue: 'Largeur horizontale du chanfrein, du bord libre jusqu\'à l\'intrados plein [m].',
   withTherm: 'Gradient thermique EN 1991-1-5 (courbure imposée sur la poutre continue) et tassements aléatoires d\'appui (δ et −δ sur deux appuis voisins, module différé).',
-  dT: 'Différence de température entre faces supérieure et inférieure : échauffement (+12 °C) puis refroidissement (−6 °C).',
+  dT: 'Différence de température entre faces supérieure et inférieure : échauffement puis refroidissement [°C]. Vide : EN 1991-1-5 (15 / −8 °C × k_sur selon le revêtement, soit +12,3 / −8 °C pour 8 cm) pour les Eurocodes, +12 / −6 °C pour le Fascicule 61.',
   EI: 'Module E du béton [MPa] et inertie totale I de la section [m⁴] ; vide = 2b·h³/12. Servent aux effets thermiques, aux tassements, aux rotations d\'appui et à la largeur équivalente Be = 12 I/h³ du biais.',
   delta: 'Tassement aléatoire d\'un appui [m] (CHAMOA : 0,01 m).',
   phiFluage: 'Coefficient de fluage pour le module différé E/(1 + φ) utilisé pour les tassements.',
@@ -354,7 +354,7 @@ export function summaryHTML(g) {
   items.push(`<b>Biais</b> : ψ = ${fr(g.psi)} gr${g.psi >= 100 ? ' (droit)' : ` ; aciers transversaux ${g.transDir === 'perp' ? 'perpendiculaires aux bords libres' : 'parallèles aux lignes d\'appui'}`}${g.tirantAir ? ` ; hauteur libre ${fr(g.tirantAir)} m` : ''}.`);
   if (g.fck) items.push(g.rail ? `<b>Matériaux</b> : C${g.fck}/${g.fck + 10}, aciers ${g.fyk} MPa, enrobage à l'axe ${fr(g.cover * 100)} cm, φ ${g.phi} / ${g.phiT} mm, wk ≤ ${g.wk} mm (Eurocodes).`
     : `<b>Matériaux</b> : C${g.fck}/${g.fck + 10} (fc28 = ${g.fck} MPa), aciers ${g.fyk} MPa, enrobage à l'axe ${fr(g.cover * 100)} cm, φ ${g.phi} / ${g.phiT} mm, wk ≤ ${g.wk} mm, fissuration BAEL ${g.fiss} ; revêtement ${fr(g.tRev)} m.`);
-  items.push(`<b>Modèle</b> : ν = ${g.nu}, ordonnées y = ${g.ys.map(v => fr(v)).join(', ')} ; ${g.withTherm ? `gradient ${g.dT[0] ?? 12} / ${g.dT[1] ?? -6} °C et tassements ${fr((g.delta || 0) * 100)} cm (E = ${g.E || 34000} MPa${g.I ? `, I = ${g.I} m⁴` : ''})` : 'sans gradient thermique ni tassements'}.`);
+  items.push(`<b>Modèle</b> : ν = ${g.nu}, ordonnées y = ${g.ys.map(v => fr(v)).join(', ')} ; ${g.withTherm ? `gradient ${g.dT.length >= 2 ? `${fr(g.dT[0])} / ${fr(g.dT[1])} °C` : (t => `EN 1991-1-5 ${fr(t.heat)} / ${fr(t.cool)} °C (Fascicule 61 : 12 / −6 °C)`)(gradientEN1991_1_5(Number.isFinite(g.tRev) ? g.tRev : 0.08))} et tassements ${fr((g.delta || 0) * 100)} cm (E = ${g.E || 34000} MPa${g.I ? `, I = ${g.I} m⁴` : ''})` : 'sans gradient thermique ni tassements'}.`);
   items.push(`<b>Appareils d'appui</b> : ${g.nBearings || Math.max(2, Math.round((g.width || 0) / 3))} par ligne, point fixe ${g.xFixed === null ? 'au milieu' : `à x = ${fr(g.xFixed)} m`}, ε = ${g.epsSlow}, ΔT = ${g.dTu} °C.`);
   return `<ul class="checks">${items.map(t => `<li>${t}</li>`).join('')}</ul>`;
 }
