@@ -37,12 +37,18 @@ def reperer(lecteur):
     """Titres (niveau, libellé, page) dans l'ordre du document ; une section n'est retenue que si elle appartient au
     chapitre en cours et que son numéro croît, ce qui écarte les « 1.5 m » des tableaux."""
     pages = [[norm(l) for l in (p.extract_text() or '').splitlines()] for p in lecteur.pages]
+    # pages de sommaire : la plupart des lignes finissent par un numéro de page ; ailleurs, un titre peut finir par
+    # un nombre (« G. Contrôles des chapitres 31 à 34 ») sans être une ligne de sommaire
+    def est_sommaire(lignes):
+        ls = [l for l in lignes if l]
+        return len(ls) >= 5 and sum(bool(TDM.search(l)) for l in ls) >= 0.6 * len(ls)
+    sommaire = {i for i, lignes in enumerate(pages) if est_sommaire(lignes)}
     # numéros portés par une forme longue (« Chapitre 3 — », « Annexe B ») : leur forme courte n'est jamais un titre
-    longs = {m.group(1) or m.group(3) for lignes in pages for l in lignes if not TDM.search(l) and (m := CHAP.match(l)) and (m.group(1) or m.group(3))}
+    longs = {m.group(1) or m.group(3) for i, lignes in enumerate(pages) for l in lignes if not (i in sommaire and TDM.search(l)) and (m := CHAP.match(l)) and (m.group(1) or m.group(3))}
     titres, vus, chap, dern, n_chap, n_ann, annexes = [], set(), None, 0, 0, ord('A') - 1, False
     for i, lignes in enumerate(pages):
         for ligne in lignes:
-            if not ligne or len(ligne) > 120 or TDM.search(ligne):
+            if not ligne or len(ligne) > 120 or (i in sommaire and TDM.search(ligne)):
                 continue  # ligne de sommaire (« … 12 ») : pas un titre
             if ligne == 'Annexes':
                 annexes = True
