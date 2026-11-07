@@ -797,6 +797,9 @@ images allégées) ; tools/manuel/build.mjs devient un contrôle de non-régress
 chapitres (npm run manuel:check, sans KaTeX), à relancer à chaque version. Correction : le résumé en clair de l'onglet
 Tablier annonce, quand le gradient n'est pas saisi, le gradient automatique EN 1991-1-5 (+12,3 / −8 °C pour 8 cm de
 revêtement) au lieu de la valeur de repli 12 / −6 °C, qui reste celle du Fascicule 61.
+v0.99.41 : coupes transversales (schémas de saisie et du guide, figures des notes) — les appareils d'appui sont dessinés
+aux ordonnées du calcul (entraxe 2b / (n − 0,1), src/bearings.js bearingOrdinates) au lieu de 1 m du bord libre, qui les
+plaçait sous le départ d'un chanfrein de 1 m ; le schéma de saisie affiche ces ordonnées.
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à

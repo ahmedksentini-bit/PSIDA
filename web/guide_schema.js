@@ -8,6 +8,7 @@
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
 import { notionalLanes } from '../src/loads_ec.js';
 import { classePont } from '../src/loads_f61.js';
+import { bearingOrdinates } from '../src/bearings.js';
 const fr = (v, d = 2) => (Number.isFinite(v) ? Number(v).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: d }) : '—');
 let UID = 0;
 /** Groupe repéré par les noms des champs du formulaire (surbrillance au survol d'un champ de l'onglet Projet). */
@@ -287,9 +288,10 @@ export function guideCrossSectionSVG(g, opt = {}) {
   }
   if (R) s += '</g>' + voiesFerrees(R, { Y, Zs, h, b });
   // appareils d'appui
-  const nb = g.nBearings || Math.max(2, Math.round(g.width / 3)), e0 = Math.min(1, b / 3), pitch = nb > 1 ? (2 * b - 2 * e0) / (nb - 1) : 0;
+  // mêmes ordonnées que le calcul (plaque, réactions, plans) : entraxe 2b / (n − 0,1), sous la sous-face pleine
+  const nb = g.nBearings || Math.max(2, Math.round(g.width / 3));
   s += '<g data-k="nBearings">';
-  for (let k = 0; k < nb; k++) { const X = Y(-b + e0 + k * pitch); s += `<rect x="${X - 8}" y="${Zs(h) + 1}" width="16" height="6" fill="${INK}"/>`; }
+  for (const y of bearingOrdinates({ width: 2 * b, n: nb })) { const X = Y(y); s += `<rect x="${X - 8}" y="${Zs(h) + 1}" width="16" height="6" fill="${INK}"/>`; }
   s += L_(Y(-b), Zs(h) + 7, Y(b), Zs(h) + 7, 0.5, 'stroke-dasharray="10 4 2 4"');
   s += '</g>';
   // axe et cotes

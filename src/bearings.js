@@ -69,6 +69,16 @@ export function bearingSpacing({ width, psi = 100, n }) {
 }
 
 /**
+ * Ordonnées transversales y des appareils d'une ligne d'appui (distance normale à l'axe, symétriques) : celles du calcul
+ * (plaque, réactions, plans) — entraxe le long de la ligne a = bearingSpacing, soit a·sin ψ = 2b / (n − 0,1) en travers.
+ */
+export function bearingOrdinates({ width, n }) {
+  if (!(n > 1)) return [0];
+  const e = bearingSpacing({ width, psi: 100, n });
+  return Array.from({ length: n }, (_, k) => (k - (n - 1) / 2) * e);
+}
+
+/**
  * Coefficients d'inégalité de répartition des réactions entre les appareils d'une ligne (PSI-DA 68 § 2.4.2, repris par
  * PSIDA.EL p. 31) : réaction de l'appareil le plus chargé = coefficient × réaction moyenne R/n.
  *   CP : k0 = n·e/E, k = max(k0 ; k0 + n/2·(1 − k0)) ;  A : idem avec la largeur chargeable ;
