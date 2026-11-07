@@ -1,5 +1,5 @@
 /**
- * Kit de rédaction du complément au manuel d'utilisation.
+ * Kit des chapitres 31 à 34 du manuel d'utilisation : calculs à la main recodés et comparés à PSIDA.
  *
  * Chaque chapitre est un module qui reçoit un objet « k » et y empile des blocs HTML (titres, paragraphes, équations,
  * tableaux, figures). Les valeurs de PSIDA sont calculées au moment de la construction ; les calculs « à la main »
@@ -10,8 +10,9 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 
 const require = createRequire(import.meta.url);
-const KATEX_DIR = process.env.KATEX_DIR || '/tmp/mbuild/node_modules/katex';
-const katex = require(path.join(KATEX_DIR, 'dist/katex.js'));
+// KaTeX n'est chargé que si KATEX_DIR est donné (rendu HTML des formules, pour relire un chapitre) : le contrôle des
+// valeurs (tools/manuel/build.mjs, npm run manuel:check) n'en a pas besoin et garde le TeX brut.
+const katex = process.env.KATEX_DIR ? require(path.join(process.env.KATEX_DIR, 'dist/katex.js')) : null;
 
 const ESP = ' ';   // espace fine insécable (milliers)
 
@@ -29,6 +30,7 @@ const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(
 
 /** Formule KaTeX (les virgules décimales s'écrivent {,} dans le TeX). */
 export function tex(t, display = false) {
+  if (!katex) return `<code class="tex">${esc(t)}</code>`;
   return katex.renderToString(t.replace(/\u202f/g, '\\,'), { displayMode: display, throwOnError: true, strict: 'ignore', output: 'html' });
 }
 
