@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Captures d'écran du complément au manuel : PSIDA servi en local, formulaire rempli, calcul lancé, élément photographié.
+Captures d'écran des chapitres 31 à 34 du manuel : PSIDA servi en local, formulaire rempli, calcul lancé, élément photographié.
 Images JPEG (1 100 px de large au plus) écrites dans docs/manuel/complement/img/.
 
     python3 tools/manuel/captures.py

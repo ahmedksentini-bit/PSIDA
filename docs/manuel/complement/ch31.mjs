@@ -55,7 +55,7 @@ export default async function chapitre31(k) {
     ['Travées (poutres BA)', 'continues', 'poutre continue d\'inertie constante sur appuis simples indéformables'],
     ['Entretoises intermédiaires par travée', '1, 2, 2, 1', '0 : Guyon-Massonnet ; 1 ou plus : méthode de Courbon. Un nombre pour toutes les travées ou une liste'],
     ['Épaisseur des entretoises intermédiaires', '0,38 m', 'épaisseur de l\'entretoise calculée (PSI-BA : 0,15 m au moins avec du HA25, 0,20 m avec du HA32)'],
-    ['Épaisseur des entretoises sur piles', '0,50 m', 'largeur e de la réduction au nu (§ 31.7)'],
+    ['Épaisseur des entretoises sur piles', '0,50 m', 'largeur e de la réduction au nu (§ 31.6)'],
     ['Gousset d\'appui : épaisseur d\'âme, longueur', 'vide', 'âme élargie au droit des piles ; vide : b₀, sur 0,15 L de part et d\'autre'],
   ], { legende: 'Champs des poutres BA continues', larg: [32, 16, 52] });
   k.table(['Donnée', 'Valeur'], [
@@ -256,7 +256,7 @@ export default async function chapitre31(k) {
     (mandrin de 4 φ, EN 1992-1-1 § 8.3) :`);
   k.eq(String.raw`L = 2\,(A + B + C) - 2{,}5\,r - 5\,\phi = 2 \times ${cad.A + cad.B + cad.C} - 2{,}5 \times ${rr} - 5 \times ${cad.phi} = ${Lc}\ \text{mm}`);
   k.cmp([['Longueur de coupe du cadre d\'âme', Lc, cad.L, 'mm', 0]], { legende: 'Façonnage d\'un cadre' });
-  k.p(`Les barres de plus de 12 m sont coupées en pièces égales recouvertes (§ 33.4). Pour l'exemple, la nomenclature totalise
+  k.p(`Les barres de plus de 12 m sont coupées en pièces égales recouvertes (§ 33.6). Pour l'exemple, la nomenclature totalise
     ${fr(N.parElement.poutre / 1000, 1)} t pour les trois poutres, ${fr(N.parElement.hourdis / 1000, 1)} t pour le hourdis,
     ${fr(N.parElement.intermediaire / 1000, 2)} t pour les entretoises intermédiaires et ${fr(N.parElement.about / 1000, 2)} t
     pour les entretoises d'about. La feuille de ferraillage reprend les masses du bordereau.`);
