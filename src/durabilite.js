@@ -41,8 +41,9 @@ const T45 = [
   [15, 30, 40, 45, 50, 55, 60],   // S5
   [20, 35, 45, 50, 55, 60, 65],   // S6
 ];
-// seuils de résistance du tableau 4.3N (réduction d'une classe), par colonne
-const SEUIL = [30, 30, 35, 40, 40, 40, 45];
+// seuils de résistance du tableau 4.3N (réduction d'une classe), par classe d'exposition : XS2 est rangée avec XD2 dans le
+// tableau 4.4N mais avec XD3 et XS3 (C45/55) dans le tableau 4.3N
+const SEUIL = { X0: 30, XC1: 30, XC2: 35, XC3: 35, XC4: 40, XD1: 40, XD2: 40, XS1: 40, XD3: 45, XS2: 45, XS3: 45 };
 
 /** Liste de classes « XC4, XA2 » ou « XC4/XA2 » → classes reconnues, dans l'ordre normalisé. */
 export function lireExpositions(txt) {
@@ -66,7 +67,8 @@ export function durabilite({ expo = 'XC4', fck = 30, phi = 16, vie = 100, dalle 
   const det = ['S4 (50 ans)'];
   let S = 4;
   if (vie >= 100) { S += 2; det.push('+2 (100 ans)'); }
-  if (fck >= SEUIL[col]) { S -= 1; det.push(`−1 (béton ≥ ${nomClasse(SEUIL[col])})`); }
+  const seuil = Math.max(30, ...expos.filter(e => e in COL && COL[e] === col).map(e => SEUIL[e]));
+  if (fck >= seuil) { S -= 1; det.push(`−1 (béton ≥ ${nomClasse(seuil)})`); }
   if (dalle) { S -= 1; det.push('−1 (géométrie de dalle)'); }
   if (qualite) { S -= 1; det.push('−1 (maîtrise de la qualité)'); }
   S = Math.min(6, Math.max(1, S));

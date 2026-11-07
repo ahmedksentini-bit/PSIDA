@@ -780,6 +780,13 @@ v0.99.35 : murs en aile — revanche horizontale en tête (figure 48), deux zone
 v0.99.36 : dalle de transition calculée aussi en plaque (éléments DKT, surfaces d'influence, voies TS et LM2 sur la
 chaussée) : moment principal = max(bandes, plaque), aciers parallèles au garde-grève par Wood-Armer ; murs en aile au
 séisme (Mononobe-Okabe, EN 1998-5 annexe E : voile, renversement, glissement).
+v0.99.37 : complément au manuel d'utilisation (chapitres 31 à 34 et annexe G : poutres BA continues, compléments
+Eurocodes, plans d'exécution, dalles de transition et murs en aile ; 83 calculs à la main comparés à PSIDA et recalculés à
+chaque construction, tools/manuel) fusionné au PDF du bouton « Manuel », avec signets. Corrections relevées en le
+rédigeant : bordereaux des appuis (longueurs et masses des barres découpées), recouvrement de la nappe supérieure (η₁ = 0,7)
+dans les notes et les transversales en deux L, éclatement horizontal des abouts de la dalle précontrainte, allongement d'un
+câble tendu par l'extrémité opposée à C0, état non fissuré homogénéisé de la flèche des dalles armées, seuil XS2 du
+tableau 4.3N, réactions de la vue 3D du grillage, contrôle des cerces de pieux.
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à

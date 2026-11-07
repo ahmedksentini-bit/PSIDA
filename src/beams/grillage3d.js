@@ -35,7 +35,8 @@ export function grillageTravee(r, L) {
 export function casGrillage(T, { cas = 'G', x = null, y = 0, q = 9, Q = 300 } = {}) {
   const { g, deck, inp } = T, F = g.vecteur(), dx = g.dx, b = g.n * g.b1 / 2;
   let roues = null;
-  const ligneX = (e, qx) => { for (let i = 1; i < g.m; i++) g.chargePoint(F, g.xs[i], e, qx * dx); };
+  // charge linéique : forces nodales q dx, q dx/2 sur les lignes d'appui (comptées dans les réactions)
+  const ligneX = (e, qx) => { for (let i = 0; i <= g.m; i++) g.chargePoint(F, g.xs[i], e, qx * (i === 0 || i === g.m ? dx / 2 : dx)); };
   const bande = (y1, y2, qs) => { const nY = Math.max(2, Math.ceil((y2 - y1) / 0.25)), dy = (y2 - y1) / nY; for (let j = 0; j < nY; j++) ligneX(y1 + (j + 0.5) * dy, qs * dy); };
   if (cas === 'G') {
     for (const f of deck.permanentFiles()) {

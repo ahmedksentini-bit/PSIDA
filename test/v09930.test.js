@@ -78,10 +78,12 @@ test('Dalle de transition biaise : bords parallèles au garde-grève allongés d
   assert.ok(planDalleTransition(biais, i, {}).valide().ok);
 });
 
-test('Contre-flèche d\'une dalle armée : flèche à long terme fissurée ≥ non fissurée, nulle aux appuis, positive vers le haut', () => {
+test('Contre-flèche d\'une dalle armée : courbure fissurée ≥ non fissurée, I_II ≤ I_I, flèche nulle aux appuis, positive vers le haut', () => {
   const F = flecheLongTermeBA(st);
   assert.ok(F && F.wMax > 0);
-  F.w.forEach((w, k) => assert.ok(w >= F.wNonFissure[k] - 1e-9));
+  // v0.99.37 : état I homogénéisé (aciers compris) → |κ| ≥ |κ_I| partout ; flèche retenue ≥ non fissurée
+  F.sections.forEach(s => assert.ok(Math.abs(s.kappa) >= Math.abs(s.kI) - 1e-12));
+  F.w.forEach((w, k) => assert.ok(w >= F.wNonFissure[k] - 1e-12 && w >= F.wCalc[k] - 1e-12));
   const x0 = st.deck.beam.x0;
   for (const x of x0) { const k = F.xs.findIndex(v => Math.abs(v - x) < 1e-9); assert.ok(Math.abs(F.w[k]) < 1e-9); }
   const N = nivellementTablier(st);

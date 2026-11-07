@@ -66,9 +66,9 @@ export function bordereau(st) {
       }
     } else if (m.dir === 'trans') {
       const ret = 10 * phi, B = m.len * 1000 - 2 * ret;
-      // au-delà de 12 m (longueur commerciale) : deux L recouvertes de l₀ (m.l0 du calcul, sinon 50 Ø)
+      // au-delà de 12 m (longueur commerciale) : deux L recouvertes de l₀ (m.l0 du calcul, sinon EN 1992-1-1 § 8.7.3)
       if (longueurCoupe('21', { A: ret + phi, B, C: ret + phi }, phi) > 12000) {
-        const l0 = (m.l0 ?? anchorage(phi, { fck: st.p.mat.fck, fyk: st.p.mat.fyk, h: 1 }).l0) * 1000;
+        const l0 = (m.l0 ?? anchorage(phi, { fck: st.p.mat.fck, fyk: st.p.mat.fyk, h, top: m.face === 'sup' }).l0) * 1000;   // η₁ = 0,7 en nappe supérieure
         ligne(m, '', '11', { A: (B + l0) / 2, B: ret + phi }, 2 * m.count);
       } else ligne(m, '', '21', { A: ret + phi, B, C: ret + phi }, m.count);
     } else if (m.dir === 'cadre') {

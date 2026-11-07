@@ -92,7 +92,7 @@ export function reperesAppui(st, i) {
     add({ elem: 'pieux', label: `Pieux Ø ${fr(A.Dp)} — armatures longitudinales${nPieces > 1 ? ` (${nPieces} tronçons, recouvrement ${fr(a.l0)})` : ''}`, phi: lb.phi, code: '00', dims: { A: Lpc * 1000 }, nombre: lb.n * nF * nP * nPieces, req: F.AsReq, prov: lb.As, pos: 'pieuL', n: lb.n });
     const sh = F.shear && F.shear.ELU ? F.shear.ELU : {}, At = Math.max(sh.AtS || 0, sh.AtSmin || 0);
     const phiT = Math.max(10, Math.ceil(lb.phi / 4 / 2) * 2), sT = Math.min(0.20, At > 0 ? 2 * areaOf(phiT) / At : 0.20, 12 * lb.phi / 1000 * 1.5);
-    const sT2 = [0.10, 0.125, 0.15, 0.175, 0.20].filter(v => v <= sT + 1e-9).pop() || 0.10, Dc = A.Dp - 2 * cp + phiT / 1000;
+    const sT2 = [0.10, 0.125, 0.15, 0.175, 0.20].filter(v => v <= sT + 1e-9).pop() || 0.10, Dc = A.Dp - 2 * cp - phiT / 1000;   // axe de la cerce : nu extérieur à c_nom du parement
     add({ elem: 'pieux', label: 'Pieux — cerces', phi: phiT, s: sT2, code: '99', dims: { A: (Math.PI * Dc + anc(phiT).l0) * 1000 }, nombre: nF * nP * (Math.floor(A.Lp / sT2) + 1), prov: 2 * areaOf(phiT) / sT2, pos: 'pieuT' });
   }
   // ---------------------------------------------------------------- fût, mur, colonnes
@@ -120,7 +120,7 @@ export function reperesAppui(st, i) {
     attentes(lb.phi, lb.n * A.nCol, `Colonnes Ø ${fr(D)} — attentes dans la semelle`, 'attC');
     verticales(lb.phi, Hc + Math.min(anc(lb.phi).lbd, A.hc - c), lb.n * A.nCol, `Colonnes Ø ${fr(D)} — armatures longitudinales (${lb.n} par colonne)`, 'verC', { req: Sh.AsReq, prov: lb.As, n: lb.n });
     const phiT = Math.max(10, Math.ceil(lb.phi / 4 / 2) * 2), sT = [0.15, 0.20, 0.25, 0.30].filter(v => v <= Math.min(0.30, 20 * lb.phi / 1000, D) + 1e-9).pop() || 0.15;
-    add({ elem: 'fût', label: 'Colonnes — cerces (resserrées à s/2 en zone de recouvrement)', phi: phiT, s: sT, code: '99', dims: { A: (Math.PI * (D - 2 * c + phiT / 1000) + anc(phiT).l0) * 1000 }, nombre: A.nCol * (Math.floor(Hc / sT) + 1 + Math.ceil(anc(lb.phi).l0 / sT)), pos: 'cerC' });
+    add({ elem: 'fût', label: 'Colonnes — cerces (resserrées à s/2 en zone de recouvrement)', phi: phiT, s: sT, code: '99', dims: { A: (Math.PI * (D - 2 * c - phiT / 1000) + anc(phiT).l0) * 1000 }, nombre: A.nCol * (Math.floor(Hc / sT) + 1 + Math.ceil(anc(lb.phi).l0 / sT)), pos: 'cerC' });
   } else if (A.kind === 'culee') {   // culée remblayée : mur de front (calcul par bande de 1 m)
     const em = A.C.em, Hm = A.Hm - A.hSom, Asf = Math.max(Sh.As || 0, 0.002 * em) / 2;
     const v = chooseBars(Asf, { phiMin: 12, phiMax: 32, sMax: 0.25, sMin: 0.10 }), nv = 2 * (Math.floor((w - 2 * c) / v.s + 1e-9) + 1);
@@ -208,21 +208,23 @@ export function reperesAppui(st, i) {
     const e2 = choisir(pD.Ae, 2, 2);
     add({ elem: 'tête', label: `Éclatement plan Δ — filantes 2 faces (${e2.n} par face, de ${fr(0.1 * pD.d)} à ${fr(Math.min(pD.d, hT))} m)`, phi: e2.phi, code: '00', dims: { A: (Lt - 2 * c) * 1000 }, nombre: 2 * e2.n, req: pD.Ae, prov: e2.prov, pos: 'eclL', n: e2.n, z0: 0.1 * pD.d, z1: Math.min(pD.d, hT - c) });
   }
+  // barres de plus de 12 m (longueur commerciale) : pièces recouvertes de l₀ — droites (00) en n pièces égales, U (21) en
+  // deux L (11) symétriques ; contrôle « Barres ≤ 12 m » de src/plans/controles.js. La découpe précède le calcul des
+  // longueurs de coupe et des masses, qui comptent ainsi les recouvrements.
+  for (const q of out) {
+    if (q.code !== '00' && q.code !== '21') continue;
+    const d0 = { A: r5(q.dims.A || 0), B: r5(q.dims.B || 0), C: r5(q.dims.C || 0) };
+    const Lc = longueurCoupe(q.code, d0, q.phi) / 1000; if (Lc <= LMAX + 1e-9) continue;
+    const l0 = anc(q.phi).l0;
+    if (q.code === '00') { const n = Math.ceil((Lc - l0) / (LMAX - l0) - 1e-9); q.dims = { A: (Lc + (n - 1) * l0) / n * 1000 }; q.nombre *= n; q.label += ` — ${n} pièces, recouvrement ${fr(l0)} m`; q.pieces = n; }
+    else { const B = (d0.B / 1000 + l0) / 2; q.code = '11'; q.dims = { A: B * 1000, B: d0.A }; q.nombre *= 2; q.label += ` — 2 L recouvertes de ${fr(l0)} m`; q.pieces = 2; }
+    q.l0Pieces = l0;
+  }
   // longueurs de coupe et masses
   for (const m of out) {
     const d = { A: r5(m.dims.A || 0), B: r5(m.dims.B || 0), C: r5(m.dims.C || 0) };
     m.dims = d; m.L = r25(longueurCoupe(m.code, d, m.phi));
     m.total = m.L / 1000 * m.nombre; m.masse = m.total * massPerM(m.phi);
-  }
-  // barres de plus de 12 m (longueur commerciale) : pièces recouvertes de l₀ — droites (00) en n pièces égales, U (21) en
-  // deux L (11) symétriques ; contrôle « Barres ≤ 12 m » de src/plans/controles.js
-  for (const q of out) {
-    if (q.code !== '00' && q.code !== '21') continue;
-    const Lc = longueurCoupe(q.code, q.dims, q.phi) / 1000; if (Lc <= LMAX + 1e-9) continue;
-    const l0 = anc(q.phi).l0;
-    if (q.code === '00') { const n = Math.ceil((Lc - l0) / (LMAX - l0) - 1e-9); q.dims = { A: (Lc + (n - 1) * l0) / n * 1000 }; q.nombre *= n; q.label += ` — ${n} pièces, recouvrement ${fr(l0)} m`; q.pieces = n; }
-    else { const B = (q.dims.B / 1000 + l0) / 2; q.code = '11'; q.dims = { A: B * 1000, B: q.dims.A }; q.nombre *= 2; q.label += ` — 2 L recouvertes de ${fr(l0)} m`; q.pieces = 2; }
-    q.l0Pieces = l0;
   }
   return { A, marks: out, code, mat };
 }

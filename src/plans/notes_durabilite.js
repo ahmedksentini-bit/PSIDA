@@ -18,11 +18,18 @@ const fr = (x, d = 1) => x.toFixed(d).replace('.', ',');
 const CUBE = { 12: 15, 16: 20, 20: 25, 25: 30, 30: 37, 35: 45, 40: 50, 45: 55, 50: 60, 55: 67, 60: 75 };
 export const classeBeton = fck => `C${fck}/${CUBE[fck] ?? Math.round(fck * 1.22)}`;
 
-/** Recouvrements l₀ en diamètres pour les diamètres utilisés : « l₀ = 45 Ø (HA12 à HA16), 52 Ø (HA20) ». */
-export function texteRecouvrements(phis, { fck, fyk }) {
-  const g = new Map();
-  for (const phi of [...new Set(phis)].sort((a, b) => a - b)) { const n = Math.ceil(anchorage(phi, { fck, fyk, h: 1 }).l0 / (phi / 1000) - 1e-9); if (!g.has(n)) g.set(n, []); g.get(n).push(phi); }
-  return [...g.entries()].map(([n, ps]) => `${n} Ø (HA${ps.length > 1 ? `${ps[0]} à HA${ps[ps.length - 1]}` : ps[0]})`).join(', ');
+/**
+ * Recouvrements l₀ en diamètres pour les diamètres utilisés : « l₀ = 45 Ø (HA12 à HA16), 52 Ø (HA20) ». Avec `hauteur`
+ * (épaisseur de la pièce, m) supérieure à 0,25 m, la nappe supérieure n'est pas en condition de bonne adhérence
+ * (EN 1992-1-1 § 8.4.2 (2), η₁ = 0,7) : sa valeur est donnée à part.
+ */
+export function texteRecouvrements(phis, { fck, fyk }, { hauteur = 0 } = {}) {
+  const liste = top => {
+    const g = new Map();
+    for (const phi of [...new Set(phis)].sort((a, b) => a - b)) { const n = Math.ceil(anchorage(phi, { fck, fyk, h: Math.max(1, hauteur), top }).l0 / (phi / 1000) - 1e-9); if (!g.has(n)) g.set(n, []); g.get(n).push(phi); }
+    return [...g.entries()].map(([n, ps]) => `${n} Ø (HA${ps.length > 1 ? `${ps[0]} à HA${ps[ps.length - 1]}` : ps[0]})`).join(', ');
+  };
+  return hauteur > 0.25 ? `${liste(false)} en nappe inférieure ; ${liste(true)} en nappe supérieure (η₁ = 0,7, § 8.4.2)` : liste(false);
 }
 
 /** Tablier (dalle) : béton, expositions, c_nom, axe des aciers ; gaines (dalle précontrainte aux Eurocodes). */
