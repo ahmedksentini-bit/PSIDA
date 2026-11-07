@@ -336,7 +336,7 @@ export function buildNote(st, { ref = 'F61', figures = {}, project = {} } = {}) 
     ...(st.psidp ? ['SETRA, PSI-DP — Passages supérieurs ou inférieurs en dalle précontrainte, dossier pilote, et note de calcul modèle PSIDP-EL 84-1, 1984-1985.', 'BPEL 91 révisé 99 — Règles techniques de conception et de calcul des ouvrages et constructions en béton précontraint suivant la méthode des états limites (fascicule 62 titre I section II du CCTG).'] : []),
     ...(st.supports ? ['SETRA, PP73 — Appuis des tabliers (piles, palées, culées), 1973-1977 ; SETRA, FOND 72 — Fondations courantes d\'ouvrages d\'art.',
       'Fascicule 62 titre V (1993) ; NF P 94-261 (2013) et guide Cerema « Eurocode 7 — fondations superficielles » (2015) ; NF P 94-262 (2012).',
-      'Note de calcul des appuis et fondations du Pont de Noé (COMETE/ICI, A.P.D. mai 2012, programme PSH) — valeurs de contrôle.'] : []),
+      'Contrôle sur une sortie du programme PSH (SETRA/CETE de l\'Ouest) d\'un ouvrage de référence — valeurs reproduites par les tests.'] : []),
   ]) para(r);
   return { title, meta, blocks: B };
 }

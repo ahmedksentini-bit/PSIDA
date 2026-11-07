@@ -9,7 +9,7 @@ import { parsePoutres, computePoutres } from '../src/beams/run.js';
 import { recommandationsPoutres, evaluerPoutres, indicationsParCible, cleCible, familleOk, familles, FAM_RAIL } from '../src/reco/poutres.js';
 import { beamsBlocks } from '../web/beams_view.js';
 
-// valeurs par défaut du formulaire (Pont de Noé : 4 poutres VIPP de 33 m), une seule travée
+// valeurs par défaut du formulaire (VIPP de référence : 4 poutres de 33 m), une seule travée
 const BASE = { pt_spans: '33', pt_type: 'BP', pt_n: '4', pt_b1: '3.28', pt_hd: '0.30', pt_geo: 'dims', pt_road: '-4, 4', pt_foot: '-6.56,-4 ; 4,6.56',
   pt_lines: '18 @ -6.87 ; 18 @ 6.87', pt_bands: '1.79 sur -6.56,6.56', pt_ret: '0', pt_mil: 'Mc120', pt_fck: '40', pt_fckh: '30', pt_fyk: '500', pt_vrive: 1,
   pt_expo: 'XC', pr_nt: '20', pr_nsup: '2', pr_type: 'T15S', pr_cbas: '0.05', pr_e: '0.05', pr_g1n: '4', pr_g1L: '2.0', pr_g2n: '4', pr_g2L: '4.0', pr_rel: '1', pr_dT: '45', pr_hetuv: '16', pr_about: '0.30' };

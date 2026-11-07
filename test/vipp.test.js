@@ -34,10 +34,10 @@ test('largeur efficace EN 1992-1-1 § 5.3.2.1', () => {
   near(largeurEfficaceT({ b1: 6, bw: 1.5, l0: 8 }), 1.5 + 2 * 1.25, 1e-12, 'réduite');
 });
 
-const NOE = { pt_geo: 'dims', pt_spans: '33', pt_n: '4', pt_b1: '3.28', pt_hd: '0.30', pt_road: '-4, 4', pt_foot: '-6.56,-4 ; 4,6.56', pt_lines: '18 @ -6.87 ; 18 @ 6.87', pt_bands: '1.79 sur -6.56,6.56', pt_type: 'BP', pt_fck: '40' };
+const VREF = { pt_geo: 'dims', pt_spans: '33', pt_n: '4', pt_b1: '3.28', pt_hd: '0.30', pt_road: '-4, 4', pt_foot: '-6.56,-4 ; 4,6.56', pt_lines: '18 @ -6.87 ; 18 @ 6.87', pt_bands: '1.79 sur -6.56,6.56', pt_type: 'BP', pt_fck: '40' };
 
 test('chaîne VIPP : contrainte à la mise en tension = P/A + P e v/I − M v/I (câble 1, poutre seule)', () => {
-  const inp = parsePoutres({ ...NOE, pt_nc: '1', pt_n2: '0' }), r = computePoutres(inp), v = r.spans[0].beams[0].vipp;
+  const inp = parsePoutres({ ...VREF, pt_nc: '1', pt_n2: '0' }), r = computePoutres(inp), v = r.spans[0].beams[0].vipp;
   const pas = v.out.pas[v.out.finPhase[0]], P = v.S.poutre, L = 33, nb = 20;
   const N = pas.cables.find(q => q && q.seg === nb / 2 - 1).N;   // segment juste avant mi-travée
   const N2 = pas.cables.find(q => q && q.seg === nb / 2).N, Nm = (N + N2) / 2;
@@ -48,7 +48,7 @@ test('chaîne VIPP : contrainte à la mise en tension = P/A + P e v/I − M v/I 
 });
 
 test('pertes : frottement + recul identiques au module de précontrainte ; raccourcissement élastique ≈ (E_p/E_cm(t)) Δσ_c', () => {
-  const inp = parsePoutres({ ...NOE, pt_nc: '2', pt_n2: '0', pt_parlit: '2' }), v = computePoutres(inp).spans[0].beams[0].vipp;
+  const inp = parsePoutres({ ...VREF, pt_nc: '2', pt_n2: '0', pt_parlit: '2' }), v = computePoutres(inp).spans[0].beams[0].vipp;
   const nb = 20, seg = nb / 2 - 1, P1a = v.out.pas[v.out.finPhase[0]].cables.find(q => q && q.cable === 0 && q.seg === seg).N;
   const P1b = v.out.pas[v.out.pas.findIndex(pp => pp.phase === 1)].cables.find(q => q && q.cable === 0 && q.seg === seg).N;
   // Δσ_c au niveau du câble 1 dû à la mise en tension du câble 2 (force P2, même excentricité, lit commun)
@@ -78,7 +78,7 @@ test('étriers EN 1992-1-1 § 6.2.3 : cot θ = 2,5 si V_Rd,max suffit, sinon ré
 });
 
 test('pont VIPP par défaut (33 m, 4 poutres) : toutes les vérifications satisfaites, pertes 15 à 30 %, ratio ≈ 40 kg/m³', () => {
-  const r = computePoutres(parsePoutres(NOE));
+  const r = computePoutres(parsePoutres(VREF));
   for (const b of r.spans[0].beams) {
     const v = b.vipp;
     assert.ok(v.ok, `poutre ${b.k + 1} : ${v.verifs.filter(q => !q.ok).map(q => q.nom).join(', ')}`);
@@ -98,14 +98,14 @@ test('encombrement des gaines (EN 1992-1-1 § 8.10.1.3) signalé', () => {
 });
 
 test('projets antérieurs : section par valeurs inchangée (pas de chaîne VIPP)', () => {
-  const r = computePoutres(parsePoutres({ ...NOE, pt_geo: undefined, pt_A: '2.047', pt_I: '1.006057', pt_K: '0.036412', pt_v: '0.65', pt_vp: '1.67', pt_H: '2.32', pt_P: '6500', pt_e0: '-1.46' }));
+  const r = computePoutres(parsePoutres({ ...VREF, pt_geo: undefined, pt_A: '2.047', pt_I: '1.006057', pt_K: '0.036412', pt_v: '0.65', pt_vp: '1.67', pt_H: '2.32', pt_P: '6500', pt_e0: '-1.46' }));
   assert.equal(r.inp.geo, 'valeurs'); assert.ok(!r.spans[0].beams[0].vipp && r.spans[0].beams[0].BP);
 });
 
 test('plans de la poutre : trois feuilles valides (mise en page sans chevauchement), allongements théoriques', async () => {
   const { planCoffrageVIPP, planCablageVIPP, planFerraillageVIPP } = await import('../src/plans/vipp.js');
   const { feuilleDXF } = await import('../src/plans/dxf.js');
-  const v = computePoutres(parsePoutres(NOE)).spans[0].beams[0].vipp;
+  const v = computePoutres(parsePoutres(VREF)).spans[0].beams[0].vipp;
   for (const fn of [planCoffrageVIPP, planCablageVIPP, planFerraillageVIPP]) {
     const F = fn(v, { numero: 'X' });
     assert.deepEqual(F.valide().problemes, []);

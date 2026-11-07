@@ -1,5 +1,5 @@
 /**
- * Ponts à poutres — Pont de Noé (COMETE/ICI 2012), sortie PONTYPE/PAP : travée isostatique de 33 m, 4 poutres VIPP
+ * Ponts à poutres — VIPP de référence (note de 2012), sortie PONTYPE/PAP : travée isostatique de 33 m, 4 poutres VIPP
  * d'entraxe 3,28 m, hourdis de 0,30 m, I poutre + hourdis = 1,006057 m⁴, K = 0,036412 m⁴ ; chaussée de 8 m (Lc = 8 m),
  * trottoirs de 2,56 m, classe 1 ; ossature 20,875 t/m, superstructures réparties 2,35 t/m, de rive 1,8 t/m par côté.
  * Valeurs de la note en t et t·m.
@@ -10,7 +10,7 @@ import { guyonParams, beamDeck, beamCombinations, beamSection, kTorsion } from '
 
 const rel = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol * Math.abs(b), `${msg} : PAP ${b}, outil ${a.toFixed(4)}`);
 const t = 10;
-const NOE = { spans: [33], n: 4, b1: 3.28, hd: 0.30, beam: { A: 20.875 * t / 25 / 4, I: 1.006057, K: 0.036412, H: 2.32 },
+const VREF = { spans: [33], n: 4, b1: 3.28, hd: 0.30, beam: { A: 20.875 * t / 25 / 4, I: 1.006057, K: 0.036412, H: 2.32 },
   roadway: { y1: -4, y2: 4 }, footways: [{ y1: -6.56, y2: -4 }, { y1: 4, y2: 6.56 }],
   lines: [{ g: 1.8 * t, e: -6.87 }, { g: 1.8 * t, e: 6.87 }], bands: [{ q: 2.35 * t / 13.12, y1: -6.56, y2: 6.56 }], nRetenue: 0, mil: 'Mc120' };
 
@@ -21,7 +21,7 @@ test('Paramètres de Guyon-Massonnet du tablier à poutres : θ = 0,679, α = 0,
 });
 
 test('Efforts par poutre à mi-travée (poutres 1 et 2) : A, Bc, Mc120, trottoirs, charges permanentes, ELS/ELU', () => {
-  const r = beamDeck(NOE), S = r.bySpan.get(33), mid = S.deck.beam.sectionIndex(0, 0.5), x0 = S.deck.beam.sectionIndex(0, 0);
+  const r = beamDeck(VREF), S = r.bySpan.get(33), mid = S.deck.beam.sectionIndex(0, 0.5), x0 = S.deck.beam.sectionIndex(0, 0);
   const REF = [{ G: 977.49, A: 201.44, Bc: 246.36, Mc120: 295.91, trott: 35.56, ELS: 1316.07, ELU: 1772.64, VBc: 33.64 },
     { G: 850.49, A: 293.89, Bc: 280.81, Mc120: 305.91, trott: 18.23, ELS: 1225.03, ELU: 1645.60, VBc: 38.35 }];
   const TOL = [{ G: 3e-3, A: 1e-3, Bc: 2e-2, Mc120: 5e-3, trott: 1e-2, ELS: 1e-2, ELU: 1e-2, VBc: 5e-3 },

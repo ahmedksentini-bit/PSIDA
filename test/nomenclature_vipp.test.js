@@ -6,8 +6,8 @@ import { nomenclatureVIPP, pieces, planNomenclatureVIPP } from '../src/plans/nom
 import { longueurCoupe } from '../src/plans/bordereau.js';
 import { anchorage, massPerM } from '../src/rebar.js';
 
-const NOE = { pt_geo: 'dims', pt_spans: '33', pt_n: '4', pt_b1: '3.28', pt_hd: '0.30', pt_road: '-4, 4', pt_foot: '-6.56,-4 ; 4,6.56', pt_lines: '18 @ -6.87 ; 18 @ 6.87', pt_bands: '1.79 sur -6.56,6.56', pt_type: 'BP', pt_fck: '40' };
-const r = computePoutres(parsePoutres(NOE)), v = r.spans[0].beams[0].vipp;
+const VREF = { pt_geo: 'dims', pt_spans: '33', pt_n: '4', pt_b1: '3.28', pt_hd: '0.30', pt_road: '-4, 4', pt_foot: '-6.56,-4 ; 4,6.56', pt_lines: '18 @ -6.87 ; 18 @ 6.87', pt_bands: '1.79 sur -6.56,6.56', pt_type: 'BP', pt_fck: '40' };
+const r = computePoutres(parsePoutres(VREF)), v = r.spans[0].beams[0].vipp;
 const ctx = { n: 4, b1: 3.28, hourdis: r.hourdis, entretoise: r.entretoise };
 
 test('pièces : n pièces de 12 m au plus, Σ longueurs = longueur hors tout + (n − 1) l₀', () => {

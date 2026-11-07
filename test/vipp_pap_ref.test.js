@@ -1,8 +1,8 @@
 /**
- * Benchmark contre la sortie PONTYPE/PAP (IPSO, 2012) de la note de calcul du tablier du Pont de Noé
- * (corridor Abidjan–Lagos, COMETE/ICI) : travée isostatique 33 m, 4 poutres VIPP entraxe 3,28 m,
+ * Benchmark contre la sortie PONTYPE/PAP (2012) de la note de calcul du tablier d'un VIPP de référence :
+ * travée isostatique 33 m, 4 poutres VIPP entraxe 3,28 m,
  * 2b = 13,12 m, chaussée 8 m + 2 trottoirs de 2,56 m, classe 1, θ = 0,679, α = 0,148.
- * Unités de la note : t et m (1 t = 10 kN). Écarts commentés dans /home/claude/ref/reports/noe.md.
+ * Unités de la note : t et m (1 t = 10 kN).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -32,7 +32,7 @@ const MUREF = { // coefficients μ_n × 10⁴ (pas 0,5 m depuis −6,56 m), un p
     5: [[0, -139.8], [3, 202.4], [6, -52.4], [9, -9.9], [12, 1.2], [15, 0.1], [18, -0.1], [21, 0.0], [24, 0.0]] },
 };
 
-test('Noé/PAP — K de Guyon-Massonnet tablier à poutres (θ = 0,679, α = 0,148) : interpolation de Massonnet √α', () => {
+test('VIPP réf./PAP — K de Guyon-Massonnet tablier à poutres (θ = 0,679, α = 0,148) : interpolation de Massonnet √α', () => {
   for (const [y, pts] of Object.entries(KREF)) for (const [i, r] of pts) {
     const e = -b + 0.125 * i;
     assert.ok(Math.abs(Kint(e, +y) - r) <= 1e-3, `K(y=${y}, e=${e.toFixed(3)}) : PAP ${r}, outil ${Kint(e, +y).toFixed(4)}`);
@@ -44,14 +44,14 @@ test('Noé/PAP — K de Guyon-Massonnet tablier à poutres (θ = 0,679, α = 0,1
   assert.ok(kEx > 3.2065 * 1.03, 'exact α ≠ PAP ' + kEx);
 });
 
-test('Noé/PAP — coefficients μ de flexion transversale (harmonique 1, 3, 5 ; ν = 0, interpolation √α)', () => {
+test('VIPP réf./PAP — coefficients μ de flexion transversale (harmonique 1, 3, 5 ; ν = 0, interpolation √α)', () => {
   for (const [y, harm] of Object.entries(MUREF)) for (const [n, pts] of Object.entries(harm)) for (const [i, r] of pts) {
     const e = -b + 0.5 * i, m = 1e4 * muInt(+n, e, +y);
     assert.ok(Math.abs(m - r) <= 2.5, `μ${n}(y=${y}, e=${e.toFixed(2)}) ×1e4 : PAP ${r}, outil ${m.toFixed(1)}`);
   }
 });
 
-test('Noé/PAP — coefficients correctifs de répartition par cas de charge (poutres 1 et 2)', () => {
+test('VIPP réf./PAP — coefficients correctifs de répartition par cas de charge (poutres 1 et 2)', () => {
   const band = (e1, e2, y, n = 200) => { let s = 0; for (let i = 0; i < n; i++) s += Kint(e1 + (e2 - e1) * (i + 0.5) / n, y); return s / n; };
   const best = (w, f) => { let m = 0; for (let s = -4; s <= 4 - w + 1e-9; s += 0.01) m = Math.max(m, f(s)); return m; };
   const REF = { [-4.92]: { tr: 1.360, A: 0.821, Bc: 1.358, Bt: 1.085, Mc: 1.346 }, [-1.64]: { tr: 0.697, A: 1.198, Bc: 1.548, Bt: 1.355, Mc: 1.391 } };
@@ -69,7 +69,7 @@ test('Noé/PAP — coefficients correctifs de répartition par cas de charge (po
   }
 });
 
-test('Noé/PAP — charges Fascicule 61 : A(l), a1/a2, bc, δ (G = moyenne max/min), moments par poutre à mi-travée', () => {
+test('VIPP réf./PAP — charges Fascicule 61 : A(l), a1/a2, bc, δ (G = moyenne max/min), moments par poutre à mi-travée', () => {
   assert.equal(classePont(8), 1); assert.deepEqual(voiesF61(8), { nv: 2, v: 4 });
   const L = 33, bm = new ContinuousBeam([L], { nGrid: 400 }), mid = bm.sectionIndex(0, 0.5);
   const A = chargeA(L, { classe: 1, nVoiesChargees: 2, v: 4 });
@@ -88,7 +88,7 @@ test('Noé/PAP — charges Fascicule 61 : A(l), a1/a2, bc, δ (G = moyenne max/m
   rel(TROTTOIR.q * 5.12 * L * L / 8 / 4 * 1.360 / 10, 35.56, 1e-3, 'trottoirs poutre 1');
 });
 
-test('Noé — appareil 400×400×4(12+3) sous les règles BT4 du guide 1989 (bearings.js) : distorsion lente refusée en C1', () => {
+test('Ouvrage de référence — appareil 400×400×4(12+3) sous les règles BT4 du guide 1989 (bearings.js) : distorsion lente refusée en C1', () => {
   // charges ELS par appareil (t → kN) : G 127,5 t, Bc 38,38 t ; déplacements lents C1 : retrait 16,2 + fluage 11,5 + TLD 13,9 mm
   const r = checkBearing({ a: 400, b: 400, t: 12, ts: 3 }, 4, { Pmax: (127.5 + 38.38) * 10, Pmin: 115.6 * 10, H: 22.9, ug: 0.0162 + 0.0115 + 0.0139, alpha: 0.003 });
   assert.ok(r.checks.compression, 'σ = 10,4 MPa ≤ 13,3 MPa');

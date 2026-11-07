@@ -4,7 +4,7 @@
  * ferraillage minimal des pieux.
  *
  * Références : Fascicule 62 titre V (1993) ; NF P 94-261 (2013) et guide Cerema 2015 (tableau des k_p, facteurs partiels) ;
- * NF P 94-262 ; SETRA FOND 72 et PP73 (bielles) ; note des appuis du Pont de Noé (reproduite : Ménard, pieux, bielles).
+ * NF P 94-262 ; SETRA FOND 72 et PP73 (bielles) ; note des appuis d'un VIPP de référence (reproduite : Ménard, pieux, bielles).
  * Les valeurs marquées TODO_VERIF sont à relire sur les textes (non accessibles lors de l'écriture).
  * Unités : m, kN, kPa (kN/m²), MPa.
  */
@@ -90,7 +90,7 @@ export function shallowFooting({ code = 'EC', B, L, D = 1, V, H = 0, M = 0, ls =
 /**
  * Semelle sur deux files de pieux, méthode des bielles (PP73 pièce 1.3.2 § 4.3.2) : tirant inférieur PAR COUPLE de pieux
  * situés de part et d'autre du fût de largeur b, entraxe l, hauteur utile h : A₁ = R/σ̄_a · (l/2 − b/4)/h, R = réaction la
- * plus élevée des deux pieux du couple. (La note du Pont de Noé applique la charge totale de la semelle, 601,6 t, au lieu
+ * plus élevée des deux pieux du couple. (La note de référence applique la charge totale de la semelle, 601,6 t, au lieu
  * de la réaction d'un pieu, 100,04 t : 501,5 cm² au lieu de 82,97 cm² par couple.)
  */
 export function pileCapStrutTie({ R, l, b, h, sigS }) { return R / (sigS * 1000) * (l / 2 - b / 4) / h; }

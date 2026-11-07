@@ -24,7 +24,7 @@ de calcul commentée **PSIDA.EL** du SETRA (version 84-1) est reproduite à 0,1�
 dénivellations d'appui, la travée équivalente, les coefficients de répartition, A(l), Bc/Bt, Mc120 en travée, les
 combinaisons ELS/ELU et la section d'acier sur appui (`test/psidael.test.js`, `docs/hypotheses.md` § 1 quater). Sont aussi
 reproduits la 2e note PSIDA.EL du guide PSI-PAP, la note modèle PSIDP.EL (hors précontrainte), les formules de PSI-DA 68,
-la répartition PONTYPE/PAP du Pont de Noé et les règles du guide 1989 relues page par page (§ 1 quinquies).
+la répartition PONTYPE/PAP d'un VIPP de référence et les règles du guide 1989 relues page par page (§ 1 quinquies).
 
 **Note de calcul** : au format des notes SETRA (plan de la note commentée PSIDA.EL pour le Fascicule 61 / BAEL, de CHAMOA
 pour les Eurocodes) — données, lignes d'influence, dénivellations, majoration dynamique, coefficients de répartition, moments
@@ -360,7 +360,7 @@ long (action permanente répartie entre les appuis, distorsion lente des apparei
   le véhicule spécial de la note CHAMOA est reproduit à 4 % (435 contre 451 kN·m à P1). LM3 : composition des lignes
   d'essieux de l'annexe A à relire (`TODO_VERIF`). Encorbellement : méthode simplifiée (diffusion à 45°), pas l'annexe 3 du PSIDP.EL.
 - Appuis et fondations (v0.13) : piles voiles ou colonnes, culées remblayées ou enterrées, semelles ou pieux, BAEL/F61/F62-V et
-  Eurocodes ; rigidités, répartition et descente de charges recalées sur la note des appuis du Pont de Noé. Les formules de
+  Eurocodes ; rigidités, répartition et descente de charges recalées sur la note des appuis d'un VIPP de référence. Les formules de
   pratique PP73 (garde-grève, murs en retour), FOND 72 et une partie de F62-V / NF P 94-262 sont marquées `TODO_VERIF`.
 - Pas encore : tassements probables, précontrainte (PSI.DP), appareils d'appui glissants ou à pot.
 - Le guide SETRA 1989 a été établi pour les charges du Fascicule 61 (classe I–II, deux voies) : ses abaques et élancements sont des
@@ -800,6 +800,8 @@ revêtement) au lieu de la valeur de repli 12 / −6 °C, qui reste celle du Fas
 v0.99.41 : coupes transversales (schémas de saisie et du guide, figures des notes) — les appareils d'appui sont dessinés
 aux ordonnées du calcul (entraxe 2b / (n − 0,1), src/bearings.js bearingOrdinates) au lieu de 1 m du bord libre, qui les
 plaçait sous le départ d'un chanfrein de 1 m ; le schéma de saisie affiche ces ordonnées.
+v0.99.42 : anonymisation — aucun ouvrage ni bureau d'études n'est plus nommé dans le code, les tests, la documentation,
+le manuel et les notes de calcul produites (les notes de référence restent citées comme « VIPP de référence »).
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à
