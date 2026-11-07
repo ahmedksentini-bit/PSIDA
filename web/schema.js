@@ -5,6 +5,7 @@
 import { notionalLanes, gradientEN1991_1_5 } from '../src/loads_ec.js';
 import { classePont } from '../src/loads_f61.js';
 import { parseRail } from '../src/pipeline.js';
+import { bearingOrdinates } from '../src/bearings.js';
 
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const fr = (v, d = 2) => Number(v).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: d });
@@ -262,9 +263,10 @@ export function crossSectionInputSVG(g) {
   }
   // appareils d'appui
   const nb = g.nBearings || Math.max(2, Math.round(g.width / 3));
-  const e0 = Math.min(1, b / 3), pitch = nb > 1 ? (2 * b - 2 * e0) / (nb - 1) : 0;
-  for (let k = 0; k < nb; k++) { const X = sy(-b + e0 + k * pitch); s += `<rect x="${X - 9}" y="${yTop + hPx + 2}" width="18" height="7" fill="var(--acc, #0b5fa5)" opacity="0.8"/>`; }
-  s += `<text x="${sy(-b)}" y="${yTop + hPx + 20}" font-size="11" fill="var(--acc, #0b5fa5)">${nb} appareils d'appui par ligne (schématique)</text>`;
+  // mêmes ordonnées que le calcul (plaque, réactions, plans) : entraxe 2b / (n − 0,1), sous la sous-face pleine
+  const yb = bearingOrdinates({ width: 2 * b, n: nb });
+  for (const y of yb) { const X = sy(y); s += `<rect x="${X - 9}" y="${yTop + hPx + 2}" width="18" height="7" fill="var(--acc, #0b5fa5)" opacity="0.8"/>`; }
+  s += `<text x="${sy(-b)}" y="${yTop + hPx + 20}" font-size="11" fill="var(--acc, #0b5fa5)">${nb} appareils d'appui par ligne, en y = ${yb.map(y => fr(y)).join(' ; ')} m</text>`;
   // axe y et ordonnées de calcul
   const yAx = yTop + hPx + 78;
   s += `<line x1="${sy(-b)}" y1="${yAx}" x2="${sy(b)}" y2="${yAx}" stroke="currentColor" stroke-width="0.8"/>`;
