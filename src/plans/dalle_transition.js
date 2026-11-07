@@ -18,7 +18,7 @@ import { placerBordereau } from './ferraillage.js';
 import { longueurCoupe, recapitulatif } from './bordereau.js';
 import { geometrieAppui, dalleTransition, alphasTrafic } from './appuis.js';
 import { couperLigne, classeBeton, texteRecouvrements, enrobagesAppuis } from './notes_durabilite.js';
-import { calculDalleTransition, corbeauDalle } from '../supports/dalle_transition.js';
+import { calculDalleTransition, corbeauDalle, plaqueDalleTransition } from '../supports/dalle_transition.js';
 import { anchorage, massPerM, chooseBars } from '../rebar.js';
 
 const fr = (x, d = 2) => (Number.isFinite(x) ? x.toFixed(d).replace('.', ',') : '—');
@@ -32,7 +32,10 @@ export function dalleTransitionCulee(st, i) {
   const DT = dalleTransition(A), { c, cS } = enrobagesAppuis(st, A.mat), mat = A.mat;
   const al = alphasTrafic(st);
   const psi = (A.G.psiL && A.G.psiL[i]) || 100, sinP = Math.sin(psi * Math.PI / 200), cotP = Math.cos(psi * Math.PI / 200) / sinP;
-  const B = A.dalle.B, K = calculDalleTransition({ L: DT.L, e: DT.e, B, hc0: A.zT + A.hGG - DT.z0, pente: DT.pente, fck: mat.fck, fyk: mat.fyk, cSup: c, cInf: cS, aQ: al.aQ, aq1: al.aq1 });
+  const B = A.dalle.B, psiP = (A.G.psiL && A.G.psiL[i]) || 100, hc0 = A.zT + A.hGG - DT.z0;
+  const rw = st.deck && st.deck.g && st.deck.g.roadway, w = rw ? rw.y2 - rw.y1 : null;
+  const plaque = plaqueDalleTransition({ L: DT.L, e: DT.e, B, psi: psiP, hc0, pente: DT.pente, aQ: al.aQ, aq1: al.aq1, w });
+  const K = calculDalleTransition({ L: DT.L, e: DT.e, B, w, hc0, pente: DT.pente, fck: mat.fck, fyk: mat.fyk, cSup: c, cInf: cS, aQ: al.aQ, aq1: al.aq1, plaque });
   // corbeau : console courte sous la réaction ELU de la dalle (aciers posés avec le garde-grève)
   const eGG = A.xGGav - A.xGGar, Kc = corbeauDalle({ FEd: K.corbeau.ELU, ac: 0.15, hc: 0.40, c, fck: mat.fck, fyk: mat.fyk });
   Kc.tirant = chooseBars(Kc.As, { phiMin: 12, phiMax: 16, sMax: 0.20, sMin: 0.10 }); Kc.cadres = chooseBars(Kc.lien, { phiMin: 10, phiMax: 12, sMax: 0.20, sMin: 0.10 });
@@ -55,9 +58,10 @@ export function reperesDalleTransition(D) {
   const nb = (long, s) => Math.floor(long / s + 1e-9) + 1;
   // nappe inférieure : principales // à l'axe (lit extérieur), répartition // au garde-grève (lit intérieur)
   add({ label: 'Nappe inférieure — principales // axe', phi: K.inf.phi, s: K.inf.s, code: '00', dims: { A: (L - 2 * c) * 1000 }, nombre: nb(B - 2 * c, K.inf.s), req: K.As.requis, prov: K.inf.As, pos: 'infL' });
-  add({ label: 'Nappe inférieure — répartition // garde-grève', phi: K.rep.phi, s: K.rep.s, code: '00', dims: { A: (Bk - 2 * c) * 1000 }, nombre: nb((L - 2 * c) * sinP, K.rep.s), req: 0.2 * K.inf.As, prov: K.rep.As, pos: 'infT' });
+  add({ label: K.transv ? 'Nappe inférieure — transversales // garde-grève (plaque)' : 'Nappe inférieure — répartition // garde-grève', phi: K.rep.phi, s: K.rep.s, code: '00', dims: { A: (Bk - 2 * c) * 1000 }, nombre: nb((L - 2 * c) * sinP, K.rep.s), req: K.transv ? K.transv.inf.requis : 0.2 * K.inf.As, prov: K.rep.As, pos: 'infT' });
   add({ label: 'Nappe supérieure — // axe', phi: K.sup.phi, s: K.sup.s, code: '00', dims: { A: (L - 2 * c) * 1000 }, nombre: nb(B - 2 * c, K.sup.s), prov: K.sup.As, pos: 'supL' });
-  add({ label: 'Nappe supérieure — // garde-grève', phi: K.sup.phi, s: K.sup.s, code: '00', dims: { A: (Bk - 2 * c) * 1000 }, nombre: nb((L - 2 * c) * sinP, K.sup.s), prov: K.sup.As, pos: 'supT' });
+  const sT = K.supT || K.sup;
+  add({ label: 'Nappe supérieure — // garde-grève', phi: sT.phi, s: sT.s, code: '00', dims: { A: (Bk - 2 * c) * 1000 }, nombre: nb((L - 2 * c) * sinP, sT.s), req: K.transv ? K.transv.sup.requis : 0, prov: sT.As, pos: 'supT' });
   // U de rive fermant les nappes : bords longitudinaux et abouts (corbeau et remblai)
   const phiU = 10, legU = Math.max(0.30, anc(phiU).lbd), hU = e - c - cS;
   add({ label: 'U de rive — bords longitudinaux', phi: phiU, s: 0.20, code: '21', dims: { A: legU * 1000, B: hU * 1000, C: legU * 1000 }, nombre: 2 * nb(L - 2 * c, 0.20), pos: 'uL' });
@@ -200,11 +204,13 @@ export function planDalleTransition(st, i, cartouche = {}) {
     lignes: [
       ['Longueur L / portée de calcul L_c', `${fr(K.L)} / ${fr(K.Lc)} m`], ['Épaisseur e / hauteur utile d', `${fr(K.e)} / ${fr(K.d, 3)} m`],
       ['Couverture moyenne (remblai + chaussée, γ = 20 kN/m³)', `${fr(K.hm)} m`], ['Charge permanente g', `${fr(K.g, 1)} kN/m²`],
-      ['M_G / M_TS / M_UDL / M_LM2', `${fr(K.M.G, 1)} / ${fr(K.M.TS, 1)} / ${fr(K.M.UDL, 1)} / ${fr(K.M.LM2, 1)} kN·m/m`],
+      ['M_G / M_TS / M_UDL / M_LM2 (bandes)', `${fr(K.M.G, 1)} / ${fr(K.M.TS, 1)} / ${fr(K.M.UDL, 1)} / ${fr(K.M.LM2, 1)} kN·m/m`],
+      ['M_Q trafic : bandes / plaque (retenu le plus grand)', `${fr(K.M.bandes, 1)} / ${K.M.plaque != null ? fr(K.M.plaque, 1) : '—'} kN·m/m`],
       ['M_Ed ELU (1,35 G + 1,35 Q, ' + K.gouverne + ')', `${fr(K.M.ELU, 1)} kN·m/m`], ['M ELS caractéristique / quasi permanent', `${fr(K.M.ELS, 1)} / ${fr(K.M.QP, 1)} kN·m/m`],
       ['A_s ELU / ELS / fissuration / minimum', `${fr(K.As.ELU * 1e4, 1)} / ${fr(K.As.ELS * 1e4, 1)} / ${fr(K.As.fissuration * 1e4, 1)} / ${fr(K.As.min * 1e4, 1)} cm²/m`],
       ['A_s retenue (nappe inférieure // axe)', `HA${K.inf.phi} e=${esp(K.inf.s)} = ${fr(K.inf.As * 1e4, 1)} cm²/m ${K.okAs ? '✓' : '✗'}`],
-      ['Répartition (≥ 20 %) / nappe supérieure', `HA${K.rep.phi} e=${esp(K.rep.s)} / HA${K.sup.phi} e=${esp(K.sup.s)}`],
+      ...(K.transv ? [['Plaque // garde-grève : m_y + |m_xy| / m_y − |m_xy| (ELU)', `${fr(K.transv.inf.M.ELU, 1)} / ${fr(K.transv.sup.M.ELU, 1)} kN·m/m`],
+        ['Transversales inf. / sup. (≥ 20 % en inférieure)', `HA${K.rep.phi} e=${esp(K.rep.s)} / HA${K.supT.phi} e=${esp(K.supT.s)}`]] : [['Répartition (≥ 20 %) / nappe supérieure', `HA${K.rep.phi} e=${esp(K.rep.s)} / HA${K.sup.phi} e=${esp(K.sup.s)}`]]),
       ['V_Ed ELU / V_Rd,c (sans armatures)', `${fr(K.V.ELU, 1)} / ${fr(K.VRdc, 1)} kN/m ${K.okV ? '✓' : '✗'}`],
       ['Réaction sur le corbeau G / Q / ELU', `${fr(K.corbeau.G, 1)} / ${fr(K.corbeau.Q, 1)} / ${fr(K.corbeau.ELU, 1)} kN/m`],
       ['Corbeau (J.3) : tirant F_Ed a_c/z₀ + 0,2 F_Ed / A_s', `${fr(D.Kc.Ft, 1)} kN/m / ${fr(D.Kc.As * 1e4, 2)} cm²/m → HA${D.Kc.tirant.phi} e=${esp(D.Kc.tirant.s)}`],
@@ -217,7 +223,7 @@ export function planDalleTransition(st, i, cartouche = {}) {
     ...couperLigne(`2. Dalle sur deux appuis simples : corbeau du garde-grève et remblai (béton de propreté de 10 cm sur remblai compacté) ; portée de calcul L_c = L − 0,30 m ; charges LM1 (TS, UDL) et LM2 diffusées à 1/1 jusqu'au feuillet moyen (EN 1991-2 § 4.3.6).`, 110),
     ...couperLigne('3. Dessus de la dalle à 0,30 m sous la chaussée au droit du garde-grève, pente de 5 % vers le remblai ; joint de 2 cm en polystyrène contre le garde-grève ; goujons scellés dans le corbeau, à disposer avant le bétonnage du corbeau.', 110),
     ...couperLigne(`4. Recouvrements l₀ (EN 1992-1-1 § 8.7.3) : ${texteRecouvrements(marks.map(q => q.phi), mat)} ; barres de plus de 12 m en pièces recouvertes.`, 110),
-    ...couperLigne('5. Aciers de répartition ≥ 20 % des aciers principaux (§ 9.3.1.1(2)) ; moments transversaux sous charges concentrées non calculés : calcul de plaque si la dalle est large ou très biaise.', 110),
+    ...couperLigne(K.transv ? '5. Calcul de plaque (éléments DKT, appuis linéaires sur les deux bords parallèles au garde-grève, bords libres) : surfaces d\'influence de m_x, m_y, m_xy, voies TS et LM2 déplacées ; moment principal = max(bandes, plaque) ; aciers parallèles au garde-grève par Wood-Armer, ≥ 20 % des principaux en nappe inférieure.' : '5. Aciers de répartition ≥ 20 % des aciers principaux (§ 9.3.1.1(2)).', 110),
     ...couperLigne('6. Bordereau ISO 4066, cotes en mm ; chaises : une par m² de dalle ; aciers du corbeau (tirant, U horizontaux, EN 1992-1-1 annexe J.3) à poser avec le garde-grève.', 110),
     ...(K.okV && K.okAs ? [] : ['7. ATTENTION — ' + (!K.okV ? 'effort tranchant > V_Rd,c : épaissir la dalle.' : 'section d\'acier insuffisante : épaissir la dalle.')]),
   ], hn = N.length * 2.2 * 1.6;

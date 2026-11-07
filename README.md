@@ -777,6 +777,9 @@ armatures, effort tranchant, corbeau, trafic transmis à la culée) et chapitre 
 v0.99.35 : murs en aile — revanche horizontale en tête (figure 48), deux zones de ferraillage et de semelle
 (enracinement, mi-longueur du rampant ; semelle de largeur variable, figure 70), jonction avec le piédroit au choix
 (figure 71 : solution 1 joint ouvert avec face avant renforcée, solution 2 joint plan).
+v0.99.36 : dalle de transition calculée aussi en plaque (éléments DKT, surfaces d'influence, voies TS et LM2 sur la
+chaussée) : moment principal = max(bandes, plaque), aciers parallèles au garde-grève par Wood-Armer ; murs en aile au
+séisme (Mononobe-Okabe, EN 1998-5 annexe E : voile, renversement, glissement).
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à

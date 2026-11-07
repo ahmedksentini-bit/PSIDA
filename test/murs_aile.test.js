@@ -125,3 +125,18 @@ test('v0.99.35 — revanche en tête, deux zones de calcul, jonction avec le pi�
   const masse = ms => ms.reduce((S, m) => S + m.masse, 0);
   assert.ok(masse(reperesAiles(A)) < masse(reperesAiles(unique)));
 });
+
+test('v0.99.36 — murs en aile au séisme : Mononobe-Okabe (EN 1998-5 annexe E), voile et stabilité', async () => {
+  const { kaeMononobe } = await import('../src/cadre/murs_aile.js');
+  assert.ok(Math.abs(kaeMononobe(30, 0) - 1 / 3) < 1e-9);                 // θ = 0 : Rankine
+  assert.ok(kaeMononobe(30, 10) > kaeMononobe(30, 5) && kaeMononobe(30, 31) === Infinity);
+  const h = { code: 'BAEL', fc28: 25, fe: 400, sigmaS: 201.6 };
+  const K0 = calculMurAile(3, { c: 0.05, es: 0.35, h }), K = calculMurAile(3, { c: 0.05, es: 0.35, h, seisme: { kh: 0.2 } });
+  assert.ok(K.seisme && K.seisme.voile.Ed > K.seisme.voile.Pa && K.semelle.B >= K0.semelle.B);
+  assert.ok(K.semelle.seisme.FSr >= 1 && K.semelle.seisme.FSg >= 1 - 1e-9 && K.ok);
+  // le cadre en zone sismique transmet k_h aux murs ; sinon pas de séisme
+  const A = ailesCadre(cadre({ cf_sis: 'oui', cf_zone: '4' }));
+  assert.ok(A.calc.seisme && A.calc.seisme.kh > 0.1);
+  assert.equal(ailesCadre(cadre({})).calc.seisme, null);
+  assert.ok(planMursAile(cadre({ cf_sis: 'oui', cf_zone: '4' }), {}).valide().ok);
+});

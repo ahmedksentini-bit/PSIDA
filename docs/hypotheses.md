@@ -600,6 +600,12 @@ Contrôle sur la note « appuis et fondations » de d'un pont-dalle précontrain
 - Jonction (figure 71) : solution 1 (défaut) joint ouvert devant l'extrémité du piédroit — la rotation du mur est gênée et la face avant est tendue ; le guide demande un ferraillage sans le chiffrer : PSIDA pose sur 1,00 m des verticales avant de la section des verticales côté terres (disposition forfaitaire). Solution 2 : joint plan, sans ce ferraillage, fruit initial majoré (non chiffré).
 - Non traité : niveau d'assise variable des murs longs (figure 70).
 
+## 1 septdecies undevicies. Dalle de transition en plaque, murs en aile au séisme (v0.99.36)
+
+- **Plaque** (`plaqueDalleTransition`) : éléments DKT (src/plate/fe.js), maille ≈ 0,25 m, parallélogramme de biais ψ sur appuis linéaires rigides aux deux bords parallèles au garde-grève, bords libres ; surfaces d'influence (K z = c) de m_x, m_y, m_xy aux lignes L_c/2 et L_c/4 ; roues diffusées à 1/1, voies TS de 3 m (deux ordres) et essieu LM2 déplacés sur la largeur roulable du tablier centrée sur la dalle ; UDL 9 α_q1 sur toute la dalle. Contrôle : charge uniforme sur dalle large, m_x = g L²/8 et m_y = ν m_x à 1 % près.
+- La méthode des bandes (Heft 240 avec regroupement des charges voisines) sous-estimait le moment de trafic de 28 à 41 % par rapport à la plaque (L = 6 à 3 m, chaussée de 10 m) : moment principal = max(bandes, plaque) ; aciers parallèles au garde-grève par Wood-Armer (m_y + |m_xy| en nappe inférieure, ≥ 20 % des principaux ; m_y − |m_xy| en nappe supérieure). Conséquence : sous LM1, dalle de 0,30 m jusqu'à L = 4 m, 0,35 m à 5–6 m (le plan OA68, calculé sous LM2 seul, garde 0,30 m à 5 m). Effort tranchant : bandes seules.
+- **Murs en aile au séisme** : k_h = a_g S / g de l'action du cadre, r = 1 (mur en béton armé fléchi, EN 1998-5 tableau 7.1), k_v = ± 0,5 k_h ; K_AE de Mononobe-Okabe (annexe E, écran vertical, terre-plein horizontal, δ = 0, φ déduit de K_a) ; incrément dynamique à mi-hauteur ; inertie du voile, de la semelle et des terres du talon ; ψ₂ = 0 pour le trafic ; voile : A_s pour M_E/1,15 (γ_s = 1) ; semelle : renversement et glissement ≥ 1, poids × (1 − k_v), excentricité ≤ B/3. Pas de bêche ni de butée.
+
 ## 1 octodecies. Textes relus (v0.36)
 
 - **Guide Sétra 2007** (appareils en élastomère fretté) : voir 1 sexdecies ; exemple du § 4.2 reproduit.

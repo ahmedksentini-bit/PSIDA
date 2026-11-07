@@ -9,6 +9,7 @@ import { placerBordereau } from './ferraillage.js';
 import { longueurCoupe, recapitulatif } from './bordereau.js';
 import { anchorage, massPerM } from '../rebar.js';
 import { mursEnAile } from '../cadre/murs_aile.js';
+import { actionSismique } from '../cadre/seisme.js';
 import { epVoile } from '../cadre/cadre.js';
 import { couperLigne } from './notes_durabilite.js';
 
@@ -28,7 +29,11 @@ export function ailesCadre(cadre) {
   const h = res.h || inp.hyp;
   // ouverture L du § 2.8.1 : ouverture droite ; ouvrage multiple : entre D et 1,3 D (D portée d'une travée), retenu 1,15 D
   const geo = { W, Lo: n > 1 ? 1.15 * gi.B : gi.B, L: gi.L > 0 ? gi.L : Math.max(2, W), zT, er, biais, ep: epVoile(g, 0) };
-  const R = mursEnAile(geo, { ...o, c: h.enrobage ?? 0.05, h: { code: h.code, fc28: h.fc28, fe: h.fe, sigmaS: h.sigmaS, exposition: h.exposition } });
+  // séisme : même action que le cadre (k_h = a_g S / g, r = 1 pour un mur en béton armé fléchi, EN 1998-5 tableau 7.1)
+  const sIn = inp.opts.seisme;
+  let seisme = null;
+  if (sIn && sIn.actif) { try { const As = actionSismique(sIn); seisme = { kh: As.kh, kv: (sIn.kvRapport ?? 0.5) * As.kh, source: As.source }; } catch (e) { seisme = null; } }
+  const R = mursEnAile(geo, { ...o, seisme, c: h.enrobage ?? 0.05, h: { code: h.code, fc28: h.fc28, fe: h.fe, sigmaS: h.sigmaS, exposition: h.exposition } });
   return { ...R, geo, h, ouvert, nCell: n };
 }
 
@@ -192,6 +197,8 @@ export function planMursAile(cadre, cartouche = {}) {
         ['Zone 2 : verticales côté terres ; semelle B (a ; b)', `HA${K2.voile.main.phi} e=${esp(K2.voile.main.s)} ; ${fr(K2.semelle.B)} (${fr(K2.semelle.a)} ; ${fr(K2.semelle.b)}) m`],
         ['Zone 2 : renversement / glissement ; σ_réf', `${fr(K2.semelle.FSr)} / ${fr(K2.semelle.FSg)} ; ${kN(K2.semelle.qref)} kPa ${K2.ok ? '✓' : '✗'}`],
       ])(A.calc2) : []),
+      ...(K.seisme ? [['Séisme : k_h / k_v ; K_AE (Mononobe-Okabe, θ)', `${fr(K.seisme.kh, 3)} / ±${fr(K.seisme.kv, 3)} ; ${fr(K.seisme.K, 3)} (${fr(K.seisme.th, 1)}°)`],
+        ['Séisme : M_E pied du voile ; A_s ; renversement / glissement (≥ 1)', `${kN(K.seisme.voile.M)} kN·m/m ; ${fr(K.seisme.voile.As)} cm²/ml${K.seisme.voile.gouverne ? ' (gouverne)' : ''} ; ${fr(S.seisme.FSr)} / ${fr(S.seisme.FSg)}`]] : []),
       ['Jonction avec le piédroit (figure 71)', A.jonction === 'sol1' ? 'solution 1 : joint ouvert, face avant renforcée sur 1,00 m' : 'solution 2 : joint plan, fruit initial majoré'],
     ] };
   const hC = (tc.lignes.length + 2) * tc.hl;
@@ -201,6 +208,7 @@ export function planMursAile(cadre, cartouche = {}) {
     ...couperLigne('3. Calcul à l\'enracinement (hauteur maximale) : armatures et semelle conservées sur toute la longueur ; poussée active et surcharge de remblai ; voile en T renversé fondé au niveau de la sous-face du radier ; épaisseur à la base ≥ e_m de l\'abaque des murs en aile et semelle de même épaisseur (Sétra PICF-EL, DT422, § 2.1).', 110),
     ...couperLigne(`4. Revanche horizontale de ${fr(A.lr)} m en tête (sous la corniche, figure 48)${A.calc2 ? ' ; zone 2 au-delà de la mi-longueur du rampant, calculée à sa hauteur maximale (semelle de largeur variable, figure 70)' : ''} ; verticales découpées par bandes de 1,50 m suivant la hauteur du mur ; horizontales par groupes de trois lits, longueur du lit le plus bas.`, 110),
     ...couperLigne(A.jonction === 'sol1' ? '5. Jonction solution 1 (figure 71) : joint ouvert devant l\'extrémité du piédroit ; la rotation du mur, gênée, tend la face avant : verticales avant de la section des verticales côté terres sur 1,00 m (disposition PSIDA, ferraillage non chiffré par le guide).' : '5. Jonction solution 2 (figure 71) : joint plan, réservé aux bons terrains ; donner au parement avant un fruit initial supérieur au fruit final (rotation du mur sous la poussée).', 110),
+    ...(K.seisme ? couperLigne('6. Séisme (EN 1998-5 § 7.3.2, annexe E) : k_h = a_g S/g (r = 1, mur en béton armé fléchi), k_v = ± 0,5 k_h ; poussée de Mononobe-Okabe, incrément dynamique à mi-hauteur, inertie du mur ; situation accidentelle à coefficients unitaires ; une bêche sous la semelle réduirait la largeur imposée par le glissement (non calculée).', 110) : []),
     ...(K.qadm > 0 ? [] : couperLigne('6. Contrainte admissible du sol non saisie : contrainte de référence à comparer à la portance (onglet Cadres, profil de sol).', 110)),
     ...(K.ok && (!A.calc2 || A.calc2.ok) ? [] : ['7. ATTENTION — vérifications non satisfaites : voir le tableau de calcul.']),
   ], hn = N.length * 2.2 * 1.6;

@@ -61,6 +61,18 @@ const interp = (T, x) => {
   for (let k = 1; k < T.length; k++) if (x <= T[k][0]) return T[k - 1][1] + (T[k][1] - T[k - 1][1]) * (x - T[k - 1][0]) / (T[k][0] - T[k - 1][0]);
   const [a, b] = T.slice(-2); return b[1] + (b[1] - a[1]) * (x - b[0]) / (b[0] - a[0]);
 };
+/**
+ * Coefficient de poussée sismique de Mononobe-Okabe (EN 1998-5 annexe E, E.4) : écran vertical (ψ = 90°), terre-plein
+ * horizontal (β = 0), frottement terre-écran δ ; θ = atan(k_h / (1 ∓ k_v)). Angles en degrés.
+ */
+export function kaeMononobe(phi, theta, delta = 0) {
+  const r = x => x * RAD, f = r(phi), t = r(theta), d = r(delta), psi = Math.PI / 2;
+  if (f - t <= 0) return Infinity;
+  const num = Math.sin(psi + f - t) ** 2;
+  const rac = Math.sqrt(Math.sin(f + d) * Math.sin(f - t) / (Math.sin(psi - t - d) * Math.sin(psi)));
+  return num / (Math.cos(t) * Math.sin(psi) ** 2 * Math.sin(psi - t - d) * (1 + rac) ** 2);
+}
+
 /** Épaisseur minimale à la base e_m [m] pour un mur de hauteur h (au-dessus de la semelle) ; f_c28 en MPa. */
 export function epaisseurAbaque(h, fc28 = 25, type = 'aile') {
   const hr = type === 'aile' ? h - 0.50 : h, t = Math.min(1, Math.max(0, (Math.min(25, Math.max(20, fc28)) - 20) / 5));
@@ -110,7 +122,17 @@ const tranchant = (Vu, d, As, h) => (h.code === 'EC2' ? tranchantEc2(Vu / 10, d,
  * o : { eT, fruit, Ka, gamma, q, phiSol, qadm [kPa, 0 = non vérifié], c, h (hypothèses du cadre : code, fc28, fe, sigmaS) }.
  */
 export function calculMurAile(hv, o) {
-  const { eT = 0.25, fruit = 0.02, Ka = 0.33, gamma = 20, q = 10, phiSol = 30, qadm = 0, c = 0.05, es = 0.40, h: hyp } = o;
+  const { eT = 0.25, fruit = 0.02, Ka = 0.33, gamma = 20, q = 10, phiSol = 30, qadm = 0, c = 0.05, es = 0.40, h: hyp, seisme = null } = o;
+  // séisme (EN 1998-5 § 7.3.2, annexe E) : mur en béton armé fléchi → r = 1, k_h = α S, k_v = ± 0,5 k_h ; poussée
+  // totale de Mononobe-Okabe E_d = ½ K_AE γ (1 ± k_v) H², incrément dynamique à mi-hauteur, inertie du voile ;
+  // surcharge de trafic ψ₂ = 0 ; frottement terre-écran nul (majorant) ; angle de frottement du remblai déduit de K_a
+  const phiR = Math.asin((1 - Ka) / (1 + Ka)) / RAD;
+  const sis = seisme && seisme.kh > 0 ? (() => {
+    const kh = seisme.kh, kv = seisme.kv ?? 0.5 * kh;
+    const cas = [1, -1].map(sg => { const th = Math.atan(kh / (1 - sg * kv)) / RAD, K = kaeMononobe(phiR, th, 0); return { sg, th, K, f: K * (1 - sg * kv) }; });
+    const pire = cas.reduce((a, b) => (b.f > a.f ? b : a));
+    return { kh, kv, phiR, ...pire, cas };
+  })() : null;
   // voile : épaisseur à la base, épaissie tant que flexion ou tranchant ne passent pas
   const em = epaisseurAbaque(hv, hyp.fc28, 'aile'), eF = (eT + fruit * hv) / (1 + fruit);
   let eB = Math.ceil(Math.max(eF, em) * 100 - 1e-6) / 100, V = null;
@@ -123,7 +145,16 @@ export function calculMurAile(hv, o) {
     if (!f.surarme && f.choix && !f.choix.insuffisant && t.ok) break;
     eB = Math.round((eB + 0.05) * 100) / 100;
   }
-  const eTop = Math.max(0.25, eT), main = V.choix, d = V.d;
+  const eTop = Math.max(0.25, eT);
+  let main = V.choix; const d = V.d;
+  if (sis) {
+    const W1v = 25 * (eTop + eB) / 2 * hv, PaS = Ka * gamma * hv ** 2 / 2, Ed = 0.5 * sis.f * gamma * hv ** 2;
+    sis.voile = { Pa: PaS, Ed, dP: Math.max(0, Ed - PaS), M: PaS * hv / 3 + Math.max(0, Ed - PaS) * hv / 2 + sis.kh * W1v * hv / 2, V: Ed + sis.kh * W1v };
+    // situation accidentelle : γ_s = 1 (au lieu de 1,15), γ_c = 1,2 (au lieu de 1,5) — équivalent fondamental M_E / 1,15
+    const fE = flexion({ Mu: sis.voile.M / 1.15, Ms: 0, e: eB, c, h: { ...hyp, code: hyp.code === 'EC2' ? 'EC2' : 'BAEL' } });
+    sis.voile.As = fE.As; sis.voile.gouverne = fE.As > V.As + 1e-9;
+    if (fE.choix && fE.As > main.As - 1e-9) main = choixAile(fE.As);
+  }
   const minF = hyp.code === 'EC2' ? minimumEc2(d, hyp.fc28, hyp.fe) : minimumBael(d, hyp.fc28, hyp.fe);
   const avant = choixAile(Math.max(minF / 2, 0.0005 * eB * 1e4));
   const horiz = choixAile(Math.max(0.25 * main.As, 0.0005 * eB * 1e4), { phiMin: 8 });
@@ -140,8 +171,18 @@ export function calculMurAile(hv, o) {
     // G + Q : résultante, excentricité, contraintes (kPa)
     const Nq = N + Q3, Mc = (Ms0 + Q3 * x3) - Mr, xr = Mc / Nq, ex = B / 2 - xr;
     const s1 = Nq / B * (1 + 6 * ex / B), s2 = Nq / B * (1 - 6 * ex / B), qref = (3 * Math.max(s1, s2) + Math.min(s1, s2)) / 4;
-    const ok = FSr >= 1.5 && FSg >= 1.5 && Math.abs(ex) <= B / 6 + 1e-9 && (!(qadm > 0) || qref <= qadm + 1e-9);
-    S = { B, a, b, W1, W2, W3, Q3, N, Pg, Pq, FSr, FSg, ex, s1, s2, qref, ok };
+    // séisme : coefficients partiels unitaires (EN 1997-1 / EN 1998-5, situation accidentelle) — renversement et
+    // glissement ≥ 1, poids réduits de (1 − k_v), poussée de Mononobe-Okabe sur le plan vertical du talon, inertie
+    let E = null;
+    if (sis) {
+      const Ed = 0.5 * sis.f * gamma * H ** 2, PaS = Ka * gamma * H ** 2 / 2, Hi = sis.kh * (W1 + W2 + W3);
+      const MrE = PaS * H / 3 + Math.max(0, Ed - PaS) * H / 2 + sis.kh * (W1 * (es + hv / 2) + W2 * es / 2 + W3 * (es + hv / 2));
+      const fv = 1 - sis.kv;
+      E = { Ed, FSr: fv * Ms0 / MrE, FSg: fv * N * tanP / (Ed + Hi), ex: B / 2 - (fv * Ms0 - MrE) / (fv * N) };
+      E.ok = E.FSr >= 1 && E.FSg >= 1 && Math.abs(E.ex) <= B / 3 + 1e-9;
+    }
+    const ok = FSr >= 1.5 && FSg >= 1.5 && Math.abs(ex) <= B / 6 + 1e-9 && (!(qadm > 0) || qref <= qadm + 1e-9) && (!E || E.ok);
+    S = { B, a, b, W1, W2, W3, Q3, N, Pg, Pq, FSr, FSg, ex, s1, s2, qref, ok, seisme: E };
     if (ok) break;
   }
   // semelle en flexion : ELU, réaction trapézoïdale ; talon (nappe supérieure) et patin (nappe inférieure)
@@ -158,7 +199,7 @@ export function calculMurAile(hv, o) {
   const repS = choixAile(Math.max(0.25 * Math.max(fT.choix ? fT.choix.As : 0, fP.choix ? fP.choix.As : 0), 0.0005 * es * 1e4));
   const ok = !V.surarme && main && !main.insuffisant && V.T.ok && S.ok && fT.choix && fP.choix;
   return {
-    hv, es, eT: eTop, eB, eFruit: eF, em, Ka, gamma, q, phiSol, qadm,
+    hv, es, eT: eTop, eB, eFruit: eF, em, Ka, gamma, q, phiSol, qadm, seisme: sis,
     voile: { Mg, Mq, Mu, Ms, Vu, d, As: V.As, main, avant, horiz, T: V.T, wk: V.wk },
     semelle: { ...S, Nu, exu, MtalU, MpatU, talon: fT, patin: fP, rep: repS },
     ok: !!ok,
