@@ -788,6 +788,8 @@ dans les notes et les transversales en deux L, éclatement horizontal des abouts
 câble tendu par l'extrémité opposée à C0, état non fissuré homogénéisé de la flèche des dalles armées, seuil XS2 du
 tableau 4.3N, réactions de la vue 3D du grillage, contrôle des cerces de pieux.
 v0.99.38 : accueil — boutons « Choisir cet ouvrage » alignés en bas à gauche des cartes, au même niveau sur une rangée.
+v0.99.39 : « Enregistrer » ajoute au nom du fichier la date et l'heure locales (projet_2026-11-07_09h54.json) ; l'horodatage
+d'un enregistrement précédent est remplacé, pas cumulé (web/projet_nom.js).
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à
