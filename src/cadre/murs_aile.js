@@ -17,8 +17,15 @@
  *    et raide au coin aigu) et la condition A = B conduisent à l'inverse avec les formules ; ouvrage droit : α = β ;
  *    angle saisi sinon ;
  *  - arête supérieure 0,20 m sous la trace du talus (pente 1/m, m = 3/2 par défaut) ; à l'enracinement, trace au niveau
- *    du dessus de la traverse + h_t ; le talus descend perpendiculairement aux têtes ; longueur = chute de l'arête jusqu'à
- *    h_min au-dessus du terrain naturel (dessus du radier) / pente le long du mur, + 0,20 m de dépassement du pied ;
+ *    du dessus de la traverse + h_t ; revanche horizontale de longueur l_r en tête (sous la corniche, § 3.6.1, figure 48) ;
+ *    le talus descend perpendiculairement aux têtes ; longueur = l_r + chute de l'arête jusqu'à h_min au-dessus du terrain
+ *    naturel (dessus du radier) / pente le long du mur + 0,20 m de dépassement du pied ;
+ *  - deux zones de ferraillage et de semelle : zone 1 de l'enracinement à la mi-longueur du rampant (calcul à h_v0),
+ *    zone 2 au-delà (calcul à sa hauteur maximale) — semelle de largeur variable (figure 70) ;
+ *  - jonction avec le piédroit (§ 3.6.1 b, figure 71) : solution 1, joint ouvert devant l'extrémité du piédroit — la
+ *    rotation du mur y est gênée et tend la face avant : verticales de la face avant portées à la section des verticales
+ *    côté terres sur 1,00 m au droit de la jonction (disposition PSIDA, le guide ne chiffre pas ce ferraillage) ;
+ *    solution 2, joint plan sans butée : fruit avant initial majoré pour compenser la rotation (non chiffré) ;
  *  - épaisseur en tête ≥ 0,25 m, à la base e = (e_haut + (f_e + f_i) h)/(1 + f_e + f_i) et e ≥ e_m de l'abaque des murs
  *    en aile (Sétra, PICF-EL, déc. 1991 – éd. juil. 1992, DT422, annexe « prédimensionnement des murs de tête » § 2.1.1,
  *    p. 75 : courbes f_c28 = 20 et 25 MPa, axe des murs en aile décalé de +0,50 m sur celui des murs en retour ; sinon
@@ -166,7 +173,7 @@ export function calculMurAile(hv, o) {
  */
 export function mursEnAile(geo, o) {
   const { W, Lo, L, zT, er, biais } = geo, b = biais * RAD, cb = Math.cos(b), sb = Math.sin(b);
-  const m = o.m > 0 ? o.m : 1.5, ht = o.ht ?? 0.30, hmin = o.hmin ?? 0.50;
+  const m = o.m > 0 ? o.m : 1.5, ht = o.ht ?? 0.30, hmin = o.hmin ?? 0.50, lr = Math.max(0, o.lr ?? 0.50);
   // semelle d'épaisseur égale à celle du mur à sa base (DT422 § 2.1), sauf épaisseur saisie : point fixe sur e_b(h_v)
   let es = o.es ?? 0.40;
   if (o.es == null) for (let k = 0; k < 6; k++) { const eb = calculMurAile(zT + ht - es, { ...o, es }).eB; if (Math.abs(eb - es) < 0.005) break; es = eb; }
@@ -187,13 +194,18 @@ export function mursEnAile(geo, o) {
     const pente = (dir[0] * nOut[end][0] + dir[1] * nOut[end][1]) / m;      // chute de la trace par mètre de mur
     const zTop0 = zT + ht, hv0 = zTop0 - es;                                // hauteur du voile à l'enracinement
     const chute = Math.max(0, zTop0 - (er + hmin));
-    const Lw = pente > 1e-3 ? Math.min(chute / pente + 0.20, 30) : null;
-    ailes.push({ end, cote, label: `${end} ${cote}`, theta, aigu, angCoin, root, dir, pente, zTop0, hv0, Lw, hEnd: Lw ? Math.max(hmin, zTop0 - pente * (Lw - 0.20)) - es : null });
+    // revanche horizontale en tête (sous la corniche, § 3.6.1), puis arête parallèle à la trace du talus
+    const Lw = pente > 1e-3 ? Math.min(lr + chute / pente + 0.20, 30) : null;
+    const s2 = Lw ? lr + (Lw - lr) / 2 : null;                              // début de la zone 2 (mi-longueur du rampant)
+    const zTopS = s => Math.max(er + hmin, zTop0 - pente * Math.max(0, s - lr));
+    ailes.push({ end, cote, label: `${end} ${cote}`, theta, aigu, angCoin, root, dir, pente, lr, zTop0, hv0, Lw, s2, zTopS, hv2: Lw ? zTopS(s2) - es : null, hEnd: Lw ? er + hmin - es : null });
   }
   // calcul : une fois par hauteur d'enracinement (identique pour les quatre ailes, les longueurs différant seules)
   const calc = calculMurAile(ailes[0].hv0, { ...o, es });
+  // zone 2 (seconde moitié du rampant) : calcul à sa hauteur maximale, épaisseur de semelle conservée
+  const a2 = ailes.find(a => a.Lw), calc2 = a2 && a2.hv2 < ailes[0].hv0 - 0.30 ? calculMurAile(Math.max(0.5, a2.hv2), { ...o, es }) : null;
   for (const a of ailes) a.Avue = a.Lw ? a.Lw * Math.sin(a.theta * RAD) : null;    // largeur vue depuis la voie franchie
-  return { ailes, calc, prop, m, ht, hmin, es, joint: 0.02, surfacesVues: surfacesVues(ailes) };
+  return { ailes, calc, calc2, prop, m, ht, hmin, lr, es, joint: 0.02, jonction: o.jonction === 'sol2' ? 'sol2' : 'sol1', surfacesVues: surfacesVues(ailes) };
 }
 
 /** Égalité des surfaces vues par tête (guide § 2.8.1, figure 35) : largeurs A = L_w sin θ et triangles ½ A h. */

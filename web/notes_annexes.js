@@ -87,8 +87,13 @@ export function mursAileBlocks(cadre) {
     ['Patin (nappe inférieure) : M_u ; aciers', `${F1(S.MpatU)} kN·m/m ; ${ha(S.patin.choix.phi, S.patin.choix.s)}`],
     ['Verdict', K.ok ? 'toutes les vérifications sont satisfaites' : 'NON — voir les lignes ci-dessus'],
   ], { small: true });
+  if (A.calc2) {
+    const K2 = A.calc2, V2 = K2.voile, S2 = K2.semelle;
+    para(`Zone 2 (seconde moitié du rampant, figure 70 : semelle de largeur variable), calculée à sa hauteur maximale h_v = ${F(K2.hv)} m : base ${F(K2.eB)} m ; verticales côté terres ${ha(V2.main.phi, V2.main.s)} (${F(V2.As)} cm²/ml requis) ; semelle ${F(S2.B)} m (patin ${F(S2.a)}, talon ${F(S2.b)}) ; renversement ${F(S2.FSr)}, glissement ${F(S2.FSg)}, σ_réf ${F1(S2.qref)} kPa — ${K2.ok ? 'vérifications satisfaites' : 'NON'}.`);
+  }
+  para(`Revanche horizontale de ${F(A.lr)} m en tête, sous la corniche (§ 3.6.1, figure 48). Jonction avec le piédroit (§ 3.6.1 b, figure 71) : ${A.jonction === 'sol1' ? 'solution 1, joint ouvert devant l\'extrémité du piédroit, qui laisse le mur libre de tasser ; sa rotation sous la poussée étant gênée, la face avant est tendue près de la jonction : les verticales avant y reçoivent la section des verticales côté terres sur 1,00 m (disposition PSIDA, le guide ne chiffrant pas ce ferraillage)' : 'solution 2, joint plan, à réserver aux bons terrains de fondation ; le parement avant reçoit un fruit initial supérieur au fruit final, la rotation du mur sous la poussée le réduisant'}.`);
   const marks = reperesAiles(A);
   para(`Aciers des quatre murs : ${F0(masse(marks))} kg (${marks.length} repères, feuille OH-AIL-01).`);
-  comment('Limites : calcul à l\'enracinement (hauteur maximale), armatures et semelle conservées sur toute la longueur ; poussée active sous talus horizontal ; séisme non traité ; jonction avec le piédroit par joint ouvert (solution 1 de la figure 71) sans armatures de face avant ; revanche sous corniche et assise en gradins non dessinées.');
+  comment('Limites : deux zones de calcul (enracinement, mi-longueur du rampant) ; poussée active sous talus horizontal ; séisme non traité ; niveau d\'assise variable des murs longs (figure 70) non dessiné.');
   return B;
 }

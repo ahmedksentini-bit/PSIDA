@@ -24,7 +24,7 @@ test('Ailes : quatre géométries distinctes, β au coin aigu, longueur = chute 
   assert.equal(aigus.length, 2);
   for (const a of R.ailes) {
     assert.ok(Math.abs(a.theta - (a.aigu ? R.prop.beta : R.prop.alpha)) < 1e-9);
-    assert.ok(Math.abs(a.Lw - ((a.zTop0 - (0.35 + 0.50)) / a.pente + 0.20)) < 1e-9);
+    assert.ok(Math.abs(a.Lw - (0.50 + (a.zTop0 - (0.35 + 0.50)) / a.pente + 0.20)) < 1e-9);   // revanche 0,50 m
   }
   // ouvrage droit, θ = 0 (prolongement des piédroits) : pente 1/m le long du mur
   const D = mursEnAile({ ...geo, biais: 90 }, { angle: 0, m: 1.5, c: 0.05, h: { code: 'BAEL', fc28: 25, fe: 400, sigmaS: 201.6 } });
@@ -102,4 +102,26 @@ test('v0.99.33 — guide 1992 § 2.8.1 : β au coin aigu égalise les surfaces v
   // ouvrage multiple : L = 1,15 D
   const A = ailesCadre(cadre({ cf_n: '3', cf_B: '3' }));
   assert.ok(Math.abs(A.geo.Lo - 3.45) < 1e-9);
+});
+
+test('v0.99.35 — revanche en tête, deux zones de calcul, jonction avec le piédroit (guide 1992 § 3.6.1, figures 48, 70, 71)', () => {
+  const A = ailesCadre(cadre({ cf_H: '3.5' })), a = A.ailes[0];
+  // revanche : arête horizontale sur l_r, puis parallèle au talus
+  assert.equal(A.lr, 0.50);
+  assert.ok(Math.abs(a.zTopS(0.30) - a.zTop0) < 1e-12 && a.zTopS(1.0) < a.zTop0);
+  // zone 2 : calcul à sa hauteur maximale, plus faible ; aciers et semelle réduits
+  assert.ok(A.calc2 && A.calc2.hv < A.calc.hv && A.calc2.ok);
+  assert.ok(A.calc2.voile.main.As <= A.calc.voile.main.As + 1e-9 && A.calc2.semelle.B <= A.calc.semelle.B + 1e-9);
+  const marks = reperesAiles(A);
+  assert.ok(marks.some(m => /zone 2/.test(m.label)) && marks.some(m => m.pos === 'vJn'));
+  const jn = marks.find(m => m.pos === 'vJn');
+  assert.ok(jn.phi === A.calc.voile.main.phi && jn.s === A.calc.voile.main.s);
+  // une seule zone si le mur est bas ; solution 2 : pas d'armatures de jonction
+  const B = ailesCadre(cadre({ cf_H: '1.0', cf_Hr: '0.5', cf_aileJonction: 'sol2', cf_aileRev: '0' }));
+  assert.equal(B.jonction, 'sol2'); assert.equal(B.lr, 0);
+  assert.ok(!reperesAiles(B).some(m => m.pos === 'vJn'));
+  // allègement par rapport à une zone unique
+  const unique = { ...A, calc2: null };
+  const masse = ms => ms.reduce((S, m) => S + m.masse, 0);
+  assert.ok(masse(reperesAiles(A)) < masse(reperesAiles(unique)));
 });

@@ -774,6 +774,9 @@ ouvrages multiples.
 v0.99.34 : notes de calcul — chapitre « Dalles de transition » dans la note du pont (par culée : géométrie, efforts,
 armatures, effort tranchant, corbeau, trafic transmis à la culée) et chapitre « Murs en aile » dans la note du cadre
 (implantation, surfaces vues, voile, semelle, stabilité) ; références complétées.
+v0.99.35 : murs en aile — revanche horizontale en tête (figure 48), deux zones de ferraillage et de semelle
+(enracinement, mi-longueur du rampant ; semelle de largeur variable, figure 70), jonction avec le piédroit au choix
+(figure 71 : solution 1 joint ouvert avec face avant renforcée, solution 2 joint plan).
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à
