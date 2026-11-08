@@ -19,7 +19,7 @@
  *    traction (§ 7.4.3) ; armatures minimales sur appui (§ 7.4.2) ;
  *  - connexion : goujons (§ 6.6.3.1), flux élastique sur section non fissurée (§ 6.6.2.1), espacement ELU et ELS
  *    (k_s = 0,75, § 6.8.1 (3)), dispositions § 6.6.5 ;
- *  - fatigue (simplifiée) : FLM3, λ = λ₁ λ₂ (EN 1993-2 § 9.5.2, λ₃ = λ₄ = 1), semelle inférieure catégorie 80 (soudures des
+ *  - fatigue (simplifiée) : FLM3, λ = min(λ₁ λ₂ ; λ_max) (EN 1993-2 § 9.5.2, λ₃ = λ₄ = 1), semelle inférieure catégorie 80 (soudures des
  *    raidisseurs), goujons Δτ_c = 90 MPa, m = 8 (EN 1994-2 § 6.8.6.2 : λ_v = 1,55 λ_v,2) ; γ_Mf = 1,35 / 1,0.
  * Unités : m, kN, kN·m, MPa.
  */
@@ -56,13 +56,57 @@ export function sectionEfficace(G, signe, type, n) {
   return { A: A2, yG: yG2, I: I2, rho, trou: h, classe4: true, psi, k, lam, brut: P, ht: C.ht, ha: C.ha };
 }
 
-/** Voilement par cisaillement (EN 1993-1-5 § 5) : V_bw,Rd et V_pl,a,Rd (kN). */
-export function cisaillement(g, fyw, a, { gM0 = 1.0, gM1 = 1.1, eta = 1.2 } = {}) {
+/**
+ * Voilement par cisaillement (EN 1993-1-5 § 5) : V_bw,Rd et V_pl,a,Rd (kN). Tableau 5.1 : montant d'extrémité non rigide
+ * par défaut (χ_w = 0,83/λ̄_w, du côté de la sécurité) ; montantRigide = true : χ_w = 1,37/(0,7 + λ̄_w) pour λ̄_w ≥ 1,08
+ * (exemple JRC EUR 25193, chapitre 6 : panneau adjacent à l'appui intermédiaire P1).
+ */
+export function cisaillement(g, fyw, a, { gM0 = 1.0, gM1 = 1.1, eta = 1.2, montantRigide = false } = {}) {
   const hw = g.hw, tw = g.tw, eps = Math.sqrt(235 / fyw), Vpl = eta * hw * tw * fyw / Math.sqrt(3) / gM0 * 1000;
   if (hw / tw <= 72 * eps / eta) return { Vpl, Vb: Vpl, chi: eta, lam: 0, voilement: false };
   const kt = a / hw >= 1 ? 5.34 + 4 * (hw / a) ** 2 : 4 + 5.34 * (hw / a) ** 2;
-  const lam = hw / (37.4 * tw * eps * Math.sqrt(kt)), chi = lam < 0.83 / eta ? eta : 0.83 / lam;
-  return { Vpl, Vb: Math.min(chi * fyw * hw * tw / Math.sqrt(3) / gM1 * 1000, Vpl), chi, lam, kt, voilement: true };
+  const lam = hw / (37.4 * tw * eps * Math.sqrt(kt));
+  const chi = lam < 0.83 / eta ? eta : montantRigide && lam >= 1.08 ? 1.37 / (0.7 + lam) : 0.83 / lam;
+  const tauCr = kt * 190000 * (tw / hw) ** 2;
+  return { Vpl, Vb: Math.min(chi * fyw * hw * tw / Math.sqrt(3) / gM1 * 1000, Vpl), chi, lam, kt, tauCr, voilement: true };
+}
+
+/**
+ * Résistance d'un goujon à tête (EN 1994-2 § 6.6.3.1) : P_Rd = min(0,8 f_u π d²/4 ; 0,29 α d² √(f_ck E_cm)) / γ_V, γ_V = 1,25,
+ * α = 1 si h/d ≥ 4, sinon 0,2 (h/d + 1). d et h en m, f_u, f_ck, E_cm en MPa ; renvoie kN.
+ */
+export function resistanceGoujon({ d = 0.022, h = 0.2, fu = 450, fck = 35, Ecm = 22000 * ((fck + 8) / 10) ** 0.3, gV = 1.25 } = {}) {
+  const alpha = h / d >= 4 ? 1 : 0.2 * (h / d + 1);
+  return Math.min(0.8 * fu * Math.PI * d * d / 4 / gV, 0.29 * alpha * d * d * Math.sqrt(fck * Ecm) / gV) * 1e6 / 1000;
+}
+
+/**
+ * Raidissement en traction des armatures d'une section fissurée (EN 1994-1-1 § 7.4.3 (3), repris par l'EN 1994-2) :
+ * Δσ_s = 0,4 f_ctm / (α_st ρ_s), α_st = A I / (A_a I_a) — A, I : section mixte fissurée (charpente + armatures),
+ * A_a, I_a : charpente seule. G : section (couches) ; rho : ρ_s = A_s / A_c ; renvoie { ast, dSig (MPa) }.
+ */
+export function raidissementTraction(G, rho, fck) {
+  const P = proprietes(G, 'fissuree'), Pa = proprietes(G, 'acier'), fctm = 0.3 * fck ** (2 / 3), ast = (P.A * P.I) / (Pa.A * Pa.I);
+  return { ast, dSig: 0.4 * fctm / (ast * rho), fctm };
+}
+
+/** k_c de l'armature minimale (EN 1994-2 § 7.4.2 (1)) : 1/(1 + h_c/(2 z₀)) + 0,3 ≤ 1, z₀ distance du c.d.g. de la dalle à celui de la section mixte non fissurée (n₀). */
+export function kcFissuration(hc, z0) { return Math.min(1, 1 / (1 + hc / (2 * z0)) + 0.3); }
+
+/**
+ * Coefficient d'équivalence des dommages des ponts routiers (EN 1993-2 § 9.5.2), λ₃ = λ₄ = 1 :
+ *  - λ₁ : à mi-travée 2,55 − 0,7 (L − 10)/70 ; sur appui 2,0 − 0,3 (L − 10)/20 (L ≤ 30), 1,70 + 0,5 (L − 30)/50 (30 à 80 m),
+ *    L étant la portée de la travée (mi-travée) ou la moyenne des deux travées adjacentes (appui) — § 9.5.2 (2) ;
+ *  - λ₂ = (Q_m1/480) (N_obs/0,5·10⁶)^(1/5), Q_m1 = 445 kN ;
+ *  - λ_max (figure 9.8) : mi-travée 2,5 − 0,5 (L − 10)/15 entre 10 et 25 m, 2,0 au-delà ; appui 1,80 jusqu'à 30 m, puis
+ *    1,80 + 0,90 (L − 30)/50 (2,52 pour L = 70 m, exemple JRC EUR 25193, chapitre 6).
+ */
+export function lambdaFatigue({ zoneAppui = false, L, Nobs = 0.5e6, Qm1 = 445 }) {
+  const l = Math.min(Math.max(L, 10), 80);
+  const lam1 = zoneAppui ? (l <= 30 ? 2.0 - 0.3 * (l - 10) / 20 : 1.70 + 0.5 * (l - 30) / 50) : 2.55 - 0.7 * (l - 10) / 70;
+  const lam2 = Qm1 / 480 * (Nobs / 0.5e6) ** 0.2;
+  const lamMax = zoneAppui ? (l <= 30 ? 1.80 : 1.80 + 0.90 * (l - 30) / 50) : (l <= 25 ? 2.5 - 0.5 * (l - 10) / 15 : 2.0);
+  return { lam1, lam2, lamMax, lam: Math.min(lam1 * lam2, lamMax) };
 }
 
 /** Courbe de flambement (EN 1993-1-1 § 6.3.1.2) : χ pour λ̄ et le facteur d'imperfection α. */
@@ -151,8 +195,8 @@ export function verifierMixte(M, o = {}) {
     if (!S.fiss) { const sGd = sigG.map(q => (q.dalle && q.dalle.sup !== undefined ? q.dalle.sup : 0)); sDal = Math.min(...sGd) + sQ(eM.max, yDal, true) + 0.6 * Math.min(sT(1, yDal, 'dalle'), sT(-1, yDal, 'dalle')); }
     else {
       const sGr = sigG.map(q => (q.dalle && q.dalle.armatures !== undefined ? q.dalle.armatures : 0)), rho = S.As / (S.beff * p.hc);
-      const fctm = 0.3 * p.fck ** (2 / 3), Pm = proprietes(G, 'mixte', n0), ast = (Pm.A * Pm.I) / (P.A * P.I);
-      sReb = Math.max(...sGr) + sQ(eM.min, yReb) + 0.6 * Math.max(Math.abs(sT(1, yReb)), Math.abs(sT(-1, yReb))) + 0.4 * fctm / (ast * rho);
+      // raidissement en traction : α_st = A I / (A_a I_a), section fissurée sur charpente seule (EN 1994-1-1 § 7.4.3 (3))
+      sReb = Math.max(...sGr) + sQ(eM.min, yReb) + 0.6 * Math.max(Math.abs(sT(1, yReb)), Math.abs(sT(-1, yReb))) + raidissementTraction(G, rho, p.fck).dSig;
     }
     // effort tranchant et interaction
     const VEd = 1.35 * VGF + 1.35 * VQ, Vr = cisaillement(G, couches(G).acier[1].fy, aRaid), eta3 = VEd / Vr.Vb;
@@ -179,10 +223,15 @@ export function verifierMixte(M, o = {}) {
     // connexion : flux de cisaillement (section non fissurée n₀), V après connexion
     const Pn = proprietes(G, 'mixte', n0), yc = C.dalle.y0 + p.hc / 2, Sc = S.beff * p.hc / n0 * (yc - Pn.yG);
     const vElu = (1.35 * dVsup + 1.35 * VQ) * Sc / Pn.I, vEls = (dVsup + VQ) * Sc / Pn.I;
-    // étendues de fatigue (FLM3 dans l'axe de la voie lente), λ = λ₁ λ₂ ≤ 2,0 (EN 1993-2 § 9.5.2)
-    const jS2 = Math.max(0, Math.min(nT - 1, R.x0.findIndex((x0, j) => x <= R.x0[j + 1] + 1e-9))), Ls = p.L[jS2];
-    const lam1 = S.zoneAppui ? (Ls <= 30 ? 2.0 - 0.3 * (Ls - 10) / 20 : 1.70 + 0.5 * (Math.min(Ls, 80) - 30) / 50) : 2.55 - 0.7 * (Math.min(Math.max(Ls, 10), 80) - 10) / 70;
-    const lamF = Math.min(lam1 * 445 / 480 * (Nobs / 0.5e6) ** 0.2, 2.0), fl = FLM3.map(q => ({ d: q.d, P: q.P * CH.fatigue }));
+    // étendues de fatigue (FLM3 dans l'axe de la voie lente), λ = min(λ₁ λ₂ ; λ_max) (EN 1993-2 § 9.5.2, lambdaFatigue)
+    const jS2 = Math.max(0, Math.min(nT - 1, R.x0.findIndex((x0, j) => x <= R.x0[j + 1] + 1e-9)));
+    // L de λ₁ : portée de la travée à mi-travée, moyenne des deux travées adjacentes sur appui intermédiaire (§ 9.5.2 (2))
+    let Ls = p.L[jS2];
+    if (S.zoneAppui && nT > 1) {
+      const jA = R.x0.slice(1, -1).reduce((b, xa, k) => (Math.abs(x - xa) < Math.abs(x - R.x0[b + 1]) ? k : b), 0) + 1;
+      Ls = (p.L[jA - 1] + p.L[jA]) / 2;
+    }
+    const lamF = lambdaFatigue({ zoneAppui: S.zoneAppui, L: Ls, Nobs }).lam, fl = FLM3.map(q => ({ d: q.d, P: q.P * CH.fatigue }));
     const EF = enveloppe(xs, PC.ligneM(x), { essieux: fl }), dSigF = (EF.max - EF.min) * P.yG / P.I / 1000;
     const dVF = Math.max(...['d', 'g'].map(cote => { const ev = enveloppe(xs, PC.ligneV(x, cote), { essieux: fl }); return ev.max - ev.min; }));
     const fatigue = { lam: lamF, dSig: dSigF, dSigE: lamF * dSigF, dvL: dVF * Sc / Pn.I, ok: lamF * dSigF <= 80 / 1.35 };
@@ -190,8 +239,7 @@ export function verifierMixte(M, o = {}) {
       eff, sEluMax, sEluFib, fibEl, sElsMax, fy: fy(S), sDal, sReb, VGF, VQ, VEd, Vr, interaction, deversement, vElu, vEls, dVsup, fatigue });
   }
   // ---- goujons
-  const fckP = p.fck, Ecm = betonEcm(fckP), d = gj.d, alpha = gj.h / d >= 4 ? 1 : 0.2 * (gj.h / d + 1);
-  const PRd = Math.min(0.8 * gj.fu * Math.PI * d * d / 4 / 1.25, 0.29 * alpha * d * d * Math.sqrt(fckP * Ecm) / 1.25) * 1e6 / 1000;   // kN
+  const d = gj.d, PRd = resistanceGoujon({ d, h: gj.h, fu: gj.fu, fck: p.fck, Ecm: betonEcm(p.fck) });   // kN
   const sMax = Math.min(4 * p.hc, 0.8), sMin = 5 * d;
   // espacement des rangées : ELU, ELS caractéristique (0,75 P_Rd) et fatigue des goujons (Δτ_E2 = 1,55 λ_v,2 Δτ ≤ 90 MPa)
   const Agj = Math.PI * d * d / 4, lamV = 1.55 * 445 / 480 * (Nobs / 0.5e6) ** (1 / 8);
@@ -202,7 +250,7 @@ export function verifierMixte(M, o = {}) {
   const fat = sections.map((q, k) => ({ x: q.x, ...q.fatigue, dTauE: connexion[k].dTauE }));
   // ---- armatures minimales sur appui (EN 1994-2 § 7.4.2)
   const sA = sec.find(s => s.fiss) || sec[0], Pa = proprietes(sA.G, 'mixte', n0), z0 = couches(sA.G).dalle.y0 + p.hc / 2 - Pa.yG;
-  const kc = Math.min(1, 1 / (1 + p.hc / (2 * z0)) + 0.3), fctm = 0.3 * p.fck ** (2 / 3), AsMin = 0.9 * kc * 0.8 * fctm * p.hc / 280;   // m²/m, σ_s = 280 MPa (φ 16, w_k 0,3)
+  const kc = kcFissuration(p.hc, z0), fctm = 0.3 * p.fck ** (2 / 3), AsMin = 0.9 * kc * 0.8 * fctm * p.hc / 280;   // m²/m, σ_s = 280 MPa (φ 16, w_k 0,3)
   const armMin = { kc, AsMin, AsReel: p.rhoAppui * p.hc, ok: p.rhoAppui * p.hc >= AsMin };
   // ---- réactions d'appui par ligne (tablier entier : n poutres) pour l'onglet Appuis
   // trafic du tablier entier : voies chargées à plein (coefficient 1), tandems TS et UDL (EN 1991-2 tableau 4.2)
