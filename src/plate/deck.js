@@ -96,7 +96,7 @@ export function plaqueTablier(deck, { h = 0.25, E = 34000, nu = deck.nu ?? 0.2, 
   const secs = deck.beam.sections.map(s => s.x);
   // entraxe des appareils le long de la ligne d'appui ; en travers (y) : a·sin ψ (par ligne)
   const sPsi = Math.sin(psi * Math.PI / 200), cot = Math.abs(psi - 100) < 1e-9 ? 0 : 1 / Math.tan(psi * Math.PI / 200);
-  const parLigne = psiL.map(pl => { const aI = bearingSpacing({ width: 2 * b, psi: Math.min(pl, 200 - pl), n: nb }), sI = Math.sin(pl * Math.PI / 200); return { psi: pl, a: aI, yb: Array.from({ length: nb }, (_, k) => (k - (nb - 1) / 2) * aI * sI) }; });
+  const parLigne = psiL.map(pl => { const aI = bearingSpacing({ width: 2 * b, h: deck.h, chamfer: deck.g.chamfer || null, psi: Math.min(pl, 200 - pl), n: nb }), sI = Math.sin(pl * Math.PI / 200); return { psi: pl, a: aI, yb: Array.from({ length: nb }, (_, k) => (k - (nb - 1) / 2) * aI * sI) }; });
   const a = parLigne[0].a, yb = parLigne[0].yb;
   const ch = deck.g.chamfer;
   // ordonnées des appareils de toutes les lignes ; regroupées quand elles sont plus proches que h/3 (mailles trop fines)

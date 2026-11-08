@@ -62,19 +62,51 @@ export function Rinf(a) {
   return 0;
 }
 
-/** Entraxe des appareils d'une ligne (PSI-DA 68 § 2.4.1, PSIDA.EL) : E/sinψ/(n − 0,1) pour n ≥ 3, (n − 0,3) sinon. */
-export function bearingSpacing({ width, psi = 100, n }) {
-  const s = Math.sin(psi * Math.PI / 200);
-  return width / s / (n - (n >= 3 ? 0.1 : 0.3));
+/**
+ * Largeurs d'une dalle à encorbellements pour l'implantation des appareils (PSI-DA 68 § 2.4.1 et § 2.4.2) :
+ *   E  (EDALLE) = largeur de la dalle rectangulaire de même inertie, 12 I / h³ ;
+ *   E1 (EDALLE 1) = largeur de l'intrados, c'est-à-dire de la nervure : 2b − 2 joue.
+ * Encorbellements de PSIDA (« chanfrein ») : épaisseur variant linéairement de h au bord de la nervure à h_rive au bord
+ * libre, dessus plan. Sans encorbellement : E = 2b et E1 = null.
+ */
+export function largeursAppui({ width, h = null, chamfer = null }) {
+  if (!chamfer || !(chamfer.joue > 0) || !(chamfer.joue < width / 2) || !(h > 0) || !(width > 0) || !((chamfer.hEdge ?? h) < h)) return { E: width, E1: null };
+  const j = Math.min(chamfer.joue, width / 2), hE = Math.max(0, Math.min(chamfer.hEdge ?? h, h)), b = width / 2;
+  // section par bandes verticales (dessus à z = 0) : aire, moment statique et inertie propre de chaque bande
+  const N = 400, t = y => (Math.abs(y) <= b - j ? h : h - (h - hE) * (Math.abs(y) - (b - j)) / j);
+  let A = 0, S = 0, I0 = 0;
+  for (let k = 0; k < N; k++) {
+    const y = -b + (k + 0.5) * width / N, tk = t(y), dA = tk * width / N;
+    A += dA; S += dA * (-tk / 2); I0 += (width / N) * tk ** 3 / 12 + dA * (tk / 2) ** 2;
+  }
+  const zG = S / A, I = I0 - A * zG ** 2;
+  return { E: 12 * I / h ** 3, E1: width - 2 * j };
+}
+
+/**
+ * Entraxe des appareils d'une ligne, mesuré le long de la ligne d'appui (PSI-DA 68 § 2.4.1, repris par PSIDA.EL et
+ * PSIDP-EL) : E/sinψ/(n − 0,1) pour n ≥ 3, (n − 0,3) pour n = 2, E largeur de la dalle rectangulaire équivalente.
+ * Dalle à encorbellements : réduit à E1/sinψ/(n − 0,6) si cette valeur est plus faible, E1 largeur de l'intrados, pour que
+ * les appareils restent sous la nervure. Sans h ni chamfer (appel historique), E = width.
+ */
+export function bearingSpacing({ width, psi = 100, n, h = null, chamfer = null }) {
+  const s = Math.sin(psi * Math.PI / 200), { E, E1 } = largeursAppui({ width, h, chamfer });
+  const a = E / s / (n - (n >= 3 ? 0.1 : 0.3));
+  return E1 ? Math.min(a, E1 / s / (n - 0.6)) : a;
+}
+
+/** Données d'implantation des appareils d'un tablier en dalle (largeur, épaisseur, encorbellements) pour bearingSpacing. */
+export function appuiDalle(deck) {
+  return { width: 2 * deck.b, h: deck.h, chamfer: deck.g && deck.g.chamfer ? deck.g.chamfer : null };
 }
 
 /**
  * Ordonnées transversales y des appareils d'une ligne d'appui (distance normale à l'axe, symétriques) : celles du calcul
- * (plaque, réactions, plans) — entraxe le long de la ligne a = bearingSpacing, soit a·sin ψ = 2b / (n − 0,1) en travers.
+ * (plaque, réactions, plans) — entraxe le long de la ligne a = bearingSpacing, soit a·sin ψ en travers.
  */
-export function bearingOrdinates({ width, n }) {
+export function bearingOrdinates({ width, n, h = null, chamfer = null }) {
   if (!(n > 1)) return [0];
-  const e = bearingSpacing({ width, psi: 100, n });
+  const e = bearingSpacing({ width, psi: 100, n, h, chamfer });
   return Array.from({ length: n }, (_, k) => (k - (n - 1) / 2) * e);
 }
 
@@ -85,9 +117,9 @@ export function bearingOrdinates({ width, n }) {
  * |y| + b/2 + débord ≤ b_dalle − joue, avec y l'ordonnée de l'appareil de rive (calcul : entraxe 2b/(n − 0,1)), b sa
  * dimension transversale et « joue » la largeur du chanfrein. Rend la liste des lignes en défaut (vide si aucune).
  */
-export function appareilsSousChanfrein({ width, n, chamfer, rows = [], debord = 0.05 }) {
+export function appareilsSousChanfrein({ width, n, chamfer, rows = [], debord = 0.05, h = null }) {
   if (!chamfer || !(chamfer.joue > 0) || !(width > 0)) return [];
-  const yMax = Math.max(...bearingOrdinates({ width, n }).map(Math.abs)), limite = width / 2 - chamfer.joue, out = [];
+  const yMax = Math.max(...bearingOrdinates({ width, n, h, chamfer }).map(Math.abs)), limite = width / 2 - chamfer.joue, out = [];
   rows.forEach((r, i) => {
     const bT = r.sel && r.sel.bd ? r.sel.bd.b / 1000 : 0, bord = yMax + bT / 2 + debord;
     if (bord > limite + 1e-9) out.push({ i, yMax, bT, bord, limite, debord, depasse: bord - limite });
@@ -104,13 +136,14 @@ export function appareilsSousChanfrein({ width, n, chamfer, rows = [], debord = 
  *   Mc120 : chenilles étalées sur 1,00 + 2 h_rev + h, positions « une chenille centrée » et « deux chenilles symétriques ».
  * Vérifié sur la note PSIDA.EL (3 et 4 appareils) à 0,3–1 %.
  */
-export function inequalityCoefficients({ width, chargeable, n, spacing = null, psi = 100, nLanes = 2, hRev = 0.08, h }) {
-  const s = Math.sin(psi * Math.PI / 200), e = (spacing || bearingSpacing({ width, psi, n })) * s;
+export function inequalityCoefficients({ width, chargeable, n, spacing = null, psi = 100, nLanes = 2, hRev = 0.08, h, chamfer = null }) {
+  const s = Math.sin(psi * Math.PI / 200), e = (spacing || bearingSpacing({ width, psi, n, h, chamfer })) * s;
+  const Eq = largeursAppui({ width, h, chamfer }).E; // MAJCP : charge permanente répartie sur EDALLE (PSI-DA 68 § 2.4.2)
   const uni = w => { const k0 = n * e / w; return Math.max(k0, k0 + n / 2 * (1 - k0)); };
   const mean = (a, b) => { let t = 0; for (let i = 0; i < 200; i++) t += Rinf(a + (b - a) * (i + 0.5) / 200); return t / 200; };
   const l = 1.0 + 2 * hRev + h, hl = l / 2, nl = Math.max(1, nLanes);
   return {
-    e, CP: uni(width), A: uni(chargeable),
+    e, CP: uni(Eq), A: uni(chargeable),
     B: Math.max(n / nl * (Rinf(0.5 / e) + Rinf(2.5 / e)), n / nl * (Rinf(0.25 / e) + Rinf(2.25 / e))),
     Mc: Math.max(n * 0.5 * (mean(-hl / e, hl / e) + mean((3.3 - hl) / e, (3.3 + hl) / e)), n * mean((1.65 - hl) / e, (1.65 + hl) / e)),
   };

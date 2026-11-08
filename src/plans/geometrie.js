@@ -5,7 +5,7 @@
 import { geoTrace } from '../plate/deck.js';
 import { epaisseur } from '../plate/deck.js';
 import { deltaDevers } from '../devers.js';
-import { bearingSpacing, totalHeight } from '../bearings.js';
+import { bearingSpacing, appuiDalle, totalHeight } from '../bearings.js';
 
 export function geometrie(st) {
   const deck = st.deck, g = deck.g, b = deck.b, x0 = deck.beam.x0, n = x0.length;
@@ -30,7 +30,7 @@ export function geometrie(st) {
   const nb = st.bearings.nb;
   const yb = x0.map((_, i) => {
     if (PL && PL.lignes) return PL.lignes[i].yb;
-    const psi = psiL[i], a = bearingSpacing({ width: 2 * b, psi: Math.min(psi, 200 - psi), n: nb }), s = Math.sin(psi * Math.PI / 200);
+    const psi = psiL[i], a = bearingSpacing({ ...appuiDalle(deck), psi: Math.min(psi, 200 - psi), n: nb }), s = Math.sin(psi * Math.PI / 200);
     return Array.from({ length: nb }, (_, k) => (k - (nb - 1) / 2) * a * s);
   });
   const appareils = st.bearings.rows.map((r, i) => {

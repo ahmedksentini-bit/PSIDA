@@ -19,7 +19,7 @@ import { durabilite } from '../durabilite.js';
 import { winklerPile, pileGroup, headFlexibility, pileProfile, pileShear, pileCapFiles, blevot } from './psh.js';
 import { minorationSurface } from '../geotech/lateral.js';
 import { pierWater } from './water.js';
-import { bearingSpacing, STANDARD_BEARINGS, designation, checkBearing, totalHeight } from '../bearings.js';
+import { bearingSpacing, appuiDalle, STANDARD_BEARINGS, designation, checkBearing, totalHeight } from '../bearings.js';
 import { verifyBearing1337, antiCheminement } from './bearings1337.js';
 import { localPressure, bearingSplitting, shortCorbel } from './pierhead.js';
 import { toPontEC8 } from '../ec8export.js';
@@ -754,7 +754,7 @@ function calculAppuis(st, input = {}) {
     const end = isEnd(i), P = sp.pile, C = sp.culee, row = bearings.rows[i], nb = row.nb;
     const Ru = Math.max(...brg.rows.filter(r => !r.minimal).map(r => r.Fz));
     const a0 = brg.g.a, b0 = brg.g.b, debSaisi = sp.bossage?.debord;
-    const pitch = bearingSpacing({ width, psi: st.p.concept.psi, n: nb });
+    const pitch = bearingSpacing({ ...appuiDalle(deck), psi: st.p.concept.psi, n: nb });
     const dA = end ? (C.type === 'remblayee' ? C.em : C.lc) : (P.type === 'voile' ? bTop : P.lc);
     // pression localisée : contact appareil / bossage (rectangle homothétique limité au bossage, béton du bossage) ;
     // diffusion sous le bossage dans la section de l'appui (rectangle homothétique inscrit dans l'épaisseur d_A et l'entraxe)
@@ -818,7 +818,7 @@ function calculAppuis(st, input = {}) {
         const shape = col ? { D: P.D, c: c + 0.01, nBars: 12 } : { b: Lv, h: bBot, c: c + 0.01, ...(bTop !== bBot ? { hBuck: bMin } : {}) };
         shaftRes = designShaft({ shape, code, fck, fyk, Hf, combos: base.filter(b => b.ls !== 'ELS' && !b.fond).map(b => ({ label: b.label, N: b.Nb, M: b.Mb - b.Mimp, Mloc: b.Mimp, My: b.Myb, acc: !!b.acc, sis: !!b.sis })), n: col ? P.nCol : 1 });
         if (col && P.hc > 0) {
-          const nb = bearings.nb, pitch = bearingSpacing({ width, psi: st.p.concept.psi, n: nb });
+          const nb = bearings.nb, pitch = bearingSpacing({ ...appuiDalle(deck), psi: st.p.concept.psi, n: nb });
           const ys = Array.from({ length: nb }, (_, k) => width / 2 + (k - (nb - 1) / 2) * pitch);
           const row = bearings.rows[i], kQ = code === 'BAEL' ? 1.605 : railSup ? Math.max(...railSup.groupes.map(g => g.gamma)) : 1.35;
           const Pu = (jG(i) * 1.35 * row.kCP * perm.Rmax[i] + nb * hypApp(i, 'max') + jQ(i) * kQ * row.kQ * Math.max(0, row.Rmax - perm.Rmax[i])) / nb;
@@ -878,7 +878,7 @@ function calculAppuis(st, input = {}) {
         const hh = Hm + hGG;
         extra.retour = { ...mr, L: C.Lret, h: hh, AsH: Math.max((requiredSteelNM({ b: hh / 2, h: mr.e, c }, { code, fck, fyk }, 0, 1.35 * mr.Mh).As ?? NaN) / 2, mr.Amin * hh / 2), AsV: (requiredSteelNM({ b: mr.e, h: Math.max(0.5, hh / 2), c }, { code, fck, fyk }, 0, 1.35 * mr.Mv).As ?? NaN) / 2 };
         if (!rem && C.hc > 0) {
-          const nb = bearings.nb, pitch = bearingSpacing({ width, psi: st.p.concept.psi, n: nb });
+          const nb = bearings.nb, pitch = bearingSpacing({ ...appuiDalle(deck), psi: st.p.concept.psi, n: nb });
           const ys = Array.from({ length: nb }, (_, k) => width / 2 + (k - (nb - 1) / 2) * pitch);
           const row = bearings.rows[i], kQ = code === 'BAEL' ? 1.605 : railSup ? Math.max(...railSup.groupes.map(g => g.gamma)) : 1.35;
           const Pu = (jG(i) * 1.35 * row.kCP * perm.Rmax[i] + nb * hypApp(i, 'max') + jQ(i) * kQ * row.kQ * Math.max(0, row.Rmax - perm.Rmax[i])) / nb;

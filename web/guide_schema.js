@@ -288,10 +288,10 @@ export function guideCrossSectionSVG(g, opt = {}) {
   }
   if (R) s += '</g>' + voiesFerrees(R, { Y, Zs, h, b });
   // appareils d'appui
-  // mêmes ordonnées que le calcul (plaque, réactions, plans) : entraxe 2b / (n − 0,1), sous la sous-face pleine
+  // mêmes ordonnées que le calcul (plaque, réactions, plans) : PSI-DA 68 § 2.4.1, sous la nervure pour une dalle à encorbellements
   const nb = g.nBearings || Math.max(2, Math.round(g.width / 3));
   s += '<g data-k="nBearings">';
-  for (const y of bearingOrdinates({ width: 2 * b, n: nb })) { const X = Y(y); s += `<rect x="${X - 8}" y="${Zs(h) + 1}" width="16" height="6" fill="${INK}"/>`; }
+  for (const y of bearingOrdinates({ width: 2 * b, h, chamfer: ch, n: nb })) { const X = Y(y); s += `<rect x="${X - 8}" y="${Zs(h) + 1}" width="16" height="6" fill="${INK}"/>`; }
   s += L_(Y(-b), Zs(h) + 7, Y(b), Zs(h) + 7, 0.5, 'stroke-dasharray="10 4 2 4"');
   s += '</g>';
   // axe et cotes

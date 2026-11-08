@@ -9,13 +9,11 @@ for (const k of [0, 2]) {   // exemples 1 (courbe, dévers, nivellement, plaque)
   test(EXEMPLES[k].nom, () => {
     const st = compute(parseData(donnees(EXEMPLES[k])));
     assert.equal(st.supportsError, null); assert.equal(st.psidpError, null); assert.equal(st.rebarError, null);
-    // Défaut documenté (non corrigé, docs/validation/invariants.md, point ouvert n° 4) : l'entraxe des appareils
-    // 2b/(n − 0,1) est pris sur toute la largeur de la dalle, encorbellements compris ; l'exemple 3 (2b = 12 m, joues de
-    // 2,5 m) a donc ses appareils de rive sous les encorbellements, ce que l'alerte de la version 0.99.45 signale.
-    const CHANFREIN = 'Position des appareils de rive (chanfreins)';
-    const all = recommandations(st).items, items = all.filter(i => i.verification !== CHANFREIN);
-    assert.equal(items.length, 0, items.map(i => `${i.lieu} | ${i.verification} | ${i.constat}`).join('\n'));
-    if (k === 2) assert.ok(all.some(i => i.verification === CHANFREIN), 'le défaut est corrigé : retirer le filtre ci-dessus et mettre à jour la note de validation');
+    // Exemple 3 (2b = 12 m, encorbellements de 2,5 m) : depuis la version 0.99.48, appareils sous la nervure
+    // (PSI-DA 68 § 2.4.1, réduction de l'entraxe à l'intrados) — plus aucune recommandation, alerte chanfrein comprise.
+    const all = recommandations(st).items;
+    assert.equal(all.length, 0, all.map(i => `${i.lieu} | ${i.verification} | ${i.constat}`).join('\n'));
+    assert.equal((st.bearings.chanfrein || []).length, 0, 'appareils de rive sous les encorbellements');
   });
 }
 

@@ -16,7 +16,7 @@
  */
 import { ContinuousBeam } from './beam.js';
 import { materialsEC2, flexureULS } from './section_ec2.js';
-import { bearingSpacing } from './bearings.js';
+import { bearingSpacing, appuiDalle, largeursAppui } from './bearings.js';
 
 /** Coefficients de forme de la répartition des charges de type 1 (§ 5.2, 5.3, 8). */
 export function annexe4Shape({ B, n, a, c, e = null }) {
@@ -145,8 +145,9 @@ export function chevetreMomentPSIDP({ R, width, spacing }) { return R / width * 
  * @param {object} p  deck, perm (permanent), ec (eurocode), n appareils par ligne, psi [gr], cover, phi, fck, fyk
  */
 export function chevetresEC({ deck, perm, ec, n, psi = 100, cover = 0.03, phi = 0.016, fck = 35, fyk = 500, gG = 1.35, gQ = 1.35 }) {
-  const s = Math.sin(psi * Math.PI / 200), B = 2 * deck.b / s;
-  const a = bearingSpacing({ width: 2 * deck.b, psi, n }), c = Math.max(0, (B - (n - 1) * a) / 2);
+  // B : largeur de la dalle équivalente (annexe 4 § 2), EDALLE = 12 I/h³ pour une dalle à encorbellements (PSI-DA 68 § 2.4.1)
+  const s = Math.sin(psi * Math.PI / 200), B = largeursAppui(appuiDalle(deck)).E / s;
+  const a = bearingSpacing({ ...appuiDalle(deck), psi, n }), c = Math.max(0, (B - (n - 1) * a) / 2);
   const nl = ec.lanes.n, wl = ec.lanes.wl, lanes = ec.lm1.lanes;
   const k2TS = Math.max(1, nl - 1) > 0 ? (nl - 1) * wl + 2.0 : 2.0;
   const k2UDL = deck.g.roadway.y2 - deck.g.roadway.y1;

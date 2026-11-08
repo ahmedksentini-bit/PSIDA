@@ -52,11 +52,11 @@ message d'un échec.
    - Le pont droit (ψ = 100 gr) alterne les diagonales des mailles ; un biais même infime prend toujours la plus courte.
    - Écart entre ψ = 100 et ψ = 99,999 gr, maille de 0,5 m : jusqu'à 1,3 % de m_x max en partie courante et 5 % aux angles. Il diminue de moitié quand la maille est divisée par deux : c'est une erreur de discrétisation, mais elle est visible.
 
-4. **Entraxe des appareils d'appui : encorbellements ignorés** (relevé par l'alerte de la version 0.99.45).
-   - PSIDA répartit les appareils sur toute la largeur de la dalle, encorbellements compris : entraxe 2b/(n − 0,1) (PSI-DA 68 § 2.4.1, établi pour une dalle rectangulaire).
-   - Pour une dalle à larges encorbellements, les appareils de rive tombent sous la partie amincie. Exemples 3 et 4 du manuel (2b = 12 m, joues de 2,5 m, 4 appareils) : appareil de rive en y = ±4,62 m pour une nervure qui s'arrête à ±3,50 m. Aucun nombre d'appareils ne règle le cas (2 appareils : y = ±3,53 m).
-   - Effet : réactions des appareils, chevêtres et plans de ces exemples calculés avec des appareils mal placés.
-   - Correction proposée : répartir les appareils sur la largeur de la nervure (2b − 2 joues) quand la dalle a des encorbellements. Elle change le modèle et les résultats des exemples 3 et 4 (chapitres 24 et 25 du manuel) : laissée à une décision. `test/exemples.test.js` fige le défaut.
+4. **Entraxe des appareils d'appui : encorbellements ignorés — corrigé en 0.99.48** (relevé par l'alerte de la version 0.99.45).
+   - PSIDA répartissait les appareils sur toute la largeur de la dalle, encorbellements compris : entraxe 2b/(n − 0,1). Exemples 3 et 4 du manuel (2b = 12 m, joues de 2,5 m) : appareil de rive en y = ±4,62 m pour une nervure qui s'arrête à ±3,50 m.
+   - Règle de PSI-DA 68 § 2.4.1, désormais appliquée : entraxe E/sinψ/(n − 0,1) (n ≥ 3) ou /(n − 0,3) (n = 2), E largeur de la dalle rectangulaire de même inertie (12 I/h³) ; pour une dalle à encorbellements, réduit à E1/sinψ/(n − 0,6), E1 largeur de l'intrados, si cette valeur est plus faible. La charge permanente du coefficient d'inégalité (MAJCP, § 2.4.2) et la largeur B des chevêtres (guide PSIDP-EL, annexe 4 § 2, « largeur de la dalle équivalente ») prennent aussi E.
+   - Une seule fonction (`src/bearings.js` : `largeursAppui`, `bearingSpacing`, `appuiDalle`) sert au calcul, à la plaque, aux chevêtres, aux appuis, aux plans et aux schémas. Dalle rectangulaire : aucun changement.
+   - Tests : `test/appareils_nervure.test.js`, `test/exemples.test.js`, `test/appareils_chanfrein.test.js`.
 
 ## Invariants mal posés au départ (corrigés dans les tests, sans toucher au code)
 

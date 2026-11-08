@@ -263,8 +263,8 @@ export function crossSectionInputSVG(g) {
   }
   // appareils d'appui
   const nb = g.nBearings || Math.max(2, Math.round(g.width / 3));
-  // mêmes ordonnées que le calcul (plaque, réactions, plans) : entraxe 2b / (n − 0,1), sous la sous-face pleine
-  const yb = bearingOrdinates({ width: 2 * b, n: nb });
+  // mêmes ordonnées que le calcul (plaque, réactions, plans) : PSI-DA 68 § 2.4.1, sous la nervure pour une dalle à encorbellements
+  const yb = bearingOrdinates({ width: 2 * b, h, chamfer: g.chamfer, n: nb });
   for (const y of yb) { const X = sy(y); s += `<rect x="${X - 9}" y="${yTop + hPx + 2}" width="18" height="7" fill="var(--acc, #0b5fa5)" opacity="0.8"/>`; }
   s += `<text x="${sy(-b)}" y="${yTop + hPx + 20}" font-size="11" fill="var(--acc, #0b5fa5)">${nb} appareils d'appui par ligne, en y = ${yb.map(y => fr(y)).join(' ; ')} m</text>`;
   // axe y et ordonnées de calcul

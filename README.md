@@ -817,6 +817,10 @@ v0.99.45 : cadres et portiques — compression du béton à l'ELS vérifiée (BA
 section fissurée n = 15 avec les aciers retenus ; colonne au tableau des armatures, alerte, verdict et recommandations.
 Pont-dalle — alerte « appareil de rive sous le chanfrein » (|y| + b/2 + 5 cm > b − joue, guide 1989 § 3.6.1) dans le
 tableau des appareils, le rapport et les recommandations (moins d'appareils, chanfrein moins large, entraxe imposé).
+v0.99.48 : implantation des appareils d'une dalle à encorbellements selon PSI-DA 68 § 2.4.1 — entraxe E/sinψ/(n − 0,1)
+avec E = 12 I/h³ (dalle rectangulaire équivalente), réduit à E1/sinψ/(n − 0,6), E1 largeur de l'intrados : les appareils
+de rive restent sous la nervure (exemples 3 et 4 : y = ±3,09 m au lieu de ±4,62 m). Coefficient d'inégalité MAJCP et
+largeur B des chevêtres (annexe 4 du guide PSIDP-EL) sur la même dalle équivalente ; dalle rectangulaire inchangée.
 
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,

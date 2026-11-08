@@ -16,7 +16,7 @@
  * dalle d'épaisseur variable ou revêtement variable : sous-face horizontale, bossages égaux. Revêtement variable :
  * épaisseur de revêtement à l'axe e_rev + supplément de dévers.
  */
-import { bearingSpacing } from '../bearings.js';
+import { bearingSpacing, appuiDalle } from '../bearings.js';
 import { revetementAxe, deltaDevers } from '../devers.js';
 const num = v => (v === '' || v == null || !Number.isFinite(+v) ? null : +v);
 
@@ -33,7 +33,7 @@ export function nivellement(sp, { deck, bearings, tRev = 0.08, isEnd, nL }) {
     const z = k => num((N[k] || [])[i]);
     const zCh = z('zCh'), zTN = z('zTN'), zDS = z('zDS'), zSS = z('zSS'), zPP = z('zPP'), zPHE = z('zPHE'), zLit = z('zLit');
     const row = bearings && bearings.rows[i], hApp = row && row.sel && row.sel.hTot ? row.sel.hTot / 1000 : 0.06;
-    const nb = (row && row.nb) || (bearings && bearings.nb) || 2, a = bearingSpacing({ width: 2 * deck.b, psi, n: nb });
+    const nb = (row && row.nb) || (bearings && bearings.nb) || 2, a = bearingSpacing({ ...appuiDalle(deck), psi, n: nb });
     const yb = Array.from({ length: nb }, (_, k) => (k - (nb - 1) / 2) * a * sPsi), off = yb.map(dz), offMin = Math.min(...off);
     const end = isEnd(i), L = { i, zCh, zTN, zDS, zSS, zPP, zPHE, zLit, hApp, hBos, warnings: [] };
     const over = {};
