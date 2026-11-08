@@ -1,8 +1,8 @@
 Manuel d'utilisation de PSIDA : un polycopié unique (PDF allégé : images recompressées en JPEG, 1100 px). Ouvert par le
 bouton « Manuel » de l'en-tête (web/app.js, constante MANUEL). À remplacer à chaque nouvelle édition, sous le même nom.
 
-Source : le document Claude Docs « PSIDA — Manuel d'utilisation » (avant-propos, chapitres 1 à 34, annexes A à H ;
-l'annexe H tient l'historique des versions). C'est la seule source du texte : on le corrige là, puis on réexporte.
+Source : le document Claude Docs « PSIDA — Manuel d'utilisation » (avant-propos, chapitres 1 à 34, annexes A à I ;
+l'annexe H tient l'historique des versions, l'annexe I la validation). C'est la seule source du texte : on le corrige là, puis on réexporte.
 
 Publication d'une édition :
 
@@ -14,13 +14,13 @@ Taille : Cloudflare Pages refuse tout fichier de plus de 25 MiB ; `pdf.py` écho
 `--qualite` (JPEG, 60 par défaut), `--px` (largeur maximale des images, 1100 par défaut) et `--px-plan`
 (plans et dessins au trait, 1700 par défaut, pour garder les cotes lisibles) ; si `qpdf` est installé, les flux sont recompressés en fin de course.
 
-Rendu local (secours, et méthode de l'édition 0.99.42) : quand l'export PDF de Docs est refusé (document trop lourd
+Rendu local (secours, et méthode des éditions 0.99.42 à 0.99.44) : quand l'export PDF de Docs est refusé (document trop lourd
 pour le service d'impression, plus de 200 images), on part des exports Markdown et HTML du même document (même
 révision) et des images nommées par leur identifiant de blob :
 
     # 2. images : pour chaque <img src="blob/…"> de l'export HTML, lire le blob dans Docs (→ identifiant d'asset),
     #    retrouver le fichier d'origine par son sha256 (list_assets de l'artefact) et le copier en <blob>.<ext>
-    tools/manuel/rendu/make.sh export.md export.html images/ "Novembre 2026 — PSIDA version 0.99.42" /tmp/brut.pdf
+    tools/manuel/rendu/make.sh export.md export.html images/ "Novembre 2026 — PSIDA version 0.99.44" /tmp/brut.pdf
     python3 tools/manuel/pdf.py /tmp/brut.pdf
 
 `rendu/build.py` substitue les images (l'export Markdown les remplace par « [image: …] », dans l'ordre de l'export
