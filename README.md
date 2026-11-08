@@ -821,6 +821,10 @@ v0.99.48 : implantation des appareils d'une dalle à encorbellements selon PSI-D
 avec E = 12 I/h³ (dalle rectangulaire équivalente), réduit à E1/sinψ/(n − 0,6), E1 largeur de l'intrados : les appareils
 de rive restent sous la nervure (exemples 3 et 4 : y = ±3,09 m au lieu de ±4,62 m). Coefficient d'inégalité MAJCP et
 largeur B des chevêtres (annexe 4 du guide PSIDP-EL) sur la même dalle équivalente ; dalle rectangulaire inchangée.
+Chevêtres : alerte « appareils de rive en fort retrait des bords libres » quand la console c dépasse 2a/3 (guide PSIDP-EL,
+annexe 4 § 1 : calcul des chevêtres à corriger manuellement ; seuil non chiffré par le guide, critère de PSIDA ≈ 1,5 fois la
+console régulière c = 0,45 a de PSI-DA 68) — tableau des chevêtres, note, rapport, recommandation « calcul en plaque » ;
+information seulement quand le tablier est calculé en plaque (moments et réactions lus sur la plaque).
 
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,

@@ -11,7 +11,9 @@ for (const k of [0, 2]) {   // exemples 1 (courbe, dévers, nivellement, plaque)
     assert.equal(st.supportsError, null); assert.equal(st.psidpError, null); assert.equal(st.rebarError, null);
     // Exemple 3 (2b = 12 m, encorbellements de 2,5 m) : depuis la version 0.99.48, appareils sous la nervure
     // (PSI-DA 68 § 2.4.1, réduction de l'entraxe à l'intrados) — plus aucune recommandation, alerte chanfrein comprise.
-    const all = recommandations(st).items;
+    // Exemple 3 : appareils de rive en fort retrait des bords libres (c > 2a/3) → seule recommandation admise, celle de
+    // l'annexe 4 § 1 du guide PSIDP-EL (chevêtres à vérifier en plaque) ; l'exemple 1 est calculé en plaque.
+    const all = recommandations(st).items.filter(i => !/fort retrait/.test(i.verification));
     assert.equal(all.length, 0, all.map(i => `${i.lieu} | ${i.verification} | ${i.constat}`).join('\n'));
     assert.equal((st.bearings.chanfrein || []).length, 0, 'appareils de rive sous les encorbellements');
   });

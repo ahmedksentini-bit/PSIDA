@@ -30,6 +30,19 @@ export function annexe4Shape({ B, n, a, c, e = null }) {
   return { alpha, lambda, mu, t, s, u, rive: 0.25 * (1 + u), central: 0.25 * (1 - u) };
 }
 
+/**
+ * Appareils latéraux « en fort retrait » des bords libres (guide PSIDP-EL, annexe 4 § 1) : l'annexe y renvoie le calcul des
+ * chevêtres à une correction manuelle sans fixer de seuil ; ses règles approchées (§ 5 et 6, établies d'après
+ * Schleicher-Wegener, Hallbjörn et le programme MRB, § 8) visent la disposition courante. Critère retenu par PSIDA,
+ * explicite et prudent : c > 2a/3, soit environ 1,5 fois la console de la disposition régulière du dossier PSI-DA 68
+ * (§ 2.4.1 : c = 0,45 a pour n ≥ 3 appareils, 0,35 a pour n = 2). c distance de l'axe de l'appareil de rive au bord libre
+ * de la dalle équivalente (mesurée le long de la ligne d'appui), a entraxe des appareils.
+ */
+export function retraitRive({ a, c, B = null, n }) {
+  const limite = 2 * a / 3;
+  return { a, c, limite, lambda: B ? c / B : null, fort: n >= 2 && c > limite + 1e-9 };
+}
+
 /** Longueur d (§ 4, éq. 3). */
 export function annexe4D({ B, a, c, e = null, L }) {
   return Math.max(a + c, (a + (e ?? a)) / 2, Math.min(B / 2, L));
@@ -167,6 +180,6 @@ export function chevetresEC({ deck, perm, ec, n, psi = 100, cover = 0.03, phi = 
     const M = chevetreMoments({ B, n, a, c, L, Sg, cases, simultaneous: true });
     const As = m => (m > 0 ? flexureULS(m / 1000, { b: 1, d }, mat).As : 0);
     const bands = { top: M.bands.top.map(b => ({ ...b, As: As(b.m) })), bot: M.bands.bot.map(b => ({ ...b, As: As(b.m) })) };
-    return { i, x, L, B, n, a, c, d: dd, zetas: R.zetas, R1: R.R1, R2: R.R2, Rmax: R.Rmax, Rmoy: (Sg + cases.reduce((t, cs) => t + cs.Sq, 0)) / n, Mc: M.Mc, Me_neg: M.Me_neg, Me_pos: M.Me_pos, mc: M.mc, me_neg: M.me_neg, me_pos: M.me_pos, bands, dEff: d };
+    return { i, x, L, B, n, a, c, retrait: retraitRive({ a, c, B, n }), d: dd, zetas: R.zetas, R1: R.R1, R2: R.R2, Rmax: R.Rmax, Rmoy: (Sg + cases.reduce((t, cs) => t + cs.Sq, 0)) / n, Mc: M.Mc, Me_neg: M.Me_neg, Me_pos: M.Me_pos, mc: M.mc, me_neg: M.me_neg, me_pos: M.me_pos, bands, dEff: d };
   });
 }

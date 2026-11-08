@@ -91,6 +91,12 @@ export const reglesTablier = [
           { texte: 'Chanfrein moins large', champ: 'joue', unite: 'm' },
           { texte: 'Ou imposer sur les plans un entraxe plus serré (appareils de rive rapprochés de l\'axe) : PSIDA calcule avec l\'entraxe 2b/(n − 0,1) du dossier PSI-DA ; reprendre alors la répartition des réactions' }] });
     }
+    { const CV = st.chevetres, rt = CV && !CV[0].plaque ? CV.filter(r => r.retrait && r.retrait.fort) : [];
+      if (rt.length) out.push({ domaine: 'Appareils d\'appui', lieu: rt.map(u => (u.i === 0 || u.i === CV.length - 1 ? `C${u.i}` : `P${u.i}`)).join(', '), verification: 'Chevêtres : appareils de rive en fort retrait des bords libres',
+        constat: `console c = ${fx(rt[0].retrait.c)} m > 2a/3 = ${fx(rt[0].retrait.limite)} m (entraxe a = ${fx(rt[0].retrait.a)} m) : les règles approchées de l'annexe 4 visent la disposition courante`,
+        regle: 'guide PSIDP-EL, annexe 4 § 1 (correction manuelle du calcul des chevêtres) ; critère PSIDA c > 2a/3',
+        actions: [{ texte: 'Vérifier le chevêtre par un calcul en plaque (réactions et moments des bandes lus sur la plaque)', champ: 'methodeTablier', valeur: 'plaque', valeurChamp: 'plaque' },
+          { texte: 'Ou vérifier le chevêtre par un calcul transversal indépendant, ou, si la nervure le permet, imposer sur les plans un entraxe plus large (appareils de rive rapprochés des bords libres)' }] }); }
     B.rows.forEach((r, i) => {
       const culee = i === 0 || i === B.rows.length - 1, champ = culee ? 'brgCul' : 'brgPile', lieu = culee ? `Culée C${i}` : `Pile P${i}`;
       if (!r.sel) out.push({ domaine: 'Appareils d\'appui', lieu, verification: 'Choix d\'un appareil standard', constat: `aucun appareil standard ne convient (P_max = ${fx(r.Pmax, 0)} kN, u_g = ${fx(r.ug * 1000, 1)} mm)`, regle: 'guide SETRA 1989 § 3.6',
