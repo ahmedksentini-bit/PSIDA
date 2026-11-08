@@ -802,6 +802,12 @@ aux ordonnées du calcul (entraxe 2b / (n − 0,1), src/bearings.js bearingOrdin
 plaçait sous le départ d'un chanfrein de 1 m ; le schéma de saisie affiche ces ordonnées.
 v0.99.42 : anonymisation — aucun ouvrage ni bureau d'études n'est plus nommé dans le code, les tests, la documentation,
 le manuel et les notes de calcul produites (les notes de référence restent citées comme « VIPP de référence »).
+v0.99.43 : tests d'invariants sur des ouvrages tirés au hasard (test/invariants_*.test.js, docs/validation/invariants.md) —
+équilibre, symétrie, Maxwell-Betti, cas limites, monotonie, continuité, sorties finies, sur la poutre continue, Guyon-
+Massonnet, le grillage, la plaque, la chaîne complète du pont-dalle, les sections, les cadres et les ponts à poutres
+(INVARIANTS_LONG=1 : dix fois plus de tirages). Deux défauts corrigés : un essieu posé au bout de l'about pouvait être
+ignoré à un arrondi près (src/beam.js) ; « As = NaN » dans la note et le métré des cadres très sollicités (α de l'ELS
+BAEL hors du domaine de la formule de BVTrace, src/cadre/sections.js). Trois défauts documentés restent ouverts.
 v0.99.44 : confrontation à l'exemple JRC EUR 25193 (pont mixte bipoutre 60 + 80 + 60 m, docs/validation/jrc_eur25193.md,
 test/jrc_eur25193.test.js) et trois correctifs du pont mixte : raidissement en traction α_st = A I/(A_a I_a) de la section
 fissurée sur la charpente (EN 1994-1-1 § 7.4.3), λ_max de la fatigue sur appui et L moyenne des travées adjacentes

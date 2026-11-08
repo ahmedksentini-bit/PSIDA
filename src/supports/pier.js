@@ -17,7 +17,7 @@ export function descendLoads({ N, H, M = 0, Hf, hc = 0, gamma = 1.35, Wchev = 0,
   return { top, base, found };
 }
 
-/** Élancement et contrainte critique d'Euler (vérification de la note Noé) ; l_f = 2 H pour un fût console. */
+/** Élancement et contrainte critique d'Euler (vérification de la note de référence) ; l_f = 2 H pour un fût console. */
 export function buckling({ Lf, h, Ev, b = null, D = null }) {
   const i = D ? D / 4 : h / Math.sqrt(12);
   const lambda = Lf / i;
