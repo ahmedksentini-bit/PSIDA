@@ -817,6 +817,11 @@ v0.99.45 : cadres et portiques — compression du béton à l'ELS vérifiée (BA
 section fissurée n = 15 avec les aciers retenus ; colonne au tableau des armatures, alerte, verdict et recommandations.
 Pont-dalle — alerte « appareil de rive sous le chanfrein » (|y| + b/2 + 5 cm > b − joue, guide 1989 § 3.6.1) dans le
 tableau des appareils, le rapport et les recommandations (moins d'appareils, chanfrein moins large, entraxe imposé).
+v0.99.47 : flexion ELS par le moment limite du béton M_rb (BAEL 91 A.4.5,2 ; EN 1992-1-1 § 7.2) — armatures simples
+sous M_rb, armatures doubles au-delà (A' = (M − M_rb)/(σ'sc (d − d')), A = A_rb + A' σ'sc/σ̄s), continues et croissantes
+en M, largeur variable (chanfreins) intégrée ; les aciers comprimés sont repris dans la face opposée du pont-dalle,
+affichés dans les tableaux et la note, et signalés par les recommandations, de même qu'un taux > 4 % (EC2 § 9.2.1.1(3)).
+Aucun effet sur l'exemple fil rouge ni sur les exemples 1 à 3.
 v0.99.48 : implantation des appareils d'une dalle à encorbellements selon PSI-DA 68 § 2.4.1 — entraxe E/sinψ/(n − 0,1)
 avec E = 12 I/h³ (dalle rectangulaire équivalente), réduit à E1/sinψ/(n − 0,6), E1 largeur de l'intrados : les appareils
 de rive restent sous la nervure (exemples 3 et 4 : y = ±3,09 m au lieu de ±4,62 m). Coefficient d'inégalité MAJCP et
@@ -825,7 +830,6 @@ Chevêtres : alerte « appareils de rive en fort retrait des bords libres » qua
 annexe 4 § 1 : calcul des chevêtres à corriger manuellement ; seuil non chiffré par le guide, critère de PSIDA ≈ 1,5 fois la
 console régulière c = 0,45 a de PSI-DA 68) — tableau des chevêtres, note, rapport, recommandation « calcul en plaque » ;
 information seulement quand le tablier est calculé en plaque (moments et réactions lus sur la plaque).
-
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à

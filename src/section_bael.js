@@ -47,20 +47,35 @@ export function crackedSectionBAEL(M, { b = 1, d, As, As2 = 0, dp = 0.05, widthF
   return { x, I, sigB: M * x / I, sigS: n * M * (d - x) / I };
 }
 
-/** Flexion ELS (A.4.5.3) : aciers pour σ̄s et σ̄bc (bissection). */
-export function flexureELS(Ms, { b = 1, d, dp = 0.05, widthFn = null }, mat) {
+/**
+ * Flexion ELS (A.4.5,2 et A.4.5,3) par la méthode du moment résistant du béton M_rb :
+ * y₁ = α₁ d, α₁ = 15 σ̄bc / (15 σ̄bc + σ̄s), M_rb = ½ σ̄bc b y₁ (d − y₁/3) (largeur variable : intégrée).
+ * M_ser ≤ M_rb : armatures simples, A tel que σs = σ̄s ; M_ser > M_rb : armatures doubles
+ * A' = (M_ser − M_rb) / (σ'sc (d − d')), σ'sc = 15 σ̄bc (y₁ − d')/y₁, A = A_rb + A' σ'sc/σ̄s (continu et croissant en M).
+ */
+export function flexureELS(Ms, { b = 1, d, h = null, dp = 0.05, widthFn = null }, mat) {
   if (Ms <= 0 || !isFinite(mat.sigSbar)) return { As: 0, As2: 0, sigB: 0, sigS: 0, x: 0 };
-  let lo = 1e-6, hi = Ms / (0.5 * d * mat.sigSbar) * 4;
-  const ok = As => { const r = crackedSectionBAEL(Ms, { b, d, As, dp, widthFn }, mat); return r.sigS <= mat.sigSbar && r.sigB <= mat.sigBbar; };
-  if (!ok(hi)) {
-    let lo2 = 0, hi2 = hi;
-    const ok2 = As2 => { const As = Ms / (0.9 * d * mat.sigSbar) + As2; const r = crackedSectionBAEL(Ms, { b, d, As, As2, dp, widthFn }, mat); return r.sigB <= mat.sigBbar && r.sigS <= mat.sigSbar; };
-    for (let i = 0; i < 60; i++) { const mid = (lo2 + hi2) / 2; if (ok2(mid)) hi2 = mid; else lo2 = mid; }
-    const As2 = hi2, As = Ms / (0.9 * d * mat.sigSbar) + As2;
-    return { As, As2, ...crackedSectionBAEL(Ms, { b, d, As, As2, dp, widthFn }, mat) };
+  const n = mat.n, sB = mat.sigBbar, sS = mat.sigSbar;
+  const y1 = n * sB / (n * sB + sS) * d;
+  let S1, S2;
+  if (widthFn) {
+    const wm = (x, k) => { const nn = 40, hh = x / nn; let s = 0; for (let i = 0; i <= nn; i++) { const z = i * hh, c = i === 0 || i === nn ? 1 : i % 2 ? 4 : 2; s += c * widthFn(z) * Math.pow(x - z, k); } return s * hh / 3; };
+    S1 = wm(y1, 1); S2 = wm(y1, 2);
+  } else { S1 = b * y1 * y1 / 2; S2 = b * y1 * y1 * y1 / 3; }
+  const Fc = sB / y1 * S1, Mrb = sB / y1 * ((d - y1) * S1 + S2), Arb = Fc / sS;
+  const Ac = h ? b * h : b * d, taux = (A, A2) => ({ rho: (A + A2) / Ac, rhoMaxDepasse: (A + A2) > 0.04 * Ac });
+  if (Ms <= Mrb) {
+    let lo = 1e-9, hi = Math.max(Arb, 1e-6);
+    for (let i = 0; i < 80; i++) { const mid = (lo + hi) / 2; if (crackedSectionBAEL(Ms, { b, d, As: mid, dp, widthFn }, mat).sigS <= sS) hi = mid; else lo = mid; }
+    return { As: hi, As2: 0, Mrb, y1, ...taux(hi, 0), ...crackedSectionBAEL(Ms, { b, d, As: hi, dp, widthFn }, mat) };
   }
-  for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (ok(mid)) hi = mid; else lo = mid; }
-  return { As: hi, As2: 0, ...crackedSectionBAEL(Ms, { b, d, As: hi, dp, widthFn }, mat) };
+  const sigSc = n * sB * (y1 - dp) / y1;
+  if (!(sigSc > 0) || dp >= d) {
+    const As2 = (Ms - Mrb) / (sS * Math.max(d - dp, 1e-3)), As = Arb + As2;
+    return { As, As2, Mrb, y1, comprimesInefficaces: true, ...taux(As, As2), ...crackedSectionBAEL(Ms, { b, d, As, As2, dp, widthFn }, mat) };
+  }
+  const As2 = (Ms - Mrb) / (sigSc * (d - dp)), As = Arb + As2 * sigSc / sS;
+  return { As, As2, Mrb, y1, sigSc, ...taux(As, As2), ...crackedSectionBAEL(Ms, { b, d, As, As2, dp, widthFn }, mat) };
 }
 
 /** Minimums : non-fragilité (A.4.2.1) et pourcentage minimal des dalles (B.7.4). */

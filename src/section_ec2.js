@@ -95,25 +95,47 @@ export function crackedSection(M, { b = 1, d, As, As2 = 0, dp = 0.05, widthFn = 
 }
 
 /**
- * Aciers nécessaires pour respecter σs ≤ σsLim et σc ≤ σcLim sous le moment de service M (bissection).
+ * Moment limite du béton à l'ELS (méthode classique des sections rectangulaires, étendue à une largeur variable) :
+ * les deux contraintes limites sont atteintes ensemble, axe neutre y₁ = α₁ d avec α₁ = n σ̄c / (n σ̄c + σ̄s).
+ * Béton comprimé : σ(ζ) = σ̄c (y₁ − ζ)/y₁ sur la largeur w(ζ) (b si la section est rectangulaire).
+ * @returns {{y1:number, Fc:number, Mrb:number, Arb:number}} résultante du béton Fc [MN/m], moment par rapport aux
+ *   aciers tendus Mrb [MN·m/m] et aciers tendus correspondants Arb = Fc/σ̄s [m²/m]
  */
-export function flexureSLS(M, { b = 1, d, dp = 0.05, widthFn = null }, mat, { sigSlim = mat.sigSlim, sigClim = mat.sigCcar } = {}) {
+export function momentLimiteELS({ b = 1, d, widthFn = null }, { n, sigC, sigS }) {
+  const y1 = n * sigC / (n * sigC + sigS) * d;
+  let S1, S2; // ∫ w (y₁ − ζ) dζ et ∫ w (y₁ − ζ)² dζ
+  if (widthFn) { const m = widthMoments(widthFn, y1); S1 = m[1]; S2 = m[2]; } else { S1 = b * y1 * y1 / 2; S2 = b * y1 * y1 * y1 / 3; }
+  const Fc = sigC / y1 * S1, Mrb = sigC / y1 * ((d - y1) * S1 + S2);
+  return { y1, Fc, Mrb, Arb: Fc / sigS };
+}
+
+/**
+ * Aciers d'une section fléchie à l'ELS sous σs ≤ σ̄s et σc ≤ σ̄c (contraintes calculées en section fissurée, n = α_e).
+ * - M ≤ M_rb (moment limite du béton) : aciers tendus seuls, A tel que σs = σ̄s (le béton reste sous σ̄c) ;
+ * - M > M_rb : aciers comprimés. L'axe neutre reste à y₁ ; A' = (M − M_rb) / (σ'sc (d − d')) avec
+ *   σ'sc = n σ̄c (y₁ − d')/y₁, et A = A_rb + A' σ'sc / σ̄s.
+ * A et A' sont continus et croissants en M (méthode du moment limite, BAEL 91 A.4.5,2 et EN 1992-1-1 § 7.2).
+ * Taux total A + A' > 4 % de la section (EN 1992-1-1 § 9.2.1.1(3)) : drapeau `rhoMaxDepasse`.
+ */
+export function flexureSLS(M, { b = 1, d, h = null, dp = 0.05, widthFn = null }, mat, { sigSlim = mat.sigSlim, sigClim = mat.sigCcar } = {}) {
   if (M <= 0) return { As: 0, As2: 0, sigC: 0, sigS: 0, x: 0 };
-  // bornes : As tel que σs = σsLim avec bras de levier 0,9d (approx.) → puis bissection sur σs et σc
-  let lo = 1e-6, hi = M / (0.5 * d * sigSlim) * 4;
-  const ok = As => { const r = crackedSection(M, { b, d, As, dp, widthFn }, mat); return r.sigS <= sigSlim && r.sigC <= sigClim; };
-  if (!ok(hi)) {
-    // la compression du béton impose des aciers comprimés : on fixe As2 par bissection avec As = As2 + As(σs)
-    let lo2 = 0, hi2 = hi;
-    const ok2 = As2 => { const As = M / (0.9 * d * sigSlim) + As2; const r = crackedSection(M, { b, d, As, As2, dp, widthFn }, mat); return r.sigC <= sigClim && r.sigS <= sigSlim; };
-    for (let i = 0; i < 60; i++) { const mid = (lo2 + hi2) / 2; if (ok2(mid)) hi2 = mid; else lo2 = mid; }
-    const As2 = hi2, As = M / (0.9 * d * sigSlim) + As2;
-    const r = crackedSection(M, { b, d, As, As2, dp, widthFn }, mat);
-    return { As, As2, ...r };
+  const lim = momentLimiteELS({ b, d, widthFn }, { n: mat.alphaE, sigC: sigClim, sigS: sigSlim });
+  const taux = (As, As2) => { const Ac = h ? b * h : b * d; return { rho: (As + As2) / Ac, rhoMaxDepasse: (As + As2) > 0.04 * Ac }; };
+  if (M <= lim.Mrb) {
+    // aciers tendus seuls : σs(As) décroît avec As → bissection sur σs = σ̄s (le béton est alors sous σ̄c)
+    let lo = 1e-9, hi = Math.max(lim.Arb, 1e-6);
+    for (let i = 0; i < 80; i++) { const mid = (lo + hi) / 2; if (crackedSection(M, { b, d, As: mid, dp, widthFn }, mat).sigS <= sigSlim) hi = mid; else lo = mid; }
+    return { As: hi, As2: 0, Mrb: lim.Mrb, y1: lim.y1, ...taux(hi, 0), ...crackedSection(M, { b, d, As: hi, dp, widthFn }, mat) };
   }
-  for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (ok(mid)) hi = mid; else lo = mid; }
-  const r = crackedSection(M, { b, d, As: hi, dp, widthFn }, mat);
-  return { As: hi, As2: 0, ...r };
+  const sigSc = mat.alphaE * sigClim * (lim.y1 - dp) / lim.y1;
+  if (!(sigSc > 0) || dp >= d) {
+    // aciers comprimés au-dessus de l'axe neutre limite impossibles (section trop mince) : solution par défaut
+    // (bras de levier d − d', σ'sc = σ̄s) signalée par le drapeau
+    const As2 = (M - lim.Mrb) / (sigSlim * Math.max(d - dp, 1e-3)), As = lim.Arb + As2;
+    return { As, As2, Mrb: lim.Mrb, y1: lim.y1, comprimesInefficaces: true, ...taux(As, As2), ...crackedSection(M, { b, d, As, As2, dp, widthFn }, mat) };
+  }
+  const As2 = (M - lim.Mrb) / (sigSc * (d - dp)), As = lim.Arb + As2 * sigSc / sigSlim;
+  return { As, As2, Mrb: lim.Mrb, y1: lim.y1, sigSc, ...taux(As, As2), ...crackedSection(M, { b, d, As, As2, dp, widthFn }, mat) };
 }
 
 /**

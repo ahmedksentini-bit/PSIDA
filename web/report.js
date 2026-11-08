@@ -132,12 +132,12 @@ export async function buildReport(st) {
 <h3>8.1 Eurocodes (EC2) — σs ≤ ${dEC.mat.sigSlim} MPa (ELS car., fatigue simplifiée), σc ≤ ${f1(dEC.mat.sigCcar)} MPa, wk ≤ ${p.mat.wkMax} mm (ELS fréquent)</h3>
 <table><thead><tr><th>Section</th><th>Face</th><th>y</th><th>M ELU</th><th>M car.</th><th>M fréq.</th><th>M QP</th><th>ELU</th><th>ELS σ</th><th>wk</th><th>min</th><th>A_s</th><th>σs</th><th>σc</th></tr></thead><tbody>`;
   for (const k of keys) for (const face of ['bot', 'top']) { const arr = dEC[face][k.idx]; const iy = arr.indexOf(Math.max(...arr)); const f = dEC.perFibre[k.idx][iy][face];
-    h += `<tr><td>${k.label}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${deck.ys[iy]}</td><td>${f0(f.Mu)}</td><td>${f0(f.Mcar)}</td><td>${f0(f.Mfre)}</td><td>${f0(f.Mqp)}</td><td>${cm(f.AsULS)}</td><td>${cm(f.AsSLS)}</td><td>${cm(f.AsWk)}</td><td>${cm(Math.max(f.as921, f.as732, f.perFace))}</td><td><b>${cm(f.As)}</b></td><td>${f0(f.sigS)}</td><td>${f1(f.sigC)}</td></tr>`; }
+    h += `<tr><td>${k.label}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${deck.ys[iy]}</td><td>${f0(f.Mu)}</td><td>${f0(f.Mcar)}</td><td>${f0(f.Mfre)}</td><td>${f0(f.Mqp)}</td><td>${cm(f.AsULS)}</td><td>${cm(f.AsSLS)}</td><td>${cm(f.AsWk)}</td><td>${cm(Math.max(f.as921, f.as732, f.perFace))}</td><td><b>${cm(f.As)}</b>${f.AsComp > 1e-9 ? ` (A_s2 = ${cm(f.AsComp)} comprimés)` : ''}</td><td>${f0(f.sigS)}</td><td>${f1(f.sigC)}</td></tr>`; }
   h += `</tbody></table><p class="small">Minimums : 9.2.1.1 ×1,2 = ${cm(dEC.mins.as921)} cm²/m (fibre tendue à l'ELS car.), 7.3.2 = ${cm(dEC.mins.as732)} (fibre tendue à l'ELS QP), 3 cm²/m par face. Effort tranchant V_Ed/V_Rd,c : ${keys.map(k => `${k.label} ${dEC.shear[k.idx].ratio.toFixed(2)}`).join(' ; ')}. Poinçonnement : LM1 vEd ${dEC.punch.LM1.vEd.toFixed(3)} / vRd,c ${dEC.punch.LM1.vRdc.toFixed(3)} MPa ; LM2 ${dEC.punch.LM2.vEd.toFixed(3)} MPa.</p>
 <h3>8.2 Fascicule 61 + BAEL 91 — σ̄s = ${isFinite(dB.mat.sigSbar) ? f0(dB.mat.sigSbar) + ' MPa' : '—'}, σ̄bc = ${f1(dB.mat.sigBbar)} MPa</h3>
 <table><thead><tr><th>Section</th><th>Face</th><th>y</th><th>M ELU</th><th>M ELS</th><th>ELU</th><th>ELS</th><th>min</th><th>A_s</th><th>σs</th><th>σb</th></tr></thead><tbody>`;
   for (const k of keys) for (const face of ['bot', 'top']) { const arr = dB[face][k.idx]; const iy = arr.indexOf(Math.max(...arr)); const f = dB.perFibre[k.idx][iy][face];
-    h += `<tr><td>${k.label}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${deck.ys[iy]}</td><td>${f0(f.Mu)}</td><td>${f0(f.Ms)}</td><td>${cm(f.AsELU)}</td><td>${cm(f.AsELS)}</td><td>${cm(Math.max(f.nonFrag, f.dalle))}</td><td><b>${cm(f.As)}</b></td><td>${f0(f.sigS)}</td><td>${f1(f.sigB)}</td></tr>`; }
+    h += `<tr><td>${k.label}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${deck.ys[iy]}</td><td>${f0(f.Mu)}</td><td>${f0(f.Ms)}</td><td>${cm(f.AsELU)}</td><td>${cm(f.AsELS)}</td><td>${cm(Math.max(f.nonFrag, f.dalle))}</td><td><b>${cm(f.As)}</b>${f.AsComp > 1e-9 ? ` (A_s2 = ${cm(f.AsComp)} comprimés)` : ''}</td><td>${f0(f.sigS)}</td><td>${f1(f.sigB)}</td></tr>`; }
   h += `</tbody></table><p class="small">τu/τ̄u : ${keys.map(k => `${k.label} ${dB.shear[k.idx].ratio.toFixed(2)}`).join(' ; ')}. Poinçonnement Br : ${dB.punch.Br.Qu.toFixed(3)} / ${dB.punch.Br.QuLim.toFixed(3)} MN.</p>` + figs.As;
 
   // 9. Transversal
@@ -148,7 +148,7 @@ export async function buildReport(st) {
   h += `
 <table><thead><tr><th>Travée</th><th>Face</th><th>y</th><th>M ELU</th><th>M car.</th><th>M fréq.</th><th>ELU</th><th>ELS σ</th><th>wk</th><th>non sect.</th><th>A_s,y (EC2)</th><th>M ELS BAEL</th><th>A_s,y (BAEL)</th></tr></thead><tbody>`;
   tEC.spans.forEach((sp, j) => { for (const face of ['bot', 'top']) { const f = sp[face], fb = tB.spans[j][face];
-    h += `<tr><td>Travée ${sp.j + 1}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${f.y}</td><td>${f1(f.Mu)}</td><td>${f1(f.Mcar)}</td><td>${f1(f.Mfre)}</td><td>${cm(f.AsULS)}</td><td>${cm(f.AsSLS)}</td><td>${cm(f.AsWk)}</td><td>${cm(f.nonSec)}</td><td><b>${cm(f.As)}</b></td><td>${f1(fb.Ms)}</td><td><b>${cm(fb.As)}</b></td></tr>`; } });
+    h += `<tr><td>Travée ${sp.j + 1}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${f.y}</td><td>${f1(f.Mu)}</td><td>${f1(f.Mcar)}</td><td>${f1(f.Mfre)}</td><td>${cm(f.AsULS)}</td><td>${cm(f.AsSLS)}</td><td>${cm(f.AsWk)}</td><td>${cm(f.nonSec)}</td><td><b>${cm(f.As)}</b>${f.AsComp > 1e-9 ? ` (A_s2 = ${cm(f.AsComp)} comprimés)` : ''}</td><td>${f1(fb.Ms)}</td><td><b>${cm(fb.As)}</b></td></tr>`; } });
   h += `</tbody></table>` + figs.my;
 
   // 10. Modules complémentaires

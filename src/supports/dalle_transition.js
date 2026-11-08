@@ -127,8 +127,9 @@ export function calculDalleTransition({ L, e = 0.30, B = 8, hc0 = 0.30, pente = 
     M: { G: Mg, TS: TS.M, UDL: MU, LM2: LM2.M, bandes: MQb, plaque: plaque ? MQp : null, Q: MQ, ELU: Mu, ELS: Ms, QP: Mqp }, V: { G: Vg, Q: VQ, ELU: Vu }, gouverne: gouv,
     transv: T ? { inf: { ...T.inf, M: plaque.inf, pos: plaque.posInf }, sup: { ...T.sup, M: plaque.sup, pos: plaque.posSup } } : null, supT,
     corbeau: { G: RG, Q: RQ, ELU: 1.35 * (RG + RQ) },
-    d, As: { ELU: res.elu.As, ELS: res.els.As, fissuration: res.fis, min: res.mins.asMin, requis: res.As },
-    inf: ch, rep, sup, VRdc, okV: Vu <= VRdc + 1e-9, okAs: !ch.insufficient && ch.As + 1e-12 >= res.As, sigS: res.els.sigS,
+    // aciers comprimés (au-delà du moment limite du béton, ELU ou ELS) : non admis pour la dalle de transition → épaissir
+    d, As: { ELU: res.elu.As, ELS: res.els.As, fissuration: res.fis, min: res.mins.asMin, requis: res.As, comprimes: Math.max(res.elu.As2 || 0, res.els.As2 || 0) },
+    inf: ch, rep, sup, VRdc, okV: Vu <= VRdc + 1e-9, okAs: !ch.insufficient && ch.As + 1e-12 >= res.As && !(Math.max(res.elu.As2 || 0, res.els.As2 || 0) > 1e-9), sigS: res.els.sigS,
   };
 }
 
