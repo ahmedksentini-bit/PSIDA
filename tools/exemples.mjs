@@ -38,9 +38,10 @@ const ex3 = { nom: 'Exemple 3 — Pont-dalle précontraint 18 + 25 + 25 + 18 m',
 } };
 
 // --- Exemple 4 : pont-dalle précontraint courbe (R = 150 m) à lignes d'appui parallèles (franchissement d'une voie droite)
+// appareils des culées imposés depuis la version 0.99.48 (appareils sous la nervure : réactions de rive plus fortes)
 const dxf4 = dxfCourbe({ R: 150, Larc: 70, L1: 10, L2: 10, stations: [12, 32, 58, 78], lAppui: 14, parallele: Math.PI / 2 });
 const ex4 = { nom: 'Exemple 4 — Pont-dalle précontraint courbe et biais', dxf: ['exemple4_trace.dxf', dxf4], data: {
-  ...trace(dxf4, 'exemple4_trace.dxf'), width: '12', h: '1.00', overhangs: '0.75, 0.75', hEdge: '0.35', joue: '2.5', typeDalle: 'DP', bp_actif: 'on', ap_pileH: '7', brgPile: '450×600×4(12+3)', ap_B: '5.0', ap_hs: '1.2', ap_De: '1.5', ap_bosFck: '35',
+  ...trace(dxf4, 'exemple4_trace.dxf'), width: '12', h: '1.00', overhangs: '0.75, 0.75', hEdge: '0.35', joue: '2.5', typeDalle: 'DP', bp_actif: 'on', ap_pileH: '7', brgPile: '450×600×4(12+3)', brgCul: '400×500×6(12+3)', ap_B: '5.0', ap_hs: '1.2', ap_De: '1.5', ap_bosFck: '35',
 } };
 
 export const EXEMPLES = [ex1, ex2, ex3, ex4];

@@ -12,7 +12,7 @@
  *  - fondations supposées rigides (comme dans Pont EC8).
  * Unités Pont EC8 : m, MPa, t/m³, kN/m, MN.
  */
-import { bearingSpacing } from './bearings.js';
+import { bearingSpacing, appuiDalle } from './bearings.js';
 
 const CLASSES = [[12, 15], [16, 20], [20, 25], [25, 30], [30, 37], [35, 45], [40, 50], [45, 55], [50, 60]];
 const betonClasse = fck => { const c = CLASSES.find(([f]) => f >= fck) || CLASSES[CLASSES.length - 1]; return `C${c[0]}/${c[1]}`; };
@@ -101,7 +101,7 @@ export function toPontEC8(st, opt = {}) {
   return {
     version: 1,
     nom: opt.nom || `${({ dalle: 'Pont-dalle', poutres: 'Pont à poutres', caisson: 'Pont-caisson', mixte: 'Pont mixte' })[deck.type || 'dalle']} ${deck.spans.join('-')} m (export PSIDA)`,
-    description: `Exporté de PSIDA (calcul manuel assisté des ponts-dalles) : tablier, appareils d'appui retenus, appuis et semelles. Entraxe des appareils ${bearingSpacing({ width, psi: p.concept.psi, n: bearings.nb }).toFixed(2)} m. Culées remblayées représentées comme rigides (culées à mur de front hors du périmètre V1 de Pont EC8).`,
+    description: `Exporté de PSIDA (calcul manuel assisté des ponts-dalles) : tablier, appareils d'appui retenus, appuis et semelles. Entraxe des appareils ${bearingSpacing({ ...(deck.g ? appuiDalle(deck) : { width }), psi: p.concept.psi, n: bearings.nb }).toFixed(2)} m. Culées remblayées représentées comme rigides (culées à mur de front hors du périmètre V1 de Pont EC8).`,
     site,
     materiaux: { beton: { classe: betonClasse(sp.mat.fck), fck: sp.mat.fck, masseVolumique: 2.5 }, acier: { fyk: sp.mat.fyk, classeDuctilite: 'B' } },
     tablier: { type: typeTablier, travees: deck.spans.slice(), largeur: width, epaisseur: deck.h, aire: deck.area ?? di.area ?? width * deck.h, superstructures: superstr,

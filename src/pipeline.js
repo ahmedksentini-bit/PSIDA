@@ -12,7 +12,7 @@ import { deformationsRail, ecmDynamique } from './rail_deformations.js';
 import { effortsLongitudinaux } from './rail_appuis.js';
 import { TransverseModel } from './transverse.js';
 import { aideConception } from './conception.js';
-import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations, parseDesignation, appareilsSousChanfrein } from './bearings.js';
+import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, appuiDalle, endRotations, parseDesignation, appareilsSousChanfrein } from './bearings.js';
 import { chevetresEC } from './chevetre.js';
 import { sectionDevers, bandesRevetement } from './devers.js';
 import { coefficientsBiais } from './plate/biais_appuis.js';
@@ -296,7 +296,7 @@ export function computeExtra(p, deck, perm, ec, thermal, settle, design, bearing
   }
   const flm = flm3Envelope(deck);
   out.fatigue = fatigueCheck(deck, flm, perm, design, deck.keySections(), x.fat);
-  const pitch = x.bearingPitch || (bearings ? bearingSpacing({ width: 2 * deck.b, psi: p.concept.psi, n: bearings.nb }) : 3);
+  const pitch = x.bearingPitch || (bearings ? bearingSpacing({ ...appuiDalle(deck), psi: p.concept.psi, n: bearings.nb }) : 3);
   out.zonage = zonage({ spans: deck.spans, overhangs: deck.g.overhangs, width: 2 * deck.b, h: deck.h, psi: p.concept.psi, bearingPitch: pitch, optionFers: p.concept.transversePerpendicular ? 2 : 1, cantilever: x.cant ? x.cant.Lc : 0 });
   out.zonage.pitch = pitch;
   return out;
@@ -360,7 +360,7 @@ export function compute(p) {
   // inégalité de répartition entre appareils d'une ligne (PSI-DA 68 § 2.4.2) : CP, UDL (formule A), tandems TS
   // (roues des voies 1 à 3, centrées dans des voies de wl, généralisation de la formule B)
   const nbL = p.concept.nBearings || Math.max(2, Math.round(2 * deck.b / 3));
-  const kc = inequalityCoefficients({ width: 2 * deck.b, chargeable: deck.g.roadway.y2 - deck.g.roadway.y1, n: nbL, psi: p.concept.psi, nLanes: ec.lanes.n, h: deck.h, hRev: p.mat.tRev });
+  const kc = inequalityCoefficients({ width: 2 * deck.b, chamfer: deck.g.chamfer || null, chargeable: deck.g.roadway.y2 - deck.g.roadway.y1, n: nbL, psi: p.concept.psi, nLanes: ec.lanes.n, h: deck.h, hRev: p.mat.tRev });
   const tsWheels = ec.lm1.lanes.slice(0, 3).flatMap((ln, i) => [{ y: i * ec.lanes.wl + ec.lanes.wl / 2 - 1, P: ln.Q }, { y: i * ec.lanes.wl + ec.lanes.wl / 2 + 1, P: ln.Q }]).filter(w => w.P > 0);
   const ineq = { coef: { ...kc, B: inequalityWheels(tsWheels, kc.e, nbL) }, Rperm: perm.Rmax, RA: ec.UDL.Rmax, RB: ec.TS.Rmax };
   // ouvrage biais calculé par Guyon : concentration à l'angle obtus lue sur la plaque (deux résolutions, permanent)
@@ -381,7 +381,7 @@ export function compute(p) {
   const bearings = designBearings({ deck, beamComb: design.EC.beam, EI, nPerLine: p.concept.nBearings, xFixed: p.concept.xFixed, epsSlow: p.concept.epsSlow, dT: p.concept.dTu, alphaQ1: ec.alpha.aQ[0], alphaq1: ec.alpha.aq1, ineq, rot: rotQ ? { perm: rotPerm, traffic: rotQ } : null,
     impose: p.concept.bearingEnd || p.concept.bearingPier ? { end: p.concept.bearingEnd, pier: p.concept.bearingPier } : null });
   bearings.rotPerm = rotPerm; bearings.EI = EI; if (ineq.kBiais) bearings.kBiais = ineq.kBiais; if (ineq.kBiaisErreur) bearings.kBiaisErreur = ineq.kBiaisErreur;
-  bearings.chanfrein = appareilsSousChanfrein({ width: 2 * deck.b, n: bearings.nb, chamfer: deck.g.chamfer, rows: bearings.rows });
+  bearings.chanfrein = appareilsSousChanfrein({ width: 2 * deck.b, h: deck.h, n: bearings.nb, chamfer: deck.g.chamfer, rows: bearings.rows });
   if (PL) {
     // plaque : réaction de l'appareil le plus chargé lue sur la plaque (au lieu des coefficients d'inégalité PSI-DA 68)
     const ra = reactionsAppareils(deck, perm, ec, design.EC.beam);
@@ -483,7 +483,7 @@ export function computeRail(p) {
   const transDesign = { EC: designTransverseEC(deck, trans, design.EC, { ...p.mat, phi: p.mat.phiT, phiLong: p.mat.phi, ...skewOpt, rail }), F61: null };
   const EI = thermal ? thermal.EI : (p.E || 34000) * 1000 * (p.I || p.deckInput.width * Math.pow(p.deckInput.h, 3) / 12);
   const nbL = p.concept.nBearings || Math.max(2, Math.round(2 * deck.b / 3));
-  const kc = inequalityCoefficients({ width: 2 * deck.b, chargeable: deck.g.roadway.y2 - deck.g.roadway.y1, n: nbL, psi: p.concept.psi, nLanes: rail.nV, h: deck.h, hRev: p.mat.tRev });
+  const kc = inequalityCoefficients({ width: 2 * deck.b, chamfer: deck.g.chamfer || null, chargeable: deck.g.roadway.y2 - deck.g.roadway.y1, n: nbL, psi: p.concept.psi, nLanes: rail.nV, h: deck.h, hRev: p.mat.tRev });
   const ineq = { coef: { ...kc, B: 1 }, Rperm: perm.Rmax, RA: ec.UDL.Rmax, RB: ec.TS.Rmax };
   const rotPerm = deck.beam.x0.map((_, i) => {
     let th = 0;
@@ -503,7 +503,7 @@ export function computeRail(p) {
   const bearings = designBearings({ deck, beamComb: design.EC.beam, EI, nPerLine: p.concept.nBearings, xFixed: p.concept.xFixed, epsSlow: p.concept.epsSlow, dT: p.concept.dTu, alphaQ1: 1, alphaq1: 1, Htot: HtotRail, ineq, rot: { perm: rotPerm, traffic: rotQ },
     impose: p.concept.bearingEnd || p.concept.bearingPier ? { end: p.concept.bearingEnd, pier: p.concept.bearingPier } : null });
   bearings.rotPerm = rotPerm; bearings.EI = EI; bearings.rail = true;
-  bearings.chanfrein = appareilsSousChanfrein({ width: 2 * deck.b, n: bearings.nb, chamfer: deck.g.chamfer, rows: bearings.rows });
+  bearings.chanfrein = appareilsSousChanfrein({ width: 2 * deck.b, h: deck.h, n: bearings.nb, chamfer: deck.g.chamfer, rows: bearings.rows });
   // liaisons saisies (pont-rail) : appareils à pot fixes ou glissants (hors élastomères), comme les appuis seuls
   const LI = p.rail.liaisons || [];
   if (LI.length) {
@@ -516,7 +516,7 @@ export function computeRail(p) {
   const chevetres = chevetresEC({ deck, perm, ec, n: bearings.nb, psi: p.concept.psi, cover: p.mat.c, phi: p.mat.phiT, fck: p.mat.fck, fyk: p.mat.fyk, gQ: Math.max(...rail.groupes.map(G => G.gamma)) });
   const concept = aideConception(conceptInput(p), { deck, perm, design: design.EC, transDesign: transDesign.EC });
   // compléments : seul le zonage (géométrique) s'applique ; LM3, fatigue FLM3, encorbellement et chantier sont routiers
-  const pitch = p.extra.bearingPitch || bearingSpacing({ width: 2 * deck.b, psi: p.concept.psi, n: bearings.nb });
+  const pitch = p.extra.bearingPitch || bearingSpacing({ ...appuiDalle(deck), psi: p.concept.psi, n: bearings.nb });
   const zz = zonage({ spans: deck.spans, overhangs: deck.g.overhangs, width: 2 * deck.b, h: deck.h, psi: p.concept.psi, bearingPitch: pitch, optionFers: p.concept.transversePerpendicular ? 2 : 1, cantilever: 0 });
   zz.pitch = pitch;
   const extra = { zonage: zz, rail: true };

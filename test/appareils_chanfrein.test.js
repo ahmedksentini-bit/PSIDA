@@ -26,9 +26,14 @@ test('exemple fil rouge avec chanfreins de 1 m : aucune alerte', () => {
   assert.equal(st.bearings.chanfrein.length, 0);
 });
 
-test('tablier de 7 m, 2 appareils par ligne, chanfreins de 1,5 m : alerte et recommandation', () => {
+test('tablier de 7 m, 2 appareils par ligne, chanfreins de 1,5 m : depuis 0.99.48, appareils sous la nervure, aucune alerte', () => {
   const st = compute(parseData({ ...formDefaults(), width: '7', roadway: '-2.5, 2.5', footways: '', nBearings: '2', hEdge: '0.40', joue: '1.5' }));
-  assert.equal(st.bearings.chanfrein.length, st.bearings.rows.length, 'toutes les lignes');
+  assert.equal(st.bearings.chanfrein.length, 0);
+});
+
+test('nervure étroite et 4 appareils par ligne (7 m, chanfreins de 1,5 m) : alerte et recommandation', () => {
+  const st = compute(parseData({ ...formDefaults(), width: '7', roadway: '-2.5, 2.5', footways: '', nBearings: '4', hEdge: '0.40', joue: '1.5' }));
+  assert.ok(st.bearings.chanfrein.length >= 1, 'appareils de 400 mm des piles : bord à 2,01 > 2,00 m');
   const { items } = recommandations(st);
   const it = items.find(x => /chanfreins/.test(x.verification || ''));
   assert.ok(it, 'recommandation présente');
