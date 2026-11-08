@@ -134,11 +134,12 @@ export function cadreBlocks(out, { reco = null } = {}) {
       const fp = faceTendue(sx.barre, true), fm = faceTendue(sx.barre, false), aP = [fp, sx.asMax.as, sx.barresMax], aM = [fm, sx.asMin.as, sx.barresMin];
       const [a1, a2] = (fp === 'intérieure' || fp === 'gauche') ? [aP, aM] : [aM, aP];
       return [sx.barre, sx.ou, F(sx.e), F3(sx.d), `${a1[0]} : ${F(a1[1])}`, a1[2].option?.label || 'aucune', `${a2[0]} : ${F(a2[1])}`, a2[2].option?.label || 'aucune',
-        sx.tranchantEc2 ? `${F(sx.tranchantEc2.ved)} / ${F(sx.tranchantEc2.vRd)}` : `${F3(sx.tranchant.tau)} / ${F3(sx.tranchant.lim)}`, sx.echec ? 'NON' : 'OK'];
+        sx.tranchantEc2 ? `${F(sx.tranchantEc2.ved)} / ${F(sx.tranchantEc2.vRd)}` : `${F3(sx.tranchant.tau)} / ${F3(sx.tranchant.lim)}`,
+        sx.beton ? `${F1(sx.beton.sig)} / ${F1(sx.beton.lim)}${sx.beton.sigQp != null ? ` ; ${F1(sx.beton.sigQp)} / ${F1(sx.beton.limQp)}` : ''}` : '—', sx.echec ? 'NON' : 'OK'];
     };
-    table(['Barre', 'Section', 'e [m]', 'd [m]', 'A_s face int. (g.) [cm²/ml]', 'Barres', 'A_s face ext. (d.) [cm²/ml]', 'Barres', h.code === 'EC2' ? 'V_Ed / V_Rd,c' : 'τ_u / τ_lim [MPa]', 'Verdict'], r.sections.map(ligne),
+    table(['Barre', 'Section', 'e [m]', 'd [m]', 'A_s face int. (g.) [cm²/ml]', 'Barres', 'A_s face ext. (d.) [cm²/ml]', 'Barres', h.code === 'EC2' ? 'V_Ed / V_Rd,c' : 'τ_u / τ_lim [MPa]', h.code === 'EC2' ? 'σ_c / 0,6 f_ck ; σ_c,qp / 0,45 f_ck [MPa]' : 'σ_bc / 0,6 f_c28 [MPa]', 'Verdict'], r.sections.map(ligne),
       { small: true, ...(ind ? { hints: r.sections.map(sx => (sx.echec ? hint({ bloc: ib, type: 'section', barre: sx.barre, ou: sx.ou }) : null)) } : {}) });
-    comment(`Hauteur utile d = e − enrobage − φ/2, recalculée avec le diamètre retenu ; flexion composée à l'ELS (BAEL) dès que N > 0,5 t/ml, avec la compression la plus faible ; non-fragilité ${h.code === 'EC2' ? 'EN 1992-1-1 §9.2.1.1' : '0,23 d f_t28/f_e'} ; effort tranchant sans armatures ${h.code === 'EC2' ? 'V_Rd,c (§6.2.2)' : '0,07 f_c28/γ_b (A.5.2,2)'}.`);
+    comment(`Hauteur utile d = e − enrobage − φ/2, recalculée avec le diamètre retenu ; flexion composée à l'ELS (BAEL) dès que N > 0,5 t/ml, avec la compression la plus faible ; non-fragilité ${h.code === 'EC2' ? 'EN 1992-1-1 §9.2.1.1' : '0,23 d f_t28/f_e'} ; effort tranchant sans armatures ${h.code === 'EC2' ? 'V_Rd,c (§6.2.2)' : '0,07 f_c28/γ_b (A.5.2,2)'} ; compression du béton à l'ELS sur section fissurée (n = 15, aciers retenus, moment rapporté aux aciers tendus en flexion composée) : ${h.code === 'EC2' ? '0,6 f_ck sous la combinaison caractéristique (§ 7.2(2)) et 0,45 f_ck sous la quasi permanente, permanents seuls, ψ₂ = 0 pour le trafic (§ 7.2(3))' : '0,6 f_c28 (A.4.5,2)'}.`);
     const B0 = r.geom.B, gs = goussetSup(B0), gi = goussetInf(B0);
     para(`Dispositions du guide PICF-EL : renfort de gousset supérieur ${F(gs.L)} m, ${gs.n} barres (${gs.base}) ; ${ouvert ? '' : `gousset inférieur ${F(gi.L)} m, ${gi.n} barres (${gi.base}) ; `}voiles : espacement 0,40 m, 0,20 m sur 2,00 m près des joints.`);
 

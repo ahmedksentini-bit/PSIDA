@@ -139,6 +139,8 @@ function bearingsTable(st) {
       if (s.antiCheminement) obs.push(`σ_min = ${f1(s.sigMin)} MPa &lt; 2 MPa (guide 1989, Fascicule 61) : risque de cheminement, prévoir un dispositif anti-cheminement (taquets) ou augmenter la charge permanente par appareil (moins d'appareils). En Eurocodes, c'est la NF EN 1337-3 qui s'applique : σ_m,min ≥ 3 MPa sous charges permanentes seules sur l'aire A′ pour un appareil non ancré, vérifié dans l'onglet Appuis`);
       if (s.glissement) obs.push(`H &gt; f·P_min (f = ${f2(s.f)}) : risque de glissement, bloquer l'appareil`);
       if (s.glissantNecessaire) obs.push(`u_g &gt; min(a, b)/10 : appareil glissant élastomère + PTFE (§ 3.6.2)`);
+      const ch = (b.chanfrein || []).find(c => c.i === r.i);
+      if (ch) obs.unshift(`<span class="badge warn">ATTENTION</span>appareil de rive sous le chanfrein : |y| + b/2 + 5 cm = ${f2(ch.bord)} m &gt; b − joue = ${f2(ch.limite)} m (y = ±${f2(ch.yMax)} m, entraxe 2b/(n − 0,1)). L'appareil doit porter sur un bossage sous la sous-face pleine (guide 1989, § 3.6.1) : réduire le nombre d'appareils, ou rapprocher les appareils de l'axe sur les plans`);
       if (s.imposed && !s.ok) obs.unshift(`appareil imposé ne vérifiant pas : ${Object.entries(s.checks).filter(([, v]) => !v).map(([k]) => ({ compression: 'compression', distorsionVide: 'distorsion u_g/T', distorsionCharge: 'distorsion sous charge', deversement: 'épaisseur T ≤ a/5', rotation: 'rotation' })[k]).join(', ')}`);
       h += `<td><b>${s.label}</b>${s.imposed ? ' <span class="small">(imposé)</span>' : ''}<br><span class="small">hauteur ${s.hTot} mm</span></td>
       <td class="chk">σ = ${f1(s.sig)} ≤ ${f1(s.sigLim)} MPa<br>u_g/T = ${f2(s.dist1)} ≤ 0,5<br>u_g/T + H/(G₂ab) = ${f2(s.dist2)} ≤ 0,7<br>T = ${(s.T * 1000).toFixed(0)} ≤ a/5 = ${(s.Tmax * 1000).toFixed(0)} mm<br>α = ${f1(r.alpha * 1000)} ≤ ${f1(s.rotLim * 1000)} mrad<br>σ_min = ${f1(s.sigMin)} ${s.antiCheminement ? '<b class="ko">&lt; 2</b>' : '≥ 2'} MPa <span class="small">(guide 1989 ; NF EN 1337-3 : 3 MPa sous G seul, onglet Appuis)</span></td>
@@ -620,7 +622,7 @@ const FORM_UI = enhanceForm($('#f')); // saisie valeur par valeur des champs mul
 const NIV = initNivellement($('#f'), () => state);
 const TRACE = initTrace($('#f'), { setField });
 // manuel d'utilisation : PDF publié avec le site (docs/manuel), paramètre de version pour ne pas servir un ancien PDF en cache
-const MANUEL = { version: '0.99.44', url: 'docs/manuel/PSIDA_Manuel.pdf' };
+const MANUEL = { version: '0.99.45', url: 'docs/manuel/PSIDA_Manuel.pdf' };
 $('#btn-manuel').addEventListener('click', () => window.open(`${MANUEL.url}?v=${MANUEL.version}`, '_blank', 'noopener'));
 $('#f').addEventListener('change', ev => { if (ev.target.name === 'niv_actif') NIV.refresh(); });
 applyHelp($('#f'), $('#help-list'));
@@ -676,7 +678,7 @@ async function saveProject() {
   const form = $('#f');
   const spans = String(form.spans.value || '').split(/[,;\s]+/).filter(Boolean).join('-');
   const name = nomAvecHorodatage(projName || `projet-psida-${spans || 'ouvrage'}.json`);   // date et heure dans le nom
-  const file = { format: PROJ_FORMAT, version: '0.99.44', date: new Date().toISOString(), data: formSnapshot(form) };
+  const file = { format: PROJ_FORMAT, version: '0.99.45', date: new Date().toISOString(), data: formSnapshot(form) };
   if (ec8Data) file.ec8 = ec8Data;
   const txt = JSON.stringify(file, null, 1);
   if (window.showSaveFilePicker) { // Chrome, Edge : choix du nom et du dossier
@@ -768,7 +770,7 @@ $('#btn-report').addEventListener('click', async () => {
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
     // pont-dalle sous rail : la note imprimable est la note ferroviaire (le rapport routier suppose LM1 et le Fascicule 61)
-    const html = state.rail ? noteToHTML(await makeNote()) : await buildReport({ ...state, version: '0.99.44', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = state.rail ? noteToHTML(await makeNote()) : await buildReport({ ...state, version: '0.99.45', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -805,8 +807,8 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  if (state.rail) return buildNoteRail({ ...state, version: '0.99.44' }, { figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
-  return buildNote({ ...state, version: '0.99.44', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  if (state.rail) return buildNoteRail({ ...state, version: '0.99.45' }, { figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.99.45', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -869,7 +871,7 @@ $('#cadre-tables').addEventListener('click', ev => {
 initCadrePlans(() => cadre);
 $('#btn-cadre-note').addEventListener('click', () => {
   if (!cadre) runCadre(); if (!cadre) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.99.44' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.99.45' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-cadre.html'; aEl.click(); }
 });
@@ -877,7 +879,7 @@ $('#btn-cadre-docx').addEventListener('click', async () => {
   if (!cadre) runCadre(); if (!cadre) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.99.44' })), docx);
+    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.99.45' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = `note-cadre-${cadre.inp.geom.nom || 'ouvrage'}.docx`; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -970,7 +972,7 @@ initPoutresPlans(() => poutres);
 initParcours();
 $('#btn-phasage-note').addEventListener('click', () => {
   if (!phasage) runPhasage(); if (!phasage) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.99.44' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.99.45' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-phasage.html'; aEl.click(); }
 });
@@ -978,7 +980,7 @@ $('#btn-phasage-docx').addEventListener('click', async () => {
   if (!phasage) runPhasage(); if (!phasage) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.99.44' })), docx);
+    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.99.45' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = 'note-phasage.docx'; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -1032,7 +1034,7 @@ $('#poutres-tables').addEventListener('click', ev => {
 });
 $('#btn-poutres-note').addEventListener('click', () => {
   if (!poutres) $('#btn-poutres').click(); if (!poutres) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(poutresNote(poutres, { version: '0.99.44' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(poutresNote(poutres, { version: '0.99.45' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-pont-poutres.html'; aEl.click(); }
 });
@@ -1040,7 +1042,7 @@ $('#btn-poutres-docx').addEventListener('click', async () => {
   if (!poutres) $('#btn-poutres').click(); if (!poutres) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(poutresNote(poutres, { version: '0.99.44' })), docx);
+    const blob = await noteToDocx(await svgToImg(poutresNote(poutres, { version: '0.99.45' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = 'note-pont-poutres.docx'; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -1080,7 +1082,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.99.44', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.99.45', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));

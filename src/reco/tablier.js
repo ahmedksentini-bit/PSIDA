@@ -81,6 +81,16 @@ export const reglesTablier = [
   st => {
     const out = [], B = st.bearings;
     if (!B) return out;
+    if (B.chanfrein && B.chanfrein.length) {
+      const c = B.chanfrein.slice().sort((u, v) => v.depasse - u.depasse)[0], lignes = B.chanfrein.map(u => (u.i === 0 || u.i === B.rows.length - 1 ? `C${u.i}` : `P${u.i}`)).join(', ');
+      const chanfreinOk = s => !(s.bearings.chanfrein && s.bearings.chanfrein.length);
+      out.push({ domaine: 'Appareils d\'appui', lieu: lignes, verification: 'Position des appareils de rive (chanfreins)',
+        constat: `appareil de rive en y = ±${fx(c.yMax)} m : |y| + b/2 + 5 cm = ${fx(c.bord)} m > b − joue = ${fx(c.limite)} m, il porterait en partie sous le chanfrein`,
+        regle: 'guide Ponts-dalles 1989 § 3.6.1 (appareil sur bossage horizontal, débord de 5 cm)',
+        actions: [...(B.nb > 2 ? [{ texte: 'Moins d\'appareils par ligne (entraxe 2b/(n − 0,1) : les appareils de rive se rapprochent de l\'axe)', champ: 'nBearings', chercher: { champ: 'nBearings', min: 2, max: B.nb - 1, pas: 1, vers: 'bas', depart: B.nb - 1, calcul: 'complet', verifie: s => chanfreinOk(s) && s.bearings.rows.every(r => !!r.sel) } }] : []),
+          { texte: 'Chanfrein moins large', champ: 'joue', unite: 'm' },
+          { texte: 'Ou imposer sur les plans un entraxe plus serré (appareils de rive rapprochés de l\'axe) : PSIDA calcule avec l\'entraxe 2b/(n − 0,1) du dossier PSI-DA ; reprendre alors la répartition des réactions' }] });
+    }
     B.rows.forEach((r, i) => {
       const culee = i === 0 || i === B.rows.length - 1, champ = culee ? 'brgCul' : 'brgPile', lieu = culee ? `Culée C${i}` : `Pile P${i}`;
       if (!r.sel) out.push({ domaine: 'Appareils d\'appui', lieu, verification: 'Choix d\'un appareil standard', constat: `aucun appareil standard ne convient (P_max = ${fx(r.Pmax, 0)} kN, u_g = ${fx(r.ug * 1000, 1)} mm)`, regle: 'guide SETRA 1989 § 3.6',
