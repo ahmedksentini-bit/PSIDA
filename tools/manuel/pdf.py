@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Manuel d'utilisation : met en forme le PDF exporté du document Claude Docs (polycopié unique, chapitres 1 à 34 et
-annexes A à H) avant de le publier sous docs/manuel/PSIDA_Manuel.pdf.
+annexes A à I) avant de le publier sous docs/manuel/PSIDA_Manuel.pdf.
 
     python3 tools/manuel/pdf.py export_docs.pdf [--sortie docs/manuel/PSIDA_Manuel.pdf] [--px 1100] [--px-plan 1700] [--qualite 60]
 
@@ -27,7 +27,7 @@ LIMITE_MO = 24  # Cloudflare Pages : 25 MiB par fichier au plus ; marge d'un peu
 MANUEL = RACINE / 'docs/manuel/PSIDA_Manuel.pdf'
 
 # « Chapitre 12 — … » ou « 28. … » ; « Annexe B … » ou « B. … » ; « Avant-propos »
-CHAP = re.compile(r'^(?:Chapitre (\d+)\s*[—–-]\s*\S.*|(\d{1,2})\. [A-ZÀ-ÖØ-Þ].*|Annexe ([A-Z])\b.*|([A-H])\. [A-ZÀ-ÖØ-Þ].*|Avant-propos)$')
+CHAP = re.compile(r'^(?:Chapitre (\d+)\s*[—–-]\s*\S.*|(\d{1,2})\. [A-ZÀ-ÖØ-Þ].*|Annexe ([A-Z])\b.*|([A-L])\. [A-ZÀ-ÖØ-Þ].*|Avant-propos)$')
 TDM = re.compile(r'(\s|\.{3,}|…)\d{1,3}$')
 SECT = re.compile(r'^(\d+)\.(\d+)(?: bis)?\s+[A-ZÀ-ÖØ-Þ«L].{2,}$')
 

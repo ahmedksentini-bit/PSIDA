@@ -1,5 +1,5 @@
 #!/bin/bash
-# Rendu local du manuel : make.sh export.md export.html dossier_images "Novembre 2026 — PSIDA version 0.99.42" sortie.pdf
+# Rendu local du manuel : make.sh export.md export.html dossier_images "Novembre 2026 — PSIDA version 0.99.44" sortie.pdf
 # KATEX_DIR : dossier dist/ de KaTeX (par défaut, celui de node_modules à côté de ce script ou de /opt/npm-tools).
 set -e
 D="$(cd "$(dirname "$0")" && pwd)"; W="${WORK:-$(mktemp -d)}"
