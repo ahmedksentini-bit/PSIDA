@@ -185,7 +185,7 @@ Choix retenus (justifiés dans les en-têtes des modules) :
 - **Fondations** : semelles NF P 94-261 (k_p du tableau D.2.3 — vérifié sur les k_p,max du guide Cerema —, i_δ, Meyerhof,
   glissement) ou F62-V (q_ref = (3q_max + q_min)/4, γ_q = 2 / 3) ; bielles ; pieux : semelle rigide, Winkler-Ménard
   (différences finies, vérifié sur la solution de Hetényi), portance NF P 94-262 simplifiée (une couche ; f_sol et k_p à relire).
-- **Écart signalé** : la note de Noé applique au tirant de la semelle de culée l'effort total (601,6 t) ; la formule des bielles
+- **Écart signalé** : la note de référence applique au tirant de la semelle de culée l'effort total (601,6 t) ; la formule des bielles
   à deux files porte sur la réaction d'une file — c'est ce que fait l'outil.
 
 ## 1 septies. Relecture des textes et intégrations (v0.14)
@@ -194,10 +194,10 @@ Choix retenus (justifiés dans les en-têtes des modules) :
   Fascicule 62 titre V (k_p par classe, Φ₁/Φ₂, q'_ref, γ_q, pieux annexe C.3 et courbes Q1–Q7), NF P 94-261 (k_p, i_δ, γ_R;v,
   γ_R;d;v, γ_R;h = γ_R;d;h = 1,1), NF P 94-262 (modèle de terrain), effet de groupe. Relus sur les textes du Drive
   (rapports `ref/reports/f62v.md`, `nfp94261.md`, `fond72.md`).
-- **Semelles sur pieux** : PP73 pièce 1.3.2 ch. 4 — tirant par couple de pieux avec R = réaction d'un pieu (la note de Noé
+- **Semelles sur pieux** : PP73 pièce 1.3.2 ch. 4 — tirant par couple de pieux avec R = réaction d'un pieu (la note de référence
   applique la charge totale de la semelle : 501,5 cm² au lieu de 82,97 cm² par couple), bielles à 45° au moins, hauteur
   minimale, répartition, ancrage, poinçonnement ; file unique : poutre sur pieux et moment M/n en tête des pieux.
-- **Ménard** : la formule reproduite sur Noé est le module de courte durée (2 E_s du F62) ; enveloppe courte/longue durée.
+- **Ménard** : la formule reproduite sur la note de référence est le module de courte durée (2 E_s du F62) ; enveloppe courte/longue durée.
 - **Séisme** : moteur de Pont EC8 (dépôt `ouvpara`, EN 1998-2, guide Cerema 2015) intégré en module ES (`src/vendor/pont-ec8.mjs`) :
   le projet est construit par `src/ec8export.js`, les efforts par appui (100/30/30, UBDP) entrent en combinaison sismique
   G + A_Ed avec matériaux accidentels. Non compris : inertie propre des fûts, surpoussée dynamique des terres.

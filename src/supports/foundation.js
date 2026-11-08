@@ -154,7 +154,7 @@ export function pileGroupForces({ N, M, H = 0, xs, Mhead = 0 }) {
 /**
  * Module de réaction frontal de Ménard (Fascicule 62 V annexe C.5 ; NF P 94-262 annexe I) : B₀ = 0,60 m,
  * E_s = 12 E_M / [(4/3)(B₀/B)(2,65 B/B₀)^α + α] (B ≥ B₀), 12 E_M / [(4/3)(2,65)^α + α] (B < B₀) ; k = E_s/B.
- * Noé : E_M = 1800 t/m², α = 0,66 → k = 6756 t/m³ (Ø 1,20) et 9120 t/m³ (Ø 0,80).
+ * Note de référence : E_M = 1800 t/m², α = 0,66 → k = 6756 t/m³ (Ø 1,20) et 9120 t/m³ (Ø 0,80).
  */
 export function menardReaction({ EM, alpha, B, B0 = 0.6 }) {
   const Es = B >= B0 ? 12 * EM / ((4 / 3) * (B0 / B) * (2.65 * B / B0) ** alpha + alpha) : 12 * EM / ((4 / 3) * 2.65 ** alpha + alpha);

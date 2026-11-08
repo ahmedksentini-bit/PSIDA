@@ -30,7 +30,7 @@ export function horizontalDistribution(lines) {
     braking: H => K.inst.map(k => k * H / sum(K.inst)),
     /**
      * ε > 0 raccourcissement du tablier (retrait, fluage, refroidissement) ; kind 'diff' (lent) ou 'inst' (rapide).
-     * H_i = K_i ε (x₀ − x_i) : effort sur la tête d'appui, positif dans le sens des x croissants (convention de la note Noé).
+     * H_i = K_i ε (x₀ − x_i) : effort sur la tête d'appui, positif dans le sens des x croissants (convention de la note de référence).
      */
     imposed: (eps, kind = 'diff') => {
       const H = K[kind].map((k, i) => k * eps * (x0[kind] - lines[i].x));
@@ -80,11 +80,11 @@ export function brakingF61Deck({ Ltot, Lc, nv, a1 = 1, a2 = 1 }) {
 }
 
 /**
- * Combinaisons des efforts en tête d'un appui (BAEL 91 annexe D, ponts routes — combinaisons C1… de la note du Pont de
- * Noé) : ELU 1,35 G + 1,35 (retrait + fluage) + γ_Q1 (Q1 + freinage) + 0,78 TLD (γ_Q1 = 1,605 pour A et B, 1,35 Mc120) ;
+ * Combinaisons des efforts en tête d'un appui (BAEL 91 annexe D, ponts routes — combinaisons C1… de la note de
+ * référence) : ELU 1,35 G + 1,35 (retrait + fluage) + γ_Q1 (Q1 + freinage) + 0,78 TLD (γ_Q1 = 1,605 pour A et B, 1,35 Mc120) ;
  * ELS G + retrait + fluage + 1,2 (Q1 + freinage) + 0,6 TLD (Mc120 × 1). Températures dominantes : 1,35 / 1,0 (TLD + TCD).
  * @param {object} a actions en tête : G {N}, Q:[{label, N, H, gU, gS}], RF {H} (retrait + fluage), TLD {H}, TCD {H} ;
- *   envelope : efforts horizontaux cumulés en valeur absolue (le freinage et la température changent de sens — la note Noé
+ *   envelope : efforts horizontaux cumulés en valeur absolue (le freinage et la température changent de sens — la note de référence
  *   combine le freinage positif avec le retrait négatif en P3, ce qui n'est pas défavorable)
  */
 export function headCombinationsBAEL({ G, Q = [], RF = { H: 0 }, TLD = { H: 0 }, TCD = { H: 0 }, envelope = false }) {
