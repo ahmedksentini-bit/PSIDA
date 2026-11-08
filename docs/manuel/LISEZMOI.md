@@ -14,13 +14,13 @@ Taille : Cloudflare Pages refuse tout fichier de plus de 25 MiB ; `pdf.py` écho
 `--qualite` (JPEG, 60 par défaut), `--px` (largeur maximale des images, 1100 par défaut) et `--px-plan`
 (plans et dessins au trait, 1700 par défaut, pour garder les cotes lisibles) ; si `qpdf` est installé, les flux sont recompressés en fin de course.
 
-Rendu local (secours, et méthode des éditions 0.99.42 à 0.99.44) : quand l'export PDF de Docs est refusé (document trop lourd
+Rendu local (secours, et méthode des éditions 0.99.42 à 0.99.48) : quand l'export PDF de Docs est refusé (document trop lourd
 pour le service d'impression, plus de 200 images), on part des exports Markdown et HTML du même document (même
 révision) et des images nommées par leur identifiant de blob :
 
     # 2. images : pour chaque <img src="blob/…"> de l'export HTML, lire le blob dans Docs (→ identifiant d'asset),
     #    retrouver le fichier d'origine par son sha256 (list_assets de l'artefact) et le copier en <blob>.<ext>
-    tools/manuel/rendu/make.sh export.md export.html images/ "Novembre 2026 — PSIDA version 0.99.44" /tmp/brut.pdf
+    tools/manuel/rendu/make.sh export.md export.html images/ "Novembre 2026 — PSIDA version 0.99.48" /tmp/brut.pdf
     python3 tools/manuel/pdf.py /tmp/brut.pdf
 
 `rendu/build.py` substitue les images (l'export Markdown les remplace par « [image: …] », dans l'ordre de l'export
