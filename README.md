@@ -812,6 +812,12 @@ v0.99.44 : confrontation à l'exemple JRC EUR 25193 (pont mixte bipoutre 60 + 80
 test/jrc_eur25193.test.js) et trois correctifs du pont mixte : raidissement en traction α_st = A I/(A_a I_a) de la section
 fissurée sur la charpente (EN 1994-1-1 § 7.4.3), λ_max de la fatigue sur appui et L moyenne des travées adjacentes
 (EN 1993-2 § 9.5.2), f_y des tôles de plus de 100 mm (EN 10025-2/-3).
+v0.99.45 : cadres et portiques — compression du béton à l'ELS vérifiée (BAEL 91 A.4.5,2 : σ_bc ≤ 0,6 f_c28 ; EN 1992-1-1
+§ 7.2(2) et (3) : 0,6 f_ck sous la combinaison caractéristique, 0,45 f_ck sous la quasi permanente, permanents seuls),
+section fissurée n = 15 avec les aciers retenus ; colonne au tableau des armatures, alerte, verdict et recommandations.
+Pont-dalle — alerte « appareil de rive sous le chanfrein » (|y| + b/2 + 5 cm > b − joue, guide 1989 § 3.6.1) dans le
+tableau des appareils, le rapport et les recommandations (moins d'appareils, chanfrein moins large, entraxe imposé).
+
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à

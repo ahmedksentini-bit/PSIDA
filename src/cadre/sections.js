@@ -45,6 +45,21 @@ export function elsBael(M, d, sigmaS, fc28, fe) {
   return { as, alpha, minG, detail: minG ? `As = ${fr(as)} cm²/ml — condition de non-fragilité (calcul ${fr(asCalc)} cm²/ml)` : `As = ${fr(as)} cm²/ml — α = ${fr(alpha, 3)}, minimum ${fr(asMin)} cm²/ml non déterminant` };
 }
 
+/**
+ * Compression du béton à l'ELS, section rectangulaire fissurée de 1 m de large en flexion simple (n = 15, aciers tendus
+ * seuls) : x racine de x²/2 = n A_s (d − x), I = x³/3 + n A_s (d − x)², σ_bc = M x / I. M en t·m/ml, d en m, A_s en
+ * cm²/ml ; σ_bc en MPa. En flexion composée, on passe le moment rapporté aux aciers tendus M_A = M + N (d − h/2) : la
+ * résultante de compression du béton vaut M_A/z dans les deux cas (équilibre des moments autour des aciers tendus), d'où
+ * la même contrainte au bras de levier près.
+ */
+export function sigmaBetonEls(M, d, As, n = 15) {
+  const m = Math.abs(M) * 0.01, A = Math.max(As, 0) / 1e4;
+  if (!(m > 0) || !(d > 0)) return 0;
+  if (!(A > 0)) return Infinity;
+  const nA = n * A, x = -nA + Math.sqrt(nA * nA + 2 * nA * d), I = x ** 3 / 3 + nA * (d - x) ** 2;
+  return m * x / I;
+}
+
 /** ELS, flexion composée (N > 0 en compression). */
 export function elsComposeeBael(M, N, e, d, sigmaS, fc28, fe) {
   if (!(d > 0)) throw new RangeError('hauteur utile nulle');

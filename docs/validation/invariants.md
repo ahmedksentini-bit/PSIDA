@@ -45,9 +45,9 @@ message d'un échec.
    - Les aciers comprimés A_s2 ne sont repris ni par le ferraillage du pont-dalle ni par une alerte.
    - Portée : hors du domaine des dalles courantes (ρ ≈ 4 % et plus).
    - Correction proposée : choisir la solution par le moment limite du béton M_rb (continue, monotone) et signaler A_s2. Elle touche le dimensionnement, donc elle est laissée à une décision.
-2. **ELS des cadres (BAEL) : σ_bc non vérifiée.**
-   - Le module des cadres, porté de BVTrace, ne limite que σ_s. Pour k > 1 environ, la compression du béton dépasse 0,6 f_c28 sans alerte.
-   - L'ELU (μ > μ_lim) signale les cas extrêmes, pas les cas intermédiaires.
+2. **ELS des cadres (BAEL) : σ_bc non vérifiée — corrigé en 0.99.45.**
+   - Le module des cadres, porté de BVTrace, ne limitait que σ_s. Pour k > 1 environ, la compression du béton dépassait 0,6 f_c28 sans alerte.
+   - Depuis la version 0.99.45 : σ_bc ≤ 0,6 f_c28 (BAEL 91 A.4.5,2) ; en Eurocode 2, σ_c ≤ 0,6 f_ck sous la combinaison caractéristique (§ 7.2(2)) et ≤ 0,45 f_ck sous la quasi permanente (§ 7.2(3)). Section fissurée, n = 15, aciers retenus ; ligne au tableau des armatures, alerte, verdict « NON » et recommandations (épaisseur, f_c28). Tests : `test/cadre_sigma_bc.test.js` et l'invariant des cadres tirés au hasard.
 3. **Plaque : la triangulation change d'un coup entre le pont droit et un très faible biais.**
    - Le pont droit (ψ = 100 gr) alterne les diagonales des mailles ; un biais même infime prend toujours la plus courte.
    - Écart entre ψ = 100 et ψ = 99,999 gr, maille de 0,5 m : jusqu'à 1,3 % de m_x max en partie courante et 5 % aux angles. Il diminue de moitié quand la maille est divisée par deux : c'est une erreur de discrétisation, mais elle est visible.
