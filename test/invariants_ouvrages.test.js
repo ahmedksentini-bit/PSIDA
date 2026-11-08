@@ -91,6 +91,11 @@ test('cadres et portiques — aucune sortie non finie, aciers et métré positif
       assert.deepEqual(nf, [], `sorties non finies : ${nf.join(' ; ')}`);
       if (sur.length) assert.ok(b.alertes.some(a => /aciers comprimés|μ =/.test(a)), `section surarmée sans alerte : ${sur.join(', ')}`);
       assert.ok(b.metre.acier > 0 && b.metre.beton > 0, `métré : ${JSON.stringify(b.metre)}`);
+      // compression du béton à l'ELS (depuis 0.99.45) : calculée partout, et signalée quand elle dépasse la limite
+      for (const sc of b.sections) {
+        assert.ok(sc.beton && (Number.isFinite(sc.beton.sig) || sc.surarme), `${sc.barre} ${sc.ou} : σ_bc = ${sc.beton?.sig}`);
+        if (!sc.beton.ok) assert.ok(sc.echec && b.alertes.some(a => a.startsWith(`${sc.barre} — ${sc.ou}`) && /0,6 f_c|0,45 f_ck/.test(a)), `${sc.barre} ${sc.ou} : σ_bc hors limite sans alerte`);
+      }
     }
   });
 });

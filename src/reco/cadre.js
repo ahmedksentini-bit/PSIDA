@@ -146,6 +146,9 @@ export function recommandationsCadre(out, data, { budget = 4000 } = {}) {
     // fissuration EC2
     const fi = ko.filter(k => k.s.fissureTrop).map(k => { const w = [k.s.fissMax, k.s.fissMin].filter(x => x && !x.ok).sort((a, b) => b.wk - a.wk)[0]; return { k, w }; }).sort((a, b) => b.w.wk - a.w.wk);
     if (fi.length) { motifs.push(`ouverture des fissures (${fi.length} section(s), w_k = ${fx(fi[0].w.wk, 3)} > w_max = ${fx(fi[0].w.wmax)} mm en ${pref(fi[0].k)}${fi[0].k.s.barre} — ${fi[0].k.s.ou})`); regles.add('EN 1992-1-1 § 7.3.4, tableau 7.1N'); }
+    // compression du béton à l'ELS
+    const bc = ko.filter(k => k.s.beton && !k.s.beton.ok).sort((a, b) => b.s.beton.ratio - a.s.beton.ratio);
+    if (bc.length) { const b = bc[0].s.beton; motifs.push(`béton trop comprimé à l'ELS (${bc.length} section(s), ${b.sig > b.lim ? `σ = ${fx(b.sig, 1)} > ${fx(b.lim, 1)} MPa` : `σ_qp = ${fx(b.sigQp, 1)} > ${fx(b.limQp, 1)} MPa`} en ${pref(bc[0])}${bc[0].s.barre} — ${bc[0].s.ou})`); regles.add(ec2 ? 'EN 1992-1-1 § 7.2(2) et (3)' : 'BAEL 91 A.4.5,2 (σ_bc ≤ 0,6 f_c28)'); }
     // catalogue de barres insuffisant
     const maxCat = CATALOGUE[CATALOGUE.length - 1];
     const ba = ko.filter(k => !k.s.surarme && (!k.s.barresMax.ok || !k.s.barresMin.ok)).map(k => ({ k, req: Math.max(k.s.barresMax.ok ? 0 : k.s.barresMax.req, k.s.barresMin.ok ? 0 : k.s.barresMin.req) })).filter(x => Number.isFinite(x.req)).sort((a, b) => b.req - a.req);
@@ -172,7 +175,7 @@ export function recommandationsCadre(out, data, { budget = 4000 } = {}) {
       actions.push({ texte: 'Partager l\'ouverture en plusieurs cellules (portées plus courtes)', champ: 'cf_n', court: LIB_CADRE.cf_n });
     }
     // béton plus résistant (cherché seul, épaisseurs actuelles)
-    if (tr.length || sa.length || fi.length || ba.length) {
+    if (tr.length || sa.length || fi.length || ba.length || bc.length) {
       const fmax = ec2 ? 50 : 40, fc = h0.fc28;
       if (fc + 5 <= fmax) {
         const r = chercher('cf_fc28', grille(plafond(fc + 0.001, 5), fmax, 5), o => famOk(o, f));

@@ -79,6 +79,23 @@ export function bearingOrdinates({ width, n }) {
 }
 
 /**
+ * Appareils d'appui sous un chanfrein (encorbellement) de la sous-face. Un appareil doit porter sur une surface horizontale :
+ * il est posé sur un bossage sous la sous-face pleine, avec 5 cm de débord au moins autour de l'appareil (guide
+ * Ponts-dalles 1989, § 3.6.1 et sa figure ; repris par les plans des appuis de PSIDA). Règle vérifiée, par ligne d'appui :
+ * |y| + b/2 + débord ≤ b_dalle − joue, avec y l'ordonnée de l'appareil de rive (calcul : entraxe 2b/(n − 0,1)), b sa
+ * dimension transversale et « joue » la largeur du chanfrein. Rend la liste des lignes en défaut (vide si aucune).
+ */
+export function appareilsSousChanfrein({ width, n, chamfer, rows = [], debord = 0.05 }) {
+  if (!chamfer || !(chamfer.joue > 0) || !(width > 0)) return [];
+  const yMax = Math.max(...bearingOrdinates({ width, n }).map(Math.abs)), limite = width / 2 - chamfer.joue, out = [];
+  rows.forEach((r, i) => {
+    const bT = r.sel && r.sel.bd ? r.sel.bd.b / 1000 : 0, bord = yMax + bT / 2 + debord;
+    if (bord > limite + 1e-9) out.push({ i, yMax, bT, bord, limite, debord, depasse: bord - limite });
+  });
+  return out;
+}
+
+/**
  * Coefficients d'inégalité de répartition des réactions entre les appareils d'une ligne (PSI-DA 68 § 2.4.2, repris par
  * PSIDA.EL p. 31) : réaction de l'appareil le plus chargé = coefficient × réaction moyenne R/n.
  *   CP : k0 = n·e/E, k = max(k0 ; k0 + n/2·(1 − k0)) ;  A : idem avec la largeur chargeable ;

@@ -12,7 +12,7 @@ import { deformationsRail, ecmDynamique } from './rail_deformations.js';
 import { effortsLongitudinaux } from './rail_appuis.js';
 import { TransverseModel } from './transverse.js';
 import { aideConception } from './conception.js';
-import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations, parseDesignation } from './bearings.js';
+import { designBearings, inequalityCoefficients, inequalityWheels, bearingSpacing, endRotations, parseDesignation, appareilsSousChanfrein } from './bearings.js';
 import { chevetresEC } from './chevetre.js';
 import { sectionDevers, bandesRevetement } from './devers.js';
 import { coefficientsBiais } from './plate/biais_appuis.js';
@@ -381,6 +381,7 @@ export function compute(p) {
   const bearings = designBearings({ deck, beamComb: design.EC.beam, EI, nPerLine: p.concept.nBearings, xFixed: p.concept.xFixed, epsSlow: p.concept.epsSlow, dT: p.concept.dTu, alphaQ1: ec.alpha.aQ[0], alphaq1: ec.alpha.aq1, ineq, rot: rotQ ? { perm: rotPerm, traffic: rotQ } : null,
     impose: p.concept.bearingEnd || p.concept.bearingPier ? { end: p.concept.bearingEnd, pier: p.concept.bearingPier } : null });
   bearings.rotPerm = rotPerm; bearings.EI = EI; if (ineq.kBiais) bearings.kBiais = ineq.kBiais; if (ineq.kBiaisErreur) bearings.kBiaisErreur = ineq.kBiaisErreur;
+  bearings.chanfrein = appareilsSousChanfrein({ width: 2 * deck.b, n: bearings.nb, chamfer: deck.g.chamfer, rows: bearings.rows });
   if (PL) {
     // plaque : réaction de l'appareil le plus chargé lue sur la plaque (au lieu des coefficients d'inégalité PSI-DA 68)
     const ra = reactionsAppareils(deck, perm, ec, design.EC.beam);
@@ -502,6 +503,7 @@ export function computeRail(p) {
   const bearings = designBearings({ deck, beamComb: design.EC.beam, EI, nPerLine: p.concept.nBearings, xFixed: p.concept.xFixed, epsSlow: p.concept.epsSlow, dT: p.concept.dTu, alphaQ1: 1, alphaq1: 1, Htot: HtotRail, ineq, rot: { perm: rotPerm, traffic: rotQ },
     impose: p.concept.bearingEnd || p.concept.bearingPier ? { end: p.concept.bearingEnd, pier: p.concept.bearingPier } : null });
   bearings.rotPerm = rotPerm; bearings.EI = EI; bearings.rail = true;
+  bearings.chanfrein = appareilsSousChanfrein({ width: 2 * deck.b, n: bearings.nb, chamfer: deck.g.chamfer, rows: bearings.rows });
   // liaisons saisies (pont-rail) : appareils à pot fixes ou glissants (hors élastomères), comme les appuis seuls
   const LI = p.rail.liaisons || [];
   if (LI.length) {

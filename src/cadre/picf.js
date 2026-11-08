@@ -142,7 +142,10 @@ function combiner(cas, mMax, mMin, vMax, vMin, h) {
   const Ag = x => x > 0 ? x * h.gG : x, Al = x => x < 0 ? x * h.gG : x;
   let sM = pSM + lSM, sm = pSm + lSm, uM = pUM + lUM, um = pUm + lUm, vp = vPM + vL, vn = vPm - vL;
   for (const g of Object.keys(gM)) { sM += gM[g]; sm += gm[g]; uM += Ag(gM[g]); um += Al(gm[g]); vp += Ag(gVM[g]); vn += Al(gVm[g]); }
-  return { sM, sm, uM, um, vU: Math.max(Math.abs(vp), Math.abs(vn)) };
+  // quasi permanent : permanents et terres seuls (ψ₂ = 0 pour le trafic, EN 1990 A2 tableaux A2.1 et A2.3)
+  let qM = pSM, qm = pSm;
+  for (const g of Object.keys(gM)) { qM += gM[g]; qm += gm[g]; }
+  return { sM, sm, uM, um, qM, qm, vU: Math.max(Math.abs(vp), Math.abs(vn)) };
 }
 
 function effetsCalcul(n, cas, h, ouvert = false) {
@@ -160,7 +163,7 @@ function effetsCalcul(n, cas, h, ouvert = false) {
       let nMin = 0; const grN = {};
       cas.forEach(c => { if (c.nature !== 'permanent') return; const nn = get(c.frame).N, g = c.groupe || ''; if (!g) nMin += nn; else grN[g] = g in grN ? Math.min(grN[g], nn) : nn; });
       for (const v of Object.values(grN)) nMin += v;
-      out.push({ barre: nb, ou: ns, s, mMax, mMin, vMax, vMin, Mels: k.sM, mels: k.sm, Melu: k.uM, melu: k.um, Vu: k.vU, N: Math.max(nMin, 0) });
+      out.push({ barre: nb, ou: ns, s, mMax, mMin, vMax, vMin, Mels: k.sM, mels: k.sm, Melu: k.uM, melu: k.um, Mqp: k.qM, mqp: k.qm, Vu: k.vU, N: Math.max(nMin, 0) });
     }
   }
   return out;
@@ -180,6 +183,31 @@ function retenir(els, elu, mn) {
   const a = Math.max(elu.as, mn);
   if (a <= els.as) return [els, false];
   return [{ as: a, alpha: elu.alpha, minG: a > elu.as, detail: `As = ${fr(a)} cm²/ml — l'ELU gouverne (${elu.detail})` }, true];
+}
+
+/**
+ * Compression du béton à l'ELS, avec les aciers retenus (disposition choisie, sinon section requise).
+ *  - BAEL 91 A.4.5,2 : σ_bc ≤ 0,6 f_c28 sous la combinaison de service.
+ *  - EN 1992-1-1 § 7.2(2) : σ_c ≤ k₁ f_ck = 0,6 f_ck sous la combinaison caractéristique (appliqué quelle que soit la
+ *    classe d'exposition, comme pour le tablier — src/section_ec2.js) ; § 7.2(3) : σ_c ≤ k₂ f_ck = 0,45 f_ck sous la
+ *    combinaison quasi permanente, faute de quoi le fluage non linéaire doit être pris en compte.
+ * Coefficient d'équivalence n = 15 dans les deux référentiels (pratique française, comme le tablier).
+ */
+function betonEls(h, e, t, d, comp, asM, asm) {
+  const ec2 = h.code === 'EC2', MA = M => (comp && M > 0 ? M + e.N * (d - t / 2) : M);
+  const sM = S.sigmaBetonEls(MA(Math.max(e.Mels, 0)), d, asM), sm = S.sigmaBetonEls(MA(Math.max(-e.mels, 0)), d, asm);
+  const lim = 0.6 * h.fc28, sig = Math.max(sM, sm);
+  const out = { sigMax: sM, sigMin: sm, sig, lim, ok: sig <= lim + 1e-9, ratio: lim > 0 ? sig / lim : Infinity };
+  if (ec2) {
+    const qM = S.sigmaBetonEls(Math.max(e.Mqp ?? 0, 0), d, asM), qm = S.sigmaBetonEls(Math.max(-(e.mqp ?? 0), 0), d, asm);
+    out.sigQp = Math.max(qM, qm); out.limQp = 0.45 * h.fc28; out.okQp = out.sigQp <= out.limQp + 1e-9;
+    out.ratio = Math.max(out.ratio, out.limQp > 0 ? out.sigQp / out.limQp : Infinity); out.ok = out.ok && out.okQp;
+  }
+  out.detail = ec2
+    ? `σ_c = ${fr(sig, 1)} MPa ${sig <= lim + 1e-9 ? '≤' : '>'} 0,6 f_ck = ${fr(lim, 1)} MPa (caractéristique, EN 1992-1-1 § 7.2(2)) ; σ_c = ${fr(out.sigQp, 1)} MPa ${out.okQp ? '≤' : '>'} 0,45 f_ck = ${fr(out.limQp, 1)} MPa (quasi permanente, § 7.2(3))`
+    : `σ_bc = ${fr(sig, 1)} MPa ${out.ok ? '≤' : '>'} 0,6 f_c28 = ${fr(lim, 1)} MPa (BAEL 91 A.4.5,2)`;
+  if (!out.ok) out.detail += ' — béton trop comprimé à l\'ELS : épaissir la pièce ou augmenter la classe du béton (ajouter des aciers tendus ne réduit que peu σ_c).';
+  return out;
 }
 
 function sectionsCalcul(geom, effets, h, alertes) {
@@ -209,18 +237,19 @@ function sectionsCalcul(geom, effets, h, alertes) {
     const bM = S.choixBarres(rM.as), bm = S.choixBarres(rm.as), tb = S.tranchantBael(e.Vu, d, h.fc28);
     const ec2 = h.code === 'EC2';
     const sec = {
-      barre: e.barre, ou: e.ou, e: t, d, Mmin: Math.min(e.mels, e.melu), Mmax: Math.max(e.Mels, e.Melu), Vu: e.Vu, N: e.N,
+      barre: e.barre, ou: e.ou, e: t, d, Mmin: Math.min(e.mels, e.melu), Mmax: Math.max(e.Mels, e.Melu), Mser: Math.max(e.Mels, -e.mels, 0), Vu: e.Vu, N: e.N,
       asMax: rM, asMin: rm, barresMax: bM, barresMin: bm, tranchant: tb, eluMax: eluM, eluMin: elum, eluGouvMax: guM, eluGouvMin: gum,
       tranchantEc2: ec2 ? S.tranchantEc2(e.Vu, d, h.fc28, Math.max(rM.as, rm.as)) : null,
       fissMax: ec2 ? S.fissureEc2(e.Mels, t, d, b0M.option?.aire ?? rM.as, phi, h.enrobage, h.fc28, h.exposition) : null,
       fissMin: ec2 ? S.fissureEc2(e.mels, t, d, b0m.option?.aire ?? rm.as, phi, h.enrobage, h.fc28, h.exposition) : null,
     };
+    sec.beton = betonEls(h, e, t, d, comp, bM.option?.aire ?? rM.as, bm.option?.aire ?? rm.as);
     sec.asGouv = Math.max(rM.as, rm.as);
     sec.surarme = eluM.surarme || elum.surarme;
     sec.tranchantOk = sec.tranchantEc2 ? sec.tranchantEc2.ok : tb.ok;
     sec.tranchantMsg = sec.tranchantEc2 ? sec.tranchantEc2.message : tb.message;
     sec.fissureTrop = (sec.fissMax && !sec.fissMax.ok) || (sec.fissMin && !sec.fissMin.ok);
-    sec.echec = !sec.tranchantOk || sec.surarme || sec.fissureTrop || !bM.ok || !bm.ok;
+    sec.echec = !sec.tranchantOk || sec.surarme || sec.fissureTrop || !sec.beton.ok || !bM.ok || !bm.ok;
     out.push(sec);
   }
   return out;
@@ -235,8 +264,9 @@ function proposerEpaisseurs(h, sections) {
     for (let e = ep + PAS_EPAISSEUR; e <= ep + RECHERCHE_EPAISSEUR + 1e-9; e += PAS_EPAISSEUR) {
       const d = e - h.enrobage; if (!(d > 0)) continue;
       const tOk = S.tranchantBael(pire.Vu, d, h.fc28).ok, elu = S.eluBael(M, d, h.fc28, h.fe), els = S.elsBael(M, d, h.sigmaS, h.fc28, h.fe);
-      const a = elu.surarme ? els.as : Math.max(els.as, elu.as);
-      if (tOk && !elu.surarme && S.choixBarres(a).ok) { trouvee = Math.round(e * 1000) / 1000; break; }
+      const a = elu.surarme ? els.as : Math.max(els.as, elu.as), ch = S.choixBarres(a);
+      const bOk = !ch.ok || S.sigmaBetonEls(pire.Mser ?? 0, d, ch.fournie) <= 0.6 * h.fc28 + 1e-9;
+      if (tOk && !elu.surarme && ch.ok && bOk) { trouvee = Math.round(e * 1000) / 1000; break; }
     }
     return { famille: f, actuelle: ep, proposee: trouvee, message: trouvee != null
       ? `${f} : ${fr(ep)} m ne suffit pas — ${fr(trouvee)} m conviendrait, à confirmer par un nouveau calcul (épaissir une pièce modifie les sollicitations de tout le cadre).`
@@ -415,7 +445,7 @@ export function calculPicf(geomIn, hypIn = {}, opts = {}) {
       if (v.surarme) sec.surarme = true;
       if (!v.okT) { sec.tranchantOk = false; sec.tranchantMsg = `séisme : τ = ${fr(tau, 3)} MPa > ${fr(lim, 3)} MPa`; }
       sec.asGouv = Math.max(sec.asMax.as, sec.asMin.as);
-      sec.echec = !sec.tranchantOk || sec.surarme || sec.fissureTrop || !sec.barresMax.ok || !sec.barresMin.ok;
+      sec.echec = !sec.tranchantOk || sec.surarme || sec.fissureTrop || !sec.beton.ok || !sec.barresMax.ok || !sec.barresMin.ok;
       sisme.verifs.push(v);
     }
     const nR = sisme.verifs.filter(v => v.renforce).length;
@@ -450,6 +480,7 @@ export function calculPicf(geomIn, hypIn = {}, opts = {}) {
   for (const s of sections) {
     if (s.surarme) res.alertes.push(`${s.barre} — ${s.ou} : ${s.eluMax.surarme ? s.eluMax.detail : s.eluMin.detail}`);
     if (!s.tranchantOk) res.alertes.push(`${s.barre} — ${s.ou} : ${s.tranchantMsg}`);
+    if (!s.beton.ok) res.alertes.push(`${s.barre} — ${s.ou} : ${s.beton.detail}`);
     if (s.fissMax && !s.fissMax.ok) res.alertes.push(`${s.barre} — ${s.ou} : ${s.fissMax.detail}`);
     else if (s.fissMin && !s.fissMin.ok) res.alertes.push(`${s.barre} — ${s.ou} : ${s.fissMin.detail}`);
     if (!s.barresMax.ok) res.alertes.push(`${s.barre} — ${s.ou} : ${s.barresMax.message}`);
@@ -511,7 +542,7 @@ export function calculPicf(geomIn, hypIn = {}, opts = {}) {
     } else if (franchie === 'rail') res.reserves.push('Voie ferrée franchie : les actions de déraillement (EN 1991-1-7, 4.5, classe de l\'ouvrage et distance à la voie) ne sont pas renseignées. REMÈDE : saisir la force de calcul exigée par le gestionnaire du réseau.');
   }
 
-  res.ok = res.reserves.length === 0 && sections.every(s => s.tranchantOk && !s.fissureTrop && s.barresMax.ok && s.barresMin.ok);
+  res.ok = res.reserves.length === 0 && sections.every(s => s.tranchantOk && !s.fissureTrop && s.beton.ok && s.barresMax.ok && s.barresMin.ok);
   res.statut = res.ok ? 'Note d\'exécution — aucune réserve bloquante' : res.reserves.length ? `AVANT-PROJET seulement — ${res.reserves.length} réserve(s) bloquante(s) à lever` : 'Insuffisant — au moins une section ne passe pas';
   res.gouvernante = sections.slice().sort((a, b) => b.asGouv - a.asGouv)[0] || null;
   return res;
