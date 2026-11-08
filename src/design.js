@@ -27,6 +27,15 @@ const kNm2MNm = 1e-3;
  * @param {object} ec     deck.eurocode()
  * @param {object} opt    { fck, fyk, c, phi, wkMax, tRev, alphaE, fsFat, kSlab }
  */
+/**
+ * Aciers comprimés (ELU au-delà du moment limite, ELS au-delà du moment résistant du béton M_rb) : ils se placent
+ * dans la face opposée à la face tendue. Les aciers requis de chaque face deviennent max(aciers tendus, A_s2 du moment
+ * de signe contraire) ; `AsComp` garde la part comprimée, `AsTendu` les aciers tendus seuls.
+ */
+function reprendreComprimes(bot, top) {
+  for (const [f, o] of [[bot, top], [top, bot]]) { f.AsTendu = f.As; f.AsComp = o.As2 || 0; if (f.AsComp > f.As) f.As = f.AsComp; }
+}
+
 /** Boucle sections × fibres × faces à partir d'une combinaison EC {ELU, CAR, FREQ, QP} (max/min [s][iy]). */
 function facesEC(deck, comb, mat, sec, secTop, mins, { wkMax, phi, c }) {
   const nS = deck.beam.sections.length;
@@ -45,6 +54,7 @@ function facesEC(deck, comb, mat, sec, secTop, mins, { wkMax, phi, c }) {
       const sb = secFibre(deck, sec, iy), st_ = secFibre(deck, secTop, iy);
       const b = face(Math.max(comb.ELU.max[s][iy], 0), Math.max(comb.CAR.max[s][iy], 0), Math.max(comb.FREQ.max[s][iy], 0), Math.max(comb.QP.max[s][iy], 0), sb);
       const t = face(Math.max(-comb.ELU.min[s][iy], 0), Math.max(-comb.CAR.min[s][iy], 0), Math.max(-comb.FREQ.min[s][iy], 0), Math.max(-comb.QP.min[s][iy], 0), st_);
+      reprendreComprimes(b, t);
       rowB.push(b.As); rowT.push(t.As); fibres.push({ bot: b, top: t });
     }
     bot.push(rowB); top.push(rowT); perFibre.push(fibres);
@@ -176,6 +186,7 @@ export function designBAEL(deck, perm, f61, opt = {}) {
       };
       const b = face(Math.max(comb.ELU.max[s][iy], 0), Math.max(comb.ELS.max[s][iy], 0), secFibre(deck, sec, iy));
       const t = face(Math.max(-comb.ELU.min[s][iy], 0), Math.max(-comb.ELS.min[s][iy], 0), secFibre(deck, secTop, iy));
+      reprendreComprimes(b, t);
       rowB.push(b.As); rowT.push(t.As); fibres.push({ bot: b, top: t });
     }
     bot.push(rowB); top.push(rowT); perFibre.push(fibres);

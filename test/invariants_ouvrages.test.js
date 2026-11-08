@@ -15,12 +15,12 @@ test('sections EC2 et BAEL — aciers croissants avec le moment, décroissants a
   tirages(200, (r, ctx) => {
     const h = r.entre(0.3, 1.4), d = h - r.entre(0.04, 0.08), fck = r.choix([25, 30, 35, 40, 45]), fyk = r.choix([400, 500]);
     const ec = materialsEC2({ fck, fyk }), ba = materialsBAEL({ fc28: fck, fe: fyk, fissuration: r.choix(['prejudiciable', 'tres prejudiciable']) });
-    // domaine : moments dont les aciers restent sous 2 % de b·d (dalles et pièces courantes) — vers 4 % et au-delà,
-    // l'ELS bascule de façon arbitraire entre « plus d'aciers tendus » et « aciers comprimés » (défaut documenté plus bas)
+    // domaine : moments dont les aciers restent sous 6 % de b·d (au-delà du taux maximal de 4 % de l'EC2 § 9.2.1.1(3),
+    // donc y compris les sections à aciers comprimés de l'ELS depuis la 0.99.47)
     const Mmax = 0.5 * d * d * ec.fcd;
     let M = r.entre(0.01, 1) * Mmax;
     const rho = m => Math.max(...[flexureSLS(m, { d }, ec), flexureELS(m, { d }, ba), flexureULS(m, { d }, ec)].map(x => x.As + (x.As2 || 0)));
-    for (let k = 0; k < 40 && Math.max(rho(M), rho(1.2 * M)) > 0.02 * d; k++) M *= 0.8;
+    for (let k = 0; k < 40 && Math.max(rho(M), rho(1.2 * M)) > 0.06 * d; k++) M *= 0.8;
     const dM = 1e-4 * Mmax;
     ctx.desc = JSON.stringify({ h, d, fck, fyk, M });
     for (const [nom, f] of [['ELU EC2', m => flexureULS(m, { d }, ec).As], ['ELS EC2', m => flexureSLS(m, { d }, ec).As], ['ELU BAEL', m => flexureELU(m, { d }, ba).As], ['ELS BAEL', m => flexureELS(m, { d }, ba).As]]) {
@@ -39,16 +39,31 @@ test('sections EC2 et BAEL — aciers croissants avec le moment, décroissants a
   });
 });
 
-// Défaut documenté (non corrigé, voir docs/validation/invariants.md) : quand la contrainte du béton gouverne l'ELS,
-// flexureSLS (EC2) et flexureELS (BAEL) cherchent d'abord une solution à aciers tendus seuls dans [0 ; 8 M/(d σ_s)] et ne
-// passent aux aciers comprimés que si cette borne arbitraire ne suffit pas. A_s tendu peut alors DIMINUER quand M
-// augmente (graine 20261140 : ρ = 3,9 %, 249 cm²/m → 159 cm²/m + A_s2 pour M × 1,2 ; graine 20261119 : 707 → 282 cm²/m).
-// Les aciers comprimés A_s2 ne sont repris ni par le ferraillage du pont-dalle ni par une alerte. Hors du domaine des
-// dalles courantes (ρ ≈ 4 % et plus), mais à reprendre : choisir la solution par le moment limite du béton (M_rb).
-test('sections — défaut documenté : bascule non monotone de l\'ELS quand le béton gouverne (ρ ≥ 4 %)', () => {
-  const ec = materialsEC2({ fck: 25, fyk: 500 }), d = 0.6446, M = 1.5743, a = flexureSLS(M, { d }, ec).As, b = flexureSLS(1.2 * M, { d }, ec);
-  assert.ok(a > 0.035 * d, `cas de référence hors des dalles courantes (ρ = ${a / d})`);
-  assert.ok(b.As < a && b.As2 > 0, 'le défaut est toujours présent : mettre à jour ce test et la note de validation s\'il est corrigé');
+// Défaut corrigé en 0.99.47 (voir docs/validation/invariants.md) : quand la contrainte du béton gouverne l'ELS,
+// flexureSLS (EC2) et flexureELS (BAEL) choisissaient la solution par une borne arbitraire et A_s tendu pouvait DIMINUER
+// quand M augmentait (graine 20261140 : 249 cm²/m → 159 cm²/m + A_s2 pour M × 1,2). Ils passent désormais par le moment
+// limite du béton M_rb : A_s et A_s2 sont continus et croissants en M.
+test('sections — ELS au-delà du moment limite du béton : A_s et A_s2 croissants (graine 20261140)', () => {
+  const ec = materialsEC2({ fck: 25, fyk: 500 }), d = 0.6446, M = 1.5743, a = flexureSLS(M, { d }, ec), b = flexureSLS(1.2 * M, { d }, ec);
+  assert.ok(b.As > a.As && b.As2 > a.As2, `A_s ${a.As} → ${b.As}, A_s2 ${a.As2} → ${b.As2}`);
+  assert.ok(Math.abs(b.sigC - ec.sigCcar) < 1e-6 && Math.abs(b.sigS - ec.sigSlim) < 1e-6, 'les deux contraintes limites sont atteintes');
+});
+
+test('sections — ELS EC2 et BAEL : continuité et monotonie de A_s et A_s2 de part et d\'autre de M_rb (tirages)', () => {
+  tirages(150, (r, ctx) => {
+    const h = r.entre(0.3, 1.4), d = h - r.entre(0.04, 0.08), fck = r.choix([25, 30, 35, 40]), fyk = r.choix([400, 500]);
+    const ec = materialsEC2({ fck, fyk }), ba = materialsBAEL({ fc28: fck, fe: fyk, fissuration: r.choix(['prejudiciable', 'tres prejudiciable']) });
+    for (const [nom, f] of [['ELS EC2', m => flexureSLS(m, { d }, ec)], ['ELS BAEL', m => flexureELS(m, { d }, ba)]]) {
+      const Mrb = f(1e-3).Mrb, k = r.entre(0.3, 2.5);
+      ctx.desc = JSON.stringify({ h, d, fck, fyk, nom, k });
+      const pts = [0.98, 0.999, 1, 1.001, 1.02, k, k * 1.1].sort((x, y) => x - y).map(c => f(c * Mrb));
+      for (let i = 1; i < pts.length; i++) {
+        assert.ok(pts[i].As >= pts[i - 1].As - 1e-12 && pts[i].As2 >= pts[i - 1].As2 - 1e-12, `${nom} : décroissance (${pts[i - 1].As} → ${pts[i].As}, ${pts[i - 1].As2} → ${pts[i].As2})`);
+      }
+      const g = f(0.9999999 * Mrb), e = f(1.0000001 * Mrb);
+      assert.ok(Math.abs(e.As - g.As) < 1e-6 && e.As2 < 1e-6, `${nom} : saut en M_rb (${g.As} → ${e.As}, A_s2 ${e.As2})`);
+    }
+  });
 });
 
 /** Cadre (PICF) ou portique (PIPO) tiré au hasard dans le domaine des dossiers pilotes. */

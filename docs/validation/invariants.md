@@ -37,14 +37,18 @@ message d'un échec.
    - Correction : la formule est gardée tant qu'elle donne 0 < α < 1, ce qui conserve la parité avec BVTrace. Au-delà, α est la racine exacte de α²(3 − α) = k (1 − α) (`src/cadre/sections.js`).
    - Trouvé sur un portique de 1,98 × 5,33 m sous 4,73 m de remblai, avec des pièces de 0,20 m (graine 20261466). L'ouvrage reste signalé insuffisant.
 
+## Défaut corrigé en v0.99.47
+
+3. **ELS des sections quand le béton gouverne : bascule non monotone** (`src/section_ec2.js` flexureSLS, `src/section_bael.js` flexureELS).
+   - Problème : la recherche d'aciers tendus seuls se faisait dans [0 ; 8 M/(d σ_s)] et ne passait aux aciers comprimés que si cette borne arbitraire ne suffisait pas. A_s tendu pouvait donc diminuer quand M augmentait (graine 20261140 : ρ = 3,9 %, 249 cm²/m qui devenaient 159 cm²/m + A_s2 pour M × 1,2), et A_s2 n'était ni ferraillé ni signalé.
+   - Correction : méthode du moment limite du béton. L'axe neutre limite est y₁ = α₁ d, α₁ = n σ̄c/(n σ̄c + σ̄s), et M_rb est le moment du béton comprimé à σ̄c par rapport aux aciers tendus (intégré sur la largeur réelle en cas de chanfreins). Sous M_rb : armatures simples avec σ_s = σ̄_s. Au-delà : A' = (M − M_rb)/(σ'sc (d − d')), σ'sc = n σ̄c (y₁ − d')/y₁, A = A_rb + A' σ'sc/σ̄s (BAEL 91 A.4.5,2 ; EN 1992-1-1 § 7.2 avec α_e = 15). A et A' sont continus et croissants en M.
+   - Ferraillage : les aciers comprimés d'une face sont repris dans la face opposée (`reprendreComprimes`, `src/design.js`) ; les tableaux de ferraillage et la note les signalent (« A_s2 = … comprimés ») ; les recommandations du tablier signalent les aciers comprimés et un taux > 4 % (EN 1992-1-1 § 9.2.1.1(3)), avec recherche d'épaisseur.
+   - Tests : `test/els_moment_limite.test.js` (références à la main BAEL et EC2, largeur variable), invariants de continuité et de monotonie autour de M_rb, domaine des tirages de sections porté à 6 %.
+   - Effet : aucun sur l'exemple fil rouge ni sur les exemples 1 à 3 (aucune section au-delà de M_rb). Sur l'exemple 4 (dalle précontrainte), seuls les aciers du calcul en béton armé, indicatifs, changent.
+
 ## Défauts trouvés et laissés ouverts (documentés, testés tels quels)
 
-1. **ELS des sections quand le béton gouverne : bascule non monotone** (`src/section_ec2.js` flexureSLS, `src/section_bael.js` flexureELS).
-   - Problème : la recherche d'aciers tendus seuls se fait dans [0 ; 8 M/(d σ_s)]. Le passage aux aciers comprimés n'a lieu que si cette borne arbitraire ne suffit pas. A_s tendu peut donc diminuer quand M augmente.
-   - Exemple (graine 20261140) : ρ = 3,9 %, 249 cm²/m, qui deviennent 159 cm²/m + A_s2 pour M × 1,2.
-   - Les aciers comprimés A_s2 ne sont repris ni par le ferraillage du pont-dalle ni par une alerte.
-   - Portée : hors du domaine des dalles courantes (ρ ≈ 4 % et plus).
-   - Correction proposée : choisir la solution par le moment limite du béton M_rb (continue, monotone) et signaler A_s2. Elle touche le dimensionnement, donc elle est laissée à une décision.
+1. *(corrigé en v0.99.47, voir plus haut)*
 2. **ELS des cadres (BAEL) : σ_bc non vérifiée — corrigé en 0.99.45.**
    - Le module des cadres, porté de BVTrace, ne limitait que σ_s. Pour k > 1 environ, la compression du béton dépassait 0,6 f_c28 sans alerte.
    - Depuis la version 0.99.45 : σ_bc ≤ 0,6 f_c28 (BAEL 91 A.4.5,2) ; en Eurocode 2, σ_c ≤ 0,6 f_ck sous la combinaison caractéristique (§ 7.2(2)) et ≤ 0,45 f_ck sous la quasi permanente (§ 7.2(3)). Section fissurée, n = 15, aciers retenus ; ligne au tableau des armatures, alerte, verdict « NON » et recommandations (épaisseur, f_c28). Tests : `test/cadre_sigma_bc.test.js` et l'invariant des cadres tirés au hasard.

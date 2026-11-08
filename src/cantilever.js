@@ -63,5 +63,5 @@ export function cantileverDesign(mom, { fck = 35, fyk = 500, c = 0.04, phi = 0.0
   const uls = flexureULS(mom.ELU * k, sec, mat), sls = flexureSLS(mom.CAR * k, sec, mat), wk = asForCrackWidth(mom.FREQ * k, sec, mat, { wkMax, phi, c });
   const mins = minimumSteel(sec, mat, { kSlab });
   const As = Math.max(uls.As, sls.As, wk, mins.as921, mins.perFace);
-  return { mat, d, AsULS: uls.As, AsSLS: sls.As, AsWk: wk, as921: mins.as921, perFace: mins.perFace, As, sigS: sls.sigS, sigC: sls.sigC, xOverD: uls.xOverD };
+  return { mat, d, AsULS: uls.As, AsSLS: sls.As, AsWk: wk, as921: mins.as921, perFace: mins.perFace, As, As2: Math.max(uls.As2 || 0, sls.As2 || 0), sigS: sls.sigS, sigC: sls.sigC, xOverD: uls.xOverD };
 }

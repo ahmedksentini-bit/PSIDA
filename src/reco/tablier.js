@@ -54,6 +54,35 @@ export const reglesTablier = [
     }
     return out;
   },
+  // ---------------------------------------------------------------- aciers comprimés et taux maximal (dalle armée)
+  st => {
+    const out = [];
+    if (!st.design || st.psidp) return out; // dalle précontrainte : justifications du chapitre précontrainte
+    const secs = st.deck.beam.sections;
+    for (const [ref, dz] of [['EC', st.design.EC], ['F61', st.design.F61]]) {
+      if (!dz || !dz.perFibre) continue;
+      const bael = ref === 'F61';
+      let pire = null, rho = null;
+      dz.perFibre.forEach((row, s) => row.forEach((f, iy) => {
+        for (const face of ['bot', 'top']) {
+          const a2 = f[face].As2 || 0;
+          if (a2 > 1e-9 && (!pire || a2 > pire.a2)) pire = { a2, s, iy, face };
+        }
+      }));
+      for (const [face, env] of [['inf', dz.envBot], ['sup', dz.envTop]]) env.forEach((a, s) => { const r = a / dz.h; if (r > 0.04 && (!rho || r > rho.r)) rho = { r, s, face }; });
+      const regle = bael ? 'BAEL 91 A.4.3 (μ_lim) et A.4.5,2 (σ̄bc, moment résistant du béton M_rb)' : 'EN 1992-1-1 § 5.5(4) (x/d) et § 7.2(2) (σc ≤ 0,6 f_ck, moment limite du béton)';
+      if (pire) {
+        out.push({ domaine: 'Tablier', lieu: `x = ${fx(secs[pire.s].x)} m, face ${pire.face === 'bot' ? 'inférieure tendue' : 'supérieure tendue'}${bael ? ' (BAEL)' : ''}`,
+          verification: 'Section sans aciers comprimés',
+          constat: `aciers comprimés nécessaires : A_s2 = ${fx(pire.a2 * 1e4, 1)} cm²/m, repris dans le ferraillage de la face opposée (moment au-delà du moment limite du béton)`,
+          regle, actions: [{ texte: 'Épaissir la dalle (supprime les aciers comprimés)', champ: 'h', unite: 'm', chercher: rechH(st, r => !r.design[ref].perFibre.some(row => row.some(q => (q.bot.As2 || 0) > 1e-9 || (q.top.As2 || 0) > 1e-9))) }, { texte: 'Béton plus résistant', champ: 'fck', unite: 'MPa' }] });
+      }
+      if (rho) out.push({ domaine: 'Tablier', lieu: `x = ${fx(secs[rho.s].x)} m, face ${rho.face}${bael ? ' (BAEL)' : ''}`, verification: 'Taux maximal d\'armatures (4 %)',
+        constat: `A_s = ${fx(rho.r * dz.h * 1e4, 0)} cm²/m soit ${fx(rho.r * 100, 1)} % de la section > 4 %`, regle: 'EN 1992-1-1 § 9.2.1.1(3) : A_s,max = 0,04 A_c (hors recouvrements)',
+        actions: [{ texte: 'Épaissir la dalle', champ: 'h', unite: 'm', chercher: rechH(st, r => Math.max(...r.design[ref].envBot, ...r.design[ref].envTop) <= 0.04 * r.design[ref].h) }, { texte: 'Béton plus résistant', champ: 'fck', unite: 'MPa' }] });
+    }
+    return out;
+  },
   // ---------------------------------------------------------------- poinçonnement et effort tranchant
   st => {
     const out = [], E = st.design && st.design.EC, B = st.design && st.design.F61;
