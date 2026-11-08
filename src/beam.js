@@ -222,8 +222,11 @@ export class ContinuousBeam {
 
   /** Valeur interpolée d'une ligne d'influence en x (0 hors de l'ouvrage). */
   ilAt(il, x) {
-    const xs = this.xs;
-    if (x < this.xMin || x > this.xMax) return 0;
+    const xs = this.xs, tol = 1e-9 * (1 + Math.abs(this.xMax));
+    if (x < this.xMin - tol || x > this.xMax + tol) return 0;
+    // une position calculée x0 + i·pas qui tombe sur une extrémité peut la dépasser d'un arrondi : ramenée sur l'extrémité
+    // (sinon un essieu posé au bout de l'about était ignoré, voir test/invariants_poutre.test.js)
+    x = Math.min(this.xMax, Math.max(this.xMin, x));
     // recherche dichotomique
     let lo = 0, hi = xs.length - 1;
     while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (xs[mid] <= x) lo = mid; else hi = mid; }
@@ -242,10 +245,11 @@ export class ContinuousBeam {
     this._sampCache ||= new Map();
     let T = this._sampCache.get(key);
     if (!T) {
-      const xs = this.xs, lo = new Int32Array(n), t = new Float64Array(n), exact = new Int8Array(n);
+      const xs = this.xs, lo = new Int32Array(n), t = new Float64Array(n), exact = new Int8Array(n), tol = 1e-9 * (1 + Math.abs(this.xMax));
       for (let i = 0; i < n; i++) {
-        const x = x0 + i * step;
-        if (x < this.xMin || x > this.xMax) { lo[i] = -1; continue; }
+        let x = x0 + i * step;
+        if (x < this.xMin - tol || x > this.xMax + tol) { lo[i] = -1; continue; }
+        x = Math.min(this.xMax, Math.max(this.xMin, x));   // arrondi au droit d'une extrémité (même règle que ilAt)
         let a = 0, b = xs.length - 1;
         while (b - a > 1) { const mid = (a + b) >> 1; if (xs[mid] <= x) a = mid; else b = mid; }
         lo[i] = a;

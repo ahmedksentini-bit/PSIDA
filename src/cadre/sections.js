@@ -25,8 +25,16 @@ export function minimumBael(d, fc28, fe) { if (!(d > 0) || !(fe > 0)) return 0; 
 export function alphaEls(mu, sigmaS) {
   if (!(sigmaS > 0)) throw new RangeError('σs nul');
   if (mu <= 0) return 0;
-  const k = 90 * mu / sigmaS, a1 = Math.sqrt(k * 0.2), a2 = Math.sqrt(k * (1 - a1) / (3 - a1));
-  return Math.sqrt(k * (1 - a2) / (3 - a2));
+  // α racine de α²(3 − α) = k (1 − α), k = 90 μ/σ_s (équilibre de la section fissurée, n = 15, σ_s imposée).
+  // Deux itérations de point fixe (formule de BVTrace, gardée pour la parité avec son moteur) : exactes à 0,06 % pour
+  // k ≤ 1, de plus en plus majorantes au-delà, puis hors domaine (α ≥ 1 dès k ≈ 4,5 et NaN dès k = 5, d'où « As = NaN »
+  // dans la note et le métré des pièces très sollicitées). Hors domaine : racine exacte par dichotomie (f croissante
+  // sur [0 ; 1], f(0) = −k < 0, f(1) = 2 > 0 : racine unique).
+  const k = 90 * mu / sigmaS, a1 = Math.sqrt(k * 0.2), a2 = Math.sqrt(k * (1 - a1) / (3 - a1)), a = Math.sqrt(k * (1 - a2) / (3 - a2));
+  if (Number.isFinite(a) && a < 1) return a;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (m * m * (3 - m) - k * (1 - m) > 0) hi = m; else lo = m; }
+  return (lo + hi) / 2;
 }
 
 /** ELS, flexion simple. */
