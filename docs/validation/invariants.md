@@ -10,7 +10,7 @@ message d'un échec.
 
 - `INVARIANTS_LONG=1` : dix fois plus de tirages.
 - `INVARIANTS_GRAINE=n` : autre graine de départ.
-- Durée en mode normal : environ 3 minutes ; en mode long : 2 minutes plus 20 minutes pour la chaîne complète du pont-dalle.
+- Durée en mode normal : environ 3 à 4 minutes (2 cœurs). En mode long, les tests hors chaîne du pont-dalle prennent 2 minutes ; la chaîne complète (`invariants_dalle`) dure environ dix fois plus que son mode normal et n'a pas encore été passée en mode long.
 
 ## Invariants couverts
 
