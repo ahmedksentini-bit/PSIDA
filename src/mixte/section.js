@@ -12,10 +12,20 @@
  * Ordonnées y en m depuis la fibre inférieure de l'acier ; moments positifs = fibre inférieure tendue.
  */
 
-/** f_y d'une tôle S235 à S460 selon son épaisseur t (mm), EN 10025-2 tableau 7 (t ≤ 100 mm). */
+/**
+ * f_y d'une tôle selon son épaisseur nominale t (mm) : EN 10025-2 tableau 7 (S235, S275, S355) et EN 10025-3 tableau 5
+ * (S420N, S460N), paliers ≤ 16, 40, 63, 80, 100, 150, 200 et 250 mm. Au-delà de 100 mm, la limite baisse encore
+ * (S355 : 295 MPa jusqu'à 150 mm, comme dans l'exemple JRC EUR 25193, chapitre 6, semelle de 120 mm).
+ */
 export function fyEpaisseur(nuance, t) {
-  const T = { S235: [235, 225, 215, 215, 215], S275: [275, 265, 255, 245, 235], S355: [355, 345, 335, 325, 315], S420: [420, 400, 390, 370, 360], S460: [460, 440, 430, 410, 400] }[nuance] || [355, 345, 335, 325, 315];
-  return t <= 16 ? T[0] : t <= 40 ? T[1] : t <= 63 ? T[2] : t <= 80 ? T[3] : T[4];
+  const T = {
+    S235: [235, 225, 215, 215, 215, 195, 185, 175], S275: [275, 265, 255, 245, 235, 225, 215, 205],
+    S355: [355, 345, 335, 325, 315, 295, 285, 275], S420: [420, 400, 390, 370, 360, 340, 330, 320],
+    S460: [460, 440, 430, 410, 400, 380, 370, 370],
+  }[nuance] || [355, 345, 335, 325, 315, 295, 285, 275];
+  const paliers = [16, 40, 63, 80, 100, 150, 200];
+  const i = paliers.findIndex(l => t <= l);
+  return T[i < 0 ? T.length - 1 : i];
 }
 
 /**

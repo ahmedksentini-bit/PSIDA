@@ -802,6 +802,10 @@ aux ordonnées du calcul (entraxe 2b / (n − 0,1), src/bearings.js bearingOrdin
 plaçait sous le départ d'un chanfrein de 1 m ; le schéma de saisie affiche ces ordonnées.
 v0.99.42 : anonymisation — aucun ouvrage ni bureau d'études n'est plus nommé dans le code, les tests, la documentation,
 le manuel et les notes de calcul produites (les notes de référence restent citées comme « VIPP de référence »).
+v0.99.44 : confrontation à l'exemple JRC EUR 25193 (pont mixte bipoutre 60 + 80 + 60 m, docs/validation/jrc_eur25193.md,
+test/jrc_eur25193.test.js) et trois correctifs du pont mixte : raidissement en traction α_st = A I/(A_a I_a) de la section
+fissurée sur la charpente (EN 1994-1-1 § 7.4.3), λ_max de la fatigue sur appui et L moyenne des travées adjacentes
+(EN 1993-2 § 9.5.2), f_y des tôles de plus de 100 mm (EN 10025-2/-3).
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à
