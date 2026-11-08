@@ -473,7 +473,7 @@ function renderDesign(st) {
     for (const k of keys) {
       for (const face of ['bot', 'top']) {
         const arr = dz[face][k.idx]; const iy = arr.indexOf(Math.max(...arr)); const f = dz.perFibre[k.idx][iy][face];
-        h += `<tr><td>${k.label}</td><td>${face === 'bot' ? 'inf' : 'sup'} (y = ${deck.ys[iy]})</td><td>${f.Mu.toFixed(0)}</td><td>${f.Mcar.toFixed(0)}</td><td>${f.Mfre.toFixed(0)}</td><td>${f.Mqp.toFixed(0)}</td><td>${cm(f.AsULS)}</td><td>${cm(f.AsSLS)}</td><td>${cm(f.AsWk)}</td><td>${cm(Math.max(f.as921, f.as732, f.perFace))}</td><td><b>${cm(f.As)}</b></td><td>${f.sigS.toFixed(0)}</td><td>${f.sigC.toFixed(1)}</td><td>${f.xOverD.toFixed(2)}</td></tr>`;
+        h += `<tr><td>${k.label}</td><td>${face === 'bot' ? 'inf' : 'sup'} (y = ${deck.ys[iy]})</td><td>${f.Mu.toFixed(0)}</td><td>${f.Mcar.toFixed(0)}</td><td>${f.Mfre.toFixed(0)}</td><td>${f.Mqp.toFixed(0)}</td><td>${cm(f.AsULS)}</td><td>${cm(f.AsSLS)}</td><td>${cm(f.AsWk)}</td><td>${cm(Math.max(f.as921, f.as732, f.perFace))}</td><td><b>${cm(f.As)}</b>${f.AsComp > 1e-9 ? ` (A_s2 = ${cm(f.AsComp)} comprimés)` : ''}</td><td>${f.sigS.toFixed(0)}</td><td>${f.sigC.toFixed(1)}</td><td>${f.xOverD.toFixed(2)}</td></tr>`;
       }
     }
     h += `</tbody></table><p class="small">Moments en kN·m/m (fibre la plus sollicitée), aciers en cm²/m. Effort tranchant par mètre (V_Ed avec facteur K du cas ${dz.rail ? 'le plus défavorable des groupes ferroviaires, γ = 1,45 / 1,20' : 'LM1'}) / V_Rd,c : ` + keys.map(k => `${k.label} : ${dz.shear[k.idx].ratio.toFixed(2)}${dz.shear[k.idx].AswS > 0 ? ' → étriers A_sw/s = ' + (dz.shear[k.idx].AswS * 1e4).toFixed(1) + ' cm²/m par m' : ''}`).join(' ; ') + (dz.punch.sansObjet ? '. Poinçonnement : sans objet (charges ferroviaires réparties par les traverses et le ballast).' : `. Poinçonnement : LM1 vEd = ${dz.punch.LM1.vEd.toFixed(3)} / vRd,c = ${dz.punch.LM1.vRdc.toFixed(3)} MPa (${dz.punch.LM1.ok ? 'OK' : 'NON'}) ; LM2 vEd = ${dz.punch.LM2.vEd.toFixed(3)} MPa (${dz.punch.LM2.ok ? 'OK' : 'NON'}).`) + ` Aciers transversaux minimaux (EC2 9.3.1.1 : 20 % des longitudinaux) : inf ${cm(dz.transverseMin.bot)}, sup ${cm(dz.transverseMin.top)} cm²/m — à compléter par les moments transversaux m_y.</p>`;
@@ -483,7 +483,7 @@ function renderDesign(st) {
     for (const k of keys) {
       for (const face of ['bot', 'top']) {
         const arr = dz[face][k.idx]; const iy = arr.indexOf(Math.max(...arr)); const f = dz.perFibre[k.idx][iy][face];
-        h += `<tr><td>${k.label}</td><td>${face === 'bot' ? 'inf' : 'sup'} (y = ${deck.ys[iy]})</td><td>${f.Mu.toFixed(0)}</td><td>${f.Ms.toFixed(0)}</td><td>${cm(f.AsELU)}</td><td>${cm(f.AsELS)}</td><td>${cm(Math.max(f.nonFrag, f.dalle))}</td><td><b>${cm(f.As)}</b></td><td>${f.sigS.toFixed(0)}</td><td>${f.sigB.toFixed(1)}</td><td>${f.alpha.toFixed(3)}</td></tr>`;
+        h += `<tr><td>${k.label}</td><td>${face === 'bot' ? 'inf' : 'sup'} (y = ${deck.ys[iy]})</td><td>${f.Mu.toFixed(0)}</td><td>${f.Ms.toFixed(0)}</td><td>${cm(f.AsELU)}</td><td>${cm(f.AsELS)}</td><td>${cm(Math.max(f.nonFrag, f.dalle))}</td><td><b>${cm(f.As)}</b>${f.AsComp > 1e-9 ? ` (A_s2 = ${cm(f.AsComp)} comprimés)` : ''}</td><td>${f.sigS.toFixed(0)}</td><td>${f.sigB.toFixed(1)}</td><td>${f.alpha.toFixed(3)}</td></tr>`;
       }
     }
     h += `</tbody></table><p class="small">Moments en kN·m/m, aciers en cm²/m. τu / τ̄u (dalles sans armatures d'âme, A.5.2.2) : ` + keys.map(k => `${k.label} : ${dz.shear[k.idx].ratio.toFixed(2)}${dz.shear[k.idx].AtS > 0 ? ' → A_t/s_t = ' + (dz.shear[k.idx].AtS * 1e4).toFixed(1) + ' cm²/m par m' : ''}`).join(' ; ') + `. Poinçonnement (A.5.2.42) : Br Qu = ${dz.punch.Br.Qu.toFixed(3)} / ${dz.punch.Br.QuLim.toFixed(3)} MN (${dz.punch.Br.ok ? 'OK' : 'NON'}). Armatures de répartition ≥ A_s/4 : inf ${cm(dz.transverseMin.bot)}, sup ${cm(dz.transverseMin.top)} cm²/m.</p>`;
@@ -510,11 +510,11 @@ function renderTransverse(st) {
   }
   if (ref === 'EC') {
     h += `<table><thead><tr><th>Travée</th><th>Face</th><th>y</th><th>M ELU</th><th>M car.</th><th>M fréq.</th><th>ELU</th><th>ELS σ</th><th>wk</th><th>non sect.</th><th>min 1989</th><th><b>A_s,y</b></th><th>σs</th></tr></thead><tbody>`;
-    dz.spans.forEach(sp2 => { for (const face of ['bot', 'top']) { const f = sp2[face]; h += `<tr><td>Travée ${sp2.j + 1}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${f.y}</td><td>${f.Mu.toFixed(1)}</td><td>${f.Mcar.toFixed(1)}</td><td>${f.Mfre.toFixed(1)}</td><td>${cm(f.AsULS)}</td><td>${cm(f.AsSLS)}</td><td>${cm(f.AsWk)}</td><td>${cm(f.nonSec)}</td><td>${f.minGuide !== undefined ? cm(f.minGuide) : '—'}</td><td><b>${cm(f.As)}</b></td><td>${f.sigS.toFixed(0)}</td></tr>`; } });
+    dz.spans.forEach(sp2 => { for (const face of ['bot', 'top']) { const f = sp2[face]; h += `<tr><td>Travée ${sp2.j + 1}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${f.y}</td><td>${f.Mu.toFixed(1)}</td><td>${f.Mcar.toFixed(1)}</td><td>${f.Mfre.toFixed(1)}</td><td>${cm(f.AsULS)}</td><td>${cm(f.AsSLS)}</td><td>${cm(f.AsWk)}</td><td>${cm(f.nonSec)}</td><td>${f.minGuide !== undefined ? cm(f.minGuide) : '—'}</td><td><b>${cm(f.As)}</b>${f.AsComp > 1e-9 ? ` (A_s2 = ${cm(f.AsComp)} comprimés)` : ''}</td><td>${f.sigS.toFixed(0)}</td></tr>`; } });
     h += `</tbody></table><p class="small">Non sectionnel (EC2 9.3.1.1 et pratique CHAMOA) : A_s,trans,inf ≥ 0,2 A_s,long,inf ; A_s,trans,sup ≥ max(0,2 A_s,long,sup ; 0,5 A_s,trans,inf) ; « min 1989 » : 1,3 n ‰ ≤ 2 ‰ de b·h (n = largeur/portée, × 1/sin ψ si parallèles aux lignes d'appui), guide SETRA § 3.4.3. Le critère wk (7.3.4) impose un espacement ≤ 5(c + φ/2), d'où un minimum lié au diamètre choisi (φ transversal ${(st.p.mat.phiT * 1000).toFixed(0)} mm).${dz.skew ? ' Moments M ELU / car. / fréq. = M_APF (direction des aciers).' : ''}</p>`;
   } else {
     h += `<table><thead><tr><th>Travée</th><th>Face</th><th>y</th><th>M ELU</th><th>M ELS</th><th>ELU</th><th>ELS</th><th>répartition</th><th>min 1989</th><th><b>A_s,y</b></th><th>σs</th></tr></thead><tbody>`;
-    dz.spans.forEach(sp2 => { for (const face of ['bot', 'top']) { const f = sp2[face]; h += `<tr><td>Travée ${sp2.j + 1}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${f.y}</td><td>${f.Mu.toFixed(1)}</td><td>${f.Ms.toFixed(1)}</td><td>${cm(f.AsELU)}</td><td>${cm(f.AsELS)}</td><td>${cm(f.nonSec)}</td><td>${f.minGuide !== undefined ? cm(f.minGuide) : '—'}</td><td><b>${cm(f.As)}</b></td><td>${f.sigS.toFixed(0)}</td></tr>`; } });
+    dz.spans.forEach(sp2 => { for (const face of ['bot', 'top']) { const f = sp2[face]; h += `<tr><td>Travée ${sp2.j + 1}</td><td>${face === 'bot' ? 'inf' : 'sup'}</td><td>${f.y}</td><td>${f.Mu.toFixed(1)}</td><td>${f.Ms.toFixed(1)}</td><td>${cm(f.AsELU)}</td><td>${cm(f.AsELS)}</td><td>${cm(f.nonSec)}</td><td>${f.minGuide !== undefined ? cm(f.minGuide) : '—'}</td><td><b>${cm(f.As)}</b>${f.AsComp > 1e-9 ? ` (A_s2 = ${cm(f.AsComp)} comprimés)` : ''}</td><td>${f.sigS.toFixed(0)}</td></tr>`; } });
     h += `</tbody></table><p class="small">Armatures de répartition BAEL B.7.4 : ≥ A_s,long/3 (charges concentrées) ; « min 1989 » : guide SETRA § 3.4.3.${dz.skew ? ' Moments ELU / ELS = M_APF (direction des aciers).' : ''}</p>`;
   }
   $('#trans-tables').innerHTML = h;
@@ -620,7 +620,7 @@ const FORM_UI = enhanceForm($('#f')); // saisie valeur par valeur des champs mul
 const NIV = initNivellement($('#f'), () => state);
 const TRACE = initTrace($('#f'), { setField });
 // manuel d'utilisation : PDF publié avec le site (docs/manuel), paramètre de version pour ne pas servir un ancien PDF en cache
-const MANUEL = { version: '0.99.44', url: 'docs/manuel/PSIDA_Manuel.pdf' };
+const MANUEL = { version: '0.99.47', url: 'docs/manuel/PSIDA_Manuel.pdf' };
 $('#btn-manuel').addEventListener('click', () => window.open(`${MANUEL.url}?v=${MANUEL.version}`, '_blank', 'noopener'));
 $('#f').addEventListener('change', ev => { if (ev.target.name === 'niv_actif') NIV.refresh(); });
 applyHelp($('#f'), $('#help-list'));
@@ -676,7 +676,7 @@ async function saveProject() {
   const form = $('#f');
   const spans = String(form.spans.value || '').split(/[,;\s]+/).filter(Boolean).join('-');
   const name = nomAvecHorodatage(projName || `projet-psida-${spans || 'ouvrage'}.json`);   // date et heure dans le nom
-  const file = { format: PROJ_FORMAT, version: '0.99.44', date: new Date().toISOString(), data: formSnapshot(form) };
+  const file = { format: PROJ_FORMAT, version: '0.99.47', date: new Date().toISOString(), data: formSnapshot(form) };
   if (ec8Data) file.ec8 = ec8Data;
   const txt = JSON.stringify(file, null, 1);
   if (window.showSaveFilePicker) { // Chrome, Edge : choix du nom et du dossier
@@ -768,7 +768,7 @@ $('#btn-report').addEventListener('click', async () => {
   const btn = $('#btn-report'); btn.disabled = true; btn.textContent = 'Préparation de la note…';
   try {
     // pont-dalle sous rail : la note imprimable est la note ferroviaire (le rapport routier suppose LM1 et le Fascicule 61)
-    const html = state.rail ? noteToHTML(await makeNote()) : await buildReport({ ...state, version: '0.99.44', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
+    const html = state.rail ? noteToHTML(await makeNote()) : await buildReport({ ...state, version: '0.99.47', hSearch: lastSearch, ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) });
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, '_blank');
@@ -805,8 +805,8 @@ async function svgToImg(note) {
 }
 async function makeNote() {
   const ref = $('#note-ref').value;
-  if (state.rail) return buildNoteRail({ ...state, version: '0.99.44' }, { figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
-  return buildNote({ ...state, version: '0.99.44', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  if (state.rail) return buildNoteRail({ ...state, version: '0.99.47' }, { figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
+  return buildNote({ ...state, version: '0.99.47', ddr: parseDDR(Object.fromEntries(new FormData($('#f')).entries())) }, { ref, figures: await noteFigures(), project: { name: (location.hash ? 'Projet' : 'Ouvrage') } });
 }
 $('#btn-note').addEventListener('click', async () => {
   if (!ensureFull()) return;
@@ -869,7 +869,7 @@ $('#cadre-tables').addEventListener('click', ev => {
 initCadrePlans(() => cadre);
 $('#btn-cadre-note').addEventListener('click', () => {
   if (!cadre) runCadre(); if (!cadre) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.99.44' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(cadreNote(cadre, { version: '0.99.47' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-cadre.html'; aEl.click(); }
 });
@@ -877,7 +877,7 @@ $('#btn-cadre-docx').addEventListener('click', async () => {
   if (!cadre) runCadre(); if (!cadre) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.99.44' })), docx);
+    const blob = await noteToDocx(await svgToImg(cadreNote(cadre, { version: '0.99.47' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = `note-cadre-${cadre.inp.geom.nom || 'ouvrage'}.docx`; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -970,7 +970,7 @@ initPoutresPlans(() => poutres);
 initParcours();
 $('#btn-phasage-note').addEventListener('click', () => {
   if (!phasage) runPhasage(); if (!phasage) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.99.44' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(phasageNote(phasage, { version: '0.99.47' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-phasage.html'; aEl.click(); }
 });
@@ -978,7 +978,7 @@ $('#btn-phasage-docx').addEventListener('click', async () => {
   if (!phasage) runPhasage(); if (!phasage) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.99.44' })), docx);
+    const blob = await noteToDocx(await svgToImg(phasageNote(phasage, { version: '0.99.47' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = 'note-phasage.docx'; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -1032,7 +1032,7 @@ $('#poutres-tables').addEventListener('click', ev => {
 });
 $('#btn-poutres-note').addEventListener('click', () => {
   if (!poutres) $('#btn-poutres').click(); if (!poutres) return;
-  const url = URL.createObjectURL(new Blob([noteToHTML(poutresNote(poutres, { version: '0.99.44' }))], { type: 'text/html' }));
+  const url = URL.createObjectURL(new Blob([noteToHTML(poutresNote(poutres, { version: '0.99.47' }))], { type: 'text/html' }));
   const w = window.open(url, '_blank');
   if (!w) { const aEl = document.createElement('a'); aEl.href = url; aEl.download = 'note-pont-poutres.html'; aEl.click(); }
 });
@@ -1040,7 +1040,7 @@ $('#btn-poutres-docx').addEventListener('click', async () => {
   if (!poutres) $('#btn-poutres').click(); if (!poutres) return;
   try {
     const docx = await import('./vendor/docx.js');
-    const blob = await noteToDocx(await svgToImg(poutresNote(poutres, { version: '0.99.44' })), docx);
+    const blob = await noteToDocx(await svgToImg(poutresNote(poutres, { version: '0.99.47' })), docx);
     const aEl = document.createElement('a'); aEl.href = URL.createObjectURL(blob); aEl.download = 'note-pont-poutres.docx'; aEl.click();
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
@@ -1080,7 +1080,7 @@ $('#btn-standalone').addEventListener('click', () => {
     $('#card-supports').scrollIntoView({ behavior: 'smooth' });
   } catch (e) { $('#error').textContent = e.stack || String(e); }
 });
-const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.99.44', standalone: !!state.standalone, spans: state.deck.spans });
+const supNote = () => supportsNote(state.supports, { ref: $('#supports-ref').value, version: '0.99.47', standalone: !!state.standalone, spans: state.deck.spans });
 $('#btn-sup-note').addEventListener('click', () => {
   if (!state || !state.supports) { $('#error').textContent = 'Lancer d\'abord le calcul.'; return; }
   const url = URL.createObjectURL(new Blob([noteToHTML(supNote())], { type: 'text/html' }));
