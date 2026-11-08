@@ -6,7 +6,9 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "manuel:check": "node tools/manuel/build.mjs",
-    "serve": "python3 -m http.server 8080"
+    "serve": "python3 -m http.server 8080",
+    "mutation:couverture": "node tools/mutation/couverture.mjs",
+    "mutation": "node tools/mutation/lancer.mjs"
   },
   "engines": {
     "node": ">=18"
