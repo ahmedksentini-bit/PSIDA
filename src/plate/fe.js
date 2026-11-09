@@ -65,6 +65,9 @@ function matB(T, xi, eta) {
   return B;
 }
 
+/** Écart relatif des diagonales au-delà duquel une maille est coupée par sa seule plus courte diagonale (voir mailler). */
+export const RHO_TRANSITION = 0.05;
+
 export class PlaqueEF {
   /**
    * @param {object} o { xs : abscisses s de la grille, ys, D:(x,y)=>number, nu, appuis:[{x,y,k}] (x = abscisse le long de
@@ -96,32 +99,44 @@ export class PlaqueEF {
   plusProche(v, t) { let b = 0; for (let k = 1; k < v.length; k++) if (Math.abs(v[k] - t) < Math.abs(v[b] - t)) b = k; return b; }
   mailler() {
     const { nx, ny, ys } = this, T = [];
-    const tri = (p, q, r) => {
+    const tri = (p, q, r, pds = 1) => {
       const ids = [p, q, r].map(([i, j]) => this.idx(i, j));
       const P3 = [p, q, r].map(([i, j]) => this.Pt(i, j));
       let x = P3.map(v => v[0]), y = P3.map(v => v[1]);
       let A2 = (x[1] - x[0]) * (y[2] - y[0]) - (x[2] - x[0]) * (y[1] - y[0]);
       if (A2 < 0) { [ids[1], ids[2]] = [ids[2], ids[1]]; [x[1], x[2]] = [x[2], x[1]]; [y[1], y[2]] = [y[2], y[1]]; A2 = -A2; }
       const D = (this.Dn[ids[0]] + this.Dn[ids[1]] + this.Dn[ids[2]]) / 3;
-      T.push({ ids, x, y, A2, D, C: coefficients(x, y) });
+      T.push({ ids, x, y, A2, D, pds, C: coefficients(x, y) });
     };
+    const coupe = (i, j, diag1, pds) => {
+      if (pds <= 0) return;
+      if (diag1) { tri([i, j], [i + 1, j], [i + 1, j + 1], pds); tri([i, j], [i + 1, j + 1], [i, j + 1], pds); }
+      else { tri([i, j], [i + 1, j], [i, j + 1], pds); tri([i + 1, j], [i + 1, j + 1], [i, j + 1], pds); }
+    };
+    // Coupe des mailles : en damier quand les deux diagonales sont égales (ouvrage droit), par la plus courte quand elles
+    // diffèrent nettement (biais, courbure). Entre les deux, les deux coupes sont superposées avec des poids
+    // complémentaires (rigidités et moments pondérés) : la triangulation varie alors continûment avec ψ et la courbure, au
+    // lieu de basculer d'un coup dès le moindre biais. Écart relatif des diagonales ρ = |d1 − d2|/(d1 + d2) ; poids de la
+    // coupe « plus courte » t = min(1, ρ/RHO_TRANSITION). ρ ≈ cot ψ / 2 pour une maille carrée : ρ = 0,05 vers ψ ≈ 94 gr.
     for (let i = 0; i < nx - 1; i++) for (let j = 0; j < ny - 1; j++) {
       const dd = (u, v) => { const A = this.Pt(...u), B = this.Pt(...v); return Math.hypot(A[0] - B[0], A[1] - B[1]); };
       const d1 = dd([i + 1, j + 1], [i, j]), d2 = dd([i, j + 1], [i + 1, j]);
-      const diag1 = Math.abs(d1 - d2) < 1e-9 * (d1 + d2) ? (i + j) % 2 === 0 : d1 < d2;
-      if (diag1) { tri([i, j], [i + 1, j], [i + 1, j + 1]); tri([i, j], [i + 1, j + 1], [i, j + 1]); }
-      else { tri([i, j], [i + 1, j], [i, j + 1]); tri([i + 1, j], [i + 1, j + 1], [i, j + 1]); }
+      const damier = (i + j) % 2 === 0, court = d1 < d2, rho = Math.abs(d1 - d2) / (d1 + d2);
+      const t = Math.min(1, rho / RHO_TRANSITION);
+      if (damier === court || t >= 1) coupe(i, j, t >= 1 ? court : damier, 1);
+      else { coupe(i, j, damier, 1 - t); coupe(i, j, court, t); }
     }
     this.T = T;
     // triangles autour de chaque nœud (lissage des moments)
     this.autour = Array.from({ length: this.n }, () => []);
     T.forEach((t, e) => t.ids.forEach((p, s) => this.autour[p].push([e, s])));
+    this.poidsAutour = this.autour.map(lst => lst.reduce((a, [e]) => a + T[e].pds, 0));   // somme des poids (lissage pondéré)
   }
   Db(D) { const nu = this.nu; return [[D, D * nu, 0], [D * nu, D, 0], [0, 0, D * (1 - nu) / 2]]; }
   assembler() {
     const K = new BandSPD(this.ndof, 3 * ((this.swap ? this.nx : this.ny) + 2));
     for (const t of this.T) {
-      const Db = this.Db(t.D), ke = Array.from({ length: 9 }, () => new Float64Array(9));
+      const Db = this.Db(t.D * t.pds), ke = Array.from({ length: 9 }, () => new Float64Array(9));
       for (const [xi, eta] of GAUSS) {
         const B = matB(t, xi, eta), w = t.A2 / 6;   // 2A × poids 1/6 (aire du triangle de référence 1/2 × 1/3)
         const DB = [0, 1, 2].map(r => Float64Array.from({ length: 9 }, (_, k) => Db[r][0] * B[0][k] + Db[r][1] * B[1][k] + Db[r][2] * B[2][k]));
@@ -187,9 +202,10 @@ export class PlaqueEF {
     const keys = ['mx', 'my', 'mxy'];
     for (let p = 0; p < n; p++) {
       const lst = this.autour[p];
+      const W = this.poidsAutour[p];
       for (const [e, s] of lst) {
-        const g = this.T[e].ids;
-        for (let r = 0; r < 3; r++) { let v = 0; for (let k = 0; k < 9; k++) v += S[e][s][r][k] * u[3 * g[Math.floor(k / 3)] + (k % 3)]; out[keys[r]][p] += v / lst.length; }
+        const g = this.T[e].ids, f = this.T[e].pds / W;
+        for (let r = 0; r < 3; r++) { let v = 0; for (let k = 0; k < 9; k++) v += S[e][s][r][k] * u[3 * g[Math.floor(k / 3)] + (k % 3)]; out[keys[r]][p] += v * f; }
       }
     }
     if (this.geo) for (let p = 0; p < n; p++) {   // repère local de l'axe (tangente, normale)
@@ -213,11 +229,12 @@ export class PlaqueEF {
       f = [f[0] * c * c + f[1] * sn * sn - f[2] * c * sn, f[0] * sn * sn + f[1] * c * c + f[2] * c * sn, f[0] * 2 * c * sn - f[1] * 2 * c * sn + f[2] * (c * c - sn * sn)];
     }
     const c = new Float64Array(this.ndof), p = this.idx(i, j), lst = this.autour[p], S = this._cache();
+    const W = this.poidsAutour[p];
     for (const [e, s] of lst) {
-      const ids = this.T[e].ids;
+      const ids = this.T[e].ids, fe = this.T[e].pds / W;
       for (let k = 0; k < 9; k++) {
         const v = f[0] * S[e][s][0][k] + f[1] * S[e][s][1][k] + f[2] * S[e][s][2][k];
-        c[3 * ids[Math.floor(k / 3)] + (k % 3)] += v / lst.length;
+        c[3 * ids[Math.floor(k / 3)] + (k % 3)] += v * fe;
       }
     }
     c.complet = true;

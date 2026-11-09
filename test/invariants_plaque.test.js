@@ -59,29 +59,33 @@ test('plaque (éléments finis) — réciprocité de Maxwell-Betti des flèches 
   });
 });
 
-// Défaut documenté (non corrigé, voir docs/validation/invariants.md) : le maillage du pont droit (ψ = 100 gr) alterne les
-// diagonales des mailles, celui d'un pont biais prend toujours la plus courte. Entre ψ = 100 et ψ = 99,999 gr la
-// triangulation change donc d'un coup : écart jusqu'à 1,3 % de m_x max hors des lignes d'appui et 5 % aux angles
-// (maille de 0,5 m, 30 tirages), qui diminue de moitié quand la maille est divisée par deux (erreur de discrétisation en O(h), pas un saut
-// du modèle). Le test borne ce saut et vérifie qu'il converge avec la maille.
-test('plaque (éléments finis) — continuité du biais : ψ = 99,999 gr ≈ pont droit ; l\'écart dû au changement de triangulation converge avec la maille', () => {
-  tirages(3, (r, ctx) => {
+// Continuité du biais (corrigé en 0.99.49, voir docs/validation/invariants.md) : la coupe des mailles passe continûment du
+// damier (ouvrage droit) à la plus courte diagonale (biais), les deux coupes étant superposées avec des poids
+// complémentaires tant que les diagonales diffèrent de moins de RHO_TRANSITION. Avant : saut de 1,3 % de m_x (5 % aux
+// angles) entre ψ = 100 et 99,999 gr.
+test('plaque (éléments finis) — continuité du biais : ψ = 99,999 gr = pont droit ; aucun saut de m_x ni de flèche de 100 à 85 gr', () => {
+  tirages(2, (r, ctx) => {
     const g = r.u() * 1e6 | 0, ch = T => ({ x1: T.L * 0.3, x2: T.L * 0.7, y1: -T.b / 2, y2: T.b / 2, q: 20 });
-    const saut = h => {
-      const A = levy(rng(g), PlaqueEF, { h }), B = levy(rng(g), PlaqueEF, { psi: 99.999, h });   // même tirage, seul ψ change
-      ctx.desc = JSON.stringify({ L: A.L, b: A.b, h });
-      const wa = A.P.resoudre(A.P.chargeRectangle(A.P.vecteur(), ch(A))), wb = B.P.resoudre(B.P.chargeRectangle(B.P.vecteur(), ch(A)));
-      const ma = A.P.moments(wa), mb = B.P.moments(wb), s = Math.max(...Array.from(ma.mx).map(Math.abs)), sw = Math.max(...Array.from(wa).map(Math.abs));
-      let dw = 0, dIn = 0, dApp = 0;
-      for (let p = 0; p < wa.length; p++) {
-        dw = Math.max(dw, Math.abs(wa[p] - wb[p]) / sw);
-        const i = A.P.iOf(p), d = Math.abs(ma.mx[p] - mb.mx[p]) / s;
-        if (i === 0 || i === A.P.nx - 1) dApp = Math.max(dApp, d); else dIn = Math.max(dIn, d);
-      }
-      return { dw, dIn, dApp };
+    const calc = psi => {
+      const A0 = levy(rng(g), PlaqueEF, { h: 0.5 }), T = levy(rng(g), PlaqueEF, { psi, h: 0.5 });   // même tirage, seul ψ change
+      ctx.desc = JSON.stringify({ L: T.L, b: T.b, psi });
+      const w = T.P.resoudre(T.P.chargeRectangle(T.P.vecteur(), ch(A0)));
+      return { w, m: T.P.moments(w), P: T.P };
     };
-    const a = saut(0.5), b = saut(0.25);
-    assert.ok(a.dw < 2e-3 && a.dIn < 0.02 && a.dApp < 0.08, `saut ψ 100 → 99,999 gr à 0,5 m : flèches ${a.dw}, m_x ${a.dIn} (courant) / ${a.dApp} (lignes d'appui)`);
-    assert.ok(b.dIn < 0.7 * a.dIn + 1e-4 && b.dApp < 0.7 * a.dApp + 1e-4, `le saut ne converge pas avec la maille : ${JSON.stringify({ a, b })}`);
+    const ref = calc(100), s = Math.max(...Array.from(ref.m.mx).map(Math.abs)), sw = Math.max(...Array.from(ref.w).map(Math.abs));
+    const ecarts = (a, b) => {
+      let dw = 0, dm = 0;
+      for (let p = 0; p < a.w.length; p++) { dw = Math.max(dw, Math.abs(a.w[p] - b.w[p]) / sw); dm = Math.max(dm, Math.abs(a.m.mx[p] - b.m.mx[p]) / s); }
+      return { dw, dm };
+    };
+    const e0 = ecarts(ref, calc(99.999));
+    assert.ok(e0.dw < 1e-5 && e0.dm < 1e-4, `ψ 100 → 99,999 gr : flèches ${e0.dw}, m_x ${e0.dm}`);
+    // balayage : entre deux biais voisins (pas de 0,5 gr), m_x varie peu et sans saut, de part et d'autre de la transition
+    let prec = ref;
+    for (let psi = 99.5; psi >= 85; psi -= 0.5) {
+      const cur = calc(psi), e = ecarts(prec, cur);
+      assert.ok(e.dm < 0.012 && e.dw < 0.01, `saut entre ψ = ${psi + 0.5} et ${psi} gr : m_x ${e.dm}, flèches ${e.dw}`);
+      prec = cur;
+    }
   });
 });

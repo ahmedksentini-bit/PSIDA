@@ -830,8 +830,14 @@ Chevêtres : alerte « appareils de rive en fort retrait des bords libres » qua
 annexe 4 § 1 : calcul des chevêtres à corriger manuellement ; seuil non chiffré par le guide, critère de PSIDA ≈ 1,5 fois la
 console régulière c = 0,45 a de PSI-DA 68) — tableau des chevêtres, note, rapport, recommandation « calcul en plaque » ;
 information seulement quand le tablier est calculé en plaque (moments et réactions lus sur la plaque).
+v0.99.49 : plaque — la triangulation passe continûment du damier du pont droit à la coupe par la plus courte diagonale
+(poids t = min(1, ρ/0,05), ρ écart relatif des diagonales de la maille, les deux coupes superposées) : plus de saut de
+m_x entre ψ = 100 et 99,999 gr (jusqu'à 1,3 % en partie courante et 5 % aux angles auparavant). Pont droit, biais marqués,
+fil rouge et exemples 2 à 4 inchangés ; exemple 1 (courbe) : réaction P1 2 112 → 2 110 kN, acier 73,6 → 73,4 t.
+Tests de mutation renforcés sur la poutre continue et Guyon-Massonnet (solutions exactes : Clapeyron, lignes
+d'influence, Courbon, identités de la plaque orthotrope) : 63,8 → 71,3 % et 72,5 → 82,5 % ; aucun défaut de calcul.
 
-v0.99.49 : cadres et portiques — plans de ferraillage refondus (src/plans/cadre_fer.js), trois feuilles par bloc :
+v0.99.50 : cadres et portiques — plans de ferraillage refondus (src/plans/cadre_fer.js), trois feuilles par bloc :
 (1) coupe et détails : coupe transversale armée aux lits écartés pour la lisibilité, cintrages au mandrin réel, bulles
 rangées au-dessus de la traverse, sous le radier et de part et d'autre des piédroits (renvois sans croisement de la
 coupe), chaînes de cotes, reprise de bétonnage indicative, fenêtres des détails ; détails A (angle supérieur), B (angle
