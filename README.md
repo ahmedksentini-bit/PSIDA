@@ -831,6 +831,19 @@ annexe 4 § 1 : calcul des chevêtres à corriger manuellement ; seuil non chiff
 console régulière c = 0,45 a de PSI-DA 68) — tableau des chevêtres, note, rapport, recommandation « calcul en plaque » ;
 information seulement quand le tablier est calculé en plaque (moments et réactions lus sur la plaque).
 
+v0.99.49 : cadres et portiques — plans de ferraillage refondus (src/plans/cadre_fer.js), trois feuilles par bloc :
+(1) coupe et détails : coupe transversale armée aux lits écartés pour la lisibilité, cintrages au mandrin réel, bulles
+rangées au-dessus de la traverse, sous le radier et de part et d'autre des piédroits (renvois sans croisement de la
+coupe), chaînes de cotes, reprise de bétonnage indicative, fenêtres des détails ; détails A (angle supérieur), B (angle
+inférieur) et C (nœud sur voile) au 1/10, lits à leur position réelle, enrobage, retours de recouvrement, chapeaux et
+équerres cotés ; (2) vues en plan de la traverse et du radier en demi-vues (nappe supérieure / inférieure), une barre
+type par repère et sa ligne de répartition, biais, tronçons de répartition recouverts et joints décalés, et coupe
+longitudinale complète dans la cellule 1 (aciers coupés, répartition avec recouvrements, piédroit vu au-delà, abouts,
+partie centrale interrompue au-delà de 16 m) ; (3) nomenclature et façonnage : chaque repère dessiné dans sa position de
+pose avec ses cotes A, B, C, longueur de coupe, mandrin et recouvrement, bordereau ISO 4066 et récapitulatif. Numéros des
+feuilles : OH-FER-01, -02, -03 à partir du numéro saisi.
+
+
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à
 compléter » — contraintes ELS et de construction ou de transfert, contrainte initiale σ_pm0, ELU de flexion, effort

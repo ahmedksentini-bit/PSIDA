@@ -154,7 +154,7 @@ test('Portance (F62 et NF P94-261) et choix sismique de NF EN 1998-2 (6.7.3 / 6.
 });
 
 test('Plans du cadre : repères cohérents avec le calcul, feuilles valides, DXF et SVG', async () => {
-  const { reperesCadre, planCoffrageCadre, planFerraillageCadre, quantitesCadre } = await import('../src/plans/cadre.js');
+  const { reperesCadre, planCoffrageCadre, planFerraillageCadre, planFerraillagePlanCadre, planFaconnageCadre, quantitesCadre } = await import('../src/plans/cadre.js');
   const { feuilleSVG } = await import('../src/plans/svg.js');
   const { feuilleDXF } = await import('../src/plans/dxf.js');
   const { areaOf } = await import('../src/rebar.js');
@@ -174,9 +174,28 @@ test('Plans du cadre : repères cohérents avec le calcul, feuilles valides, DXF
     const sb = Math.sin((g.biais ?? 90) * Math.PI / 180);   // l'avant-métré du calcul ne réduit pas la section biaise par sin φ
     assert.ok(Math.abs(Q.beton - r.metre.beton * sb) / r.metre.beton < 0.03, `béton ${Q.beton} / ${r.metre.beton}`);
     assert.ok(Q.ratio > 40 && Q.ratio < 250, `ratio ${Q.ratio}`);
-    for (const F of [planCoffrageCadre(r, {}), planFerraillageCadre(r, {})]) {
+    for (const F of [planCoffrageCadre(r, {}), planFerraillageCadre(r, {}), planFerraillagePlanCadre(r, {}), planFaconnageCadre(r, {})]) {
       assert.ok(F.valide().ok, F.valide().problemes.join(' ; '));
       assert.ok(feuilleSVG(F).length > 1000); assert.match(feuilleDXF(F), /ACIERS|COFFRAGE/);
     }
+    // la feuille de façonnage porte le bordereau complet (masse = somme des repères)
+    proche(planFaconnageCadre(r, {}).masse, masse, 1e-6);
   }
+});
+
+test('Plans de ferraillage du cadre : outils de dessin (cintrage, découpe, étalement des bulles)', async () => {
+  const { arrondir, decouper, etaler } = await import('../src/plans/cadre_fer.js');
+  // cintrage d'un angle droit : points sur l'arc de rayon r, extrémités conservées
+  const r = 0.1, p = arrondir([[0, 1], [0, 0], [1, 0]], r);
+  assert.deepEqual(p[0], [0, 1]); assert.deepEqual(p[p.length - 1], [1, 0]);
+  for (const q of p.slice(1, -1)) assert.ok(Math.abs(Math.hypot(q[0] - r, q[1] - r) - r) < 1e-9);
+  // découpe par une fenêtre : un U traversant donne deux morceaux
+  const m = decouper([[0, 0], [0, 2], [3, 2], [3, 0]], [-1, 1, 1, 3]);
+  assert.equal(m.length, 1); assert.deepEqual(m[0][0], [0, 1]); assert.deepEqual(m[0][m[0].length - 1], [1, 2]);
+  assert.equal(decouper([[0, 0], [0, 2], [3, 2], [3, 0]], [-1, 1, 4, 3]).length, 1);
+  assert.equal(decouper([[0, 0], [0, 2], [3, 2], [3, 0]], [-1, -1, 4, 1]).length, 2);
+  // étalement : écart minimal respecté, ordre conservé
+  const P = etaler([1, 1.01, 1.02, 5], 0.5);
+  for (let i = 1; i < 3; i++) assert.ok(P[i] - P[i - 1] >= 0.5 - 1e-12);
+  assert.ok(P[3] > P[2]);
 });

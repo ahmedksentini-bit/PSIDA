@@ -98,7 +98,7 @@ export class Vue {
         const kx = this.echelle / 1000, ky = (this.echelleV || this.echelle) / 1000, w = 0.53 * e.h * e.s.length * (e.gras ? 1.12 : 1), hh = e.h;
         const vert = Math.abs(Math.abs(e.angle || 0) - 90) < 1;
         const [W, H] = vert ? [hh * kx, w * ky] : [w * kx, hh * ky];
-        const ax = vert ? 0.5 : (e.ancre === 'c' ? 0.5 : e.ancre === 'd' ? 1 : 0), ay = vert ? (e.ancre === 'c' ? 0.5 : 0) : (e.v === 'm' ? 0.5 : e.v === 'h' ? 1 : 0);
+        const ax = vert ? 0.5 : (e.ancre === 'c' ? 0.5 : e.ancre === 'd' ? 1 : 0), ay = vert ? (e.ancre === 'c' ? 0.5 : e.ancre === 'd' ? 1 : 0) : (e.v === 'm' ? 0.5 : e.v === 'h' ? 1 : 0);
         ajoute([e.p[0] - ax * W, e.p[1] - ay * H]); ajoute([e.p[0] + (1 - ax) * W, e.p[1] + (1 - ay) * H]);
       } else if (e.t === 'niveau' && this.echelle) {
         const kx = this.echelle / 1000, ky = (this.echelleV || this.echelle) / 1000, n = (e.s ? e.s.length + 7 : 6);
