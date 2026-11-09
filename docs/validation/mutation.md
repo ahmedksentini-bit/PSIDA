@@ -40,14 +40,18 @@ tests lents ne localisent pas l'erreur.
 
 | Module | Mutants possibles | Score avant | Score après | Tests ajoutés |
 |---|---|---|---|---|
-| `src/beam.js` (poutre continue, lignes d'influence) | 1 116 | 61,3 % | 61,3 % | — |
-| `src/guyon.js` (Guyon-Massonnet) | 324 | 65,0 % | 65,0 % | — |
+| `src/beam.js` (poutre continue, lignes d'influence) | 1 116 | 61,3 % (63,8 %¹) | 71,3 % | `renfort_poutre` |
+| `src/guyon.js` (Guyon-Massonnet) | 324 | 65,0 % (72,5 %¹) | 82,5 % | `renfort_guyon` |
 | `src/loads_ec.js` (EN 1991-2, EN 1991-1-5) | 134 | 82,5 % | 92,5 % | `renfort_charges_ec` |
 | `src/loads_f61.js` (Fascicule 61 titre II) | 185 | 48,8 % | 80,0 % | `renfort_charges_f61` |
 | `src/design.js` (assemblage du dimensionnement) | 461 | 6,3 % | 32,5 % | `renfort_dimensionnement` |
 | `src/bearings.js` (appareils d'appui, freinage) | 545 | 75,0 % | 80,0 % | `renfort_freinage` |
 | `src/supports/foundation.js` (fondations) | 649 | 1,3 % | 60,0 % | `renfort_fondations` |
 | `src/cadre/sections.js` (sections des cadres) | 358 | 58,8 % | 91,3 % | `renfort_cadre_sections` |
+
+¹ Second passage (0.99.49) sur `beam.js` et `guyon.js` : carte de couverture refaite sur les seuls tests qui importent ces
+deux modules, d'où un score « avant » un peu différent du premier passage (même échantillon de 80 mutants, mêmes
+budgets 20 s / 60 s). Le score « après » est mesuré sur cette même carte, nouveaux tests compris.
 
 Les tests ajoutés comparent PSIDA à des valeurs indépendantes, jamais à sa propre sortie :
 
@@ -58,21 +62,34 @@ Les tests ajoutés comparent PSIDA à des valeurs indépendantes, jamais à sa p
   V_Rd,c, w_k de l'EN 1992-1-1 § 7.3.4, freinage EN 1991-2 § 4.4.1 et Fascicule 61) ;
 - solution analytique de Hetényi pour le pieu de Winkler long (tête libre et encastrée) ;
 - recalcul de l'effort tranchant, du poinçonnement et des minimums transversaux de `design.js` à partir des efforts
-  du calcul, avec les formules de l'EN 1992-1-1 (6.2.2, 6.2.3) et du BAEL (A.5.1, A.5.2).
+  du calcul, avec les formules de l'EN 1992-1-1 (6.2.2, 6.2.3) et du BAEL (A.5.1, A.5.2) ;
+- poutre continue (`renfort_poutre`) : équation des trois moments de Clapeyron (EI variable par travée), 3PL/32, ligne
+  d'influence de M_B −a(L² − a²)/(4L²) et son extremum −L/(6√3), console (−c sur l'appui d'about, +c/4 au suivant),
+  gradient thermique 3EIκ/2 et dénivellation 3EIδ/L² par superposition, bandes de charge (qcL/4 − qc²/8, cas
+  défavorable de charges disjointes), charge A(l) dépendant de la longueur chargée, convoi avec espacement minimal actif ;
+- Guyon-Massonnet (`renfort_guyon`) : identités exactes de l'équation de la plaque orthotrope à bords libres
+  (∫Y dy = 1/k⁴ pour tout α et tout harmonique, d'où K moyen = 1 ; α = 0 : ∫yK dy = 2be), limite de Courbon
+  K = 1 + 3ey/b² et K = 1 à θ → 0, interpolation de Massonnet en √α (K, μ, moments locaux), conditions aux limites
+  d'une charge sur le bord libre, Σ m_x sur la largeur = moment de poutre.
 
 Aucun mutant tué n'a révélé de défaut de calcul : les modules faibles l'étaient par manque de tests unitaires rapides,
 pas par erreur.
 
-## Survivants restants (190 sur 640) et pourquoi
+## Survivants restants (168 sur 640) et pourquoi
 
 - **Mutants équivalents ou sans effet d'ingénierie** : tolérances numériques (`1e-9` → `1,1e-9`), nombre d'itérations
   d'une dichotomie déjà convergée, valeurs par défaut d'options que le pipeline passe toujours explicitement, cases des
   tables a1 et bc des classes 2 et 3 au-delà de deux voies (inatteignables : ces ponts ont au plus deux voies), pas de
   discrétisation (200 éléments de pieu → 201, pas de convoi) qui ne changent le résultat qu'à l'arrondi.
-- **`src/beam.js` et `src/guyon.js`** (31 et 28 survivants) : cas limites des lignes d'influence (charge exactement sur
-  un appui, interpolation entre points de calcul, abouts) et branches peu utilisées de Guyon-Massonnet (charge au bord
-  exact ±b, interpolation de Massonnet désactivée, ν = 0). Les tests de référence (notes SETRA, CHAMOA) passent par ces
-  modules mais sur peu de positions ; c'est le prochain renfort à faire.
+- **`src/beam.js`** (23 survivants après renfort) : finesse des grilles et tolérances (pas de recherche, bornes des
+  primitives `_primitive` / `_primitiveSigned`), choix de branche de signe dans `integrateIL`, découpage et masque de la
+  charge répartie selon la longueur chargée, internes de la programmation dynamique des essieux et des convois (bornes de
+  boucles qui ne changent l'optimum qu'à l'arrondi), racine de `equivalentSpans`. Aucun ne cache d'erreur de calcul :
+  rejoués un à un, ils déplacent le résultat de moins que la discrétisation.
+- **`src/guyon.js`** (14) : équivalents pour l'essentiel — tolérances `1e-9`, décalage de l'origine de la base
+  exponentielle (t = y + c reste une base de solutions), dérivée de la base isotrope (α = 1) qui n'intervient que par
+  une combinaison où elle se simplifie, sélection de branche de la charge au bord (autre chemin, même physique, ou jamais
+  atteinte), nombres de morceaux et d'itérations des intégrations, seuil d'α du cas isotrope.
 - **`src/design.js`** (54) : chemins du pont-dalle sous rail (`designRailEC`), flexion transversale (`designTransverse*`)
   et combinaisons partielles, couverts seulement par des tests d'intégration lents.
 - **`src/supports/foundation.js`** (32) : enchaînement portance / glissement / surface comprimée par état limite et
