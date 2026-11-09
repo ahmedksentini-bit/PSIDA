@@ -220,8 +220,8 @@ export function primitivesFeuille(F, { blocsDXF = false } = {}) {
     const lt = 0.6 * 3.8 * v.titre.length;
     papier.push({ calque: 'TEXTES', t: 'T', p: [cx, yT], s: v.titre, h: 3.8, ancre: 'c', v: 'b', gras: true });
     papier.push({ calque: 'TEXTES', t: 'L', a: [cx - lt / 2, yT - 0.9], b: [cx + lt / 2, yT - 0.9], ep: 0.3 });
-    const te = v.echelleV ? `Ech : 1/${v.echelle} (long.) — 1/${v.echelleV} (haut.)` : `Ech : 1/${v.echelle}`;
-    const barres = v.echelleV ? [[v.echelle, 'long.'], [v.echelleV, 'haut.']] : [[v.echelle, '']];
+    const te = v.sansEchelle ? 'Sans échelle' : v.echelleV ? `Ech : 1/${v.echelle} (long.) — 1/${v.echelleV} (haut.)` : `Ech : 1/${v.echelle}`;
+    const barres = v.sansEchelle ? [] : v.echelleV ? [[v.echelle, 'long.'], [v.echelleV, 'haut.']] : [[v.echelle, '']];
     const wte = 0.53 * 2.5 * te.length, wb = barres.reduce((s, [d, l]) => s + largeurEchelle(d) + (l ? 10 : 0) + 6, 0);
     let xe = cx - (wte + wb) / 2, ye = yT - 7.5;
     papier.push({ calque: 'TEXTES', t: 'T', p: [xe, ye], s: te, h: 2.5, ancre: 'g', v: 'b' });

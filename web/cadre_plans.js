@@ -2,7 +2,7 @@
  * Onglet « Cadres et portiques » — carte « Plans d'exécution » : coffrage et ferraillage de chaque bloc (PICF) ou du
  * portique (PIPO), aperçu, DXF et PDF. Le cartouche reprend les champs de la carte des plans (onglet Ferraillage).
  */
-import { planCoffrageCadre, planFerraillageCadre } from '../src/plans/cadre.js';
+import { planCoffrageCadre, planFerraillageCadre, planFerraillagePlanCadre, planFaconnageCadre } from '../src/plans/cadre.js';
 import { planMursAile } from '../src/plans/murs_aile.js';
 import { feuilleSVG } from '../src/plans/svg.js';
 import { feuilleDXF, octetsCp1252 } from '../src/plans/dxf.js';
@@ -11,22 +11,26 @@ import { cartouche } from './plans_view.js';
 const $ = s => document.querySelector(s);
 const val = n => { const e = document.querySelector(`[name="${n}"]`); return e ? e.value.trim() : ''; };
 
-/** Clés des plans : 'cof-i' et 'fer-i' pour le bloc i ; 'ail-0' pour les murs en aile. */
+/** Clés des plans du bloc i : 'cof-i' coffrage, 'fer-i' coupes et détails, 'fpl-i' vues en plan, 'fac-i' façonnage ; 'ail-0' murs en aile. */
 export function plansCadre(cadre) {
   if (!cadre || !cadre.blocs) return [];
   const ailes = cadre.inp && cadre.inp.opts && cadre.inp.opts.ailes && cadre.inp.opts.ailes.actif !== false ? [{ k: 'ail-0', t: 'ail', i: 0, titre: 'Murs en aile — coffrage et ferraillage' }] : [];
-  return [...cadre.blocs.flatMap((b, i) => ['cof', 'fer'].map(t => ({ k: `${t}-${i}`, t, i, titre: `${cadre.blocs.length > 1 ? `Bloc ${i + 1} (${cadre.split.blocs[i].label}) — ` : ''}${t === 'cof' ? 'coffrage' : 'ferraillage'}` }))), ...ailes];
+  const T = { cof: 'coffrage', fer: 'ferraillage — coupe et détails', fpl: 'ferraillage — vues en plan et coupe longitudinale', fac: 'nomenclature et façonnage' };
+  return [...cadre.blocs.flatMap((b, i) => Object.keys(T).map(t => ({ k: `${t}-${i}`, t, i, titre: `${cadre.blocs.length > 1 ? `Bloc ${i + 1} (${cadre.split.blocs[i].label}) — ` : ''}${T[t]}` }))), ...ailes];
 }
 function numero(cadre, t, i) {
   if (t === 'ail') return val('cf_num_ail') || 'OH-AIL-01';
-  const base = t === 'cof' ? (val('cf_num_cof') || 'OH-COF-01') : (val('cf_num_fer') || 'OH-FER-01');
+  // feuilles de ferraillage : numéro saisi, puis suivants (OH-FER-01, -02, -03)
+  const suivant = (s, d) => (d ? s.replace(/(\d+)(?!.*\d)/, q => String(+q + d).padStart(q.length, '0')) : s);
+  const base = t === 'cof' ? (val('cf_num_cof') || 'OH-COF-01') : suivant(val('cf_num_fer') || 'OH-FER-01', { fer: 0, fpl: 1, fac: 2 }[t]);
   return cadre.blocs.length > 1 ? `${base}-B${i + 1}` : base;
 }
 export function feuilleCadre(cadre, k) {
   const [t, si] = k.split('-'), i = +si, res = cadre.blocs[i];
   if (t === 'ail') return planMursAile(cadre, cartouche(numero(cadre, t, i)));
   const bloc = cadre.blocs.length > 1 ? `bloc ${i + 1}` : '';
-  return (t === 'cof' ? planCoffrageCadre : planFerraillageCadre)(res, cartouche(numero(cadre, t, i)), { bloc });
+  const f = { cof: planCoffrageCadre, fer: planFerraillageCadre, fpl: planFerraillagePlanCadre, fac: planFaconnageCadre }[t];
+  return f(res, cartouche(numero(cadre, t, i)), { bloc });
 }
 function telecharger(blob, nom) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nom; a.click();
