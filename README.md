@@ -830,6 +830,12 @@ Chevêtres : alerte « appareils de rive en fort retrait des bords libres » qua
 annexe 4 § 1 : calcul des chevêtres à corriger manuellement ; seuil non chiffré par le guide, critère de PSIDA ≈ 1,5 fois la
 console régulière c = 0,45 a de PSI-DA 68) — tableau des chevêtres, note, rapport, recommandation « calcul en plaque » ;
 information seulement quand le tablier est calculé en plaque (moments et réactions lus sur la plaque).
+v0.99.49 : plaque — la triangulation passe continûment du damier du pont droit à la coupe par la plus courte diagonale
+(poids t = min(1, ρ/0,05), ρ écart relatif des diagonales de la maille, les deux coupes superposées) : plus de saut de
+m_x entre ψ = 100 et 99,999 gr (jusqu'à 1,3 % en partie courante et 5 % aux angles auparavant). Pont droit, biais marqués,
+fil rouge et exemples 2 à 4 inchangés ; exemple 1 (courbe) : réaction P1 2 112 → 2 110 kN, acier 73,6 → 73,4 t.
+Tests de mutation renforcés sur la poutre continue et Guyon-Massonnet (solutions exactes : Clapeyron, lignes
+d'influence, Courbon, identités de la plaque orthotrope) : 63,8 → 71,3 % et 72,5 → 82,5 % ; aucun défaut de calcul.
 
 Ponts à poutres : recommandations sous chaque « NON » (src/reco/poutres.js). Dans l'onglet « Ponts à poutres » (VIPP,
 PRAD, poutres BA, vérification simplifiée BP, sous route ou sous rail), chaque vérification qui sort « NON » ou « à

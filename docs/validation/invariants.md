@@ -46,15 +46,16 @@ message d'un échec.
    - Tests : `test/els_moment_limite.test.js` (références à la main BAEL et EC2, largeur variable), invariants de continuité et de monotonie autour de M_rb, domaine des tirages de sections porté à 6 %.
    - Effet : aucun sur l'exemple fil rouge ni sur les exemples 1 à 3 (aucune section au-delà de M_rb). Sur l'exemple 4 (dalle précontrainte), seuls les aciers du calcul en béton armé, indicatifs, changent.
 
-## Défauts trouvés et laissés ouverts (documentés, testés tels quels)
+## Défauts trouvés ensuite (tous corrigés depuis, avec leur test)
 
 1. *(corrigé en v0.99.47, voir plus haut)*
 2. **ELS des cadres (BAEL) : σ_bc non vérifiée — corrigé en 0.99.45.**
    - Le module des cadres, porté de BVTrace, ne limitait que σ_s. Pour k > 1 environ, la compression du béton dépassait 0,6 f_c28 sans alerte.
    - Depuis la version 0.99.45 : σ_bc ≤ 0,6 f_c28 (BAEL 91 A.4.5,2) ; en Eurocode 2, σ_c ≤ 0,6 f_ck sous la combinaison caractéristique (§ 7.2(2)) et ≤ 0,45 f_ck sous la quasi permanente (§ 7.2(3)). Section fissurée, n = 15, aciers retenus ; ligne au tableau des armatures, alerte, verdict « NON » et recommandations (épaisseur, f_c28). Tests : `test/cadre_sigma_bc.test.js` et l'invariant des cadres tirés au hasard.
-3. **Plaque : la triangulation change d'un coup entre le pont droit et un très faible biais.**
-   - Le pont droit (ψ = 100 gr) alterne les diagonales des mailles ; un biais même infime prend toujours la plus courte.
-   - Écart entre ψ = 100 et ψ = 99,999 gr, maille de 0,5 m : jusqu'à 1,3 % de m_x max en partie courante et 5 % aux angles. Il diminue de moitié quand la maille est divisée par deux : c'est une erreur de discrétisation, mais elle est visible.
+3. **Plaque : la triangulation changeait d'un coup entre le pont droit et un très faible biais — corrigé en 0.99.49.**
+   - Cause : le pont droit (ψ = 100 gr) alternait les diagonales des mailles (damier) ; dès que les deux diagonales différaient de plus de 10⁻⁹ en relatif, toutes les mailles étaient coupées par la plus courte. Écart entre ψ = 100 et ψ = 99,999 gr, maille de 0,5 m : jusqu'à 1,3 % de m_x max en partie courante et 5 % aux angles (erreur de discrétisation en O(h), mais visible).
+   - Correction (`src/plate/fe.js`, `mailler`) : avec ρ = |d1 − d2|/(d1 + d2) l'écart relatif des diagonales d'une maille, la coupe « plus courte » reçoit le poids t = min(1, ρ/0,05) et la coupe en damier le poids 1 − t ; les deux coupes sont superposées (rigidités et lissage des moments pondérés). ρ ≈ cot ψ/2 pour une maille carrée : transition jusque vers ψ ≈ 94 gr. Pont droit (ρ = 0) et biais marqués (ρ ≥ 0,05) : maillage inchangé ; ouvrage courbe : les mailles presque rectangulaires sont maintenant traitées comme celles du pont droit.
+   - Test : `test/invariants_plaque.test.js` — ψ = 99,999 gr identique au pont droit (10⁻⁴), et balayage de 100 à 85 gr par pas de 0,5 gr sans saut (< 1,2 % de m_x entre deux pas, dû au seul biais).
 
 4. **Entraxe des appareils d'appui : encorbellements ignorés — corrigé en 0.99.48** (relevé par l'alerte de la version 0.99.45).
    - PSIDA répartissait les appareils sur toute la largeur de la dalle, encorbellements compris : entraxe 2b/(n − 0,1). Exemples 3 et 4 du manuel (2b = 12 m, joues de 2,5 m) : appareil de rive en y = ±4,62 m pour une nervure qui s'arrête à ±3,50 m.

@@ -27,7 +27,9 @@ export function statsMaillage(M) {
   const P = M.P, A = aretes(P);
   let lmin = Infinity, lmax = 0;
   for (const [a, b] of A) { const p = pos(P, a), q = pos(P, b), l = Math.hypot(p[0] - q[0], p[1] - q[1]); lmin = Math.min(lmin, l); lmax = Math.max(lmax, l); }
-  return { noeuds: P.n, triangles: P.T.length, ddl: P.ndof, aretes: A.length, appuis: P.appuis.length, lmin, lmax, nx: P.nx, ny: P.ny };
+  // triangles équivalents : une maille de transition porte ses deux coupes superposées, de poids complémentaires (fe.js)
+  const triangles = Math.round(P.T.reduce((a, t) => a + (t.pds ?? 1), 0));
+  return { noeuds: P.n, triangles, ddl: P.ndof, aretes: A.length, appuis: P.appuis.length, lmin, lmax, nx: P.nx, ny: P.ny };
 }
 
 /** SVG du maillage en plan. */
